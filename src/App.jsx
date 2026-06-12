@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
-  Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2,
+  Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks,
 } from 'lucide-react'
 import { useStore } from './store.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -9,6 +9,7 @@ import { Modal, Field } from './ui.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Rdv from './pages/Rdv.jsx'
 import Leads from './pages/Leads.jsx'
+import Tasks from './pages/Tasks.jsx'
 import Contacts from './pages/Contacts.jsx'
 import Notes from './pages/Notes.jsx'
 import Primes from './pages/Primes.jsx'
@@ -258,6 +259,7 @@ const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
   { id: 'rdv', label: 'Mes Rendez-vous', icon: CalendarDays, brick: 'Mes Rendez-vous' },
   { id: 'leads', label: 'Leads', icon: KanbanSquare, brick: 'Leads' },
+  { id: 'tasks', label: 'Tâches prioritaires', icon: ListChecks, brick: 'Tâches prioritaires' },
   { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
   { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
   { id: 'primes', label: 'Primes & Commissions', icon: Coins, brick: 'Primes & Commissions' },
@@ -293,6 +295,7 @@ function MainApp() {
     dashboard: <Dashboard />,
     rdv: <Rdv pendingNote={pendingNote} onPendingNoteUsed={() => setPendingNote('')} />,
     leads: <Leads />,
+    tasks: <Tasks />,
     contacts: <Contacts />,
     notes: <Notes onCreateRdvFromNote={goCreateRdvFromNote} />,
     primes: <Primes />,

@@ -1,8 +1,27 @@
 import React, { useRef, useState } from 'react'
-import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check } from 'lucide-react'
+import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, ShieldCheck } from 'lucide-react'
 import { useStore } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
 import { Modal, Field, Confirm } from '../ui.jsx'
+
+// Génère une copie autonome de l'app (HTML + scripts inlinés) téléchargeable pour un usage local hors-ligne.
+function downloadStandaloneApp() {
+  const clone = document.documentElement.cloneNode(true)
+  const root = clone.querySelector('#root')
+  if (root) root.innerHTML = '' // on repart d'une app vierge qui se remonte toute seule à l'ouverture
+  const html = '<!doctype html>\n' + clone.outerHTML
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'BDR-Flow-Pro.html'
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+// Détecte si les scripts de l'app sont inlinés (build autonome) ou externes (serveur de dev).
+function isStandaloneCapable() {
+  return [...document.querySelectorAll('script')].some(s => !s.src && s.textContent.length > 1000)
+}
 
 function ImageInput({ value, onChange, label }) {
   const ref = useRef(null)
@@ -34,7 +53,6 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
   const mySubs = store.db.subenvs.filter(s => s.envId === session.envId)
   const curSub = store.db.subenvs.find(s => s.id === session.subEnvId)
   const hubspot = store.sub?.integrations?.hubspot || {}
-  const linkedin = store.sub?.integrations?.linkedin || {}
   const setIntegration = (key, patch) => store.setSub(d => ({ ...d, integrations: { ...(d.integrations || {}), [key]: { ...((d.integrations || {})[key] || {}), ...patch } } }))
 
   const tabs = [
@@ -42,6 +60,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
     ['widgets', 'Widgets dashboard', LayoutGrid],
     ['envs', 'Gérer mes environnements', Globe],
     ['integrations', 'Intégrations', Plug],
+    ['download', "Télécharger l'app", Download],
     ['profile', 'Mon profil', User],
   ]
 
@@ -119,48 +138,49 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
       )}
 
       {tab === 'integrations' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold">HubSpot CRM</h3>
-              <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-                <input type="checkbox" checked={!!hubspot.enabled} onChange={e => setIntegration('hubspot', { enabled: e.target.checked })} /> Activée
-              </label>
-            </div>
-            <Field label="Clé API privée (Private App Token)">
-              <input className="input" type="password" placeholder="pat-eu1-..." value={hubspot.token || ''} onChange={e => setIntegration('hubspot', { token: e.target.value })} />
-            </Field>
-            <Field label="Options de synchronisation">
-              <div className="space-y-1 text-sm">
-                {[['contacts', 'Synchroniser les contacts'], ['deals', 'Synchroniser les transactions (deals)'], ['notes', 'Synchroniser les notes']].map(([k, l]) => (
-                  <label key={k} className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={!!hubspot[k]} onChange={e => setIntegration('hubspot', { [k]: e.target.checked })} /> {l}
-                  </label>
-                ))}
-              </div>
-            </Field>
-            <p className="text-xs text-muted">La synchronisation s'exécutera dès qu'une clé API valide est renseignée et que l'application a accès au réseau HubSpot.</p>
+        <div className="card p-4 space-y-3 max-w-2xl">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold flex items-center gap-2"><Plug size={17} className="text-brand" /> HubSpot CRM</h3>
+            <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+              <input type="checkbox" checked={!!hubspot.enabled} onChange={e => setIntegration('hubspot', { enabled: e.target.checked })} /> Activée
+            </label>
           </div>
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold">LinkedIn</h3>
-              <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-                <input type="checkbox" checked={!!linkedin.enabled} onChange={e => setIntegration('linkedin', { enabled: e.target.checked })} /> Activée
-              </label>
+          <Field label="Clé API privée (Private App Token)">
+            <input className="input" type="password" placeholder="pat-eu1-..." value={hubspot.token || ''} onChange={e => setIntegration('hubspot', { token: e.target.value })} />
+          </Field>
+          <Field label="ID du portail HubSpot (optionnel)">
+            <input className="input" placeholder="ex : 12345678" value={hubspot.portalId || ''} onChange={e => setIntegration('hubspot', { portalId: e.target.value })} />
+          </Field>
+          <Field label="Options de synchronisation">
+            <div className="space-y-1 text-sm">
+              {[['contacts', 'Synchroniser les contacts'], ['deals', 'Synchroniser les transactions (deals)'], ['notes', 'Synchroniser les notes']].map(([k, l]) => (
+                <label key={k} className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={!!hubspot[k]} onChange={e => setIntegration('hubspot', { [k]: e.target.checked })} /> {l}
+                </label>
+              ))}
             </div>
-            <Field label="URL de votre profil">
-              <input className="input" placeholder="https://linkedin.com/in/..." value={linkedin.profile || ''} onChange={e => setIntegration('linkedin', { profile: e.target.value })} />
-            </Field>
-            <Field label="Options">
-              <div className="space-y-1 text-sm">
-                {[['enrich', 'Enrichir les contacts depuis LinkedIn'], ['openProfiles', 'Ouvrir les profils en un clic depuis les RDV']].map(([k, l]) => (
-                  <label key={k} className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={!!linkedin[k]} onChange={e => setIntegration('linkedin', { [k]: e.target.checked })} /> {l}
-                  </label>
-                ))}
-              </div>
-            </Field>
+          </Field>
+          <div className="rounded-xl bg-surface p-3 text-xs text-muted flex gap-2">
+            <ShieldCheck size={16} className="text-brand shrink-0 mt-0.5" />
+            <span>La configuration est enregistrée ici. La synchronisation réelle vers HubSpot nécessite que l'app soit déployée en ligne avec un proxy serveur (les navigateurs bloquent les appels directs à l'API HubSpot pour des raisons de sécurité). Une fois déployée, la clé ci-dessus active la synchronisation automatique.</span>
           </div>
+          <p className="text-xs text-muted">L'intégration LinkedIn a été retirée : LinkedIn ne propose pas d'API publique permettant de récupérer ou d'enrichir des contacts, elle n'était donc pas réalisable.</p>
+        </div>
+      )}
+
+      {tab === 'download' && (
+        <div className="card p-4 space-y-3 max-w-2xl">
+          <h3 className="font-bold flex items-center gap-2"><Download size={17} className="text-brand" /> Télécharger l'application en local</h3>
+          <p className="text-sm text-muted">Téléchargez une copie autonome de BDR Flow Pro dans un seul fichier HTML. Ouvrez-le ensuite directement dans votre navigateur, sans connexion ni serveur — toutes les fonctionnalités restent disponibles et vos données sont conservées sur votre ordinateur.</p>
+          {isStandaloneCapable() ? (
+            <button className="btn-primary" onClick={downloadStandaloneApp}><Download size={16} /> Télécharger BDR-Flow-Pro.html</button>
+          ) : (
+            <div className="rounded-xl bg-surface p-3 text-xs text-muted">
+              Vous utilisez actuellement la version « serveur de développement ». Le téléchargement autonome fonctionne sur la version compilée (le fichier <code>BDR-Flow-Pro.html</code> ou l'app déployée en ligne).
+              <button className="btn-ghost text-xs mt-2" onClick={downloadStandaloneApp}><Download size={14} /> Tenter le téléchargement quand même</button>
+            </div>
+          )}
+          <p className="text-xs text-muted">Astuce : ce fichier téléchargé contient lui-même le bouton de téléchargement, vous pourrez donc toujours en regénérer une copie à jour.</p>
         </div>
       )}
 

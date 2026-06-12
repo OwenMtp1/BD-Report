@@ -106,7 +106,7 @@ export const RDV_FIELDS = [
 ]
 
 export const BRICKS = [
-  'Dashboard', 'Mes Rendez-vous', 'Leads', 'Mes contacts', 'Mes notes',
+  'Dashboard', 'Mes Rendez-vous', 'Leads', 'Tâches prioritaires', 'Mes contacts', 'Mes notes',
   'Primes & Commissions', 'KPI Entreprise', 'Dashboard personnalisé',
 ]
 
@@ -260,10 +260,21 @@ export function computePrimes(rdvs, bareme) {
 // ---------------------------------------------------------------- Store React
 const Ctx = createContext(null)
 
+function migrate(db) {
+  // Ajoute les nouvelles briques aux comptes qui avaient déjà l'accès cœur (proxy : brique "Leads").
+  ;(db.accounts || []).forEach(a => {
+    a.bricks = a.bricks || []
+    if (a.bricks.includes('Leads') && !a.bricks.includes('Tâches prioritaires')) {
+      a.bricks.splice(a.bricks.indexOf('Leads') + 1, 0, 'Tâches prioritaires')
+    }
+  })
+  return db
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(LS_KEY)
-    if (raw) return JSON.parse(raw)
+    if (raw) return migrate(JSON.parse(raw))
   } catch (e) { /* base corrompue : on repart du seed */ }
   return buildSeedDb()
 }

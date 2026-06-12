@@ -77,7 +77,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Mes contacts', 'Mes notes', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Gestion Administration']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Tâches prioritaires', 'Mes contacts', 'Mes notes', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Gestion Administration']) {
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
     await click(btn)
