@@ -30,8 +30,15 @@ nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.88);backdrop-f
 .nav-in{display:flex;align-items:center;gap:28px;height:68px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:-.5px}
 .logo b{color:var(--brand)}
-.nav-links{display:flex;gap:22px;margin-left:auto;font-weight:600;font-size:14.5px;color:var(--muted)}
+.nav-links{display:flex;gap:22px;margin-left:auto;font-weight:600;font-size:14.5px;color:var(--muted);align-items:center}
 .nav-links a:hover{color:var(--brand)}
+.dd{position:relative}
+.dd>button{font:inherit;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer}
+.dd>button:hover{color:var(--brand)}
+.dd-menu{position:absolute;top:30px;left:-14px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 44px rgba(23,32,51,.14);padding:8px;display:none;min-width:230px;z-index:60}
+.dd:hover .dd-menu,.dd:focus-within .dd-menu{display:block}
+.dd-menu a{display:block;padding:9px 13px;border-radius:9px;font-size:14px}
+.dd-menu a:hover{background:var(--surface);color:var(--brand)}
 .lang-btn{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:7px 12px;font-weight:700;font-size:13px;cursor:pointer}
 @media(max-width:860px){.nav-links{display:none}}
 
@@ -122,6 +129,17 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
       <span><b>BD</b> Report</span>
     </a>
     <div class="nav-links">
+      <div class="dd">
+        <button data-i18n="nav.product">Produit ▾</button>
+        <div class="dd-menu">
+          <a href="produit/pilotage.html">📈 <span data-i18n="cat.pilotage">Pilotage</span></a>
+          <a href="produit/activite.html">📅 <span data-i18n="cat.activite">Activité</span></a>
+          <a href="produit/pipeline.html">🧲 <span data-i18n="cat.pipeline">Pipeline</span></a>
+          <a href="produit/remuneration.html">💶 <span data-i18n="cat.remuneration">Rémunération</span></a>
+          <a href="produit/collaboration.html">🤝 <span data-i18n="cat.collaboration">Collaboration</span></a>
+          <a href="produit/donnees.html">🗄️ <span data-i18n="cat.donnees">Données</span></a>
+        </div>
+      </div>
       <a href="#features" data-i18n="nav.features">Fonctionnalités</a>
       <a href="#tarifs" data-i18n="nav.pricing">Tarifs</a>
       <a href="#blog" data-i18n="nav.blog">Blog</a>
@@ -168,6 +186,7 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
     </div>
     <div class="tabs" id="tabs"></div>
     <div class="feat-grid" id="featGrid"></div>
+    <div style="text-align:center;margin-top:30px"><a class="btn btn-ghost" id="moreLink" href="produit/pilotage.html"></a></div>
   </div>
 </section>
 
@@ -175,46 +194,24 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
   <div class="wrap">
     <div class="sec-head fade">
       <span class="chip" data-i18n="pricing.chip">Tarifs</span>
-      <h2 data-i18n="pricing.title">Des tarifs simples, sans surprise</h2>
-      <p data-i18n="pricing.sub">Lancement commercial à venir — les offres ci-dessous sont prévisionnelles.</p>
+      <h2 data-i18n="pricing.title">Rejoignez la bêta — offre exclusive et limitée</h2>
+      <p data-i18n="pricing.sub">BD Report est en phase de bêta privée : un nombre restreint de places, un accès privilégié, et votre voix dans la feuille de route.</p>
     </div>
-    <div class="plans fade">
-      <div class="plan">
-        <h3>Starter</h3>
-        <div class="price">0 € <small data-i18n="pricing.permo">/ mois</small></div>
-        <p style="color:var(--muted);font-size:14px" data-i18n="pricing.p1desc">Pour un BDR en solo</p>
-        <ul>
-          <li data-i18n="pricing.p1a">1 espace personnel</li>
-          <li data-i18n="pricing.p1b">RDV, pipeline & primes illimités</li>
-          <li data-i18n="pricing.p1c">Exports CSV / Excel</li>
-        </ul>
-        <a class="btn btn-ghost" href="app/" data-i18n="pricing.try">Essayer</a>
-      </div>
+    <div class="plans fade" style="grid-template-columns:1fr;max-width:520px;margin:0 auto">
       <div class="plan pro">
-        <span class="badge" data-i18n="pricing.popular">Populaire</span>
-        <h3>Pro</h3>
-        <div class="price">19 € <small data-i18n="pricing.peruser">/ utilisateur / mois</small></div>
-        <p style="color:var(--muted);font-size:14px" data-i18n="pricing.p2desc">Pour les équipes de prospection</p>
+        <span class="badge" data-i18n="pricing.badge">⭐ Offre exclusive — places limitées</span>
+        <h3 data-i18n="pricing.beta">Bêta Testeur</h3>
+        <div class="price">0 € <small data-i18n="pricing.duration">pendant toute la bêta</small></div>
+        <p style="color:var(--muted);font-size:14px" data-i18n="pricing.bdesc">Accédez à tout BD Report avant tout le monde, en échange de vos retours.</p>
         <ul>
-          <li data-i18n="pricing.p2a">Tout Starter</li>
-          <li data-i18n="pricing.p2b">Pipeline entreprise partagé & @mentions</li>
-          <li data-i18n="pricing.p2c">Pilotage équipe : forecast, standup, alertes</li>
-          <li data-i18n="pricing.p2d">Primes versionnées & logs d'audit</li>
+          <li data-i18n="pricing.b1">1 environnement d'organisation</li>
+          <li data-i18n="pricing.b2">Jusqu'à 5 comptes collaborateurs</li>
+          <li data-i18n="pricing.b3">Usage limité : volumes adaptés à la phase de test</li>
+          <li data-i18n="pricing.b4">Toutes les fonctionnalités, sans exception</li>
+          <li data-i18n="pricing.b5">Ligne directe avec l'équipe produit</li>
         </ul>
-        <a class="btn btn-primary" href="#contact" data-i18n="pricing.contact">Nous contacter</a>
-        <div class="soon" data-i18n="pricing.soon">Bientôt disponible</div>
-      </div>
-      <div class="plan">
-        <h3>Entreprise</h3>
-        <div class="price" data-i18n="pricing.custom">Sur mesure</div>
-        <p style="color:var(--muted);font-size:14px" data-i18n="pricing.p3desc">Pour les organisations multi-équipes</p>
-        <ul>
-          <li data-i18n="pricing.p3a">Tout Pro</li>
-          <li data-i18n="pricing.p3b">Environnements illimités & SSO</li>
-          <li data-i18n="pricing.p3c">Intégration CRM & accompagnement dédié</li>
-        </ul>
-        <a class="btn btn-ghost" href="#contact" data-i18n="pricing.contact2">Nous contacter</a>
-        <div class="soon" data-i18n="pricing.soon2">Bientôt disponible</div>
+        <a class="btn btn-primary" href="#contact" data-i18n="pricing.apply">Demander ma place</a>
+        <div class="soon" data-i18n="pricing.note">Les offres Starter, Pro et Entreprise arriveront à la fin de la bêta. Les bêta-testeurs bénéficieront de conditions préférentielles à vie.</div>
       </div>
     </div>
   </div>
@@ -377,12 +374,12 @@ const I18N = {
     'mock.sql':'SQL generated','mock.primes':'Bonuses this month','mock.rdv':'Meetings held — this year',
     'feat.chip':'Features','feat.title':'A BDR\'s entire day, in one place',
     'feat.sub':'Six feature families covering prospecting from the first booked meeting to the bonus payout.',
-    'pricing.chip':'Pricing','pricing.title':'Simple, honest pricing','pricing.sub':'Commercial launch coming — plans below are indicative.',
-    'pricing.permo':'/ month','pricing.peruser':'/ user / month','pricing.popular':'Popular','pricing.custom':'Custom',
-    'pricing.p1desc':'For a solo BDR','pricing.p1a':'1 personal workspace','pricing.p1b':'Unlimited meetings, pipeline & bonuses','pricing.p1c':'CSV / Excel exports','pricing.try':'Try it',
-    'pricing.p2desc':'For prospecting teams','pricing.p2a':'Everything in Starter','pricing.p2b':'Shared company pipeline & @mentions','pricing.p2c':'Team steering: forecast, standup, alerts','pricing.p2d':'Versioned bonuses & audit logs',
-    'pricing.contact':'Contact us','pricing.soon':'Coming soon',
-    'pricing.p3desc':'For multi-team organizations','pricing.p3a':'Everything in Pro','pricing.p3b':'Unlimited environments & SSO','pricing.p3c':'CRM integration & dedicated onboarding','pricing.contact2':'Contact us','pricing.soon2':'Coming soon',
+    'nav.product':'Product ▾','cat.pilotage':'Steering','cat.activite':'Activity','cat.pipeline':'Pipeline','cat.remuneration':'Compensation','cat.collaboration':'Collaboration','cat.donnees':'Data',
+    'pricing.chip':'Pricing','pricing.title':'Join the beta — an exclusive, limited offer','pricing.sub':'BD Report is in private beta: a restricted number of seats, privileged access, and your voice on the roadmap.',
+    'pricing.badge':'⭐ Exclusive offer — limited seats','pricing.beta':'Beta Tester','pricing.duration':'for the whole beta',
+    'pricing.bdesc':'Get all of BD Report before everyone else, in exchange for your feedback.',
+    'pricing.b1':'1 organization environment','pricing.b2':'Up to 5 teammate accounts','pricing.b3':'Limited usage: volumes sized for the test phase','pricing.b4':'Every single feature included','pricing.b5':'Direct line to the product team',
+    'pricing.apply':'Request my seat','pricing.note':'Starter, Pro and Enterprise plans will arrive at the end of the beta. Beta testers get preferential conditions for life.',
     'blog.title':'The outbound teams blog','blog.sub':'Prospecting tips, war stories and product news — first articles coming soon.',
     'blog.t1':'Prospecting','blog.a1':'Cold calling: 7 openers that earn you 30 seconds of attention','blog.soon':'Coming soon',
     'blog.t2':'Compensation','blog.a2':'Building a commission grid your BDRs actually understand','blog.soon2':'Coming soon',
@@ -417,6 +414,7 @@ function toggleLang() {
 }
 
 // ---------- Onglets de fonctionnalités ----------
+const SLUGS = ['pilotage', 'activite', 'pipeline', 'remuneration', 'collaboration', 'donnees']
 let activeTab = 0
 function renderTabs() {
   const data = FEATURES[lang]
@@ -424,6 +422,9 @@ function renderTabs() {
     `<button class="tab ${i === activeTab ? 'active' : ''}" onclick="setTab(${i})">${c}</button>`).join('')
   document.getElementById('featGrid').innerHTML = data.items[activeTab].map(([ic, t, d]) =>
     `<div class="feat"><div class="ic">${ic}</div><h3>${t}</h3><p>${d}</p></div>`).join('')
+  const more = document.getElementById('moreLink')
+  more.href = `produit/${SLUGS[activeTab]}.html`
+  more.textContent = (lang === 'fr' ? 'Découvrir la page ' : 'Explore the ') + data.cats[activeTab].replace(/^\S+\s/, '') + (lang === 'fr' ? ' en détail →' : ' page →')
 }
 function setTab(i) { activeTab = i; renderTabs() }
 
