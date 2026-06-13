@@ -12,9 +12,8 @@ export function openCompany(name) {
 // Fil de commentaires partagé : stocké au niveau de l'environnement, visible par tous ses membres.
 function CommentThread({ name, store }) {
   const [text, setText] = useState('')
-  const env = store.db.environments.find(e => e.id === store.session.envId)
   const curSub = store.db.subenvs.find(s => s.id === store.session.subEnvId)
-  const comments = (env?.comments || {})[name.trim()] || []
+  const comments = store.companyComments(name)
   const fmtTs = (ts) => new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const send = () => {
     if (!text.trim()) return

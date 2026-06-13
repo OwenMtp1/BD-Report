@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react'
-import { Download, Upload, Trash2, Search } from 'lucide-react'
+import { Download, Upload, Trash2, Search, FileSpreadsheet } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { useStore, uid, todayISO, fmtDate, SOURCES } from '../store.jsx'
-import { Empty, Confirm, Select } from '../ui.jsx'
+import { Empty, Confirm, Select, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
 const COLS = [
@@ -72,6 +73,20 @@ export default function Contacts() {
     a.click()
     URL.revokeObjectURL(a.href)
     store.logAction('Contact', 'Export CSV', `${list.length} contact(s)${onlySelected ? ' (sélection)' : hasFilters ? ' (filtre)' : ''}`)
+    toast(`${list.length} contact(s) exporté(s) en CSV`)
+  }
+
+  const exportXLSX = () => {
+    // Même règle que le CSV : sans filtre = tout, avec filtre = uniquement le résultat filtré.
+    const list = selected.size > 0 ? sub.contacts.filter(c => selected.has(c.id)) : contacts
+    const rows = list.map(c => Object.fromEntries(COLS.map(([k, l]) => [l, k === 'createdAt' ? fmtDate(c[k]) : (c[k] || '')])))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    ws['!cols'] = COLS.map(([, l]) => ({ wch: Math.max(14, l.length + 2) }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Contacts')
+    XLSX.writeFile(wb, 'contacts.xlsx')
+    store.logAction('Contact', 'Export Excel', `${list.length} contact(s)`)
+    toast(`${list.length} contact(s) exporté(s) en Excel`)
   }
 
   const importCSV = (file) => {
@@ -92,7 +107,10 @@ export default function Contacts() {
           <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={e => { if (e.target.files[0]) importCSV(e.target.files[0]); e.target.value = '' }} />
           <button className="btn-ghost text-xs" onClick={() => fileRef.current.click()}><Upload size={14} /> Importer CSV</button>
           <button className="btn-ghost text-xs" onClick={() => exportCSV(false)}>
-            <Download size={14} /> {hasFilters ? `Exporter le filtre (${contacts.length})` : 'Exporter tout'}
+            <Download size={14} /> {hasFilters ? `CSV filtré (${contacts.length})` : 'Exporter CSV'}
+          </button>
+          <button className="btn-ghost text-xs" onClick={exportXLSX}>
+            <FileSpreadsheet size={14} /> {hasFilters ? `Excel filtré (${contacts.length})` : 'Exporter Excel'}
           </button>
           {selected.size > 0 && <>
             <button className="btn-primary text-xs" onClick={() => exportCSV(true)}><Download size={14} /> Exporter la sélection ({selected.size})</button>

@@ -1,0 +1,14 @@
+{
+  "name": "BDR Flow Pro",
+  "short_name": "BDR Flow",
+  "description": "Espace Sales tout-en-un pour BDR / SDR",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f4f6fa",
+  "theme_color": "#3b5bdb",
+  "lang": "fr",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

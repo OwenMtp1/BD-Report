@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Plus, Pin, PinOff, Archive, CalendarPlus, FileDown, Trash2, FolderPlus, Pencil } from 'lucide-react'
 import { useStore, uid, todayISO, fmtDate } from '../store.jsx'
-import { Modal, Field, Select, Empty, Confirm } from '../ui.jsx'
+import { Modal, Field, Select, Empty, Confirm, toast } from '../ui.jsx'
 
 function exportNote(note, format) {
   const html = `<html><head><meta charset="utf-8"><title>${note.title}</title></head>
@@ -45,6 +45,7 @@ export default function Notes({ onCreateRdvFromNote }) {
       return [...notes]
     })
     store.logAction('Note', 'Note enregistrée', editing.title)
+    toast('Note enregistrée')
     setEditing(null)
   }
 
@@ -194,7 +195,17 @@ export default function Notes({ onCreateRdvFromNote }) {
         </Modal>
       )}
 
-      {confirmDel && <Confirm message="Supprimer cette note ?" onYes={() => { store.logAction('Note', 'Note supprimée', sub.notes.find(n => n.id === confirmDel)?.title || ''); setNotes(ns => ns.filter(x => x.id !== confirmDel)); setConfirmDel(null) }} onNo={() => setConfirmDel(null)} />}
+      {confirmDel && <Confirm message="Mettre cette note à la corbeille ? (restaurable 30 jours)" onYes={() => {
+        const note = sub.notes.find(n => n.id === confirmDel)
+        store.logAction('Note', 'Note mise à la corbeille', note?.title || '')
+        store.setSub(d => ({
+          ...d,
+          notes: d.notes.filter(x => x.id !== confirmDel),
+          noteTrash: [...(d.noteTrash || []), { ...note, deletedAt: new Date().toISOString() }],
+        }))
+        toast('Note mise à la corbeille')
+        setConfirmDel(null)
+      }} onNo={() => setConfirmDel(null)} />}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft } from 'lucide-react'
-import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, SOURCES, PHASE_COLORS, OPP_COLORS, RDV_FIELDS, inTimeline } from '../store.jsx'
-import { Modal, Confirm, Field, Select, EditableSelect, Empty } from '../ui.jsx'
+import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, SOURCES, PHASE_COLORS, OPP_COLORS, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
+import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
 const emptyContact = () => ({ id: uid(), nom: '', poste: '', email: '', tel: '' })
@@ -293,6 +293,9 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   const visible = (k) => sub.fieldsConfig.find(c => c.key === k)?.visible !== false
 
   const saveRdv = (data, mode, id) => {
+    // Canonise la casse du nom d'entreprise sur la première variante connue (évite les doublons kanban).
+    const existing = sub.rdvs.find(r => companyKey(r.entreprise) === companyKey(data.entreprise))
+    if (existing && existing.entreprise !== data.entreprise) data = { ...data, entreprise: existing.entreprise }
     store.setSub(d => {
       if (mode === 'create' || mode === 'sub') {
         const rdv = {
@@ -310,6 +313,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       return d
     })
     store.logAction('RDV', mode === 'edit' ? 'RDV modifié' : mode === 'sub' ? 'RDV suivant créé' : 'RDV créé', data.entreprise)
+    toast(mode === 'edit' ? 'Rendez-vous modifié' : 'Rendez-vous créé')
     setForm(null)
   }
 
@@ -328,20 +332,30 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   }
 
   const confirmSqlDate = () => {
-    const { rdvId, patch, date } = sqlAsk
+    const { rdvId, patch, date, effectif } = sqlAsk
     store.setSub(d => {
       const r = d.rdvs.find(x => x.id === rdvId)
-      Object.assign(r, applyRdvAutomations(r, { ...patch, datePassageSQL: date }))
+      const extra = { ...patch, datePassageSQL: date }
+      if (effectif) extra.effectif = effectif
+      Object.assign(r, applyRdvAutomations(r, extra))
       return d
     })
     store.logAction('RDV', 'Passage en SQL', `le ${date}`)
+    toast('Passage en SQL enregistré — prime déclenchée')
     setSqlAsk(null)
   }
 
   const deleteRdv = (id) => {
-    const r = sub.rdvs.find(x => x.id === id)
-    store.setSub(d => ({ ...d, rdvs: d.rdvs.filter(x => x.id !== id && x.parentId !== id) }))
-    store.logAction('RDV', 'RDV supprimé', r?.entreprise || '')
+    // Suppression douce : le RDV (et ses suites) part en corbeille, restaurable 30 jours.
+    const family = sub.rdvs.filter(x => x.id === id || x.parentId === id)
+    const deletedAt = new Date().toISOString()
+    store.setSub(d => ({
+      ...d,
+      rdvs: d.rdvs.filter(x => x.id !== id && x.parentId !== id),
+      rdvTrash: [...(d.rdvTrash || []), ...family.map(r => ({ ...r, deletedAt }))],
+    }))
+    store.logAction('RDV', 'RDV mis à la corbeille', family[0]?.entreprise || '')
+    toast('Rendez-vous mis à la corbeille (restaurable 30 jours)')
     setConfirmDel(null)
   }
 
@@ -523,16 +537,27 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           onYes={() => deleteRdv(confirmDel)} onNo={() => setConfirmDel(null)} />
       )}
 
-      {sqlAsk && (
-        <Modal title="Date de passage en SQL" onClose={() => setSqlAsk(null)}>
-          <p className="text-sm text-muted mb-3">Ce rendez-vous passe en SQL. Renseignez la date de passage en SQL — c'est elle qui déclenche la prime.</p>
-          <input type="date" className="input" value={sqlAsk.date} onChange={e => setSqlAsk(s => ({ ...s, date: e.target.value }))} />
-          <div className="flex justify-end gap-2 mt-4">
-            <button className="btn-ghost" onClick={() => setSqlAsk(null)}>Annuler</button>
-            <button className="btn-primary" onClick={confirmSqlDate}>Valider</button>
-          </div>
-        </Modal>
-      )}
+      {sqlAsk && (() => {
+        const rdv = sub.rdvs.find(x => x.id === sqlAsk.rdvId)
+        const missingEff = rdv && !Number(rdv.effectif)
+        return (
+          <Modal title="Date de passage en SQL" onClose={() => setSqlAsk(null)}>
+            <p className="text-sm text-muted mb-3">Ce rendez-vous passe en SQL. Renseignez la date de passage en SQL — c'est elle qui déclenche la prime.</p>
+            <input type="date" className="input" value={sqlAsk.date} onChange={e => setSqlAsk(s => ({ ...s, date: e.target.value }))} />
+            {missingEff && (
+              <div className="mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3">
+                <p className="text-xs text-amber-800 font-semibold mb-2">⚠️ Effectif non renseigné : sans lui, aucune prime ne sera calculée pour ce SQL. Ajoutez-le maintenant :</p>
+                <input type="number" className="input" placeholder="Nombre de collaborateurs"
+                  value={sqlAsk.effectif || ''} onChange={e => setSqlAsk(s => ({ ...s, effectif: e.target.value }))} />
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <button className="btn-ghost" onClick={() => setSqlAsk(null)}>Annuler</button>
+              <button className="btn-primary" onClick={confirmSqlDate}>Valider</button>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {fieldsModal && (
         <Modal title="Modifier les champs du formulaire" onClose={() => setFieldsModal(false)}>

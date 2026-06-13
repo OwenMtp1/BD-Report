@@ -11,3 +11,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </StoreProvider>
   </React.StrictMode>,
 )
+
+// PWA : installable et utilisable hors-ligne (uniquement en HTTPS, ignoré en fichier local)
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {})
+}
