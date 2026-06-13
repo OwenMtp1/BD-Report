@@ -9,6 +9,63 @@ export const parseISO = (s) => (s ? new Date(s + 'T00:00:00') : null)
 export const fmtDate = (s) => (s ? new Date(s + 'T00:00:00').toLocaleDateString('fr-FR') : '—')
 export const uid = () => Math.random().toString(36).slice(2, 10)
 
+// ---------------------------------------------------------------- SHA-256 (synchrone, compact)
+// Les mots de passe sont stockés hashés ("sha256:<hex>"), jamais en clair.
+export function sha256(ascii) {
+  const rrot = (v, c) => (v >>> c) | (v << (32 - c))
+  const words = []
+  const asciiBitLength = ascii.length * 8
+  let result = ''
+  const hash = [], k = []
+  let primeCounter = 0
+  const isComposite = {}
+  for (let candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (let i = 0; i < 313; i += candidate) isComposite[i] = candidate
+      hash[primeCounter] = (Math.pow(candidate, 0.5) * 4294967296) | 0
+      k[primeCounter++] = (Math.pow(candidate, 1 / 3) * 4294967296) | 0
+    }
+  }
+  ascii = unescape(encodeURIComponent(ascii)) + '\x80'
+  while ((ascii.length % 64) - 56) ascii += '\x00'
+  for (let i = 0; i < ascii.length; i++) {
+    const j = ascii.charCodeAt(i)
+    words[i >> 2] = (words[i >> 2] || 0) | (j << ((3 - (i % 4)) * 8))
+  }
+  words[words.length] = (asciiBitLength / 4294967296) | 0
+  words[words.length] = asciiBitLength | 0
+  for (let j = 0; j < words.length;) {
+    const w = words.slice(j, (j += 16))
+    const oldHash = hash.slice(0)
+    for (let i = 0; i < 64; i++) {
+      const w15 = w[i - 15], w2 = w[i - 2]
+      const a = hash[0], e = hash[4]
+      const temp1 = hash[7]
+        + (rrot(e, 6) ^ rrot(e, 11) ^ rrot(e, 25))
+        + ((e & hash[5]) ^ (~e & hash[6]))
+        + k[i]
+        + (w[i] = i < 16 ? w[i] : (w[i - 16] + (rrot(w15, 7) ^ rrot(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rrot(w2, 17) ^ rrot(w2, 19) ^ (w2 >>> 10))) | 0)
+      const temp2 = (rrot(a, 2) ^ rrot(a, 13) ^ rrot(a, 22)) + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]))
+      hash.unshift((temp1 + temp2) | 0)
+      hash.pop()
+      hash[4] = (hash[4] + temp1) | 0
+    }
+    for (let i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0
+  }
+  for (let i = 0; i < 8; i++) {
+    for (let j = 3; j + 1; j--) {
+      const b = (hash[i] >> (j * 8)) & 255
+      result += (b < 16 ? '0' : '') + b.toString(16)
+    }
+  }
+  return result
+}
+export const hashPw = (pw) => 'sha256:' + sha256(String(pw))
+export const checkPw = (input, stored) => (stored || '').startsWith('sha256:') ? hashPw(input) === stored : input === stored
+
+// Clé normalisée pour regrouper les entreprises (insensible à la casse et aux espaces)
+export const companyKey = (name) => (name || '').trim().toLowerCase()
+
 export function startOfWeek(d) {
   const x = new Date(d)
   const day = (x.getDay() + 6) % 7
@@ -139,6 +196,9 @@ function emptySubEnvData() {
     customDashboards: [],
     companies: {}, // infos société enrichies manuellement (CA, site, LinkedIn, localisation)
     logs: [], // journal d'audit : { id, ts, type, action, details }
+    rdvTrash: [], // corbeille : éléments restaurables 30 jours
+    noteTrash: [],
+    goals: { rdvSemaine: 10, sqlMois: 5, primesMois: 1000 }, // objectifs & quotas
   }
 }
 
@@ -269,6 +329,17 @@ function migrate(db) {
     ;['Tâches prioritaires', 'Logs'].forEach(b => {
       if (a.bricks.includes('Leads') && !a.bricks.includes(b)) a.bricks.push(b)
     })
+    // Hashage des mots de passe hérités stockés en clair
+    if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
+  })
+  // Valeurs par défaut des nouveaux champs + purge de la corbeille (> 30 jours)
+  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
+  Object.values(db.data || {}).forEach(data => {
+    data.logs = data.logs || []
+    data.companies = data.companies || {}
+    data.rdvTrash = (data.rdvTrash || []).filter(t => t.deletedAt > cutoff)
+    data.noteTrash = (data.noteTrash || []).filter(t => t.deletedAt > cutoff)
+    data.goals = data.goals || { rdvSemaine: 10, sqlMois: 5, primesMois: 1000 }
   })
   return db
 }
@@ -278,7 +349,7 @@ function load() {
     const raw = localStorage.getItem(LS_KEY)
     if (raw) return migrate(JSON.parse(raw))
   } catch (e) { /* base corrompue : on repart du seed */ }
-  return buildSeedDb()
+  return migrate(buildSeedDb())
 }
 
 export function StoreProvider({ children }) {
@@ -289,6 +360,17 @@ export function StoreProvider({ children }) {
 
   useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(db)) }, [db])
   useEffect(() => { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)) }, [session])
+
+  // Synchronisation multi-onglets : un changement dans un autre onglet est rechargé ici.
+  useEffect(() => {
+    const h = (e) => {
+      if (e.key === LS_KEY && e.newValue) {
+        try { setDbState(JSON.parse(e.newValue)) } catch (err) { /* contenu invalide : on ignore */ }
+      }
+    }
+    window.addEventListener('storage', h)
+    return () => window.removeEventListener('storage', h)
+  }, [])
 
   const api = useMemo(() => {
     const setDb = (fn) => setDbState(prev => {
@@ -301,13 +383,13 @@ export function StoreProvider({ children }) {
       login(identifier, password) {
         const acc = db.accounts.find(a =>
           (a.email.toLowerCase() === identifier.toLowerCase() || a.pseudo.toLowerCase() === identifier.toLowerCase())
-          && a.password === password)
+          && checkPw(password, a.password))
         if (acc) setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return acc
       },
       register({ email, pseudo, password }) {
         if (db.accounts.some(a => a.email.toLowerCase() === email.toLowerCase())) return { error: 'Un compte existe déjà avec cet email.' }
-        const acc = { id: uid(), email, pseudo: pseudo || email.split('@')[0], password, role: 'Membre', developer: false, photo: '', bricks: [...BRICKS], teamOf: null }
+        const acc = { id: uid(), email, pseudo: pseudo || email.split('@')[0], password: hashPw(password), role: 'Membre', developer: false, photo: '', bricks: [...BRICKS], teamOf: null }
         setDb(d => { d.accounts.push(acc); return d })
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return { account: acc }
@@ -375,7 +457,7 @@ export function StoreProvider({ children }) {
         setDb(d => {
           const e = d.environments.find(x => x.id === env.id)
           e.comments = e.comments || {}
-          const key = company.trim()
+          const key = companyKey(company)
           e.comments[key] = e.comments[key] || []
           e.comments[key].push({
             id: uid(), ts: new Date().toISOString(), text: text.trim(),
@@ -387,17 +469,40 @@ export function StoreProvider({ children }) {
       deleteCompanyComment(company, commentId) {
         setDb(d => {
           const e = d.environments.find(x => x.id === session?.envId)
-          if (e?.comments?.[company.trim()]) {
-            e.comments[company.trim()] = e.comments[company.trim()].filter(c => c.id !== commentId)
+          const key = companyKey(company)
+          if (e?.comments?.[key]) {
+            e.comments[key] = e.comments[key].filter(c => c.id !== commentId)
           }
           return d
         })
+      },
+      companyComments(company) {
+        const env = db.environments.find(e => e.id === session?.envId)
+        return (env?.comments || {})[companyKey(company)] || []
+      },
+      // ----- changement d'Id sûr : met à jour toutes les références + la session courante
+      changeAccountId(oldId, newId) {
+        if (!newId || newId === oldId) return
+        setDb(d => {
+          const acc = d.accounts.find(a => a.id === oldId)
+          if (!acc) return d
+          acc.id = newId
+          d.accounts.forEach(a => { if (a.teamOf === oldId) a.teamOf = newId })
+          d.environments.forEach(e => {
+            if (e.createdBy === oldId) e.createdBy = newId
+            if (e.members) e.members = e.members.map(m => m === oldId ? newId : m)
+          })
+          d.subenvs.forEach(s => { if (s.ownerId === oldId) s.ownerId = newId })
+          return d
+        })
+        setSession(s => (s && s.accountId === oldId ? { ...s, accountId: newId } : s))
       },
       // ----- comptes (administration)
       updateAccount(id, patch) { setDb(d => { Object.assign(d.accounts.find(a => a.id === id), patch); return d }) },
       deleteAccount(id) { setDb(d => { d.accounts = d.accounts.filter(a => a.id !== id); return d }) },
       addAccount(acc) {
         const a = { id: uid(), role: 'Membre', developer: false, photo: '', bricks: [...BRICKS], teamOf: null, ...acc }
+        if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
         setDb(d => { d.accounts.push(a); return d })
         return a
       },

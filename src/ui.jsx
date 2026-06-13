@@ -165,3 +165,29 @@ export function Gauge({ score, max = 10, label, color = '#ec4899' }) {
 export function Empty({ text }) {
   return <div className="text-center text-muted text-sm py-10">{text}</div>
 }
+
+// ---------------------------------------------------------------- Toasts de confirmation
+export const toast = (msg) => window.dispatchEvent(new CustomEvent('app-toast', { detail: msg }))
+
+export function Toasts() {
+  const [items, setItems] = useState([])
+  useEffect(() => {
+    const h = (e) => {
+      const id = Math.random().toString(36).slice(2)
+      setItems(list => [...list, { id, msg: e.detail }])
+      setTimeout(() => setItems(list => list.filter(t => t.id !== id)), 2600)
+    }
+    window.addEventListener('app-toast', h)
+    return () => window.removeEventListener('app-toast', h)
+  }, [])
+  if (!items.length) return null
+  return (
+    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] space-y-2 pointer-events-none">
+      {items.map(t => (
+        <div key={t.id} className="fade-in bg-ink text-card text-sm font-semibold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+          <span className="text-emerald-400">✓</span> {t.msg}
+        </div>
+      ))}
+    </div>
+  )
+}

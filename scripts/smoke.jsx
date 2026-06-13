@@ -13,6 +13,7 @@ globalThis.HTMLElement = win.HTMLElement
 globalThis.Element = win.Element
 globalThis.Node = win.Node
 globalThis.Event = win.Event
+globalThis.CustomEvent = win.CustomEvent
 globalThis.MouseEvent = win.MouseEvent
 globalThis.FileReader = win.FileReader
 globalThis.Blob = win.Blob
@@ -71,6 +72,7 @@ async function main() {
   await click(find('button', 'Owen Mrani Bonnier'))
   if (!text().includes('4 chiffres')) throw new Error('PIN gate missing: ' + text().slice(0, 300))
   await type(container.querySelector('input'), '1205')
+  await act(async () => { await new Promise(r => setTimeout(r, 600)) }) // laisse passer le squelette de chargement
 
   // 5. App principale : Dashboard
   if (!text().includes('Espace Sales de OwenMtp')) throw new Error('Main app missing: ' + text().slice(0, 400))

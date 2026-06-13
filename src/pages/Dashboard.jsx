@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { Trophy, Pencil, EyeOff, Eye, GripVertical } from 'lucide-react'
+import { Trophy, Pencil, EyeOff, Eye, MonitorPlay } from 'lucide-react'
 import { useStore, inTimeline, computePrimes, fmtDate, monthKey, startOfWeek, parseISO } from '../store.jsx'
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
 
 const DEFAULT_WIDGETS = [
   { id: 'rdv-realises', label: 'RDV réalisés', size: 'lg' },
   { id: 'rdv-pris', label: 'RDV pris', size: 'lg' },
+  { id: 'objectifs', label: 'Objectifs & quotas', size: 'lg' },
   { id: 'bubbles', label: 'Indicateurs clés (MQL / SQL / Primes)', size: 'lg' },
   { id: 'performance', label: 'Performance', size: 'md' },
   { id: 'provenance', label: 'Provenance des RDV', size: 'md' },
@@ -203,6 +204,14 @@ export default function Dashboard() {
   const [perfCustom, setPerfCustom] = useState({})
   const [posteFilter, setPosteFilter] = useState('')
   const [reportMode, setReportMode] = useState('week')
+  const [presentation, setPresentation] = useState(false)
+
+  // Sortie du mode présentation avec Échap (suit aussi la sortie du plein écran navigateur)
+  React.useEffect(() => {
+    const h = () => { if (!document.fullscreenElement) setPresentation(false) }
+    document.addEventListener('fullscreenchange', h)
+    return () => document.removeEventListener('fullscreenchange', h)
+  }, [])
 
   // Fusionne la config sauvegardée avec les widgets ajoutés depuis (ils apparaissent à la fin).
   const saved = sub.widgets || []
@@ -350,6 +359,42 @@ export default function Dashboard() {
             )}
           </div>
         )
+      case 'objectifs': {
+        const goals = sub.goals || { rdvSemaine: 10, sqlMois: 5, primesMois: 1000 }
+        const setGoal = (k, v) => store.setSub(d => ({ ...d, goals: { ...(d.goals || {}), [k]: Number(v) || 0 } }))
+        const rdvSem = rdvs.filter(r => inTimeline(r.datePriseRdv, 'week')).length
+        const sqlMois = rdvs.filter(r => inTimeline(r.datePassageSQL, 'month')).length
+        const items = [
+          { k: 'rdvSemaine', label: 'RDV pris cette semaine', cur: rdvSem, unit: '' },
+          { k: 'sqlMois', label: 'SQL ce mois-ci', cur: sqlMois, unit: '' },
+          { k: 'primesMois', label: 'Primes ce mois-ci', cur: primesCeMois, unit: ' €' },
+        ]
+        return (
+          <div className="card p-4">
+            <h3 className="font-bold mb-3">Objectifs & quotas <span className="text-xs text-muted font-semibold">(cibles modifiables)</span></h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {items.map(({ k, label, cur, unit }) => {
+                const target = goals[k] || 0
+                const pct = target ? Math.min(100, Math.round((cur / target) * 100)) : 0
+                const ok = pct >= 100
+                return (
+                  <div key={k}>
+                    <div className="flex items-center justify-between text-xs font-semibold mb-1">
+                      <span>{label}</span>
+                      <span className={ok ? 'text-emerald-600' : 'text-muted'}>{cur}{unit} / <input type="number" className="w-16 bg-surface rounded px-1 py-0.5 text-right outline-none focus:ring-1 ring-brand"
+                        value={target} onChange={e => setGoal(k, e.target.value)} />{unit}</span>
+                    </div>
+                    <div className="h-2.5 bg-surface rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${ok ? 'bg-emerald-500' : pct >= 60 ? 'bg-brand' : 'bg-amber-500'}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className={`text-[11px] mt-0.5 font-semibold ${ok ? 'text-emerald-600' : 'text-muted'}`}>{ok ? '🎉 Objectif atteint !' : `${pct} %`}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      }
       case 'velocite': {
         const velo = pipelineVelocity(rdvs)
         const maxAvg = Math.max(1, ...velo.map(v => v.avg))
@@ -444,12 +489,21 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className={`space-y-4 ${presentation ? 'fixed inset-0 z-50 bg-surface overflow-y-auto p-6' : ''}`}>
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold">Dashboard</h2>
-        <button className="btn-ghost text-xs" onClick={() => setEditMode(e => !e)}>
-          <Pencil size={14} /> {editMode ? 'Terminer' : 'Modifier les widgets'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button className="btn-ghost text-xs" onClick={() => {
+            if (!presentation) { document.documentElement.requestFullscreen?.().catch(() => {}) }
+            else { document.exitFullscreen?.().catch(() => {}) }
+            setPresentation(p => !p)
+          }}>
+            <MonitorPlay size={14} /> {presentation ? 'Quitter la présentation' : 'Mode présentation'}
+          </button>
+          {!presentation && <button className="btn-ghost text-xs" onClick={() => setEditMode(e => !e)}>
+            <Pencil size={14} /> {editMode ? 'Terminer' : 'Modifier les widgets'}
+          </button>}
+        </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {widgets.map((w, i) => {

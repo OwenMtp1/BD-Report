@@ -1,17 +1,17 @@
 import React, { useState } from 'react'
 import { Clock, Building2, Users, UserRound, MessageSquare } from 'lucide-react'
-import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS } from '../store.jsx'
-import { Modal, Empty } from '../ui.jsx'
+import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS, companyKey } from '../store.jsx'
+import { Modal, Empty, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
 const recentDate = (r) => r.dateRdv || r.datePriseRdv || r.createdAt || ''
 
-// Regroupe les RDV par entreprise : une entreprise = une carte unique dans le pipeline.
+// Regroupe les RDV par entreprise (clé insensible à la casse/espaces) : une entreprise = une carte unique.
 function groupByCompany(rdvs) {
   const map = {}
   rdvs.forEach(r => {
-    const key = (r.entreprise || 'Sans nom').trim()
-    map[key] = map[key] || { entreprise: key, rdvs: [] }
+    const key = companyKey(r.entreprise) || 'sans nom'
+    map[key] = map[key] || { entreprise: (r.entreprise || 'Sans nom').trim(), key, rdvs: [] }
     map[key].rdvs.push(r)
   })
   return Object.values(map).map(g => {
@@ -86,19 +86,30 @@ export default function Leads() {
   const groups = groupByCompany(scope === 'me' ? sub.rdvs : orgRdvs)
 
   const drop = (opp) => {
-    if (!dragKey || scope === 'org') return
-    store.setSub(d => {
-      const group = groupByCompany(d.rdvs).find(g => g.entreprise === dragKey)
-      if (group) {
+    if (!dragKey || scope === 'org') { setDragKey(null); return }
+    // Le RDV représentatif est résolu hors de l'updater pour éviter tout double effet (StrictMode).
+    const group = groupByCompany(sub.rdvs).find(g => g.key === dragKey)
+    if (group && group.rep.opportunite !== opp) {
+      store.setSub(d => {
         const r = d.rdvs.find(x => x.id === group.rep.id)
-        if (r && r.opportunite !== opp) {
-          Object.assign(r, applyRdvAutomations(r, { opportunite: opp }))
-          store.logAction('Lead', 'Statut déplacé (kanban)', `${dragKey} → ${opp}`)
-        }
-      }
-      return d
-    })
+        if (r) Object.assign(r, applyRdvAutomations(r, { opportunite: opp }))
+        return d
+      })
+      store.logAction('Lead', 'Statut déplacé (kanban)', `${group.entreprise} → ${opp}`)
+      toast(`${group.entreprise} → ${opp}`)
+    }
     setDragKey(null)
+  }
+
+  // Drag & drop tactile : suit le doigt et dépose sur la colonne sous le point de contact.
+  const touchDrop = (e) => {
+    if (!dragKey) return
+    const t = e.changedTouches?.[0]
+    if (!t) { setDragKey(null); return }
+    const el = document.elementFromPoint(t.clientX, t.clientY)
+    const col = el?.closest?.('[data-opp]')
+    if (col) drop(col.getAttribute('data-opp'))
+    else setDragKey(null)
   }
 
   return (
@@ -121,7 +132,7 @@ export default function Leads() {
         {cols.map(opp => {
           const cards = groups.filter(g => g.opportunite === opp)
           return (
-            <div key={opp} className="kanban-col flex-1 rounded-2xl bg-surface/80 border border-line p-2.5"
+            <div key={opp} data-opp={opp} className="kanban-col flex-1 rounded-2xl bg-surface/80 border border-line p-2.5"
               onDragOver={e => e.preventDefault()} onDrop={() => drop(opp)}>
               <div className="flex items-center justify-between px-1 mb-2">
                 <span className={`chip ${OPP_COLORS[opp] || 'bg-card text-ink'}`}>{opp}</span>
@@ -130,10 +141,11 @@ export default function Leads() {
               <div className="space-y-2 min-h-[6rem]">
                 {cards.length === 0 && <div className="text-xs text-muted text-center py-4">—</div>}
                 {cards.map(g => {
-                  const nbComments = (store.db.environments.find(e => e.id === store.session.envId)?.comments?.[g.entreprise] || []).length
+                  const nbComments = store.companyComments(g.entreprise).length
                   return (
-                    <div key={g.entreprise} draggable={scope === 'me'} onDragStart={() => setDragKey(g.entreprise)} onDragEnd={() => setDragKey(null)}
-                      className={`card !rounded-xl p-3 ${scope === 'me' ? 'cursor-grab active:cursor-grabbing' : ''} ${dragKey === g.entreprise ? 'dragging' : ''}`}>
+                    <div key={g.key} draggable={scope === 'me'} onDragStart={() => setDragKey(g.key)} onDragEnd={() => setDragKey(null)}
+                      onTouchStart={() => scope === 'me' && setDragKey(g.key)} onTouchEnd={touchDrop}
+                      className={`card !rounded-xl p-3 ${scope === 'me' ? 'cursor-grab active:cursor-grabbing touch-none' : ''} ${dragKey === g.key ? 'dragging' : ''}`}>
                       <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline" title="Ouvrir la fiche entreprise"
                         onClick={() => openCompany(g.entreprise)}><Building2 size={13} className="text-muted shrink-0" /> {g.entreprise}</button>
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">

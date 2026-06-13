@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus } from 'lucide-react'
-import { useStore, ROLES, BRICKS, uid } from '../store.jsx'
-import { Modal, Field, Confirm, Empty } from '../ui.jsx'
+import { useStore, ROLES, BRICKS, uid, hashPw } from '../store.jsx'
+import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 
 // ---- Accès aux environnements (administrateurs) : ajouter n'importe quel utilisateur à n'importe quel environnement
 function EnvAccess({ store }) {
@@ -58,20 +58,20 @@ function TeamInvite({ store, actor }) {
     const mail = email.trim().toLowerCase()
     if (!mail || !mail.includes('@')) { setMsg({ err: true, text: 'Entrez un email valide.' }); return }
     let acc = store.db.accounts.find(a => a.email.toLowerCase() === mail)
-    let created = false
+    let provisional = null
     if (!acc) {
-      const password = Math.random().toString(36).slice(2, 8)
-      acc = store.addAccount({ email: mail, pseudo: mail.split('@')[0], password, role: 'Membre', teamOf: actor.id })
-      created = true
+      provisional = Math.random().toString(36).slice(2, 8)
+      acc = store.addAccount({ email: mail, pseudo: mail.split('@')[0], password: provisional, role: 'Membre', teamOf: actor.id })
     } else {
       store.updateAccount(acc.id, { teamOf: acc.teamOf || actor.id })
     }
     const members = new Set(env.members || [])
     members.add(acc.id)
     store.updateEnv(envId, { members: [...members] })
-    setMsg(created
-      ? { err: false, text: `✅ Compte créé pour ${mail} (mot de passe provisoire : ${acc.password}) et ajouté à « ${env.name} » dans votre équipe.` }
+    setMsg(provisional
+      ? { err: false, text: `✅ Compte créé pour ${mail} (mot de passe provisoire : ${provisional}) et ajouté à « ${env.name} » dans votre équipe.` }
       : { err: false, text: `✅ ${mail} a été ajouté à « ${env.name} » dans votre équipe.` })
+    toast('Invitation enregistrée')
     setEmail('')
   }
   return (
@@ -112,11 +112,12 @@ function UserRow({ u, actor, store, onDelete }) {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <Field label="Mail"><input className="input" disabled={!editable} value={u.email} onChange={e => patch('email', e.target.value)} /></Field>
         <Field label="Pseudo"><input className="input" disabled={!editable} value={u.pseudo} onChange={e => patch('pseudo', e.target.value)} /></Field>
-        <Field label="Mot de passe"><input className="input" disabled={!editable} value={u.password} onChange={e => patch('password', e.target.value)} /></Field>
-        <Field label="Id"><input className="input" disabled={!idEditable} value={u.id} onChange={e => {
-          const newId = e.target.value
-          store.setDb(d => { d.accounts.find(a => a.id === u.id).id = newId; return d })
-        }} /></Field>
+        <Field label="Mot de passe (hashé)">
+          <input className="input" type="password" disabled={!editable} placeholder="Définir un nouveau..." defaultValue=""
+            onBlur={e => { if (e.target.value) { patch('password', hashPw(e.target.value)); e.target.value = ''; toast('Mot de passe mis à jour') } }} />
+        </Field>
+        <Field label="Id"><input className="input" disabled={!idEditable} defaultValue={u.id}
+          onBlur={e => { if (e.target.value && e.target.value !== u.id) store.changeAccountId(u.id, e.target.value) }} /></Field>
         <Field label="Permissions">
           <select className="input" disabled={!editable} value={u.role} onChange={e => patch('role', e.target.value)}>
             {ROLES.map(r => <option key={r} value={r} disabled={!rolesAssignable(actor).includes(r)}>{r}</option>)}

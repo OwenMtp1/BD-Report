@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react'
 import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck } from 'lucide-react'
-import { useStore } from '../store.jsx'
+import { useStore, hashPw } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
-import { Modal, Field, Confirm } from '../ui.jsx'
+import { Modal, Field, Confirm, toast } from '../ui.jsx'
 
 // Génère une copie autonome de l'app (HTML + scripts inlinés) téléchargeable pour un usage local hors-ligne.
 function downloadStandaloneApp() {
@@ -225,7 +225,10 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
           <h3 className="font-bold">Mon profil</h3>
           <Field label="Photo de profil"><ImageInput value={me.photo} onChange={v => store.updateAccount(me.id, { photo: v })} label="Changer ma photo" /></Field>
           <Field label="Pseudo"><input className="input" value={me.pseudo} onChange={e => store.updateAccount(me.id, { pseudo: e.target.value })} /></Field>
-          <Field label="Mot de passe"><input className="input" value={me.password} onChange={e => store.updateAccount(me.id, { password: e.target.value })} /></Field>
+          <Field label="Nouveau mot de passe">
+            <input className="input" type="password" placeholder="Laisser vide pour ne pas changer" defaultValue=""
+              onBlur={e => { if (e.target.value) { store.updateAccount(me.id, { password: hashPw(e.target.value) }); e.target.value = ''; toast('Mot de passe mis à jour') } }} />
+          </Field>
           {curSub && <Field label="Photo du sous-environnement (organigramme)">
             <ImageInput value={curSub.photo} onChange={v => store.updateSubEnv(curSub.id, { photo: v })} label="Changer la photo" />
           </Field>}

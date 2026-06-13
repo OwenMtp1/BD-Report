@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
-  ScrollText, ChevronDown, ChevronRight,
+  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2,
 } from 'lucide-react'
 import { useStore } from './store.jsx'
 import { THEMES, applyTheme } from './themes.js'
-import { Modal, Field } from './ui.jsx'
+import { Modal, Field, Toasts } from './ui.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Rdv from './pages/Rdv.jsx'
 import Leads from './pages/Leads.jsx'
@@ -20,6 +20,7 @@ import Settings from './pages/Settings.jsx'
 import OrgChart from './pages/OrgChart.jsx'
 import AiDashboard from './pages/AiDashboard.jsx'
 import Logs from './pages/Logs.jsx'
+import Trash from './pages/Trash.jsx'
 import CompanyModal from './pages/Company.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
@@ -282,6 +283,7 @@ const NAV_GROUPS = [
       { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
       { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
       { id: 'logs', label: 'Logs', icon: ScrollText, brick: 'Logs' },
+      { id: 'corbeille', label: 'Corbeille', icon: Trash2 },
     ],
   },
   {
@@ -319,6 +321,10 @@ function MainApp() {
   }
   const groups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(canSee) })).filter(g => g.items.length)
   const [closedGroups, setClosedGroups] = useState({})
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [booting, setBooting] = useState(true)
+  useEffect(() => { const t = setTimeout(() => setBooting(false), 350); return () => clearTimeout(t) }, [session.subEnvId])
+  const goto = (id) => { setPage(id); setSidebarOpen(false) }
 
   const goCreateRdvFromNote = (content) => { setPendingNote(content); setPage('rdv') }
 
@@ -332,6 +338,7 @@ function MainApp() {
     primes: <Primes />,
     ai: <AiDashboard />,
     logs: <Logs />,
+    corbeille: <Trash />,
     kpi: <Kpi />,
     admin: <Admin mode="admin" />,
     teams: <Admin mode="teams" />,
@@ -348,8 +355,11 @@ function MainApp() {
           left: `${15 + i * 30}%`, top: `${20 + i * 22}%`, animationDelay: `${i * 2.5}s`,
         }} />
       ))}
-      {/* Sidebar */}
-      <aside className="w-56 shrink-0 bg-card/90 backdrop-blur border-r border-line flex flex-col z-10">
+      {/* Sidebar (off-canvas sur mobile, fixe sur desktop) */}
+      {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      <aside className={`w-56 shrink-0 bg-card/95 backdrop-blur border-r border-line flex flex-col
+        fixed inset-y-0 left-0 z-40 transition-transform lg:static lg:translate-x-0 lg:z-10
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="px-3.5 py-3 border-b border-line">
           <div className="flex items-center gap-2.5">
             {env?.logo
@@ -375,7 +385,7 @@ function MainApp() {
                 {(open || hasActive) && (
                   <div className="space-y-0.5 mt-0.5">
                     {g.items.map(item => (
-                      <button key={item.id} onClick={() => setPage(item.id)}
+                      <button key={item.id} onClick={() => goto(item.id)}
                         className={`w-full flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-lg text-[13px] font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'}`}>
                         <item.icon size={15} className={page === item.id ? '' : 'text-muted'} />
                         <span className="truncate">{item.label}</span>
@@ -401,12 +411,17 @@ function MainApp() {
 
       {/* Contenu */}
       <div className="flex-1 min-w-0 z-10">
-        <header className="h-14 px-5 flex items-center justify-between bg-card/80 backdrop-blur border-b border-line sticky top-0 z-20">
-          <span className="font-bold text-sm text-muted">{NAV.find(n => n.id === page)?.label || (page === 'settings' ? 'Paramètres' : page === 'org' ? 'Organigramme' : '')}</span>
+        <header className="h-14 px-3 sm:px-5 flex items-center justify-between bg-card/80 backdrop-blur border-b border-line sticky top-0 z-20">
+          <div className="flex items-center gap-2 min-w-0">
+            <button className="p-2 rounded-xl hover:bg-surface lg:hidden" title="Menu" onClick={() => setSidebarOpen(o => !o)}>
+              {sidebarOpen ? <X size={19} /> : <Menu size={19} />}
+            </button>
+            <span className="font-bold text-sm text-muted truncate">{NAV.find(n => n.id === page)?.label || (page === 'settings' ? 'Paramètres' : page === 'org' ? 'Organigramme' : '')}</span>
+          </div>
           <div className="flex items-center gap-1.5">
-            <button title="Recherche (Ctrl+K)" className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-line text-muted text-xs hover:bg-surface"
+            <button title="Recherche (Ctrl+K)" className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-line text-muted text-xs hover:bg-surface"
               onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}>
-              <Search size={14} /> Rechercher <kbd className="text-[10px] border border-line rounded px-1">⌘K</kbd>
+              <Search size={14} /> <span className="hidden sm:inline">Rechercher</span> <kbd className="hidden sm:inline text-[10px] border border-line rounded px-1">⌘K</kbd>
             </button>
             <button title="Organigramme" className={`p-2 rounded-xl hover:bg-surface ${page === 'org' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('org')}>
               <Network size={19} />
@@ -419,11 +434,26 @@ function MainApp() {
               : <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-xs font-extrabold flex items-center justify-center ml-1">{me.pseudo?.slice(0, 2).toUpperCase()}</div>}
           </div>
         </header>
-        <main className="p-5 max-w-[1400px] mx-auto">{pageEl}</main>
+        <main className="p-3 sm:p-5 max-w-[1400px] mx-auto">
+          {booting ? <PageSkeleton /> : pageEl}
+        </main>
       </div>
       <CompanyModal />
-      <GlobalSearch onNavigate={setPage} />
+      <GlobalSearch onNavigate={goto} />
       <Chatbot />
+      <Toasts />
+    </div>
+  )
+}
+
+// Squelette affiché brièvement à l'entrée dans un espace (chargement perçu plus doux)
+function PageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="skeleton h-7 w-48 rounded-lg" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="skeleton h-48 rounded-2xl" />)}
+      </div>
     </div>
   )
 }
