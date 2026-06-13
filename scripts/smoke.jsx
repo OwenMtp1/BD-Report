@@ -113,6 +113,27 @@ async function main() {
   await click(container.querySelector('button[title="Paramètres"]'))
   if (!text().includes('Thèmes de design')) throw new Error('Settings did not render')
 
+  // 10. Migration : un ancien stockage SANS l'environnement Test doit le récupérer au rechargement
+  const raw = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+  raw.environments = raw.environments.filter(x => x.id !== 'env-test')
+  raw.accounts = raw.accounts.filter(a => !String(a.id).startsWith('test-'))
+  raw.subenvs = raw.subenvs.filter(s => !String(s.id).startsWith('tsub-'))
+  Object.keys(raw.data).forEach(k => { if (k.startsWith('tsub-')) delete raw.data[k] })
+  win.localStorage.setItem('bdrflow_db_v1', JSON.stringify(raw))
+  win.sessionStorage.clear()
+  const c2 = win.document.createElement('div')
+  win.document.body.appendChild(c2)
+  const root2 = createRoot(c2)
+  await act(async () => {
+    root2.render(React.createElement(StoreProvider, null, React.createElement(App)))
+  })
+  const inputs2 = c2.querySelectorAll('input')
+  await type(inputs2[0], 'OwenMtp')
+  await type(inputs2[1], 'Elisaowen2003.')
+  await click([...c2.querySelectorAll('button')].find(b => b.textContent.includes('Se connecter')))
+  await act(async () => { await new Promise(r => setTimeout(r, 2800)) })
+  if (!c2.textContent.includes('Test')) throw new Error('Migration failed: env Test not injected into legacy storage')
+
   const realErrors = errors.filter(e => !e.includes('act(') && !e.includes('width(0) and height(0)') && !e.includes('Not implemented') && !e.includes('test-utils'))
   if (realErrors.length) throw new Error('Console errors:\n' + realErrors.join('\n---\n'))
   console.log('SMOKE OK — all screens rendered without errors')
