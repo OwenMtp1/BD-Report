@@ -4,7 +4,7 @@ import {
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell,
 } from 'lucide-react'
-import { useStore } from './store.jsx'
+import { useStore, APP_VERSION } from './store.jsx'
 import { THEMES, applyTheme } from './themes.js'
 import { Modal, Field, Toasts } from './ui.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -75,6 +75,7 @@ function Login() {
           <button className="w-full text-xs text-gray-500 hover:underline" onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setErr('') }}>
             {mode === 'login' ? "Pas de compte ? Créer un compte" : 'Déjà un compte ? Se connecter'}
           </button>
+          <p className="text-center text-[10px] text-gray-400">version {APP_VERSION}</p>
         </div>
       </div>
     </div>
@@ -409,6 +410,7 @@ function MainApp() {
             onClick={store.logout}>
             <LogOut size={15} /> Déconnexion
           </button>
+          <p className="text-center text-[10px] text-muted pt-1">v{APP_VERSION}</p>
         </div>
       </aside>
 
