@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Clock, Building2, Users, UserRound, MessageSquare } from 'lucide-react'
 import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS, phaseColor, oppColor, companyKey } from '../store.jsx'
-import { Modal, Empty, toast } from '../ui.jsx'
+import { Modal, Empty, toast, confetti } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
 const recentDate = (r) => r.dateRdv || r.datePriseRdv || r.createdAt || ''
@@ -96,7 +96,8 @@ export default function Leads() {
         return d
       })
       store.logAction('Lead', 'Statut déplacé (kanban)', `${group.entreprise} → ${opp}`)
-      toast(opp === 'Perdue' ? `${group.entreprise} → Perdue — pensez à renseigner le motif (menu ⋯ dans Mes RDV)`
+      if (opp === 'Signée') { confetti(); toast(`🎉 Signature ! Bravo pour ${group.entreprise} 🏆`) }
+      else toast(opp === 'Perdue' ? `${group.entreprise} → Perdue — pensez à renseigner le motif (menu ⋯ dans Mes RDV)`
         : opp.startsWith('No Show') ? `${group.entreprise} → ${opp} — pensez à renseigner la raison`
         : `${group.entreprise} → ${opp}`)
     }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Plus, Pin, PinOff, Archive, CalendarPlus, FileDown, Trash2, FolderPlus, Pencil } from 'lucide-react'
 import { useStore, uid, todayISO, fmtDate } from '../store.jsx'
-import { Modal, Field, Select, Empty, Confirm, toast } from '../ui.jsx'
+import { Modal, Field, Select, Empty, Confirm, toast, DictateButton } from '../ui.jsx'
 
 const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 function exportNote(note, format) {
@@ -137,8 +137,11 @@ export default function Notes({ onCreateRdvFromNote }) {
               <Select value={editing.opportunite} onChange={v => setEditing(x => ({ ...x, opportunite: v }))} options={sub.opportunites} placeholder="Opportunité" />
               <input type="date" className="input" value={editing.createdAt} onChange={e => setEditing(x => ({ ...x, createdAt: e.target.value }))} />
             </div>
+            <div className="flex justify-end">
+              <DictateButton onText={(txt) => setEditing(x => ({ ...x, content: (x.content ? x.content + ' ' : '') + txt }))} />
+            </div>
             <textarea className="input min-h-[45vh] text-sm leading-relaxed" value={editing.content}
-              onChange={e => setEditing(x => ({ ...x, content: e.target.value }))} placeholder="Écrivez votre note..." />
+              onChange={e => setEditing(x => ({ ...x, content: e.target.value }))} placeholder="Écrivez ou dictez votre note..." />
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex gap-2">
                 <button className="btn-ghost text-xs" onClick={() => exportNote(editing, 'docx')}><FileDown size={14} /> Word</button>

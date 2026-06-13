@@ -70,6 +70,16 @@ body.animated-bg { animation: bgshift 18s ease infinite; }
 .splash-bar { width: 30%; animation: splashbar 1.2s ease-in-out infinite; }
 @keyframes splashbar { 0% { margin-left: -30% } 100% { margin-left: 100% } }
 
+/* Confettis (signature) */
+.confetti-piece {
+  position: absolute; top: -16px; border-radius: 2px;
+  animation-name: confetti-fall; animation-timing-function: cubic-bezier(.3,.6,.5,1); animation-fill-mode: both;
+}
+@keyframes confetti-fall {
+  0% { transform: translate(0, -10vh) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--drift, 0), 105vh) rotate(var(--rot, 360deg)); opacity: .9; }
+}
+
 /* Squelettes de chargement */
 .skeleton {
   background: linear-gradient(90deg, rgb(var(--line) / .5) 25%, rgb(var(--line)) 50%, rgb(var(--line) / .5) 75%);

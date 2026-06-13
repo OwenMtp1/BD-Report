@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { X, Pencil, Trash2, Plus, ChevronDown } from 'lucide-react'
+import { X, Pencil, Trash2, Plus, ChevronDown, Mic, MicOff } from 'lucide-react'
 import { TIMELINES } from './store.jsx'
 
 export function Modal({ title, onClose, children, wide }) {
@@ -189,5 +189,72 @@ export function Toasts() {
         </div>
       ))}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- Confettis (feature 24)
+export const confetti = () => window.dispatchEvent(new CustomEvent('app-confetti'))
+const CONFETTI_COLORS = ['#3B5BDB', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#A7F3D0', '#FBBF24']
+export function Confetti() {
+  const [bursts, setBursts] = useState([])
+  useEffect(() => {
+    const h = () => {
+      const id = Math.random().toString(36).slice(2)
+      const pieces = Array.from({ length: 90 }, (_, i) => ({
+        i, left: Math.random() * 100, delay: Math.random() * 0.25,
+        dur: 1.8 + Math.random() * 1.4, rot: Math.random() * 360,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length], size: 6 + Math.random() * 8,
+        drift: (Math.random() - 0.5) * 200,
+      }))
+      setBursts(b => [...b, { id, pieces }])
+      setTimeout(() => setBursts(b => b.filter(x => x.id !== id)), 3400)
+    }
+    window.addEventListener('app-confetti', h)
+    return () => window.removeEventListener('app-confetti', h)
+  }, [])
+  if (!bursts.length) return null
+  return (
+    <div className="fixed inset-0 z-[80] pointer-events-none overflow-hidden">
+      {bursts.map(burst => burst.pieces.map(p => (
+        <span key={burst.id + p.i} className="confetti-piece" style={{
+          left: `${p.left}%`, background: p.color, width: p.size, height: p.size * 0.5,
+          animationDelay: `${p.delay}s`, animationDuration: `${p.dur}s`,
+          '--rot': `${p.rot}deg`, '--drift': `${p.drift}px`,
+        }} />
+      )))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- Dictée vocale (feature 18)
+export function DictateButton({ onText, className = '' }) {
+  const [listening, setListening] = useState(false)
+  const recRef = useRef(null)
+  const supported = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
+  const toggle = () => {
+    if (!supported) { toast("La dictée vocale n'est pas disponible sur ce navigateur."); return }
+    if (listening) { recRef.current?.stop(); return }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    const rec = new SR()
+    rec.lang = (localStorage.getItem('bdr_lang') === 'en' ? 'en-US' : localStorage.getItem('bdr_lang') === 'es' ? 'es-ES' : 'fr-FR')
+    rec.continuous = true
+    rec.interimResults = false
+    rec.onresult = (e) => {
+      let txt = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript
+      if (txt.trim()) onText(txt.trim())
+    }
+    rec.onerror = () => { setListening(false); toast('Dictée interrompue.') }
+    rec.onend = () => setListening(false)
+    recRef.current = rec
+    rec.start()
+    setListening(true)
+  }
+  return (
+    <button type="button" onClick={toggle} title={listening ? 'Arrêter la dictée' : 'Dicter une note vocale'}
+      className={`btn ${listening ? 'bg-red-500 text-white animate-pulse' : 'btn-ghost'} !py-1.5 text-xs ${className}`}>
+      {listening ? <MicOff size={14} /> : <Mic size={14} />}
+      {listening ? 'Stop' : 'Dicter'}
+    </button>
   )
 }

@@ -1,8 +1,17 @@
 import React, { useMemo, useState } from 'react'
 import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft } from 'lucide-react'
 import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
-import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast } from '../ui.jsx'
+import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
+
+// Déclenche les confettis + un toast quand un RDV devient « Signée » (feature 24)
+const isSigned = (phase, opp) => phase === 'Signée' || opp === 'Signée'
+function celebrateIfSigned(before, afterPhase, afterOpp, entreprise) {
+  if (isSigned(afterPhase, afterOpp) && !isSigned(before.phase, before.opportunite)) {
+    confetti()
+    toast(`🎉 Signature ! Bravo pour ${entreprise || 'ce deal'} 🏆`)
+  }
+}
 
 const emptyContact = () => ({ id: uid(), nom: '', poste: '', email: '', tel: '' })
 
@@ -116,9 +125,11 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
 
       {visible('notes') && (
         <div className="mt-3">
-          <Field label="Notes">
-            <textarea className="input min-h-[110px]" value={f.notes} onChange={e => set('notes', e.target.value)} />
-          </Field>
+          <div className="flex items-center justify-between mb-1">
+            <span className="label !mb-0">Notes</span>
+            <DictateButton onText={(txt) => setF(x => ({ ...x, notes: (x.notes ? x.notes + ' ' : '') + txt }))} />
+          </div>
+          <textarea className="input min-h-[110px]" value={f.notes} onChange={e => set('notes', e.target.value)} placeholder="Saisissez ou dictez vos notes..." />
         </div>
       )}
 
@@ -360,6 +371,8 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
     })
     store.logAction('RDV', mode === 'edit' ? 'RDV modifié' : mode === 'sub' ? 'RDV suivant créé' : 'RDV créé', data.entreprise)
     toast(mode === 'edit' ? 'Rendez-vous modifié' : 'Rendez-vous créé')
+    const before = mode === 'edit' ? (sub.rdvs.find(r => r.id === id) || {}) : {}
+    celebrateIfSigned(before, data.phase, data.opportunite, data.entreprise)
     setForm(null)
   }
 
@@ -376,6 +389,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
     })
     const what = Object.entries(patch).map(([k, v]) => `${k} → ${v}`).join(', ')
     store.logAction('RDV', 'Champ modifié', `${rdv.entreprise} : ${what}`)
+    celebrateIfSigned(rdv, patch.phase ?? rdv.phase, patch.opportunite ?? rdv.opportunite, rdv.entreprise)
     // Rappels non bloquants : motif de perte / raison du no-show
     if (patch.opportunite === 'Perdue' && !rdv.motifKo) setMotifAsk({ rdvId: rdv.id, kind: 'ko', value: '' })
     if ((patch.opportunite === 'No Show R1' || patch.opportunite === 'No Show MQL') && !rdv.motifNoShow) setMotifAsk({ rdvId: rdv.id, kind: 'noshow', value: '' })
@@ -383,6 +397,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
 
   const confirmSqlDate = () => {
     const { rdvId, patch, date, effectif } = sqlAsk
+    const before = sub.rdvs.find(x => x.id === rdvId) || {}
     store.setSub(d => {
       const r = d.rdvs.find(x => x.id === rdvId)
       const extra = { ...patch, datePassageSQL: date }
@@ -393,6 +408,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
     })
     store.logAction('RDV', 'Passage en SQL', `le ${date}`)
     toast('Passage en SQL enregistré — prime déclenchée')
+    celebrateIfSigned(before, patch.phase ?? before.phase, patch.opportunite ?? before.opportunite, before.entreprise)
     setSqlAsk(null)
   }
 

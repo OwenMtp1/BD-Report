@@ -8,7 +8,7 @@ import { useStore, APP_VERSION, setCurrentCurrency } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
-import { Modal, Field, Toasts } from './ui.jsx'
+import { Modal, Field, Toasts, Confetti } from './ui.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Rdv from './pages/Rdv.jsx'
 import Leads from './pages/Leads.jsx'
@@ -477,6 +477,7 @@ function MainApp() {
       <GlobalSearch onNavigate={goto} />
       <Chatbot />
       <Toasts />
+      <Confetti />
     </div>
   )
 }
