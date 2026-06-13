@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 
 const LS_KEY = 'bdrflow_db_v1'
 const SESSION_KEY = 'bdrflow_session_v1'
-export const APP_VERSION = '1.6.1'
+export const APP_VERSION = '1.7.0'
 
 // ---------------------------------------------------------------- Helpers dates
 export const todayISO = () => new Date().toISOString().slice(0, 10)

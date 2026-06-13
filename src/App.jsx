@@ -5,6 +5,7 @@ import {
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell,
 } from 'lucide-react'
 import { useStore, APP_VERSION } from './store.jsx'
+import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { THEMES, applyTheme } from './themes.js'
 import { Modal, Field, Toasts } from './ui.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -53,8 +54,8 @@ function Login() {
       style={{ background: 'linear-gradient(135deg, #1e2a52 0%, #3b5bdb 55%, #0ea5e9 100%)' }}>
       <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md fade-in">
         <div className="text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#3b5bdb] to-[#0ea5e9] text-white flex items-center justify-center text-2xl font-extrabold mx-auto mb-3">B</div>
-          <h1 className="text-2xl font-extrabold text-gray-900">BDR Flow Pro</h1>
+          <div className="mx-auto mb-3 w-fit"><LogoMark size={56} /></div>
+          <h1 className="text-2xl font-extrabold tracking-tight"><span className="text-[#3B5BDB]">BD</span><span className="text-gray-900"> Report</span></h1>
           <p className="text-sm text-gray-500">Votre espace sales tout-en-un</p>
         </div>
         <div className="space-y-3">
@@ -364,13 +365,12 @@ function MainApp() {
       <aside className={`w-56 shrink-0 bg-card/95 backdrop-blur border-r border-line flex flex-col
         fixed inset-y-0 left-0 z-40 transition-transform lg:static lg:translate-x-0 lg:z-10
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="px-3.5 py-3 border-b border-line">
-          <div className="flex items-center gap-2.5">
-            {env?.logo
-              ? <img src={env.logo} alt="" className="w-8 h-8 rounded-lg object-cover" />
-              : <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand to-brand2 text-white text-sm font-extrabold flex items-center justify-center">B</div>}
+        <div className="px-3.5 py-3 border-b border-line space-y-2">
+          <Logo size={28} textClass="text-[17px]" />
+          <div className="flex items-center gap-2 min-w-0">
+            {env?.logo && <img src={env.logo} alt="" className="w-6 h-6 rounded-md object-cover shrink-0" />}
             <div className="min-w-0">
-              <div className="font-extrabold text-[13px] leading-tight truncate">Espace Sales de {me.pseudo}</div>
+              <div className="font-bold text-[12px] leading-tight truncate">Espace Sales de {me.pseudo}</div>
               <div className="text-[11px] text-muted truncate">{env?.name} · {sub?.prenom} {sub?.nom}</div>
             </div>
           </div>
@@ -508,6 +508,14 @@ function PageSkeleton() {
 export default function App() {
   const store = useStore()
   const session = store.session
+  // Splash screen BD Report : une fois par session navigateur
+  const [splash, setSplash] = useState(() => !sessionStorage.getItem('bdr_splashed'))
+  useEffect(() => {
+    if (!splash) return
+    const t = setTimeout(() => { sessionStorage.setItem('bdr_splashed', '1'); setSplash(false) }, 1500)
+    return () => clearTimeout(t)
+  }, [splash])
+  if (splash) return <SplashScreen />
 
   if (!session || !store.account) return <Login />
   if (!session.welcomed) {

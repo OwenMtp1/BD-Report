@@ -68,6 +68,12 @@ body.animated-bg { animation: bgshift 18s ease infinite; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgb(var(--line)); border-radius: 8px; }
 
+/* Splash screen BD Report */
+.splash-logo { animation: splashpulse 1.4s ease-in-out infinite; filter: drop-shadow(0 8px 30px rgba(14,165,233,.45)); }
+@keyframes splashpulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.07) } }
+.splash-bar { width: 30%; animation: splashbar 1.2s ease-in-out infinite; }
+@keyframes splashbar { 0% { margin-left: -30% } 100% { margin-left: 100% } }
+
 /* Squelettes de chargement */
 .skeleton {
   background: linear-gradient(90deg, rgb(var(--line) / .5) 25%, rgb(var(--line)) 50%, rgb(var(--line) / .5) 75%);

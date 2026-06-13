@@ -52,8 +52,9 @@ async function main() {
   })
   const type = async (el, value) => act(async () => { Simulate.change(el, { target: { value } }) })
 
-  // 1. Écran de connexion
-  if (!text().includes('BDR Flow Pro')) throw new Error('Login screen missing: ' + text().slice(0, 200))
+  // 0. Splash screen BD Report puis écran de connexion
+  await act(async () => { await new Promise(r => setTimeout(r, 1700)) })
+  if (!text().includes('BD Report')) throw new Error('Login screen missing: ' + text().slice(0, 200))
   const inputs = container.querySelectorAll('input')
   await type(inputs[0], 'OwenMtp')
   await type(inputs[1], 'Elisaowen2003.')
@@ -127,6 +128,7 @@ async function main() {
   await act(async () => {
     root2.render(React.createElement(StoreProvider, null, React.createElement(App)))
   })
+  await act(async () => { await new Promise(r => setTimeout(r, 1700)) }) // splash
   const inputs2 = c2.querySelectorAll('input')
   await type(inputs2[0], 'OwenMtp')
   await type(inputs2[1], 'Elisaowen2003.')
