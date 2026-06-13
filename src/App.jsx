@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
-  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2,
+  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell,
 } from 'lucide-react'
 import { useStore } from './store.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -21,6 +21,7 @@ import OrgChart from './pages/OrgChart.jsx'
 import AiDashboard from './pages/AiDashboard.jsx'
 import Logs from './pages/Logs.jsx'
 import Trash from './pages/Trash.jsx'
+import TeamLead from './pages/TeamLead.jsx'
 import CompanyModal from './pages/Company.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
@@ -269,6 +270,7 @@ const NAV_GROUPS = [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
       { id: 'ai', label: 'Dashboard personnalisé', icon: Sparkles, brick: 'Dashboard personnalisé' },
       { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: ['Manager', 'Administrateur', 'Fondateur'] },
+      { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, roles: ['Manager', 'Administrateur', 'Fondateur'] },
     ],
   },
   {
@@ -340,6 +342,7 @@ function MainApp() {
     logs: <Logs />,
     corbeille: <Trash />,
     kpi: <Kpi />,
+    teamlead: <TeamLead />,
     admin: <Admin mode="admin" />,
     teams: <Admin mode="teams" />,
     settings: <Settings onEditWidgets={() => setPage('dashboard')} currentTheme={store.sub?.theme || 'ocean-pro'}
@@ -423,6 +426,7 @@ function MainApp() {
               onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}>
               <Search size={14} /> <span className="hidden sm:inline">Rechercher</span> <kbd className="hidden sm:inline text-[10px] border border-line rounded px-1">⌘K</kbd>
             </button>
+            <MentionsBell />
             <button title="Organigramme" className={`p-2 rounded-xl hover:bg-surface ${page === 'org' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('org')}>
               <Network size={19} />
             </button>
@@ -442,6 +446,47 @@ function MainApp() {
       <GlobalSearch onNavigate={goto} />
       <Chatbot />
       <Toasts />
+    </div>
+  )
+}
+
+// Cloche de notifications : @mentions reçues dans les commentaires d'entreprise
+function MentionsBell() {
+  const store = useStore()
+  const [open, setOpen] = useState(false)
+  const mentions = store.sub?.mentions || []
+  const unread = mentions.filter(m => !m.read).length
+  const openMention = (m) => {
+    store.setSub(d => ({ ...d, mentions: d.mentions.map(x => x.id === m.id ? { ...x, read: true } : x) }))
+    setOpen(false)
+    window.dispatchEvent(new CustomEvent('open-company', { detail: m.company }))
+  }
+  return (
+    <div className="relative">
+      <button title="Notifications" className={`p-2 rounded-xl hover:bg-surface relative ${open ? 'text-brand' : 'text-muted'}`} onClick={() => setOpen(o => !o)}>
+        <Bell size={19} />
+        {unread > 0 && <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-extrabold rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center">{unread}</span>}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-11 z-40 card shadow-xl w-80 p-2 fade-in">
+          <div className="flex items-center justify-between px-2 py-1">
+            <span className="text-xs font-bold uppercase text-muted">Mentions</span>
+            {mentions.length > 0 && <button className="text-[11px] text-brand underline"
+              onClick={() => store.setSub(d => ({ ...d, mentions: d.mentions.map(x => ({ ...x, read: true })) }))}>Tout marquer lu</button>}
+          </div>
+          {mentions.length === 0 && <p className="text-xs text-muted text-center py-5">Aucune mention. Vos collègues peuvent vous citer avec @{store.db.subenvs.find(s => s.id === store.session.subEnvId)?.prenom} dans les commentaires d'entreprise.</p>}
+          <div className="max-h-72 overflow-y-auto space-y-1">
+            {mentions.slice(0, 20).map(m => (
+              <button key={m.id} onClick={() => openMention(m)}
+                className={`w-full text-left p-2 rounded-lg hover:bg-surface ${m.read ? 'opacity-60' : ''}`}>
+                <div className="text-xs"><b>{m.from}</b> vous a mentionné sur <b>{m.company}</b></div>
+                <div className="text-xs text-muted line-clamp-2">{m.text}</div>
+                <div className="text-[10px] text-muted">{new Date(m.ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

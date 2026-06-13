@@ -96,7 +96,9 @@ export default function Leads() {
         return d
       })
       store.logAction('Lead', 'Statut déplacé (kanban)', `${group.entreprise} → ${opp}`)
-      toast(`${group.entreprise} → ${opp}`)
+      toast(opp === 'Perdue' ? `${group.entreprise} → Perdue — pensez à renseigner le motif (menu ⋯ dans Mes RDV)`
+        : opp.startsWith('No Show') ? `${group.entreprise} → ${opp} — pensez à renseigner la raison`
+        : `${group.entreprise} → ${opp}`)
     }
     setDragKey(null)
   }

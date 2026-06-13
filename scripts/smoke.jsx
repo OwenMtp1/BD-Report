@@ -63,8 +63,9 @@ async function main() {
   if (!text().includes('Bienvenue OwenMtp')) throw new Error('Welcome screen missing: ' + text().slice(0, 300))
   await act(async () => { await new Promise(r => setTimeout(r, 2800)) })
 
-  // 3. Choix de l'environnement
+  // 3. Choix de l'environnement (PeopleSpheres + environnement de démo Test)
   if (!text().includes('PeopleSpheres')) throw new Error('Env picker missing: ' + text().slice(0, 300))
+  if (!text().includes('Test')) throw new Error('Env Test missing from picker')
   await click(find('button', 'PeopleSpheres'))
 
   // 4. Sous-environnement protégé par PIN

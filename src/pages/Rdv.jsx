@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft } from 'lucide-react'
-import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, SOURCES, PHASE_COLORS, OPP_COLORS, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
+import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, SOURCES, PHASE_COLORS, OPP_COLORS, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
@@ -15,7 +15,7 @@ function emptyForm() {
 }
 
 // ---------------------------------------------------------------- Formulaire RDV
-function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate }) {
+function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners }) {
   const [f, setF] = useState(initial)
   const [err, setErr] = useState('')
   const visible = (k) => sub.fieldsConfig.find(c => c.key === k)?.visible !== false
@@ -28,6 +28,8 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate })
     : []
   const dupEmails = f.contacts.map(c => c.email.trim().toLowerCase()).filter(e =>
     e && sub.contacts.some(c => (c.email || '').toLowerCase() === e))
+  // Conflit de comptes : un autre membre de l'organisation travaille déjà cette entreprise
+  const orgOwners = f.entreprise.trim().length > 1 && findOrgOwners ? findOrgOwners(f.entreprise) : []
 
   const submit = () => {
     if (!f.phase || !f.entreprise || !f.provenance) {
@@ -76,6 +78,14 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate })
         <Field label="Date de passage en SQL">
           <input type="date" className="input" value={f.datePassageSQL} onChange={e => set('datePassageSQL', e.target.value)} />
         </Field>
+        {f.opportunite === 'Perdue' && <Field label="Motif de la perte">
+          <EditableSelect value={f.motifKo || ''} onChange={v => set('motifKo', v)} options={sub.lostReasons || []}
+            onOptionsChange={o => setSubList('lostReasons', o)} label="motifs" />
+        </Field>}
+        {(f.opportunite === 'No Show R1' || f.opportunite === 'No Show MQL') && <Field label="Raison du no-show">
+          <EditableSelect value={f.motifNoShow || ''} onChange={v => set('motifNoShow', v)} options={sub.noShowReasons || []}
+            onOptionsChange={o => setSubList('noShowReasons', o)} label="raisons" />
+        </Field>}
       </div>
 
       {(visible('contact') || visible('poste') || visible('email') || visible('tel')) && (
@@ -120,6 +130,13 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate })
         <div className="mt-2 rounded-xl bg-sky-50 border border-sky-300 p-3 text-xs text-sky-800 flex gap-2">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
           <span>Contact déjà connu ({dupEmails.join(', ')}) : il ne sera pas dupliqué dans Mes contacts.</span>
+        </div>
+      )}
+      {orgOwners.length > 0 && (
+        <div className="mt-2 rounded-xl bg-purple-50 border border-purple-300 p-3 text-xs text-purple-800 flex gap-2">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span><b>Conflit de compte possible :</b> « {f.entreprise} » est déjà travaillée par <b>{orgOwners.join(', ')}</b> dans votre organisation.
+            Vérifiez les commentaires d'équipe sur la fiche entreprise avant de prospecter.</span>
         </div>
       )}
       {err && <p className="text-red-500 text-sm mt-3">{err}</p>}
@@ -268,6 +285,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   const [form, setForm] = useState(pendingNote ? { mode: 'create', data: { ...emptyForm(), notes: pendingNote } } : null)
   const [confirmDel, setConfirmDel] = useState(null)
   const [sqlAsk, setSqlAsk] = useState(null) // {rdvId, patch, date}
+  const [motifAsk, setMotifAsk] = useState(null) // {rdvId, kind: 'ko'|'noshow', value} — rappel non bloquant
   const [openGroups, setOpenGroups] = useState({})
   const [menuFor, setMenuFor] = useState(null)
   const [fieldsModal, setFieldsModal] = useState(false)
@@ -305,10 +323,12 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
         }
         d.rdvs.push(rdv)
         syncContacts(d, rdv)
+        ensurePrimeSnapshot(d, rdv)
       } else {
         const r = d.rdvs.find(x => x.id === id)
         Object.assign(r, applyRdvAutomations(r, data))
         syncContacts(d, r)
+        ensurePrimeSnapshot(d, r)
       }
       return d
     })
@@ -325,10 +345,14 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
     store.setSub(d => {
       const r = d.rdvs.find(x => x.id === rdv.id)
       Object.assign(r, applyRdvAutomations(r, patch))
+      ensurePrimeSnapshot(d, r)
       return d
     })
     const what = Object.entries(patch).map(([k, v]) => `${k} → ${v}`).join(', ')
     store.logAction('RDV', 'Champ modifié', `${rdv.entreprise} : ${what}`)
+    // Rappels non bloquants : motif de perte / raison du no-show
+    if (patch.opportunite === 'Perdue' && !rdv.motifKo) setMotifAsk({ rdvId: rdv.id, kind: 'ko', value: '' })
+    if ((patch.opportunite === 'No Show R1' || patch.opportunite === 'No Show MQL') && !rdv.motifNoShow) setMotifAsk({ rdvId: rdv.id, kind: 'noshow', value: '' })
   }
 
   const confirmSqlDate = () => {
@@ -338,6 +362,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       const extra = { ...patch, datePassageSQL: date }
       if (effectif) extra.effectif = effectif
       Object.assign(r, applyRdvAutomations(r, extra))
+      ensurePrimeSnapshot(d, r) // fige la prime au barème du jour (versionnage)
       return d
     })
     store.logAction('RDV', 'Passage en SQL', `le ${date}`)
@@ -527,6 +552,13 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
         <RdvForm
           title={form.mode === 'create' ? 'Créer un RDV' : form.mode === 'sub' ? 'Créer le rendez-vous suivant' : 'Modifier le RDV'}
           initial={form.data} sub={sub} setSubList={setSubList} isCreate={form.mode === 'create'}
+          findOrgOwners={(name) => {
+            const k = companyKey(name)
+            return store.db.subenvs
+              .filter(s => s.envId === store.session.envId && s.id !== store.session.subEnvId)
+              .filter(s => (store.db.data[s.id]?.rdvs || []).some(r => companyKey(r.entreprise) === k))
+              .map(s => `${s.prenom} ${s.nom}`)
+          }}
           onSave={(data) => saveRdv(data, form.mode, form.id)}
           onClose={() => setForm(null)}
         />
@@ -558,6 +590,32 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           </Modal>
         )
       })()}
+
+      {motifAsk && (
+        <Modal title={motifAsk.kind === 'ko' ? 'Motif de la perte (recommandé)' : 'Raison du no-show (recommandé)'} onClose={() => setMotifAsk(null)}>
+          <p className="text-sm text-muted mb-3">
+            {motifAsk.kind === 'ko'
+              ? 'Renseigner pourquoi ce lead est perdu permet d\'analyser vos raisons de perte. Vous pouvez passer.'
+              : 'Renseigner la raison du no-show aide à distinguer un problème de qualification d\'un problème de confirmation. Vous pouvez passer.'}
+          </p>
+          <EditableSelect value={motifAsk.value} onChange={v => setMotifAsk(m => ({ ...m, value: v }))}
+            options={motifAsk.kind === 'ko' ? (sub.lostReasons || []) : (sub.noShowReasons || [])}
+            onOptionsChange={o => setSubList(motifAsk.kind === 'ko' ? 'lostReasons' : 'noShowReasons', o)}
+            label="motifs" placeholder="Choisir un motif..." />
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn-ghost" onClick={() => setMotifAsk(null)}>Passer</button>
+            <button className="btn-primary" disabled={!motifAsk.value} onClick={() => {
+              store.setSub(d => {
+                const r = d.rdvs.find(x => x.id === motifAsk.rdvId)
+                if (r) r[motifAsk.kind === 'ko' ? 'motifKo' : 'motifNoShow'] = motifAsk.value
+                return d
+              })
+              store.logAction('RDV', motifAsk.kind === 'ko' ? 'Motif de perte renseigné' : 'Raison du no-show renseignée', motifAsk.value)
+              setMotifAsk(null)
+            }}>Enregistrer le motif</button>
+          </div>
+        </Modal>
+      )}
 
       {fieldsModal && (
         <Modal title="Modifier les champs du formulaire" onClose={() => setFieldsModal(false)}>

@@ -14,6 +14,17 @@ function CommentThread({ name, store }) {
   const [text, setText] = useState('')
   const curSub = store.db.subenvs.find(s => s.id === store.session.subEnvId)
   const comments = store.companyComments(name)
+  const teammates = store.db.subenvs.filter(s => s.envId === store.session.envId && s.id !== curSub?.id)
+
+  // Met en évidence les @mentions dans le texte affiché
+  const renderText = (t) => {
+    const names = store.db.subenvs.filter(s => s.envId === store.session.envId).map(s => s.prenom)
+    if (!names.length) return t
+    const re = new RegExp(`(@(?:${names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}))`, 'gi')
+    return t.split(re).map((part, i) => part.startsWith('@')
+      ? <span key={i} className="text-brand font-bold">{part}</span>
+      : part)
+  }
   const fmtTs = (ts) => new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const send = () => {
     if (!text.trim()) return
@@ -36,7 +47,7 @@ function CommentThread({ name, store }) {
                 <span className="font-bold text-xs">{c.author}</span>
                 <span className="text-[10px] text-muted">{fmtTs(c.ts)}</span>
               </div>
-              <p className="text-sm whitespace-pre-wrap">{c.text}</p>
+              <p className="text-sm whitespace-pre-wrap">{renderText(c.text)}</p>
             </div>
             {c.authorSubId === curSub?.id && (
               <button className="p-1 rounded hover:bg-card text-red-400" title="Supprimer mon commentaire"
@@ -46,8 +57,15 @@ function CommentThread({ name, store }) {
         ))}
       </div>
       <div className="flex gap-2">
-        <input className="input !py-1.5 text-sm" placeholder="Ajouter un commentaire pour l'équipe..." value={text}
+        <input className="input !py-1.5 text-sm" placeholder="Ajouter un commentaire... (@Prénom pour notifier un collègue)" value={text}
           onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
+        {teammates.length > 0 && (
+          <select className="input !w-auto !py-1.5 text-xs" value="" title="Mentionner un collègue"
+            onChange={e => { if (e.target.value) setText(t => `${t}${t && !t.endsWith(' ') ? ' ' : ''}@${e.target.value} `) }}>
+            <option value="">@</option>
+            {teammates.map(s => <option key={s.id} value={s.prenom}>@{s.prenom}</option>)}
+          </select>
+        )}
         <button className="btn-primary !px-2.5" onClick={send}><Send size={14} /></button>
       </div>
     </div>

@@ -120,14 +120,14 @@ export default function Primes() {
               </>}
             </div>
           </div>
-          <p className="text-xs text-muted mb-3">Règle : déclenchée à la date de passage en SQL. Payée le mois en cours si le passage a lieu avant le 15, sinon le mois suivant.</p>
+          <p className="text-xs text-muted mb-3">Règle : déclenchée à la date de passage en SQL. Payée le mois en cours si le passage a lieu avant le 15, sinon le mois suivant. 🔒 = prime figée au barème en vigueur lors du passage en SQL (un changement de barème ne réécrit pas le passé).</p>
           {repPrimes.length === 0 ? <Empty text="Aucune prime sur cette période." /> : (
             <div className="space-y-1.5">
               {repPrimes.sort((a, b) => b.montant - a.montant).map((p, i) => (
                 <div key={p.rdvId + i}>
                   <button className="w-full flex items-center justify-between text-sm p-2 rounded-xl bg-surface hover:bg-line/50"
                     onClick={() => setOpenPrime(openPrime === p.rdvId ? '' : p.rdvId)}>
-                    <span className="font-semibold">#{i + 1} — {p.entreprise}</span>
+                    <span className="font-semibold">#{i + 1} — {p.entreprise} {p.figee && <span title={`Prime figée le ${p.figeeLe}`}>🔒</span>}</span>
                     <span className="font-extrabold text-emerald-600">{p.montant} €</span>
                   </button>
                   {openPrime === p.rdvId && (

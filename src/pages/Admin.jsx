@@ -158,7 +158,7 @@ export default function Admin({ mode }) {
   const store = useStore()
   const actor = store.account
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ email: '', pseudo: '', password: '' })
+  const [form, setForm] = useState({ email: '', pseudo: '', password: '', teamOf: '' })
   const [confirmDel, setConfirmDel] = useState(null)
   const [openTeams, setOpenTeams] = useState({})
 
@@ -172,11 +172,16 @@ export default function Admin({ mode }) {
 
   const create = () => {
     if (!form.email || !form.password) return
-    const acc = store.addAccount({ ...form, role: 'Membre', teamOf: mode === 'teams' ? actor.id : null })
+    const acc = store.addAccount({
+      email: form.email, pseudo: form.pseudo, password: form.password,
+      role: 'Membre', teamOf: mode === 'teams' ? actor.id : (form.teamOf || null),
+    })
+    toast(`Compte créé pour ${form.email}`)
     setCreating(false)
-    setForm({ email: '', pseudo: '', password: '' })
+    setForm({ email: '', pseudo: '', password: '', teamOf: '' })
     return acc
   }
+  const allManagers = all.filter(a => a.role === 'Manager')
 
   return (
     <div className="space-y-4">
@@ -221,6 +226,14 @@ export default function Admin({ mode }) {
             <Field label="Mail" required><input className="input" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></Field>
             <Field label="Pseudo"><input className="input" value={form.pseudo} onChange={e => setForm(f => ({ ...f, pseudo: e.target.value }))} /></Field>
             <Field label="Mot de passe" required><input className="input" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} /></Field>
+            {mode === 'admin' && (
+              <Field label="Manager (pour un organigramme clair)">
+                <select className="input" value={form.teamOf} onChange={e => setForm(f => ({ ...f, teamOf: e.target.value }))}>
+                  <option value="">— Aucun manager —</option>
+                  {allManagers.map(m => <option key={m.id} value={m.id}>Équipe de {m.pseudo}</option>)}
+                </select>
+              </Field>
+            )}
             <p className="text-xs text-muted">L'Id est généré automatiquement et l'utilisateur est ajouté à la base de données{mode === 'teams' ? ' dans votre équipe' : ''}.</p>
             <div className="flex justify-end gap-2">
               <button className="btn-ghost" onClick={() => setCreating(false)}>Annuler</button>

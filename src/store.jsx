@@ -199,6 +199,9 @@ function emptySubEnvData() {
     rdvTrash: [], // corbeille : éléments restaurables 30 jours
     noteTrash: [],
     goals: { rdvSemaine: 10, sqlMois: 5, primesMois: 1000 }, // objectifs & quotas
+    mentions: [], // notifications @mention reçues : { id, ts, company, from, text, read }
+    lostReasons: ['Pas de budget', 'Concurrent retenu', 'Mauvais timing', 'Pas décideur', 'Injoignable'],
+    noShowReasons: ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date'],
   }
 }
 
@@ -297,21 +300,44 @@ function buildSeedDb() {
 }
 
 // ---------------------------------------------------------------- Calcul des primes
+export function baremeMatch(bareme, effectif, source) {
+  const eff = Number(effectif) || 0
+  return bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max) && (!b.leadSource || b.leadSource === source))
+    || bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max))
+}
+
+// Fige la prime d'un RDV au moment de son passage en SQL (barème versionné : un
+// changement de barème ultérieur ne réécrit pas les primes déjà acquises).
+export function ensurePrimeSnapshot(data, rdv) {
+  if (!rdv || rdv.primeSnapshot) return
+  if (!(rdv.phase === 'SQL' || rdv.phase === 'Signée') || !rdv.datePassageSQL) return
+  const row = baremeMatch(data.bareme, rdv.effectif, rdv.source)
+  if (!row) return
+  rdv.primeSnapshot = {
+    montant: Number(row.montant) || 0,
+    bareme: { min: row.min, max: row.max, leadSource: row.leadSource || '' },
+    effectif: Number(rdv.effectif) || 0, source: rdv.source || '',
+    figeeLe: todayISO(),
+  }
+}
+
 export function computePrimes(rdvs, bareme) {
   // Une prime par RDV (racine ou sous-RDV) dont la phase est SQL ou Signée,
   // déclenchée à la date de passage en SQL (fallback : date de prise de RDV).
+  // Si une prime a été figée au passage en SQL (snapshot), c'est elle qui fait foi.
   const primes = []
   rdvs.forEach(r => {
     if (!(r.phase === 'SQL' || r.phase === 'Signée')) return
     const trigger = r.datePassageSQL || r.datePriseRdv || r.dateRdv || r.createdAt
-    const eff = Number(r.effectif) || 0
-    const row = bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max) && (!b.leadSource || b.leadSource === r.source))
-      || bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max))
-    if (!row) return
+    const snap = r.primeSnapshot
+    const row = snap ? null : baremeMatch(bareme, r.effectif, r.source)
+    if (!snap && !row) return
     const payMonth = primePaymentMonth(trigger)
     primes.push({
-      rdvId: r.id, entreprise: r.entreprise, effectif: eff, source: r.source,
-      montant: Number(row.montant) || 0, triggerDate: trigger,
+      rdvId: r.id, entreprise: r.entreprise, effectif: Number(r.effectif) || 0, source: r.source,
+      montant: snap ? snap.montant : (Number(row.montant) || 0),
+      figee: !!snap, figeeLe: snap?.figeeLe,
+      triggerDate: trigger,
       payMonth, payMonthKey: payMonth ? monthKey(payMonth) : null,
       payMonthLabel: payMonth ? monthLabel(payMonth) : '—',
     })
@@ -322,7 +348,123 @@ export function computePrimes(rdvs, bareme) {
 // ---------------------------------------------------------------- Store React
 const Ctx = createContext(null)
 
+// ---------------------------------------------------------------- Environnement de démonstration « Test »
+function makeTestRdvs(names, opts) {
+  // Génère des RDV fictifs répartis sur les 3 derniers mois pour un BDR.
+  const now = new Date()
+  const day = (offset) => {
+    const d = new Date(now); d.setDate(d.getDate() - offset)
+    return d.toISOString().slice(0, 10)
+  }
+  return names.map(([entreprise, secteur, effectif, contact, poste], i) => {
+    const spec = opts[i] || {}
+    const prise = day(spec.prise ?? (10 + i * 7))
+    const rdv = day(spec.rdv ?? (5 + i * 7))
+    const r = {
+      id: uid(), parentId: null, entreprise, secteur, effectif,
+      source: spec.source || 'Outbound', provenance: spec.prov || 'Cold Call',
+      phase: spec.phase || 'R1', opportunite: spec.opp || 'En cours',
+      contacts: [{ id: uid(), nom: contact, poste, email: `${contact.toLowerCase().replace(/[^a-z]/g, '.')}@${entreprise.toLowerCase().replace(/[^a-z]/g, '')}.fr`, tel: `06 ${String(10 + i)} ${String(20 + i)} ${String(30 + i)} ${String(40 + i)}` }],
+      datePriseRdv: prise, dateRdv: rdv,
+      datePassageSQL: spec.sql ? day(spec.sql) : '',
+      linkedin: '', notes: spec.notes || '', motifKo: spec.motifKo || '', motifNoShow: spec.motifNoShow || '',
+      history: [{ type: 'phase', value: 'R1', date: prise }, ...(spec.phase && spec.phase !== 'R1' ? [{ type: 'phase', value: spec.phase, date: rdv }] : [])],
+      createdAt: prise,
+    }
+    return r
+  })
+}
+
+function injectTestEnv(db) {
+  if (db.environments.some(e => e.id === 'env-test')) return db
+  const mkAcc = (id, prenom, nom, pseudo, role, teamOf) => ({
+    id, email: `${prenom.toLowerCase()}@test.fr`, pseudo, password: 'test1234',
+    role, developer: false, photo: '', bricks: [...BRICKS], teamOf,
+  })
+  db.accounts.push(
+    mkAcc('test-julie', 'Julie', 'Lambert', 'JulieL', 'Manager', null),
+    mkAcc('test-sarah', 'Sarah', 'Cohen', 'SarahC', 'Membre', 'test-julie'),
+    mkAcc('test-thomas', 'Thomas', 'Moreau', 'ThomasM', 'Membre', 'test-julie'),
+    mkAcc('test-karim', 'Karim', 'Benali', 'KarimB', 'Membre', 'test-julie'),
+  )
+  db.environments.push({
+    id: 'env-test', name: 'Test', logo: '', pin: '', createdBy: 'test-julie',
+    departments: ['Sales', 'Marketing'], members: ['test-julie', 'test-sarah', 'test-thomas', 'test-karim'],
+    comments: {
+      'novacorp industries': [
+        { id: uid(), ts: new Date(Date.now() - 3 * 86400000).toISOString(), text: 'Compte stratégique — le DAF est très réceptif, on pousse fort ce mois-ci.', author: 'Julie Lambert', authorSubId: 'tsub-julie' },
+        { id: uid(), ts: new Date(Date.now() - 86400000).toISOString(), text: '@Sarah ils ont aussi un site à Lyon, ça recoupe ton territoire — on s\'aligne ?', author: 'Thomas Moreau', authorSubId: 'tsub-thomas' },
+      ],
+    },
+  })
+  const mkSub = (id, prenom, nom, poste, ownerId) => ({ id, envId: 'env-test', prenom, nom, poste, service: 'Sales', pin: '0000', photo: '', ownerId })
+  db.subenvs.push(
+    mkSub('tsub-julie', 'Julie', 'Lambert', 'Team Lead BDR', 'test-julie'),
+    mkSub('tsub-sarah', 'Sarah', 'Cohen', 'BDR', 'test-sarah'),
+    mkSub('tsub-thomas', 'Thomas', 'Moreau', 'BDR', 'test-thomas'),
+    mkSub('tsub-karim', 'Karim', 'Benali', 'BDR', 'test-karim'),
+  )
+  const base = () => emptySubEnvData()
+  const sarah = base()
+  sarah.rdvs = makeTestRdvs([
+    ['NovaCorp Industries', 'Industrie', 450, 'Pierre Vasseur', 'DAF'],
+    ['Hexalog', 'Logistique', 120, 'Amélie Roux', 'DRH'],
+    ['Datapulse', 'SaaS', 35, 'Lucas Brun', 'CEO'],
+    ['Verdana Group', 'Retail', 800, 'Chloé Martin', 'VP People'],
+    ['Atelier Mobilier', 'Manufacture', 60, 'Hugo Lefort', 'DG'],
+    ['CleanTech SE', 'Énergie', 230, 'Inès Dupré', 'Head of HR'],
+  ], [
+    { phase: 'SQL', opp: 'Gagnée', sql: 8, source: 'Outbound', prov: 'Cold Call', notes: 'POC validé, négociation en cours.' },
+    { phase: 'MQL', opp: 'En cours', source: 'Inbound', prov: 'Site Web' },
+    { phase: 'R1', opp: 'No Show R1', motifNoShow: 'A annulé', source: 'Outbound', prov: 'LinkedIn' },
+    { phase: 'Signée', opp: 'Signée', sql: 35, source: 'Event', prov: 'Salon', notes: 'Signé après démo sur le salon.' },
+    { phase: 'KO', opp: 'Perdue', motifKo: 'Pas de budget', source: 'Outbound', prov: 'Cold Call' },
+    { phase: 'R2', opp: 'En cours', source: 'Partner', prov: 'Référence client' },
+  ])
+  const thomas = base()
+  thomas.rdvs = makeTestRdvs([
+    ['NovaCorp Industries', 'Industrie', 450, 'Marc Olivier', 'Directeur Site Lyon'],
+    ['BlueWave Conseil', 'Conseil', 25, 'Emma Petit', 'Associée'],
+    ['FerroTrans', 'Transport', 1500, 'Nadia Slimani', 'DRH Groupe'],
+    ['Studio Pixel', 'Création', 15, 'Léo Garnier', 'Fondateur'],
+    ['AgriPlus', 'Agroalimentaire', 320, 'Paul Mercier', 'DAF'],
+  ], [
+    { phase: 'R2', opp: 'En cours', source: 'Outbound', prov: 'Cold Call', notes: 'Recoupe le compte de Sarah — coordination en cours.' },
+    { phase: 'MQL', opp: 'En cours', source: 'Inbound', prov: 'Site Web' },
+    { phase: 'SQL', opp: 'Gagnée', sql: 12, source: 'Outbound', prov: 'LinkedIn' },
+    { phase: 'KO', opp: 'Perdue', motifKo: 'Concurrent retenu', source: 'Event', prov: 'Salon' },
+    { phase: 'R1', opp: 'En cours', source: 'Partner', prov: 'Référence client', prise: 2, rdv: -3 },
+  ])
+  const karim = base()
+  karim.rdvs = makeTestRdvs([
+    ['Maison Bélier', 'Luxe', 90, 'Sophie Arnaud', 'DRH'],
+    ['TechSecure', 'Cybersécurité', 200, 'Yann Morel', 'COO'],
+    ['Urbavert', 'Paysagisme', 45, 'Julien Caron', 'Gérant'],
+    ['Grand Large Hotels', 'Hôtellerie', 600, 'Claire Fontaine', 'VP RH'],
+  ], [
+    { phase: 'R1', opp: 'No Show R1', motifNoShow: 'Injoignable', source: 'Outbound', prov: 'Cold Call' },
+    { phase: 'MQL', opp: 'En cours', source: 'Inbound', prov: 'Emailing' },
+    { phase: 'R1', opp: 'En cours', source: 'Outbound', prov: 'Cold Call', prise: 40, rdv: 38 },
+    { phase: 'SQL', opp: 'Gagnée', sql: 20, source: 'Event', prov: 'Salon' },
+  ])
+  const julie = base()
+  julie.rdvs = makeTestRdvs([
+    ['Groupe Méridien', 'Banque', 2500, 'François Bayard', 'DRH Groupe'],
+    ['Solstice Énergie', 'Énergie', 380, 'Laura Pinto', 'Head of Talent'],
+  ], [
+    { phase: 'Signée', opp: 'Signée', sql: 28, source: 'Partner', prov: 'Référence client', notes: 'Compte stratégique signé en direct.' },
+    { phase: 'SQL', opp: 'Gagnée', sql: 6, source: 'Inbound', prov: 'Site Web' },
+  ])
+  ;[sarah, thomas, karim, julie].forEach(d => { d.contacts = []; d.rdvs.forEach(r => syncContacts(d, r)) })
+  db.data['tsub-sarah'] = sarah
+  db.data['tsub-thomas'] = thomas
+  db.data['tsub-karim'] = karim
+  db.data['tsub-julie'] = julie
+  return db
+}
+
 function migrate(db) {
+  injectTestEnv(db)
   // Ajoute les nouvelles briques aux comptes qui avaient déjà l'accès cœur (proxy : brique "Leads").
   ;(db.accounts || []).forEach(a => {
     a.bricks = a.bricks || []
@@ -340,6 +482,9 @@ function migrate(db) {
     data.rdvTrash = (data.rdvTrash || []).filter(t => t.deletedAt > cutoff)
     data.noteTrash = (data.noteTrash || []).filter(t => t.deletedAt > cutoff)
     data.goals = data.goals || { rdvSemaine: 10, sqlMois: 5, primesMois: 1000 }
+    data.mentions = data.mentions || []
+    data.lostReasons = data.lostReasons || ['Pas de budget', 'Concurrent retenu', 'Mauvais timing', 'Pas décideur', 'Injoignable']
+    data.noShowReasons = data.noShowReasons || ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date']
   })
   return db
 }
@@ -459,9 +604,20 @@ export function StoreProvider({ children }) {
           e.comments = e.comments || {}
           const key = companyKey(company)
           e.comments[key] = e.comments[key] || []
+          const author = sub ? `${sub.prenom} ${sub.nom}` : 'Inconnu'
           e.comments[key].push({
             id: uid(), ts: new Date().toISOString(), text: text.trim(),
-            author: sub ? `${sub.prenom} ${sub.nom}` : 'Inconnu', authorSubId: sub?.id,
+            author, authorSubId: sub?.id,
+          })
+          // @mentions : notifie chaque membre de l'environnement cité par son prénom
+          d.subenvs.filter(s => s.envId === env.id && s.id !== sub?.id).forEach(s => {
+            if (text.toLowerCase().includes('@' + s.prenom.toLowerCase())) {
+              const data = d.data[s.id]
+              if (data) {
+                data.mentions = data.mentions || []
+                data.mentions.unshift({ id: uid(), ts: new Date().toISOString(), company: company.trim(), from: author, text: text.trim(), read: false })
+              }
+            }
           })
           return d
         })
