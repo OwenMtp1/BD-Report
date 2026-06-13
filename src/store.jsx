@@ -26,21 +26,40 @@ export const uid = () => Math.random().toString(36).slice(2, 10)
 // Ajout de jours en UTC (stable quel que soit le fuseau du navigateur)
 const addDaysISO = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
 
-// Construit un projet d'implémentation par défaut à partir d'une demande entrante.
-export function makeProjectFromRequest(req) {
+// Phases d'implémentation par défaut (4 phases hebdomadaires séquentielles à partir d'aujourd'hui).
+function defaultProjectPhases() {
   const pick = ['Cadrage', 'Implémentation', 'Formation', 'Go-live']
   const colors = ['#3b5bdb', '#0ea5e9', '#f59e0b', '#10b981']
   let cursor = todayISO()
-  const phases = pick.map((name, i) => {
+  return pick.map((name, i) => {
     const start = cursor
     const end = addDaysISO(start, 6)
     cursor = addDaysISO(end, 1)
     return { id: uid(), name, start, end, done: false, color: colors[i] }
   })
+}
+
+// Construit un projet d'implémentation par défaut à partir d'une demande entrante.
+export function makeProjectFromRequest(req) {
   return {
     id: uid(), name: `Implémentation — ${req.name || 'Client'}`, clientName: req.name || 'Client',
-    envId: null, owner: '', status: 'prevu', phases, createdAt: new Date().toISOString(),
+    envId: null, owner: '', status: 'prevu', phases: defaultProjectPhases(), createdAt: new Date().toISOString(),
     sourceRequestId: req.id,
+  }
+}
+
+// Chaque environnement existant est un client : carte « Clients actifs » du back-office support.
+function makeClientFromEnv(env) {
+  const now = new Date().toISOString()
+  return { id: uid(), key: 'env:' + env.id, name: env.name, envId: env.id, accountId: env.createdBy || null, status: 'actifs', createdAt: now, lastActivity: now, note: '' }
+}
+
+// ...et possède son projet d'implémentation dans la Gestion de Projet.
+function makeProjectFromEnv(env) {
+  return {
+    id: uid(), name: `Implémentation — ${env.name}`, clientName: env.name,
+    envId: env.id, owner: '', status: 'encours', phases: defaultProjectPhases(), createdAt: new Date().toISOString(),
+    sourceEnvId: env.id,
   }
 }
 
@@ -634,6 +653,11 @@ function migrate(db) {
       db.projects.unshift(makeProjectFromRequest(req))
     }
   })
+  // Chaque environnement existant est forcément un client (Clients actifs) avec son projet d'implémentation.
+  ;(db.environments || []).forEach(env => {
+    if (!db.clients.some(c => c.key === 'env:' + env.id)) db.clients.unshift(makeClientFromEnv(env))
+    if (!db.projects.some(p => p.sourceEnvId === env.id)) db.projects.unshift(makeProjectFromEnv(env))
+  })
   // Corbeille support : purge des éléments supprimés depuis plus de 30 jours
   const supCutoff = new Date(Date.now() - 30 * 86400000).toISOString()
   db.supportTrash = (db.supportTrash || []).filter(t => t.deletedAt > supCutoff)
@@ -787,7 +811,15 @@ export function StoreProvider({ children }) {
         // L'environnement hérite de l'offre de son créateur (Starter reste limité).
         const plan = account?.plan || 'starter'
         const env = { id: uid(), name, logo: logo || '', pin: '', plan, createdBy: session.accountId, departments: ['Marketing', 'Sales'] }
-        setDb(d => { d.environments.push(env); return d })
+        setDb(d => {
+          d.environments.push(env)
+          // Tout nouvel environnement devient un client avec son projet d'implémentation.
+          d.clients = d.clients || []
+          if (!d.clients.some(c => c.key === 'env:' + env.id)) d.clients.unshift(makeClientFromEnv(env))
+          d.projects = d.projects || []
+          if (!d.projects.some(p => p.sourceEnvId === env.id)) d.projects.unshift(makeProjectFromEnv(env))
+          return d
+        })
         return env
       },
       createSubEnv(envId, { prenom, nom, poste, service, pin }) {

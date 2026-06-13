@@ -107,13 +107,15 @@ async function main() {
   await click(navBtn('Tickets Techniques'))
   if (!text().includes('Connexion & authentification')) throw new Error('Ticket not visible in Tickets Techniques')
   await click(navBtn('Clients'))
-  if (!text().includes('PeopleSpheres')) throw new Error('Client not auto-created in Clients kanban')
+  // Chaque environnement existant est forcément un client (PeopleSpheres + Test).
+  if (!text().includes('PeopleSpheres') || !text().includes('Test')) throw new Error('Environments not turned into clients')
   // La demande du site est arrivée dans Nouvelles demandes...
   await click(navBtn('Nouvelles demandes'))
   if (!text().includes('ACME Corp')) throw new Error('Contact request not ingested into Nouvelles demandes')
-  // ...et a généré automatiquement un projet d'implémentation.
+  // ...et a généré automatiquement un projet ; chaque environnement a aussi son projet d'implémentation.
   await click(navBtn('Gestion de Projet'))
   if (!text().includes('ACME Corp')) throw new Error('Auto-project from request not created')
+  if (!text().includes('PeopleSpheres')) throw new Error('Environment project not created')
   // Création manuelle d'un projet : le formulaire + le planning Gantt doivent fonctionner.
   await click(find('button', 'Nouveau projet'))
   if (!text().includes('Phases du projet')) throw new Error('Project form did not open')
