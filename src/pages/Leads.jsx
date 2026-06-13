@@ -18,7 +18,13 @@ function groupByCompany(rdvs) {
     // Le RDV le plus récent représente l'état actuel de l'entreprise dans le pipeline.
     const rep = [...g.rdvs].sort((a, b) => recentDate(b).localeCompare(recentDate(a)))[0]
     const starts = g.rdvs.map(r => r.datePriseRdv || r.createdAt).filter(Boolean).sort()
-    return { ...g, rep, opportunite: rep.opportunite, firstDate: starts[0] || rep.createdAt }
+    // Dernière activité = dernier événement d'historique de toute la famille
+    const activities = g.rdvs.flatMap(r => (r.history || []).map(h => h.date)).filter(Boolean).sort()
+    const lastDate = activities.length ? activities[activities.length - 1] : (starts[starts.length - 1] || rep.createdAt)
+    // Date de fermeture = date du passage en statut clos (Gagnée/Perdue/Signée), sinon vide (lead ouvert)
+    const closed = ['Gagnée', 'Perdue', 'Signée'].includes(rep.opportunite) || ['Signée', 'KO'].includes(rep.phase)
+    const closeDate = closed ? (rep.history?.length ? rep.history[rep.history.length - 1].date : rep.dateRdv) : ''
+    return { ...g, rep, owner: rep._owner || '', opportunite: rep.opportunite, firstDate: starts[0] || rep.createdAt, lastDate, closeDate }
   })
 }
 
@@ -77,13 +83,32 @@ export default function Leads() {
   const [detail, setDetail] = useState(null)
   const [dragKey, setDragKey] = useState(null)
   const [scope, setScope] = useState('me') // 'me' = mon pipeline | 'org' = pipeline entreprise (partagé)
+  // Filtres : propriétaire + plages de dates (ouverture / fermeture / dernière activité)
+  const [fOwner, setFOwner] = useState('')
+  const [fOpen, setFOpen] = useState({ start: '', end: '' })
+  const [fClose, setFClose] = useState({ start: '', end: '' })
+  const [fActivity, setFActivity] = useState({ start: '', end: '' })
 
   const cols = sub.opportunites // le kanban se met à jour avec chaque nouveau statut créé
 
   // Vue entreprise : agrège les RDV de tous les espaces de l'environnement, avec leur propriétaire.
   const envSubs = store.db.subenvs.filter(s => s.envId === store.session.envId)
   const orgRdvs = envSubs.flatMap(s => (store.db.data[s.id]?.rdvs || []).map(r => ({ ...r, _owner: `${s.prenom} ${s.nom}` })))
-  const groups = groupByCompany(scope === 'me' ? sub.rdvs : orgRdvs)
+  const ownerOptions = [...new Set(envSubs.map(s => `${s.prenom} ${s.nom}`))]
+  const inRange = (d, range) => {
+    if (!range.start && !range.end) return true
+    if (!d) return false
+    if (range.start && d < range.start) return false
+    if (range.end && d > range.end) return false
+    return true
+  }
+  const allGroups = groupByCompany(scope === 'me' ? sub.rdvs : orgRdvs)
+  const groups = allGroups.filter(g =>
+    (!fOwner || g.owner === fOwner) &&
+    inRange(g.firstDate, fOpen) &&
+    (fClose.start || fClose.end ? inRange(g.closeDate, fClose) : true) &&
+    inRange(g.lastDate, fActivity))
+  const hasFilter = fOwner || fOpen.start || fOpen.end || fClose.start || fClose.end || fActivity.start || fActivity.end
 
   const drop = (opp) => {
     if (!dragKey || scope === 'org') { setDragKey(null); return }
@@ -131,6 +156,30 @@ export default function Leads() {
           ? "Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut d'opportunité."
           : 'Vue partagée de toute l\'organisation (lecture). Ouvrez une fiche entreprise pour laisser un commentaire visible par tous les membres.'}
       </p>
+
+      <div className="card p-3 flex items-end gap-3 flex-wrap text-xs">
+        {scope === 'org' && (
+          <div>
+            <span className="label">Propriétaire du lead</span>
+            <select className="input !w-auto !py-1.5" value={fOwner} onChange={e => setFOwner(e.target.value)}>
+              <option value="">Tous</option>
+              {ownerOptions.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        )}
+        {[['Date d\'ouverture', fOpen, setFOpen], ['Date de fermeture', fClose, setFClose], ['Dernière activité', fActivity, setFActivity]].map(([label, val, setter]) => (
+          <div key={label}>
+            <span className="label">{label}</span>
+            <div className="flex items-center gap-1">
+              <input type="date" className="input !w-auto !py-1.5" value={val.start} onChange={e => setter(v => ({ ...v, start: e.target.value }))} />
+              <span className="text-muted">→</span>
+              <input type="date" className="input !w-auto !py-1.5" value={val.end} onChange={e => setter(v => ({ ...v, end: e.target.value }))} />
+            </div>
+          </div>
+        ))}
+        {hasFilter && <button className="text-brand underline pb-2" onClick={() => { setFOwner(''); setFOpen({ start: '', end: '' }); setFClose({ start: '', end: '' }); setFActivity({ start: '', end: '' }) }}>Réinitialiser</button>}
+      </div>
+
       <div className="flex gap-3 overflow-x-auto pb-3">
         {cols.map(opp => {
           const cards = groups.filter(g => g.opportunite === opp)

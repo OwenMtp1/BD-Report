@@ -85,8 +85,8 @@ export default function Tasks() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-extrabold">Tâches prioritaires</h2>
-      <p className="text-xs text-muted -mt-2">Vos actions classées par priorité : d'abord les no-shows à replanifier, puis les opportunités en cours, enfin les leads perdus à relancer.</p>
+      <h2 className="text-xl font-extrabold">Recommandations prioritaires</h2>
+      <p className="text-xs text-muted -mt-2">Vos recommandations d'actions classées par priorité : d'abord les no-shows à replanifier, puis les opportunités en cours, enfin les leads perdus à relancer.</p>
 
       <Section icon={<CalendarClock size={18} className="text-orange-600" />} color="bg-orange-100"
         title="No Show R1 à replanifier" desc="Rendez-vous manqués : reprogrammez un nouveau créneau." count={noShows.length}>

@@ -194,24 +194,38 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
   <div class="wrap">
     <div class="sec-head fade">
       <span class="chip" data-i18n="pricing.chip">Tarifs</span>
-      <h2 data-i18n="pricing.title">Rejoignez la bêta — offre exclusive et limitée</h2>
-      <p data-i18n="pricing.sub">BD Report est en phase de bêta privée : un nombre restreint de places, un accès privilégié, et votre voix dans la feuille de route.</p>
+      <h2 data-i18n="pricing.title">Commencez gratuitement, débloquez tout en bêta</h2>
+      <p data-i18n="pricing.sub">L'offre Starter est gratuite et accessible immédiatement. L'offre Beta Testing, complète et exclusive, s'obtient sur invitation.</p>
     </div>
-    <div class="plans fade" style="grid-template-columns:1fr;max-width:520px;margin:0 auto">
-      <div class="plan pro">
-        <span class="badge" data-i18n="pricing.badge">⭐ Offre exclusive — places limitées</span>
-        <h3 data-i18n="pricing.beta">Bêta Testeur</h3>
-        <div class="price">0 € <small data-i18n="pricing.duration">pendant toute la bêta</small></div>
-        <p style="color:var(--muted);font-size:14px" data-i18n="pricing.bdesc">Accédez à tout BD Report avant tout le monde, en échange de vos retours.</p>
+    <div class="plans fade" style="grid-template-columns:1fr 1fr;max-width:840px;margin:0 auto">
+      <div class="plan">
+        <h3 data-i18n="pricing.starter">Starter</h3>
+        <div class="price">0 € <small data-i18n="pricing.free">gratuit, pour toujours</small></div>
+        <p style="color:var(--muted);font-size:14px" data-i18n="pricing.sdesc">Pour démarrer en solo et tester l'essentiel.</p>
         <ul>
-          <li data-i18n="pricing.b1">1 environnement d'organisation</li>
-          <li data-i18n="pricing.b2">Jusqu'à 5 comptes collaborateurs</li>
-          <li data-i18n="pricing.b3">Usage limité : volumes adaptés à la phase de test</li>
+          <li data-i18n="pricing.s1">Dashboard de suivi</li>
+          <li data-i18n="pricing.s2">Gestion de vos rendez-vous</li>
+          <li data-i18n="pricing.s3">Répertoire de contacts</li>
+          <li data-i18n="pricing.s4">Gestion de vos tâches</li>
+          <li data-i18n="pricing.s5">1 espace personnel</li>
+        </ul>
+        <a class="btn btn-primary" href="app/" data-i18n="pricing.createAccount">Créer un compte gratuit</a>
+        <div class="soon" data-i18n="pricing.supgrade">Passez en Beta Testing pour débloquer toutes les fonctionnalités.</div>
+      </div>
+      <div class="plan pro">
+        <span class="badge" data-i18n="pricing.badge">⭐ Offre exclusive — sur invitation</span>
+        <h3 data-i18n="pricing.beta">Beta Testing</h3>
+        <div class="price">0 € <small data-i18n="pricing.duration">pendant toute la bêta</small></div>
+        <p style="color:var(--muted);font-size:14px" data-i18n="pricing.bdesc">Accédez à tout BD Report, en échange de vos retours.</p>
+        <ul>
           <li data-i18n="pricing.b4">Toutes les fonctionnalités, sans exception</li>
+          <li data-i18n="pricing.b1">Environnements d'organisation</li>
+          <li data-i18n="pricing.b2">Comptes collaborateurs gérés par un manager</li>
+          <li data-i18n="pricing.b6">Pilotage d'équipe, primes, leads, notes…</li>
           <li data-i18n="pricing.b5">Ligne directe avec l'équipe produit</li>
         </ul>
         <a class="btn btn-primary" href="#contact" data-i18n="pricing.apply">Demander ma place</a>
-        <div class="soon" data-i18n="pricing.note">Les offres Starter, Pro et Entreprise arriveront à la fin de la bêta. Les bêta-testeurs bénéficieront de conditions préférentielles à vie.</div>
+        <div class="soon" data-i18n="pricing.note">Les comptes créés par un manager d'un espace Beta héritent automatiquement de l'accès complet.</div>
       </div>
     </div>
   </div>
@@ -260,12 +274,27 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
       <h2 data-i18n="contact.title">Parlons de votre équipe</h2>
       <p data-i18n="contact.sub">Une question, une démo, un partenariat ? Écrivez-nous.</p>
     </div>
-    <form class="contact-box fade" action="mailto:owen.mb.pro@gmail.com" method="get" enctype="text/plain">
-      <input type="text" name="subject" data-i18n-ph="contact.name" placeholder="Votre nom & entreprise" required>
-      <input type="email" name="cc" data-i18n-ph="contact.email" placeholder="Votre email" required>
-      <textarea name="body" data-i18n-ph="contact.msg" placeholder="Votre message..." required></textarea>
+    <form class="contact-box fade" id="contactForm" onsubmit="return sendContact(event)">
+      <input type="text" id="cName" data-i18n-ph="contact.name" placeholder="Votre nom & entreprise" required>
+      <input type="email" id="cEmail" data-i18n-ph="contact.email" placeholder="Votre email" required>
+      <textarea id="cMsg" data-i18n-ph="contact.msg" placeholder="Votre message..." required></textarea>
       <button class="btn btn-primary" type="submit" data-i18n="contact.send">Envoyer le message</button>
+      <p id="cHint" style="font-size:12.5px;color:rgba(255,255,255,.55);text-align:center"></p>
     </form>
+    <script>
+      function sendContact(e){
+        e.preventDefault();
+        var name=document.getElementById('cName').value.trim();
+        var email=document.getElementById('cEmail').value.trim();
+        var msg=document.getElementById('cMsg').value.trim();
+        var subject=encodeURIComponent('[BD Report] Contact — '+name);
+        var body=encodeURIComponent('De : '+name+'\nEmail : '+email+'\n\n'+msg);
+        // Toutes les réponses arrivent sur owen.mb.pro@gmail.com
+        window.location.href='mailto:owen.mb.pro@gmail.com?subject='+subject+'&body='+body;
+        document.getElementById('cHint').textContent='Votre messagerie va s’ouvrir. Si rien ne se passe, écrivez à owen.mb.pro@gmail.com';
+        return false;
+      }
+    </script>
   </div>
 </section>
 
@@ -416,11 +445,14 @@ const I18N = {
     'feat.chip':'Features','feat.title':'A BDR\'s entire day, in one place',
     'feat.sub':'Six feature families covering prospecting from the first booked meeting to the bonus payout.',
     'nav.product':'Product ▾','cat.pilotage':'Steering','cat.activite':'Activity','cat.pipeline':'Pipeline','cat.remuneration':'Compensation','cat.collaboration':'Collaboration','cat.donnees':'Data',
-    'pricing.chip':'Pricing','pricing.title':'Join the beta — an exclusive, limited offer','pricing.sub':'BD Report is in private beta: a restricted number of seats, privileged access, and your voice on the roadmap.',
-    'pricing.badge':'⭐ Exclusive offer — limited seats','pricing.beta':'Beta Tester','pricing.duration':'for the whole beta',
-    'pricing.bdesc':'Get all of BD Report before everyone else, in exchange for your feedback.',
-    'pricing.b1':'1 organization environment','pricing.b2':'Up to 5 teammate accounts','pricing.b3':'Limited usage: volumes sized for the test phase','pricing.b4':'Every single feature included','pricing.b5':'Direct line to the product team',
-    'pricing.apply':'Request my seat','pricing.note':'Starter, Pro and Enterprise plans will arrive at the end of the beta. Beta testers get preferential conditions for life.',
+    'pricing.chip':'Pricing','pricing.title':'Start free, unlock everything in beta','pricing.sub':'The Starter plan is free and instantly available. The full, exclusive Beta Testing plan is invitation-only.',
+    'pricing.starter':'Starter','pricing.free':'free, forever','pricing.sdesc':'To start solo and try the essentials.',
+    'pricing.s1':'Tracking dashboard','pricing.s2':'Meeting management','pricing.s3':'Contact directory','pricing.s4':'Task management','pricing.s5':'1 personal workspace',
+    'pricing.createAccount':'Create a free account','pricing.supgrade':'Upgrade to Beta Testing to unlock every feature.',
+    'pricing.badge':'⭐ Exclusive offer — invitation only','pricing.beta':'Beta Testing','pricing.duration':'for the whole beta',
+    'pricing.bdesc':'Get all of BD Report, in exchange for your feedback.',
+    'pricing.b1':'Organization environments','pricing.b2':'Teammate accounts managed by a manager','pricing.b4':'Every single feature included','pricing.b5':'Direct line to the product team','pricing.b6':'Team steering, bonuses, leads, notes…',
+    'pricing.apply':'Request my seat','pricing.note':'Accounts created by a manager of a Beta workspace automatically inherit full access.',
     'blog.title':'The outbound teams blog','blog.sub':'Prospecting tips, war stories and product news — first articles coming soon.',
     'blog.t1':'Prospecting','blog.a1':'Cold calling: 7 openers that earn you 30 seconds of attention','blog.soon':'Coming soon',
     'blog.t2':'Compensation','blog.a2':'Building a commission grid your BDRs actually understand','blog.soon2':'Coming soon',
@@ -439,11 +471,14 @@ const I18N = {
     'feat.chip':'Funciones','feat.title':'Todo el día de un BDR, en un solo lugar',
     'feat.sub':'Seis familias de funciones que cubren la prospección desde la primera cita hasta el pago de la prima.',
     'nav.product':'Producto ▾','cat.pilotage':'Dirección','cat.activite':'Actividad','cat.pipeline':'Pipeline','cat.remuneration':'Remuneración','cat.collaboration':'Colaboración','cat.donnees':'Datos',
-    'pricing.chip':'Precios','pricing.title':'Únete a la beta — oferta exclusiva y limitada','pricing.sub':'BD Report está en beta privada: plazas restringidas, acceso privilegiado y tu voz en la hoja de ruta.',
-    'pricing.badge':'⭐ Oferta exclusiva — plazas limitadas','pricing.beta':'Beta Tester','pricing.duration':'durante toda la beta',
-    'pricing.bdesc':'Accede a todo BD Report antes que nadie, a cambio de tus comentarios.',
-    'pricing.b1':'1 entorno de organización','pricing.b2':'Hasta 5 cuentas de colaboradores','pricing.b3':'Uso limitado: volúmenes adaptados a la fase de prueba','pricing.b4':'Todas las funciones, sin excepción','pricing.b5':'Línea directa con el equipo de producto',
-    'pricing.apply':'Solicitar mi plaza','pricing.note':'Los planes Starter, Pro y Empresa llegarán al final de la beta. Los beta testers tendrán condiciones preferentes de por vida.',
+    'pricing.chip':'Precios','pricing.title':'Empieza gratis, desbloquea todo en beta','pricing.sub':'El plan Starter es gratuito y accesible al instante. El plan Beta Testing, completo y exclusivo, es por invitación.',
+    'pricing.starter':'Starter','pricing.free':'gratis, para siempre','pricing.sdesc':'Para empezar en solitario y probar lo esencial.',
+    'pricing.s1':'Panel de seguimiento','pricing.s2':'Gestión de citas','pricing.s3':'Agenda de contactos','pricing.s4':'Gestión de tareas','pricing.s5':'1 espacio personal',
+    'pricing.createAccount':'Crear una cuenta gratis','pricing.supgrade':'Pasa a Beta Testing para desbloquear todas las funciones.',
+    'pricing.badge':'⭐ Oferta exclusiva — por invitación','pricing.beta':'Beta Testing','pricing.duration':'durante toda la beta',
+    'pricing.bdesc':'Accede a todo BD Report, a cambio de tus comentarios.',
+    'pricing.b1':'Entornos de organización','pricing.b2':'Cuentas de colaboradores gestionadas por un manager','pricing.b4':'Todas las funciones, sin excepción','pricing.b5':'Línea directa con el equipo de producto','pricing.b6':'Dirección de equipo, primas, leads, notas…',
+    'pricing.apply':'Solicitar mi plaza','pricing.note':'Las cuentas creadas por un manager de un espacio Beta heredan automáticamente el acceso completo.',
     'blog.title':'El blog de los equipos outbound','blog.sub':'Consejos de prospección, experiencias y novedades de producto — primeros artículos muy pronto.',
     'blog.t1':'Prospección','blog.a1':'Cold call: 7 aperturas que ganan 30 segundos de atención','blog.soon':'Próximamente',
     'blog.t2':'Remuneración','blog.a2':'Crear un baremo de comisiones que tus BDR entiendan','blog.soon2':'Próximamente',

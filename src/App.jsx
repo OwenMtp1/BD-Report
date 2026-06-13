@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
-  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell,
+  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Rdv from './pages/Rdv.jsx'
 import Leads from './pages/Leads.jsx'
 import Tasks from './pages/Tasks.jsx'
+import MyTasks from './pages/MyTasks.jsx'
 import Contacts from './pages/Contacts.jsx'
 import Notes from './pages/Notes.jsx'
 import Primes from './pages/Primes.jsx'
@@ -291,7 +292,8 @@ const NAV_GROUPS = [
     id: 'activite', label: 'Activité commerciale', items: [
       { id: 'rdv', label: 'Mes Rendez-vous', icon: CalendarDays, brick: 'Mes Rendez-vous' },
       { id: 'leads', label: 'Leads', icon: KanbanSquare, brick: 'Leads' },
-      { id: 'tasks', label: 'Tâches prioritaires', icon: ListChecks, brick: 'Tâches prioritaires' },
+      { id: 'tasks', label: 'Recommandations prioritaires', icon: ListChecks, brick: 'Recommandations prioritaires' },
+      { id: 'mytasks', label: 'Mes tâches', icon: CheckSquare, brick: 'Mes tâches' },
     ],
   },
   {
@@ -332,9 +334,10 @@ function MainApp() {
 
   const themeObj = THEMES.find(t => t.id === (store.sub?.theme || theme)) || THEMES[0]
 
+  const myBricks = allowedBricks(me) // briques permises par l'offre (Starter limité / Beta complet)
   const canSee = (item) => {
     if (item.roles && !item.roles.includes(me.role)) return false
-    if (item.brick && !(me.bricks || []).includes(item.brick)) return false
+    if (item.brick && !myBricks.includes(item.brick)) return false
     return true
   }
   const groups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(canSee) })).filter(g => g.items.length)
@@ -351,6 +354,7 @@ function MainApp() {
     rdv: <Rdv pendingNote={pendingNote} onPendingNoteUsed={() => setPendingNote('')} />,
     leads: <Leads />,
     tasks: <Tasks />,
+    mytasks: <MyTasks />,
     contacts: <Contacts />,
     notes: <Notes onCreateRdvFromNote={goCreateRdvFromNote} />,
     primes: <Primes />,
@@ -437,7 +441,13 @@ function MainApp() {
             onClick={store.logout}>
             <LogOut size={15} /> {tr('common.logout')}
           </button>
-          <p className="text-center text-[10px] text-muted pt-1">v{APP_VERSION}</p>
+          {me.plan === 'starter' && (
+            <div className="mt-1 rounded-lg bg-brand/10 p-2 text-center">
+              <div className="text-[11px] font-bold text-brand">Offre Starter</div>
+              <div className="text-[10px] text-muted">Accès limité — passez en Beta pour tout débloquer</div>
+            </div>
+          )}
+          <p className="text-center text-[10px] text-muted pt-1">v{APP_VERSION} · {(PLANS[me.plan] || PLANS.beta).label}</p>
         </div>
       </aside>
 

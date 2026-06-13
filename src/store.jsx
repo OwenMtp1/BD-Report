@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 
 const LS_KEY = 'bdrflow_db_v1'
 const SESSION_KEY = 'bdrflow_session_v1'
-export const APP_VERSION = '1.9.0'
+export const APP_VERSION = '1.10.0'
 
 // ---------------------------------------------------------------- Format monétaire
 export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
@@ -194,9 +194,24 @@ export const RDV_FIELDS = [
 ]
 
 export const BRICKS = [
-  'Dashboard', 'Mes Rendez-vous', 'Leads', 'Tâches prioritaires', 'Mes contacts', 'Mes notes',
+  'Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes',
   'Primes & Commissions', 'KPI Entreprise', 'Dashboard personnalisé', 'Logs',
 ]
+
+// ---------------------------------------------------------------- Offres (plans)
+// starter : compte gratuit auto-créé, accès très limité.
+// beta : accès complet, attribué quand un manager crée un compte dans un environnement Beta.
+export const STARTER_BRICKS = ['Dashboard', 'Mes Rendez-vous', 'Mes contacts', 'Mes tâches']
+export const PLANS = {
+  starter: { id: 'starter', label: 'Starter', bricks: STARTER_BRICKS },
+  beta: { id: 'beta', label: 'Beta Testing', bricks: [...BRICKS] },
+}
+// Briques réellement accessibles à un compte selon son offre
+export function allowedBricks(account) {
+  const plan = PLANS[account?.plan] || PLANS.beta
+  const planSet = new Set(plan.bricks)
+  return (account?.bricks || []).filter(b => planSet.has(b))
+}
 
 export const ROLES = ['Fondateur', 'Administrateur', 'Manager', 'Développeur', 'Membre']
 
@@ -234,6 +249,7 @@ function emptySubEnvData() {
     lostReasons: ['Pas de budget', 'Concurrent retenu', 'Mauvais timing', 'Pas décideur', 'Injoignable'],
     noShowReasons: ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date'],
     currency: 'EUR', // devise des primes (EUR ou USD)
+    tasks: [], // Mes tâches : { id, title, description, dueDate, assignee, company, contact, rdvId, done, archived, pinned, createdAt }
   }
 }
 
@@ -323,9 +339,9 @@ function buildSeedDb() {
   return {
     accounts: [{
       id: '01', email: 'owen.mb.pro@gmail.com', pseudo: 'OwenMtp', password: 'demo1234',
-      role: 'Fondateur', developer: true, photo: '', bricks: [...BRICKS], teamOf: null,
+      role: 'Fondateur', developer: true, plan: 'beta', photo: '', bricks: [...BRICKS], teamOf: null,
     }],
-    environments: [{ id: envId, name: 'PeopleSpheres', logo: '', pin: '', createdBy: '01', departments: ['Marketing', 'Sales', 'Tech', 'Direction'] }],
+    environments: [{ id: envId, name: 'PeopleSpheres', logo: '', pin: '', plan: 'beta', createdBy: '01', departments: ['Marketing', 'Sales', 'Tech', 'Direction'] }],
     subenvs: [{ id: subId, envId, prenom: 'Owen', nom: 'Mrani Bonnier', poste: 'BDR', service: 'Marketing', pin: '1205', photo: '', ownerId: '01' }],
     data: { [subId]: subData },
   }
@@ -411,7 +427,7 @@ function injectTestEnv(db) {
   if (db.environments.some(e => e.id === 'env-test')) return db
   const mkAcc = (id, prenom, nom, pseudo, role, teamOf) => ({
     id, email: `${prenom.toLowerCase()}@test.fr`, pseudo, password: 'test1234',
-    role, developer: false, photo: '', bricks: [...BRICKS], teamOf,
+    role, developer: false, plan: 'beta', photo: '', bricks: [...BRICKS], teamOf,
   })
   db.accounts.push(
     mkAcc('test-julie', 'Julie', 'Lambert', 'JulieL', 'Manager', null),
@@ -420,7 +436,7 @@ function injectTestEnv(db) {
     mkAcc('test-karim', 'Karim', 'Benali', 'KarimB', 'Membre', 'test-julie'),
   )
   db.environments.push({
-    id: 'env-test', name: 'Test', logo: '', pin: '', createdBy: 'test-julie',
+    id: 'env-test', name: 'Test', logo: '', pin: '', plan: 'beta', createdBy: 'test-julie',
     departments: ['Sales', 'Marketing'], members: ['test-julie', 'test-sarah', 'test-thomas', 'test-karim'],
     comments: {
       'novacorp industries': [
@@ -500,12 +516,17 @@ function migrate(db) {
   // Ajoute les nouvelles briques aux comptes qui avaient déjà l'accès cœur (proxy : brique "Leads").
   ;(db.accounts || []).forEach(a => {
     a.bricks = a.bricks || []
-    ;['Tâches prioritaires', 'Logs'].forEach(b => {
+    // Renommage de la brique "Tâches prioritaires" → "Recommandations prioritaires"
+    a.bricks = a.bricks.map(b => b === 'Tâches prioritaires' ? 'Recommandations prioritaires' : b)
+    ;['Recommandations prioritaires', 'Mes tâches', 'Logs'].forEach(b => {
       if (a.bricks.includes('Leads') && !a.bricks.includes(b)) a.bricks.push(b)
     })
+    // Offre par défaut : les comptes existants gardent l'accès complet (beta)
+    if (!a.plan) a.plan = 'beta'
     // Hashage des mots de passe hérités stockés en clair
     if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
   })
+  ;(db.environments || []).forEach(e => { if (!e.plan) e.plan = 'beta' })
   // Valeurs par défaut des nouveaux champs + purge de la corbeille (> 30 jours)
   const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
   Object.values(db.data || {}).forEach(data => {
@@ -518,6 +539,7 @@ function migrate(db) {
     data.lostReasons = data.lostReasons || ['Pas de budget', 'Concurrent retenu', 'Mauvais timing', 'Pas décideur', 'Injoignable']
     data.noShowReasons = data.noShowReasons || ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date']
     data.currency = data.currency || 'EUR'
+    data.tasks = data.tasks || []
   })
   return db
 }
@@ -592,7 +614,8 @@ export function StoreProvider({ children }) {
         if (db.accounts.some(a => a.email.toLowerCase() === email.toLowerCase())) return { error: 'Un compte existe déjà avec cet email.' }
         const wanted = (pseudo || email.split('@')[0]).trim()
         if (wanted && db.accounts.some(a => a.pseudo.toLowerCase() === wanted.toLowerCase())) return { error: 'Ce pseudo est déjà pris, choisissez-en un autre.' }
-        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), role: 'Membre', developer: false, photo: '', bricks: [...BRICKS], teamOf: null }
+        // Inscription libre = offre Starter (accès très limité), avec son propre environnement starter.
+        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), role: 'Fondateur', developer: false, plan: 'starter', photo: '', bricks: [...STARTER_BRICKS], teamOf: null }
         setDb(d => { d.accounts.push(acc); return d })
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return { account: acc }
@@ -614,7 +637,9 @@ export function StoreProvider({ children }) {
         })
       },
       createEnv({ name, logo }) {
-        const env = { id: uid(), name, logo: logo || '', pin: '', createdBy: session.accountId, departments: ['Marketing', 'Sales'] }
+        // L'environnement hérite de l'offre de son créateur (Starter reste limité).
+        const plan = account?.plan || 'starter'
+        const env = { id: uid(), name, logo: logo || '', pin: '', plan, createdBy: session.accountId, departments: ['Marketing', 'Sales'] }
         setDb(d => { d.environments.push(env); return d })
         return env
       },
@@ -718,7 +743,10 @@ export function StoreProvider({ children }) {
       updateAccount(id, patch) { setDb(d => { Object.assign(d.accounts.find(a => a.id === id), patch); return d }) },
       deleteAccount(id) { setDb(d => { d.accounts = d.accounts.filter(a => a.id !== id); return d }) },
       addAccount(acc) {
-        const a = { id: uid(), role: 'Membre', developer: false, photo: '', bricks: [...BRICKS], teamOf: null, ...acc }
+        // Compte créé par un manager/admin = accès complet de l'offre de l'environnement courant (Beta par défaut).
+        const env = db.environments.find(e => e.id === session?.envId)
+        const plan = acc.plan || env?.plan || 'beta'
+        const a = { id: uid(), role: 'Membre', developer: false, plan, photo: '', bricks: [...(PLANS[plan]?.bricks || BRICKS)], teamOf: null, ...acc, plan }
         if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
         setDb(d => { d.accounts.push(a); return d })
         return a
