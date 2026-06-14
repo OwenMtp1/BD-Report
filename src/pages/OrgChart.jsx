@@ -7,7 +7,7 @@ export default function OrgChart({ onOpenProfile }) {
   const session = store.session
   const env = store.db.environments.find(e => e.id === session.envId)
   const subs = store.db.subenvs.filter(s => s.envId === session.envId)
-  const isManager = ['Manager', 'Administrateur', 'Fondateur'].includes(store.account.role)
+  const isManager = ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(store.account.role)
   const accOf = (s) => store.db.accounts.find(a => a.id === s.ownerId)
   // Hiérarchie par manager : un espace est rattaché au manager (teamOf) de son propriétaire.
   const managerSubs = subs.filter(s => subs.some(x => accOf(x)?.teamOf === s.ownerId))

@@ -114,6 +114,15 @@ async function main() {
   await click(find('button', 'Connexion & authentification'))
   await click(find('button', 'Clôturer'))
   if (psClient()?.status !== 'actifs') throw new Error('Client not restored to "actifs" on ticket close: ' + psClient()?.status)
+  // Helpdesk : priorité par défaut + notation de satisfaction (CSAT) après clôture.
+  const myTicket = () => dbNow().tickets.find(t => t.category === 'Connexion & authentification')
+  if (myTicket()?.priority !== 'normale') throw new Error('Default ticket priority should be "normale"')
+  await click(navBtn('Support'))
+  await click(find('button', 'Connexion & authentification'))
+  if (!text().includes('comment évaluez-vous')) throw new Error('CSAT prompt not shown on closed ticket')
+  await click(container.querySelector('button[title="4/5"]'))
+  await click(find('button', 'Envoyer mon avis'))
+  if (myTicket()?.csat?.score !== 4) throw new Error('CSAT rating not saved: ' + JSON.stringify(myTicket()?.csat))
   await click(navBtn('Clients'))
   // Chaque environnement existant est forcément un client (PeopleSpheres + Test).
   if (!text().includes('PeopleSpheres') || !text().includes('Test')) throw new Error('Environments not turned into clients')

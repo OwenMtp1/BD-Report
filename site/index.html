@@ -291,6 +291,8 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
         var email=document.getElementById('cEmail').value.trim();
         var msg=document.getElementById('cMsg').value.trim();
         if(!name||!email||!msg) return false;
+        var curLang=(localStorage.getItem('bdr_site_lang')||'fr');
+        var ok=true;
         try{
           var KEY='bdrflow_contact_inbox_v1';
           var inbox=[];
@@ -299,16 +301,17 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
           inbox.push({
             id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),
             name:name, email:email, message:msg,
-            lang:(localStorage.getItem('bdr_site_lang')||'fr'),
+            lang:curLang,
             createdAt:new Date().toISOString()
           });
           if(inbox.length>200) inbox=inbox.slice(-200);
           localStorage.setItem(KEY, JSON.stringify(inbox));
-        }catch(err){}
-        var curLang=(localStorage.getItem('bdr_site_lang')||'fr');
+        }catch(err){ ok=false; }
         var sent={fr:'Message envoyé ✓ L\'équipe BD Report vous répondra rapidement.',en:'Message sent ✓ The BD Report team will get back to you soon.',es:'Mensaje enviado ✓ El equipo de BD Report te responderá pronto.'};
-        document.getElementById('contactForm').reset();
-        document.getElementById('cHint').textContent=sent[curLang]||sent.fr;
+        var fail={fr:'Échec de l\'envoi. Écrivez-nous directement à owen.mb.pro@gmail.com',en:'Sending failed. Please email us directly at owen.mb.pro@gmail.com',es:'Error al enviar. Escríbenos directamente a owen.mb.pro@gmail.com'};
+        var hint=document.getElementById('cHint');
+        if(ok){ document.getElementById('contactForm').reset(); hint.style.color=''; hint.textContent=sent[curLang]||sent.fr; }
+        else { hint.style.color='#ffb4b4'; hint.textContent=fail[curLang]||fail.fr; }
         return false;
       }
     </script>
@@ -537,7 +540,9 @@ function renderTabs() {
     `<div class="feat"><div class="ic">${ic}</div><h3>${t}</h3><p>${d}</p></div>`).join('')
   const more = document.getElementById('moreLink')
   more.href = `produit/${SLUGS[activeTab]}.html`
-  more.textContent = (lang === 'fr' ? 'Découvrir la page ' : 'Explore the ') + data.cats[activeTab].replace(/^\S+\s/, '') + (lang === 'fr' ? ' en détail →' : ' page →')
+  const morePrefix = { fr: 'Découvrir la page ', en: 'Explore the ', es: 'Descubrir la página ' }
+  const moreSuffix = { fr: ' en détail →', en: ' page →', es: ' en detalle →' }
+  more.textContent = (morePrefix[lang] || morePrefix.fr) + data.cats[activeTab].replace(/^\S+\s/, '') + (moreSuffix[lang] || moreSuffix.fr)
 }
 function setTab(i) { activeTab = i; renderTabs() }
 

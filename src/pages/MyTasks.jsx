@@ -155,7 +155,7 @@ export default function MyTasks() {
         </Modal>
       )}
 
-      {confirmDel && <Confirm message="Déplacer cette tâche dans la corbeille ?" onYes={() => remove(confirmDel)} onNo={() => setConfirmDel(null)} />}
+      {confirmDel && <Confirm yesLabel="Déplacer" message="Déplacer cette tâche dans la corbeille ?" onYes={() => remove(confirmDel)} onNo={() => setConfirmDel(null)} />}
     </div>
   )
 }

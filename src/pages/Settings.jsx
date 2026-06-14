@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react'
 import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock } from 'lucide-react'
 import { useStore, hashPw } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
-import { Modal, Field, Confirm, toast } from '../ui.jsx'
+import { Modal, Field, Confirm, toast, CommitInput } from '../ui.jsx'
 
 // Génère une copie autonome de l'app (HTML + scripts inlinés) téléchargeable pour un usage local hors-ligne.
 function downloadStandaloneApp() {
@@ -52,6 +52,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
   const me = store.account
   const session = store.session
   const env = store.db.environments.find(e => e.id === session.envId)
+  const canManageSub = !!env && (env.createdBy === me.id || ['Fondateur', 'Administrateur', 'Support BD Report'].includes(me.role))
   const mySubs = store.db.subenvs.filter(s => s.envId === session.envId)
   const curSub = store.db.subenvs.find(s => s.id === session.subEnvId)
   const hubspot = store.sub?.integrations?.hubspot || {}
@@ -126,16 +127,18 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
                   </div>
                 </div>
               )}
-              <Field label="Nom"><input className="input !w-72" disabled={store.readOnly} value={env.name} onChange={e => store.updateEnv(env.id, { name: e.target.value })} /></Field>
+              <Field label="Nom"><CommitInput className="input !w-72" disabled={store.readOnly} value={env.name} onCommit={v => store.updateEnv(env.id, { name: v })} /></Field>
               <Field label="Logo de l'entreprise"><ImageInput value={env.logo} onChange={v => !store.readOnly && store.updateEnv(env.id, { logo: v })} label="Télécharger un logo" /></Field>
               <Field label="Code d'accès (4 chiffres, vide = aucun)">
-                <input className="input !w-32" maxLength={4} disabled={store.readOnly} value={env.pin || ''} onChange={e => store.updateEnv(env.id, { pin: e.target.value.replace(/\D/g, '') })} />
+                <CommitInput className="input !w-32" maxLength={4} disabled={store.readOnly} value={env.pin || ''} sanitize={v => v.replace(/\D/g, '')} onCommit={v => store.updateEnv(env.id, { pin: v })} />
               </Field>
               {env.subState === 'cancelling'
                 ? <p className="text-xs text-muted">Résiliation demandée — en attente du traitement par le support.</p>
                 : env.subState === 'blocked'
                   ? <p className="text-xs text-muted">Environnement bloqué par le support.</p>
-                  : <button className="btn-danger !py-1.5 text-xs" onClick={() => setConfirmCancel(true)}><Ban size={13} /> Résilier mon abonnement</button>}
+                  : canManageSub
+                    ? <button className="btn-danger !py-1.5 text-xs" onClick={() => setConfirmCancel(true)}><Ban size={13} /> Résilier mon abonnement</button>
+                    : <p className="text-xs text-muted">Seul le responsable de l'environnement peut résilier l'abonnement.</p>}
             </div>
           )}
           <div className="card p-4 space-y-3">
@@ -156,19 +159,19 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
             {mySubs.map(s => {
               const owner = store.db.accounts.find(a => a.id === s.ownerId)
               const isPrincipal = env?.createdBy === me.id
-              const elevated = ['Fondateur', 'Administrateur', 'Développeur'].includes(me.role) || isPrincipal
+              const elevated = ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'].includes(me.role) || isPrincipal
               const managesThem = me.role === 'Manager' && owner?.teamOf === me.id
               const own = s.ownerId === me.id
               const canPin = elevated || managesThem || own
               return (
                 <div key={s.id} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end border-b border-line pb-3">
-                  <Field label="Prénom"><input className="input" value={s.prenom} onChange={e => store.updateSubEnv(s.id, { prenom: e.target.value })} /></Field>
-                  <Field label="Nom"><input className="input" value={s.nom} onChange={e => store.updateSubEnv(s.id, { nom: e.target.value })} /></Field>
-                  <Field label="Poste"><input className="input" value={s.poste} onChange={e => store.updateSubEnv(s.id, { poste: e.target.value })} /></Field>
-                  <Field label="Service"><input className="input" value={s.service} onChange={e => store.updateSubEnv(s.id, { service: e.target.value })} /></Field>
+                  <Field label="Prénom"><CommitInput className="input" value={s.prenom} onCommit={v => store.updateSubEnv(s.id, { prenom: v })} /></Field>
+                  <Field label="Nom"><CommitInput className="input" value={s.nom} onCommit={v => store.updateSubEnv(s.id, { nom: v })} /></Field>
+                  <Field label="Poste"><CommitInput className="input" value={s.poste} onCommit={v => store.updateSubEnv(s.id, { poste: v })} /></Field>
+                  <Field label="Service"><CommitInput className="input" value={s.service} onCommit={v => store.updateSubEnv(s.id, { service: v })} /></Field>
                   <Field label="Code (4 chiffres)">
                     {canPin
-                      ? <input className="input" maxLength={4} value={s.pin} onChange={e => store.updateSubEnv(s.id, { pin: e.target.value.replace(/\D/g, '') })} />
+                      ? <CommitInput className="input" maxLength={4} value={s.pin} sanitize={v => v.replace(/\D/g, '')} onCommit={v => store.updateSubEnv(s.id, { pin: v })} />
                       : <input className="input" value="••••" disabled title="Code masqué" />}
                   </Field>
                 </div>

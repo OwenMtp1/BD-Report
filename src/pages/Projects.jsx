@@ -103,7 +103,9 @@ function MonthCalendar({ projects }) {
   const first = new Date(cursor.y, cursor.m, 1)
   const startPad = (first.getDay() + 6) % 7 // lundi = 0
   const daysInMonth = new Date(cursor.y, cursor.m + 1, 0).getDate()
-  const today = todayISO()
+  // « Aujourd'hui » calculé en heure locale pour coïncider avec la grille (construite en local).
+  const t0 = new Date()
+  const today = `${t0.getFullYear()}-${String(t0.getMonth() + 1).padStart(2, '0')}-${String(t0.getDate()).padStart(2, '0')}`
   const cells = []
   for (let i = 0; i < startPad; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(`${cursor.y}-${String(cursor.m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`)

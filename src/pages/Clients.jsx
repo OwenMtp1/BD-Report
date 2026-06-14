@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Building2, Users2, MessageSquare, Clock, Trash2, X, Ban, Unlock, ShieldAlert } from 'lucide-react'
 import { useStore, CLIENT_STATUSES, fmtDate } from '../store.jsx'
-import { Empty, Confirm, toast } from '../ui.jsx'
+import { Empty, Confirm, toast, CommitTextarea } from '../ui.jsx'
 
 const fmtTs = (ts) => ts ? new Date(ts).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '—'
 
@@ -104,8 +104,8 @@ export default function Clients() {
                 </div>
                 <div>
                   <span className="label">Note interne</span>
-                  <textarea className="input min-h-[70px]" value={detail.note || ''}
-                    onChange={e => { setDetail({ ...detail, note: e.target.value }); store.updateClient(detail.id, { note: e.target.value }) }}
+                  <CommitTextarea className="input min-h-[70px]" value={detail.note || ''}
+                    onCommit={v => { setDetail({ ...detail, note: v }); store.updateClient(detail.id, { note: v }) }}
                     placeholder="Notes de l'équipe support sur ce client…" />
                 </div>
                 <div>
@@ -152,7 +152,7 @@ export default function Clients() {
         )
       })()}
 
-      {confirmDel && <Confirm message="Retirer ce client de la liste ? (ses tickets ne sont pas supprimés)" onYes={() => remove(confirmDel)} onNo={() => setConfirmDel(null)} />}
+      {confirmDel && <Confirm yesLabel="Retirer" message="Retirer ce client de la liste ? (ses tickets ne sont pas supprimés)" onYes={() => remove(confirmDel)} onNo={() => setConfirmDel(null)} />}
       {confirmEnv && (
         <Confirm
           yesLabel={confirmEnv.action === 'block' ? 'Bloquer' : 'Supprimer'}

@@ -204,7 +204,7 @@ export default function Notes({ onCreateRdvFromNote }) {
         </Modal>
       )}
 
-      {confirmDel && <Confirm message="Mettre cette note à la corbeille ? (restaurable 30 jours)" onYes={() => {
+      {confirmDel && <Confirm yesLabel="Mettre à la corbeille" message="Mettre cette note à la corbeille ? (restaurable 30 jours)" onYes={() => {
         const note = sub.notes.find(n => n.id === confirmDel)
         store.logAction('Note', 'Note mise à la corbeille', note?.title || '')
         store.setSub(d => ({

@@ -28,6 +28,29 @@ export function Confirm({ message, onYes, onNo, yesLabel = 'Supprimer' }) {
   )
 }
 
+// Champ contrôlé localement qui ne « commit » (écriture dans le store) qu'au blur / Entrée.
+// Évite de cloner toute la base à chaque frappe (perf).
+export function CommitInput({ value, onCommit, sanitize, className = 'input', ...rest }) {
+  const [v, setV] = useState(value ?? '')
+  useEffect(() => { setV(value ?? '') }, [value])
+  const commit = () => { if (v !== (value ?? '')) onCommit(v) }
+  return (
+    <input {...rest} className={className} value={v}
+      onChange={e => setV(sanitize ? sanitize(e.target.value) : e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }} />
+  )
+}
+export function CommitTextarea({ value, onCommit, className = 'input', ...rest }) {
+  const [v, setV] = useState(value ?? '')
+  useEffect(() => { setV(value ?? '') }, [value])
+  return (
+    <textarea {...rest} className={className} value={v}
+      onChange={e => setV(e.target.value)}
+      onBlur={() => { if (v !== (value ?? '')) onCommit(v) }} />
+  )
+}
+
 export function Field({ label, children, required }) {
   return (
     <div>

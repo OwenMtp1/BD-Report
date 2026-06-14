@@ -5,7 +5,7 @@ const SESSION_KEY = 'bdrflow_session_v1'
 // Boîte de réception partagée site ↔ app (même origine owenmtp1.github.io) : le
 // formulaire de contact du site y dépose ses messages, l'app les y récupère.
 export const CONTACT_INBOX_KEY = 'bdrflow_contact_inbox_v1'
-export const APP_VERSION = '1.13.0'
+export const APP_VERSION = '1.14.0'
 
 // ---------------------------------------------------------------- Format monétaire
 export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
@@ -71,11 +71,17 @@ function shouldIngestRequest(d, item) {
   if ((d._ingestedRequestIds || []).includes(item.id)) return false
   return true
 }
+function makeClientFromRequest(item) {
+  const now = new Date().toISOString()
+  return { id: uid(), key: 'req:' + item.id, name: item.name || 'Prospect', email: item.email || '', envId: null, accountId: null, status: 'demandes', createdAt: now, lastActivity: now, note: item.message || '' }
+}
 function ingestRequest(d, item) {
   d.supportRequests = d.supportRequests || []
   d._ingestedRequestIds = d._ingestedRequestIds || []
-  d._autoSeed = d._autoSeed || { envClients: [], envProjects: [], reqProjects: [] }
+  d._autoSeed = d._autoSeed || { envClients: [], envProjects: [], reqProjects: [], reqClients: [] }
+  d._autoSeed.reqClients = d._autoSeed.reqClients || []
   d.projects = d.projects || []
+  d.clients = d.clients || []
   d.supportRequests.unshift({
     id: item.id, name: item.name || '', email: item.email || '', message: item.message || '',
     lang: item.lang || 'fr', createdAt: item.createdAt || new Date().toISOString(), status: 'new', archived: false,
@@ -83,6 +89,8 @@ function ingestRequest(d, item) {
   d._ingestedRequestIds.push(item.id)
   // Projet d'implémentation auto, marqué comme déjà créé (ne réapparaît pas s'il est supprimé)
   if (!d._autoSeed.reqProjects.includes(item.id)) { d.projects.unshift(makeProjectFromRequest(item)); d._autoSeed.reqProjects.push(item.id) }
+  // Fiche client en « Demandes en cours », créée une seule fois (suppression respectée)
+  if (!d._autoSeed.reqClients.includes(item.id)) { d.clients.unshift(makeClientFromRequest(item)); d._autoSeed.reqClients.push(item.id) }
   pushSupportLog(d, { type: 'Demande', action: 'Nouvelle demande reçue', details: `${item.name || ''}${item.email ? ' · ' + item.email : ''}`, actorName: 'Site' })
 }
 
@@ -327,6 +335,15 @@ export const TICKET_CATEGORIES = [
   'Autre / question générale',
 ]
 
+// Niveaux de priorité d'un ticket de support.
+export const TICKET_PRIORITIES = [
+  { id: 'basse', label: 'Basse', color: 'bg-gray-200 text-gray-600', rank: 0 },
+  { id: 'normale', label: 'Normale', color: 'bg-blue-100 text-blue-700', rank: 1 },
+  { id: 'haute', label: 'Haute', color: 'bg-amber-100 text-amber-700', rank: 2 },
+  { id: 'urgente', label: 'Urgente', color: 'bg-red-100 text-red-700', rank: 3 },
+]
+export const priorityRank = (id) => (TICKET_PRIORITIES.find(p => p.id === id) || TICKET_PRIORITIES[1]).rank
+
 // ---------------------------------------------------------------- Seed
 function emptySubEnvData() {
   return {
@@ -468,7 +485,8 @@ function syncProjectToClientStatus(d, client) {
   if (!client || !client.envId) return
   const ps = CLIENT_TO_PROJECT_STATUS[client.status]
   if (!ps) return
-  ;(d.projects || []).forEach(p => { if (p.sourceEnvId === client.envId) p.status = ps })
+  // On ne touche pas au statut d'un projet édité manuellement par le support (statusLocked).
+  ;(d.projects || []).forEach(p => { if (p.sourceEnvId === client.envId && !p.statusLocked) p.status = ps })
 }
 
 // Aligne le statut du client sur ses tickets : en attente de support s'il a un ticket
@@ -486,11 +504,12 @@ function syncClientStatusFromTickets(d, ticket) {
 }
 
 // Construit un ticket (utilisé pour les tickets techniques ET les demandes de résiliation).
-function makeTicket({ accountId, prenom, photo, clientName, envId, subEnvId, category, message, botText }) {
+function makeTicket({ accountId, prenom, photo, clientName, envId, subEnvId, category, message, botText, priority }) {
   const now = new Date().toISOString()
   const botTs = new Date(Date.now() + 1000).toISOString()
   return {
     id: uid(), category: category || 'Autre / question générale', status: 'open',
+    priority: priority || 'normale', assignedTo: null, csat: null,
     userAccountId: accountId || null, userName: prenom, userPhoto: photo || '',
     clientName: clientName || prenom, envId: envId || null, subEnvId: subEnvId || null,
     createdAt: now, handledBy: null, typing: {}, readUserAt: botTs, readSupportAt: '',
@@ -716,11 +735,18 @@ function migrate(db) {
   db.clients = db.clients || []
   db.projects = db.projects || []
   db.supportLogs = db.supportLogs || []
+  // Champs ajoutés aux tickets existants (priorité, assignation, satisfaction)
+  ;(db.tickets || []).forEach(t => {
+    if (!t.priority) t.priority = 'normale'
+    if (t.assignedTo === undefined) t.assignedTo = null
+    if (t.csat === undefined) t.csat = null
+  })
   // État d'abonnement de chaque environnement : 'active' | 'cancelling' (résilié) | 'blocked' (bloqué support)
   ;(db.environments || []).forEach(e => { if (!e.subState) e.subState = 'active' })
   // Suivi des éléments déjà créés automatiquement : on ne (re)crée chaque entité qu'UNE fois.
   // Ainsi, ce que l'utilisateur supprime ne réapparaît pas au rechargement (bug de résurrection).
-  db._autoSeed = db._autoSeed || { envClients: [], envProjects: [], reqProjects: [] }
+  db._autoSeed = db._autoSeed || { envClients: [], envProjects: [], reqProjects: [], reqClients: [] }
+  db._autoSeed.reqClients = db._autoSeed.reqClients || []
   // Initialise l'historique des demandes déjà ingérées (demandes actuelles + supprimées) pour
   // ne jamais les ré-ingérer depuis la boîte partagée du site.
   const ingested = new Set(db._ingestedRequestIds || [])
@@ -728,11 +754,15 @@ function migrate(db) {
   ;(db.supportTrash || []).forEach(t => { if (t.kind === 'request' && t.data?.id) ingested.add(t.data.id) })
   db._ingestedRequestIds = [...ingested]
 
-  // Chaque demande reçue donne lieu à UN projet d'implémentation (créé une seule fois).
+  // Chaque demande reçue donne lieu à UN projet d'implémentation + UNE fiche client « Demandes en cours » (une seule fois).
   ;(db.supportRequests || []).forEach(req => {
     if (req && req.id && !db._autoSeed.reqProjects.includes(req.id)) {
       if (!db.projects.some(p => p.sourceRequestId === req.id)) db.projects.unshift(makeProjectFromRequest(req))
       db._autoSeed.reqProjects.push(req.id)
+    }
+    if (req && req.id && !db._autoSeed.reqClients.includes(req.id)) {
+      if (!db.clients.some(c => c.key === 'req:' + req.id)) db.clients.unshift(makeClientFromRequest(req))
+      db._autoSeed.reqClients.push(req.id)
     }
   })
   // Chaque environnement existant est forcément un client (Clients actifs) avec son projet d'implémentation.
@@ -845,6 +875,12 @@ export function StoreProvider({ children }) {
     // Accès en lecture seule : abonnement résilié ('cancelling') ou bloqué par le support ('blocked').
     const readOnly = !!(currentEnv && currentEnv.subState && currentEnv.subState !== 'active')
     const actorName = (db.subenvs.find(s => s.id === session?.subEnvId)?.prenom) || account?.pseudo || 'Support'
+    // Garde lecture seule : bloque toute écriture sur l'environnement courant quand il est résilié/bloqué.
+    const roBlocked = () => {
+      if (!readOnly) return false
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: '🔒 Accès en lecture seule : abonnement résilié ou bloqué. Seul le support reste accessible.' }))
+      return true
+    }
     return {
       db, setDb, session, setSession,
       account, currentEnv, readOnly,
@@ -874,7 +910,7 @@ export function StoreProvider({ children }) {
       },
       logout() { setSession(null) },
       enterEnv(envId) { setSession(s => ({ ...s, envId, subEnvId: null })) },
-      setCurrency(c) { setDb(d => { if (session?.subEnvId && d.data[session.subEnvId]) d.data[session.subEnvId].currency = c; return d }); setCurrentCurrency(c) },
+      setCurrency(c) { if (roBlocked()) return; setDb(d => { if (session?.subEnvId && d.data[session.subEnvId]) d.data[session.subEnvId].currency = c; return d }); setCurrentCurrency(c) },
       enterSubEnv(subEnvId) {
         setSession(s => ({ ...s, subEnvId }))
         setCurrentCurrency(db.data[subEnvId]?.currency || 'EUR')
@@ -904,21 +940,14 @@ export function StoreProvider({ children }) {
         return env
       },
       createSubEnv(envId, { prenom, nom, poste, service, pin }) {
+        if (roBlocked()) return null
         const sub = { id: uid(), envId, prenom, nom, poste, service, pin: pin || '0000', photo: '', ownerId: session.accountId }
         setDb(d => { d.subenvs.push(sub); d.data[sub.id] = emptySubEnvData(); return d })
         return sub
       },
-      updateEnv(envId, patch) { setDb(d => { Object.assign(d.environments.find(e => e.id === envId), patch); return d }) },
-      deleteEnv(envId) {
-        setDb(d => {
-          d.subenvs.filter(s => s.envId === envId).forEach(s => delete d.data[s.id])
-          d.subenvs = d.subenvs.filter(s => s.envId !== envId)
-          d.environments = d.environments.filter(e => e.id !== envId)
-          return d
-        })
-      },
-      updateSubEnv(subId, patch) { setDb(d => { Object.assign(d.subenvs.find(s => s.id === subId), patch); return d }) },
-      deleteSubEnv(subId) { setDb(d => { d.subenvs = d.subenvs.filter(s => s.id !== subId); delete d.data[subId]; return d }) },
+      updateEnv(envId, patch) { if (roBlocked()) return; setDb(d => { Object.assign(d.environments.find(e => e.id === envId), patch); return d }) },
+      updateSubEnv(subId, patch) { if (roBlocked()) return; setDb(d => { Object.assign(d.subenvs.find(s => s.id === subId), patch); return d }) },
+      deleteSubEnv(subId) { if (roBlocked()) return; setDb(d => { d.subenvs = d.subenvs.filter(s => s.id !== subId); delete d.data[subId]; return d }) },
       // ----- données du sous-environnement courant
       sub: session?.subEnvId ? db.data[session.subEnvId] : null,
       setSub(fn) {
@@ -930,7 +959,7 @@ export function StoreProvider({ children }) {
       // ----- journal d'audit (traçabilité)
       logAction(type, action, details = '') {
         const subId = session?.subEnvId
-        if (!subId) return
+        if (!subId || readOnly) return // en lecture seule aucune action n'est journalisée
         setDb(d => {
           const data = d.data[subId]
           if (!data) return d
@@ -942,6 +971,7 @@ export function StoreProvider({ children }) {
       },
       // ----- commentaires d'entreprise partagés au niveau de l'environnement
       addCompanyComment(company, text) {
+        if (roBlocked()) return
         const env = db.environments.find(e => e.id === session?.envId)
         const sub = db.subenvs.find(s => s.id === session?.subEnvId)
         if (!env || !text.trim()) return
@@ -970,6 +1000,7 @@ export function StoreProvider({ children }) {
         })
       },
       deleteCompanyComment(company, commentId) {
+        if (roBlocked()) return
         setDb(d => {
           const e = d.environments.find(x => x.id === session?.envId)
           const key = companyKey(company)
@@ -1001,9 +1032,10 @@ export function StoreProvider({ children }) {
         setSession(s => (s && s.accountId === oldId ? { ...s, accountId: newId } : s))
       },
       // ----- comptes (administration)
-      updateAccount(id, patch) { setDb(d => { Object.assign(d.accounts.find(a => a.id === id), patch); return d }) },
-      deleteAccount(id) { setDb(d => { d.accounts = d.accounts.filter(a => a.id !== id); return d }) },
+      updateAccount(id, patch) { if (roBlocked()) return; setDb(d => { Object.assign(d.accounts.find(a => a.id === id), patch); return d }) },
+      deleteAccount(id) { if (roBlocked()) return; setDb(d => { d.accounts = d.accounts.filter(a => a.id !== id); return d }) },
       addAccount(acc) {
+        if (roBlocked()) return null
         // Compte créé par un manager/admin = accès complet de l'offre de l'environnement courant (Beta par défaut).
         const env = db.environments.find(e => e.id === session?.envId)
         const plan = acc.plan || env?.plan || 'beta'
@@ -1056,7 +1088,7 @@ export function StoreProvider({ children }) {
         const photo = sub?.photo || account?.photo || ''
         const ticket = makeTicket({
           accountId: account?.id, prenom, photo, clientName: env.name, envId: env.id, subEnvId: session?.subEnvId,
-          category: 'Facturation & abonnement',
+          category: 'Facturation & abonnement', priority: 'haute',
           message: `Bonjour, je souhaite résilier mon abonnement BD Report pour l'environnement « ${env.name} ».`,
           botText: `Bonjour ${prenom}, votre demande de résiliation est bien enregistrée. Votre accès passe en lecture seule en attendant qu'un membre de l'équipe BD Report la traite. Échangeons directement ici si besoin.`,
         })
@@ -1073,14 +1105,14 @@ export function StoreProvider({ children }) {
         return ticket
       },
       // ----- Support : tickets techniques (conversation utilisateur ↔ équipe technique)
-      createTicket({ category, message }) {
+      createTicket({ category, message, priority }) {
         const sub = db.subenvs.find(s => s.id === session?.subEnvId)
         const env = db.environments.find(e => e.id === session?.envId)
         const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
         const photo = sub?.photo || account?.photo || ''
         const ticket = makeTicket({
           accountId: account?.id, prenom, photo, clientName: env?.name || prenom,
-          envId: session?.envId, subEnvId: session?.subEnvId, category, message,
+          envId: session?.envId, subEnvId: session?.subEnvId, category, message, priority,
         })
         setDb(d => {
           d.tickets = d.tickets || []
@@ -1151,6 +1183,33 @@ export function StoreProvider({ children }) {
             const label = status === 'closed' ? 'Ticket clôturé' : status === 'in_progress' ? 'Ticket rouvert / en cours' : 'Statut du ticket modifié'
             pushSupportLog(d, { type: 'Ticket', action: label, details: `${t.category} · ${t.userName}`, actorId: account?.id || null, actorName })
           }
+          return d
+        })
+      },
+      setTicketPriority(ticketId, priority) {
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (t) { t.priority = priority; pushSupportLog(d, { type: 'Ticket', action: 'Priorité modifiée', details: `${t.category} → ${priority}`, actorId: account?.id || null, actorName }) }
+          return d
+        })
+      },
+      assignTicket(ticketId, assigneeId) {
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (!t) return d
+          t.assignedTo = assigneeId || null
+          const who = d.accounts.find(a => a.id === assigneeId)
+          pushSupportLog(d, { type: 'Ticket', action: assigneeId ? 'Ticket assigné' : 'Ticket désassigné', details: `${t.category}${who ? ' → ' + who.pseudo : ''}`, actorId: account?.id || null, actorName })
+          return d
+        })
+      },
+      // Note de satisfaction laissée par le client à la clôture (CSAT).
+      rateTicket(ticketId, score, comment = '') {
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (!t) return d
+          t.csat = { score, comment, ts: new Date().toISOString() }
+          pushSupportLog(d, { type: 'Ticket', action: `Satisfaction ${score}/5`, details: t.category, actorId: account?.id || null, actorName: t.userName })
           return d
         })
       },
@@ -1228,11 +1287,13 @@ export function StoreProvider({ children }) {
       },
       // ----- Gestion de projet (back-office support)
       saveProject(project) {
+        // Un projet enregistré manuellement verrouille son statut (la synchro auto ne l'écrase plus).
+        const locked = { ...project, statusLocked: true }
         setDb(d => {
           d.projects = d.projects || []
-          const i = d.projects.findIndex(p => p.id === project.id)
-          if (i >= 0) d.projects[i] = project
-          else d.projects.unshift({ ...project, id: project.id || uid(), createdAt: new Date().toISOString() })
+          const i = d.projects.findIndex(p => p.id === locked.id)
+          if (i >= 0) d.projects[i] = locked
+          else d.projects.unshift({ ...locked, id: locked.id || uid(), createdAt: new Date().toISOString() })
           return d
         })
       },
