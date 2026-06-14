@@ -36,6 +36,7 @@ const DICT = {
   'page.tickets': { fr: 'Tickets Techniques', en: 'Technical tickets', es: 'Tickets técnicos' },
   'page.clients': { fr: 'Clients', en: 'Clients', es: 'Clientes' },
   'page.projects': { fr: 'Gestion de Projet', en: 'Project management', es: 'Gestión de proyectos' },
+  'page.supportlogs': { fr: 'Logs Support', en: 'Support logs', es: 'Registros de soporte' },
   'page.supporttrash': { fr: 'Corbeille', en: 'Trash', es: 'Papelera' },
   'page.admin': { fr: 'Gestion Administration', en: 'Administration', es: 'Administración' },
   'page.teams': { fr: 'Gérez mes équipes', en: 'Manage my teams', es: 'Gestionar mis equipos' },

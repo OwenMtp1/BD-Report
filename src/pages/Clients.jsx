@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Building2, Users2, MessageSquare, Clock, Trash2, X } from 'lucide-react'
+import { Building2, Users2, MessageSquare, Clock, Trash2, X, Ban, Unlock, ShieldAlert } from 'lucide-react'
 import { useStore, CLIENT_STATUSES, fmtDate } from '../store.jsx'
 import { Empty, Confirm, toast } from '../ui.jsx'
 
@@ -12,6 +12,7 @@ export default function Clients() {
   const [dragId, setDragId] = useState(null)
   const [detail, setDetail] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
+  const [confirmEnv, setConfirmEnv] = useState(null) // { action:'block'|'delEnv', envId, name }
 
   const ticketsOf = (c) => tickets.filter(t => c.envId ? t.envId === c.envId : t.userAccountId === c.accountId)
   const stats = (c) => {
@@ -68,7 +69,8 @@ export default function Clients() {
                           <Building2 size={13} className="text-muted shrink-0" /> {c.name}
                         </button>
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          {s.open > 0 && <span className="chip bg-red-100 text-red-700 flex items-center gap-0.5"><MessageSquare size={10} /> {s.open} ouvert{s.open > 1 ? 's' : ''}</span>}
+                          {c.blocked && <span className="chip bg-red-100 text-red-700 flex items-center gap-0.5"><ShieldAlert size={10} /> Bloqué</span>}
+                          {s.open > 0 && <span className="chip bg-amber-100 text-amber-700 flex items-center gap-0.5"><MessageSquare size={10} /> {s.open} ouvert{s.open > 1 ? 's' : ''}</span>}
                           <span className="chip bg-surface text-muted">{s.total} ticket{s.total > 1 ? 's' : ''}</span>
                         </div>
                         <div className="flex items-center gap-1 text-[11px] text-muted mt-2"><Clock size={11} /> Activité : {fmtTs(c.lastActivity)}</div>
@@ -84,6 +86,7 @@ export default function Clients() {
 
       {detail && (() => {
         const ts = ticketsOf(detail)
+        const env = store.db.environments.find(e => e.id === detail.envId)
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={e => e.target === e.currentTarget && setDetail(null)}>
             <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto fade-in">
@@ -118,8 +121,29 @@ export default function Clients() {
                     </div>
                   )}
                 </div>
+                {env ? (
+                  <div className="rounded-xl border border-line p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="label !mb-0">Environnement :</span>
+                      {env.subState === 'blocked'
+                        ? <span className="chip bg-red-100 text-red-700 flex items-center gap-1"><ShieldAlert size={11} /> Bloqué</span>
+                        : env.subState === 'cancelling'
+                          ? <span className="chip bg-amber-100 text-amber-700">Résiliation en cours</span>
+                          : <span className="chip bg-emerald-100 text-emerald-700">Actif</span>}
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {env.subState === 'active'
+                        ? <button className="btn-ghost !py-1.5 text-xs" onClick={() => setConfirmEnv({ action: 'block', envId: env.id, name: env.name })}><Ban size={13} /> Bloquer le client</button>
+                        : <button className="btn-ghost !py-1.5 text-xs text-emerald-600" onClick={() => { store.unblockEnv(env.id); toast('Environnement débloqué') }}><Unlock size={13} /> Débloquer</button>}
+                      <button className="btn-danger !py-1.5 text-xs" onClick={() => setConfirmEnv({ action: 'delEnv', envId: env.id, name: env.name })}><Trash2 size={13} /> Supprimer l'environnement</button>
+                    </div>
+                    <p className="text-[11px] text-muted">Bloquer met l'accès du client en lecture seule (ex. impayé). Supprimer l'environnement efface ses données et le classe en « Anciens clients ».</p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted">Aucun environnement lié (client issu d'une demande directe).</p>
+                )}
                 <div className="flex justify-between pt-1">
-                  <button className="btn-danger !py-1.5 text-xs" onClick={() => setConfirmDel(detail.id)}><Trash2 size={13} /> Retirer le client</button>
+                  <button className="btn-ghost !py-1.5 text-xs" onClick={() => setConfirmDel(detail.id)}><Trash2 size={13} /> Retirer de la liste</button>
                   <button className="btn-ghost" onClick={() => setDetail(null)}>Fermer</button>
                 </div>
               </div>
@@ -129,6 +153,19 @@ export default function Clients() {
       })()}
 
       {confirmDel && <Confirm message="Retirer ce client de la liste ? (ses tickets ne sont pas supprimés)" onYes={() => remove(confirmDel)} onNo={() => setConfirmDel(null)} />}
+      {confirmEnv && (
+        <Confirm
+          yesLabel={confirmEnv.action === 'block' ? 'Bloquer' : 'Supprimer'}
+          message={confirmEnv.action === 'block'
+            ? `Bloquer l'environnement « ${confirmEnv.name} » ? Son accès passera en lecture seule.`
+            : `Supprimer définitivement l'environnement « ${confirmEnv.name} » et toutes ses données ? Le client sera classé en « Anciens clients ».`}
+          onYes={() => {
+            if (confirmEnv.action === 'block') { store.blockEnv(confirmEnv.envId); toast('Client bloqué') }
+            else { store.deleteClientEnv(confirmEnv.envId); toast('Environnement supprimé'); setDetail(null) }
+            setConfirmEnv(null)
+          }}
+          onNo={() => setConfirmEnv(null)} />
+      )}
     </div>
   )
 }

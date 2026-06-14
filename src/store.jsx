@@ -83,6 +83,7 @@ function ingestRequest(d, item) {
   d._ingestedRequestIds.push(item.id)
   // Projet d'implémentation auto, marqué comme déjà créé (ne réapparaît pas s'il est supprimé)
   if (!d._autoSeed.reqProjects.includes(item.id)) { d.projects.unshift(makeProjectFromRequest(item)); d._autoSeed.reqProjects.push(item.id) }
+  pushSupportLog(d, { type: 'Demande', action: 'Nouvelle demande reçue', details: `${item.name || ''}${item.email ? ' · ' + item.email : ''}`, actorName: 'Site' })
 }
 
 // ---------------------------------------------------------------- SHA-256 (synchrone, compact)
@@ -461,15 +462,50 @@ function enrichClientFromTicket(d, ticket) {
   return client
 }
 
+// Le statut du projet d'implémentation suit le statut du client (clients & gestion de projet liés).
+const CLIENT_TO_PROJECT_STATUS = { demandes: 'prevu', actifs: 'encours', attente: 'pause', anciens: 'termine' }
+function syncProjectToClientStatus(d, client) {
+  if (!client || !client.envId) return
+  const ps = CLIENT_TO_PROJECT_STATUS[client.status]
+  if (!ps) return
+  ;(d.projects || []).forEach(p => { if (p.sourceEnvId === client.envId) p.status = ps })
+}
+
 // Aligne le statut du client sur ses tickets : en attente de support s'il a un ticket
 // ouvert, sinon il repasse en clients actifs (déclenché à l'ouverture/clôture d'un ticket).
 function syncClientStatusFromTickets(d, ticket) {
   if (!ticket) return
   const client = (d.clients || []).find(c => c.envId ? c.envId === ticket.envId : c.accountId === ticket.userAccountId)
   if (!client) return
+  // Un client « ancien » (environnement supprimé/résilié) le reste : pas de réactivation par un ticket.
+  if (client.status === 'anciens') return
   const related = (d.tickets || []).filter(t => client.envId ? t.envId === client.envId : t.userAccountId === client.accountId)
   const hasOpen = related.some(t => t.status !== 'closed')
   client.status = hasOpen ? 'attente' : 'actifs'
+  syncProjectToClientStatus(d, client)
+}
+
+// Construit un ticket (utilisé pour les tickets techniques ET les demandes de résiliation).
+function makeTicket({ accountId, prenom, photo, clientName, envId, subEnvId, category, message, botText }) {
+  const now = new Date().toISOString()
+  const botTs = new Date(Date.now() + 1000).toISOString()
+  return {
+    id: uid(), category: category || 'Autre / question générale', status: 'open',
+    userAccountId: accountId || null, userName: prenom, userPhoto: photo || '',
+    clientName: clientName || prenom, envId: envId || null, subEnvId: subEnvId || null,
+    createdAt: now, handledBy: null, typing: {}, readUserAt: botTs, readSupportAt: '',
+    messages: [
+      { id: uid(), ts: now, from: 'user', authorAccountId: accountId || null, authorName: prenom, authorPhoto: photo || '', text: message || '', photo: '' },
+      { id: uid(), ts: botTs, from: 'bot', authorName: 'BD Report', authorPhoto: '', text: botText || `Bonjour ${prenom}, merci pour votre message. Un membre de l'équipe technique BD Report va très prochainement prendre en charge votre demande. Vous recevrez la réponse directement dans cette conversation.`, photo: '' },
+    ],
+  }
+}
+
+// Journal d'audit du back-office support (visible dans « Logs Support »).
+function pushSupportLog(d, { type, action, details = '', actorId = null, actorName = 'Système' }) {
+  d.supportLogs = d.supportLogs || []
+  d.supportLogs.unshift({ id: uid(), ts: new Date().toISOString(), type, action, details, actorId, actorName })
+  if (d.supportLogs.length > 2000) d.supportLogs.length = 2000
 }
 
 function buildSeedDb() {
@@ -679,6 +715,9 @@ function migrate(db) {
   db.tickets = db.tickets || []
   db.clients = db.clients || []
   db.projects = db.projects || []
+  db.supportLogs = db.supportLogs || []
+  // État d'abonnement de chaque environnement : 'active' | 'cancelling' (résilié) | 'blocked' (bloqué support)
+  ;(db.environments || []).forEach(e => { if (!e.subState) e.subState = 'active' })
   // Suivi des éléments déjà créés automatiquement : on ne (re)crée chaque entité qu'UNE fois.
   // Ainsi, ce que l'utilisateur supprime ne réapparaît pas au rechargement (bug de résurrection).
   db._autoSeed = db._autoSeed || { envClients: [], envProjects: [], reqProjects: [] }
@@ -802,9 +841,13 @@ export function StoreProvider({ children }) {
       return next
     })
     const account = session ? db.accounts.find(a => a.id === session.accountId) : null
+    const currentEnv = session?.envId ? db.environments.find(e => e.id === session.envId) : null
+    // Accès en lecture seule : abonnement résilié ('cancelling') ou bloqué par le support ('blocked').
+    const readOnly = !!(currentEnv && currentEnv.subState && currentEnv.subState !== 'active')
+    const actorName = (db.subenvs.find(s => s.id === session?.subEnvId)?.prenom) || account?.pseudo || 'Support'
     return {
       db, setDb, session, setSession,
-      account,
+      account, currentEnv, readOnly,
       // ----- langue de l'interface (compte connecté sinon préférence locale)
       uiLang: account?.lang || uiLang,
       setUiLang(lang) {
@@ -881,6 +924,7 @@ export function StoreProvider({ children }) {
       setSub(fn) {
         const subId = session?.subEnvId
         if (!subId) return
+        if (readOnly) { window.dispatchEvent(new CustomEvent('app-toast', { detail: '🔒 Accès en lecture seule : abonnement résilié ou bloqué. Seul le support reste accessible.' })); return }
         setDb(d => { d.data[subId] = fn(d.data[subId]); return d })
       },
       // ----- journal d'audit (traçabilité)
@@ -1002,28 +1046,50 @@ export function StoreProvider({ children }) {
           return d
         })
       },
+      // ----- Abonnement : résiliation (côté client)
+      // Ouvre un ticket « résiliation » au support et bascule l'environnement en lecture seule.
+      cancelSubscription() {
+        const env = currentEnv
+        if (!env) return null
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
+        const photo = sub?.photo || account?.photo || ''
+        const ticket = makeTicket({
+          accountId: account?.id, prenom, photo, clientName: env.name, envId: env.id, subEnvId: session?.subEnvId,
+          category: 'Facturation & abonnement',
+          message: `Bonjour, je souhaite résilier mon abonnement BD Report pour l'environnement « ${env.name} ».`,
+          botText: `Bonjour ${prenom}, votre demande de résiliation est bien enregistrée. Votre accès passe en lecture seule en attendant qu'un membre de l'équipe BD Report la traite. Échangeons directement ici si besoin.`,
+        })
+        setDb(d => {
+          const e = d.environments.find(x => x.id === env.id)
+          if (e) e.subState = 'cancelling'
+          d.tickets = d.tickets || []
+          d.tickets.unshift(ticket)
+          enrichClientFromTicket(d, ticket)
+          syncClientStatusFromTickets(d, ticket)
+          pushSupportLog(d, { type: 'Abonnement', action: 'Demande de résiliation', details: env.name, actorId: account?.id || null, actorName: prenom })
+          return d
+        })
+        return ticket
+      },
       // ----- Support : tickets techniques (conversation utilisateur ↔ équipe technique)
       createTicket({ category, message }) {
         const sub = db.subenvs.find(s => s.id === session?.subEnvId)
         const env = db.environments.find(e => e.id === session?.envId)
         const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
         const photo = sub?.photo || account?.photo || ''
-        const now = new Date().toISOString()
-        const botTs = new Date(Date.now() + 1000).toISOString()
-        const ticket = {
-          id: uid(), category: category || 'Autre / question générale', status: 'open',
-          userAccountId: account?.id || null, userName: prenom, userPhoto: photo,
-          clientName: env?.name || prenom,
-          envId: session?.envId || null, subEnvId: session?.subEnvId || null,
-          createdAt: now, handledBy: null, typing: {},
-          // Suivi des messages lus : l'auteur a vu son message + l'accueil auto ; le support n'a encore rien vu.
-          readUserAt: botTs, readSupportAt: '',
-          messages: [
-            { id: uid(), ts: now, from: 'user', authorAccountId: account?.id || null, authorName: prenom, authorPhoto: photo, text: message || '', photo: '' },
-            { id: uid(), ts: botTs, from: 'bot', authorName: 'BD Report', authorPhoto: '', text: `Bonjour ${prenom}, merci pour votre message. Un membre de l'équipe technique BD Report va très prochainement prendre en charge votre demande. Vous recevrez la réponse directement dans cette conversation.`, photo: '' },
-          ],
-        }
-        setDb(d => { d.tickets = d.tickets || []; d.tickets.unshift(ticket); enrichClientFromTicket(d, ticket); syncClientStatusFromTickets(d, ticket); return d })
+        const ticket = makeTicket({
+          accountId: account?.id, prenom, photo, clientName: env?.name || prenom,
+          envId: session?.envId, subEnvId: session?.subEnvId, category, message,
+        })
+        setDb(d => {
+          d.tickets = d.tickets || []
+          d.tickets.unshift(ticket)
+          enrichClientFromTicket(d, ticket)
+          syncClientStatusFromTickets(d, ticket)
+          pushSupportLog(d, { type: 'Ticket', action: 'Ticket créé', details: `${ticket.category} · ${prenom}`, actorId: account?.id || null, actorName: prenom })
+          return d
+        })
         return ticket
       },
       postTicketMessage(ticketId, { text, photo, from }) {
@@ -1051,6 +1117,7 @@ export function StoreProvider({ children }) {
           // Met à jour l'activité du client correspondant
           const c = (d.clients || []).find(x => x.envId ? x.envId === t.envId : x.accountId === t.userAccountId)
           if (c) c.lastActivity = msgTs
+          if (from === 'support') pushSupportLog(d, { type: 'Ticket', action: 'Réponse du support', details: `${t.category} · ${t.userName}`, actorId: account?.id || null, actorName: prenom })
           return d
         })
       },
@@ -1078,7 +1145,12 @@ export function StoreProvider({ children }) {
       setTicketStatus(ticketId, status) {
         setDb(d => {
           const t = (d.tickets || []).find(x => x.id === ticketId)
-          if (t) { t.status = status; syncClientStatusFromTickets(d, t) }
+          if (t) {
+            t.status = status
+            syncClientStatusFromTickets(d, t)
+            const label = status === 'closed' ? 'Ticket clôturé' : status === 'in_progress' ? 'Ticket rouvert / en cours' : 'Statut du ticket modifié'
+            pushSupportLog(d, { type: 'Ticket', action: label, details: `${t.category} · ${t.userName}`, actorId: account?.id || null, actorName })
+          }
           return d
         })
       },
@@ -1109,12 +1181,51 @@ export function StoreProvider({ children }) {
       emptySupportTrash() { setDb(d => { d.supportTrash = []; return d }) },
       // ----- Kanban Clients (back-office support)
       setClientStatus(id, status) {
-        setDb(d => { const c = (d.clients || []).find(x => x.id === id); if (c) c.status = status; return d })
+        setDb(d => {
+          const c = (d.clients || []).find(x => x.id === id)
+          if (c) { c.status = status; syncProjectToClientStatus(d, c) } // la gestion de projet suit le client
+          return d
+        })
       },
       updateClient(id, patch) {
         setDb(d => { const c = (d.clients || []).find(x => x.id === id); if (c) Object.assign(c, patch); return d })
       },
       deleteClient(id) { setDb(d => { d.clients = (d.clients || []).filter(x => x.id !== id); return d }) },
+      // ----- Support : gestion des environnements clients (bloquer / débloquer / supprimer)
+      blockEnv(envId) {
+        setDb(d => {
+          const e = d.environments.find(x => x.id === envId); if (!e) return d
+          e.subState = 'blocked'
+          const c = (d.clients || []).find(x => x.envId === envId); if (c) c.blocked = true
+          ;(d.projects || []).forEach(p => { if (p.sourceEnvId === envId) p.status = 'pause' })
+          pushSupportLog(d, { type: 'Client', action: 'Environnement bloqué', details: e.name, actorId: account?.id || null, actorName })
+          return d
+        })
+      },
+      unblockEnv(envId) {
+        setDb(d => {
+          const e = d.environments.find(x => x.id === envId); if (!e) return d
+          e.subState = 'active'
+          const c = (d.clients || []).find(x => x.envId === envId); if (c) c.blocked = false
+          ;(d.projects || []).forEach(p => { if (p.sourceEnvId === envId && p.status === 'pause') p.status = 'encours' })
+          pushSupportLog(d, { type: 'Client', action: 'Environnement débloqué', details: e.name, actorId: account?.id || null, actorName })
+          return d
+        })
+      },
+      deleteClientEnv(envId) {
+        // Le support supprime l'environnement client : le client devient « ancien », son projet est retiré.
+        setDb(d => {
+          const e = d.environments.find(x => x.id === envId)
+          const name = e?.name || ''
+          d.subenvs.filter(s => s.envId === envId).forEach(s => delete d.data[s.id])
+          d.subenvs = d.subenvs.filter(s => s.envId !== envId)
+          d.environments = d.environments.filter(x => x.id !== envId)
+          const c = (d.clients || []).find(x => x.envId === envId); if (c) { c.status = 'anciens'; c.blocked = false }
+          d.projects = (d.projects || []).filter(p => p.sourceEnvId !== envId)
+          pushSupportLog(d, { type: 'Client', action: 'Environnement client supprimé', details: name, actorId: account?.id || null, actorName })
+          return d
+        })
+      },
       // ----- Gestion de projet (back-office support)
       saveProject(project) {
         setDb(d => {

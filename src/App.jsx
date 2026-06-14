@@ -31,6 +31,7 @@ import Tickets from './pages/Tickets.jsx'
 import Clients from './pages/Clients.jsx'
 import Projects from './pages/Projects.jsx'
 import SupportTrash from './pages/SupportTrash.jsx'
+import SupportLogs from './pages/SupportLogs.jsx'
 import CompanyModal from './pages/Company.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
@@ -326,6 +327,7 @@ const NAV_GROUPS = [
       { id: 'tickets', label: 'Tickets Techniques', icon: LifeBuoy, roles: SUPPORT_ROLES },
       { id: 'clients', label: 'Clients', icon: Users2, roles: SUPPORT_ROLES },
       { id: 'projects', label: 'Gestion de Projet', icon: FolderKanban, roles: SUPPORT_ROLES },
+      { id: 'supportlogs', label: 'Logs Support', icon: ScrollText, roles: SUPPORT_ROLES },
       { id: 'supporttrash', label: 'Corbeille', icon: Trash2, roles: SUPPORT_ROLES },
     ],
   },
@@ -402,6 +404,7 @@ function MainApp() {
     tickets: <Tickets />,
     clients: <Clients />,
     projects: <Projects />,
+    supportlogs: <SupportLogs />,
     supporttrash: <SupportTrash />,
     kpi: <Kpi />,
     teamlead: <TeamLead />,
@@ -460,9 +463,11 @@ function MainApp() {
                   <div className="space-y-0.5 mt-0.5">
                     {g.items.map(item => {
                       const label = tr(`page.${item.id}`, item.label)
+                      // En lecture seule (résiliation/blocage), les briques apparaissent transparentes (consultation uniquement).
+                      const dimmed = store.readOnly && item.brick
                       return (
-                        <button key={item.id} onClick={() => goto(item.id)} title={label}
-                          className={`w-full flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-lg text-[13px] font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'}`}>
+                        <button key={item.id} onClick={() => goto(item.id)} title={dimmed ? `${label} — lecture seule` : label}
+                          className={`w-full flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-lg text-[13px] font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'} ${dimmed && page !== item.id ? 'opacity-40' : ''}`}>
                           <item.icon size={15} className={`shrink-0 ${page === item.id ? '' : 'text-muted'}`} />
                           <span className="truncate">{label}</span>
                           {badges[item.id] > 0 && (
@@ -527,6 +532,18 @@ function MainApp() {
           </div>
         </header>
         <main className="p-3 sm:p-5 pb-24 max-w-[1400px] mx-auto">
+          {store.readOnly && page !== 'support' && (
+            <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3 flex items-center gap-2 fade-in">
+              <Lock size={16} className="shrink-0" />
+              <span className="flex-1">
+                {env?.subState === 'cancelling'
+                  ? 'Abonnement en cours de résiliation — accès en lecture seule. '
+                  : 'Environnement bloqué — accès en lecture seule. '}
+                Seule la rubrique Support reste accessible.
+              </span>
+              <button className="btn-primary !py-1 text-xs shrink-0" onClick={() => goto('support')}>Aller au Support</button>
+            </div>
+          )}
           {booting ? <PageSkeleton /> : pageEl}
         </main>
       </div>

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck } from 'lucide-react'
+import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock } from 'lucide-react'
 import { useStore, hashPw } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
 import { Modal, Field, Confirm, toast } from '../ui.jsx'
@@ -46,7 +46,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
   const store = useStore()
   const [tab, setTab] = useState('ux')
   const [pendingTheme, setPendingTheme] = useState(currentTheme)
-  const [confirmDelEnv, setConfirmDelEnv] = useState(null)
+  const [confirmCancel, setConfirmCancel] = useState(false)
   const [importMsg, setImportMsg] = useState('')
   const importRef = useRef(null)
   const me = store.account
@@ -116,12 +116,26 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
           {env && (
             <div className="card p-4 space-y-3">
               <h3 className="font-bold">Environnement : {env.name}</h3>
-              <Field label="Nom"><input className="input !w-72" value={env.name} onChange={e => store.updateEnv(env.id, { name: e.target.value })} /></Field>
-              <Field label="Logo de l'entreprise"><ImageInput value={env.logo} onChange={v => store.updateEnv(env.id, { logo: v })} label="Télécharger un logo" /></Field>
+              {store.readOnly && (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3 flex items-start gap-2">
+                  <Lock size={16} className="mt-0.5 shrink-0" />
+                  <div>
+                    {env.subState === 'cancelling'
+                      ? "Abonnement en cours de résiliation : l'accès est en lecture seule. Seul le Support reste accessible le temps que l'équipe BD Report traite votre demande."
+                      : "Cet environnement est bloqué par le support (par ex. en cas d'impayé) : l'accès est en lecture seule. Contactez le support via un ticket pour le débloquer."}
+                  </div>
+                </div>
+              )}
+              <Field label="Nom"><input className="input !w-72" disabled={store.readOnly} value={env.name} onChange={e => store.updateEnv(env.id, { name: e.target.value })} /></Field>
+              <Field label="Logo de l'entreprise"><ImageInput value={env.logo} onChange={v => !store.readOnly && store.updateEnv(env.id, { logo: v })} label="Télécharger un logo" /></Field>
               <Field label="Code d'accès (4 chiffres, vide = aucun)">
-                <input className="input !w-32" maxLength={4} value={env.pin || ''} onChange={e => store.updateEnv(env.id, { pin: e.target.value.replace(/\D/g, '') })} />
+                <input className="input !w-32" maxLength={4} disabled={store.readOnly} value={env.pin || ''} onChange={e => store.updateEnv(env.id, { pin: e.target.value.replace(/\D/g, '') })} />
               </Field>
-              <button className="btn-danger !py-1.5 text-xs" onClick={() => setConfirmDelEnv(env.id)}><Trash2 size={13} /> Supprimer l'environnement</button>
+              {env.subState === 'cancelling'
+                ? <p className="text-xs text-muted">Résiliation demandée — en attente du traitement par le support.</p>
+                : env.subState === 'blocked'
+                  ? <p className="text-xs text-muted">Environnement bloqué par le support.</p>
+                  : <button className="btn-danger !py-1.5 text-xs" onClick={() => setConfirmCancel(true)}><Ban size={13} /> Résilier mon abonnement</button>}
             </div>
           )}
           <div className="card p-4 space-y-3">
@@ -260,10 +274,15 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
         </div>
       )}
 
-      {confirmDelEnv && (
-        <Confirm message="Supprimer cet environnement et toutes ses données ?"
-          onYes={() => { store.deleteEnv(confirmDelEnv); setConfirmDelEnv(null); store.setSession(s => ({ ...s, envId: null, subEnvId: null })) }}
-          onNo={() => setConfirmDelEnv(null)} />
+      {confirmCancel && (
+        <Confirm yesLabel="Résilier" message="Résilier votre abonnement BD Report pour cet environnement ? Un ticket de résiliation sera ouvert au support et votre accès passera en lecture seule (seul le Support reste accessible)."
+          onYes={() => {
+            store.cancelSubscription()
+            setConfirmCancel(false)
+            toast('Demande de résiliation envoyée au support')
+            window.dispatchEvent(new CustomEvent('app-navigate', { detail: 'support' }))
+          }}
+          onNo={() => setConfirmCancel(false)} />
       )}
     </div>
   )

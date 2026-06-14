@@ -53,6 +53,7 @@ async function main() {
 
   const text = () => container.textContent || ''
   const find = (sel, label) => [...container.querySelectorAll(sel)].find(el => el.textContent.trim().includes(label))
+  const findExact = (label) => [...container.querySelectorAll('button')].find(b => b.textContent.trim() === label)
   const click = async (el) => act(async () => {
     el.dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true }))
   })
@@ -87,7 +88,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Gestion Administration']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Logs Support', 'Gestion Administration']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
@@ -130,6 +131,20 @@ async function main() {
   await click(find('button', 'Enregistrer'))
   if (!text().includes('Avancement')) throw new Error('Project not created / Gantt did not render')
 
+  // 6c. Logs Support : la création de ticket a bien été journalisée.
+  await click(navBtn('Logs Support'))
+  if (!text().includes('Ticket créé')) throw new Error('Support log for ticket creation missing')
+
+  // 6d. Le support peut bloquer puis débloquer un environnement client.
+  await click(navBtn('Clients'))
+  await click(find('button', 'PeopleSpheres'))
+  await click(find('button', 'Bloquer le client'))
+  await click(findExact('Bloquer')) // confirmation
+  if (dbNow().environments.find(e => e.id === 'env-peoplespheres').subState !== 'blocked') throw new Error('Env not blocked')
+  await click(find('button', 'Débloquer'))
+  if (dbNow().environments.find(e => e.id === 'env-peoplespheres').subState !== 'active') throw new Error('Env not unblocked')
+  await click(find('button', 'Fermer'))
+
   // 7. Créer un RDV via le formulaire : validation des champs obligatoires puis création réelle
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes Rendez-vous'))
   await click(find('button', 'Créer un RDV'))
@@ -155,6 +170,14 @@ async function main() {
   if (!text().includes('Organigramme')) throw new Error('OrgChart did not render')
   await click(container.querySelector('button[title="Paramètres"]'))
   if (!text().includes('Thèmes de design')) throw new Error('Settings did not render')
+
+  // 9b. Résiliation d'abonnement : ouvre un ticket support + bascule l'environnement en lecture seule.
+  await click(find('button', 'Gérer mes environnements'))
+  await click(find('button', 'Résilier mon abonnement'))
+  await click(findExact('Résilier')) // confirmation
+  const dbR = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+  if (dbR.environments.find(e => e.id === 'env-peoplespheres').subState !== 'cancelling') throw new Error('Résiliation did not set env to cancelling')
+  if (!dbR.tickets.some(t => t.category === 'Facturation & abonnement')) throw new Error('Résiliation ticket not created')
 
   // 10. Migration : un ancien stockage SANS l'environnement Test doit le récupérer au rechargement
   const raw = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))

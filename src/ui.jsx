@@ -16,13 +16,13 @@ export function Modal({ title, onClose, children, wide }) {
   )
 }
 
-export function Confirm({ message, onYes, onNo }) {
+export function Confirm({ message, onYes, onNo, yesLabel = 'Supprimer' }) {
   return (
     <Modal title="Confirmation" onClose={onNo}>
       <p className="text-sm mb-5">{message}</p>
       <div className="flex justify-end gap-2">
         <button className="btn-ghost" onClick={onNo}>Annuler</button>
-        <button className="btn-danger" onClick={onYes}>Supprimer</button>
+        <button className="btn-danger" onClick={onYes}>{yesLabel}</button>
       </div>
     </Modal>
   )
