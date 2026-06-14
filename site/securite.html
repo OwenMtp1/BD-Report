@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BD Report — Sécurité & protection des données</title>
+<meta name="description" content="Hébergement UE, chiffrement AES-256 et TLS, Row Level Security, sauvegardes quotidiennes et conformité RGPD : comment BD Report protège vos données.">
+<link rel="icon" type="image/svg+xml" href="app/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--brand:#3B5BDB;--cyan:#0EA5E9;--ink:#172033;--night:#10162E;--muted:#647085;--line:#E2E6EE;--surface:#F4F6FA;--mint:#10B981}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:#fff;line-height:1.65}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:920px;margin:0 auto;padding:0 24px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;border:none;transition:.2s}
+.btn-primary{background:linear-gradient(135deg,var(--brand),var(--cyan));color:#fff;box-shadow:0 6px 20px rgba(59,91,219,.35)}
+.btn-primary:hover{transform:translateY(-2px)}
+nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;gap:24px;height:64px;max-width:1080px;margin:0 auto;padding:0 24px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.5px}
+.logo b{color:var(--brand)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.hero{background:linear-gradient(135deg,var(--night),#1E2A52 60%,#14346B);color:#fff;padding:60px 0}
+.hero .chip{display:inline-block;padding:5px 14px;border-radius:999px;font-size:13px;font-weight:700;background:rgba(94,220,255,.15);color:#5EDCFF}
+.hero h1{font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1.15;margin:14px 0 10px}
+.hero p{color:rgba(255,255,255,.72);font-size:17px;max-width:680px}
+section.sec{padding:30px 0}
+.intro{color:var(--muted);font-size:16px;margin:34px 0 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:26px;margin:16px 0}
+.card h2{font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.card .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:#fff;border:1px solid var(--line);flex:none}
+.card p{color:var(--muted);font-size:15.5px;margin-bottom:8px}
+.card ul{color:var(--muted);font-size:15.5px;padding-left:20px;margin:6px 0}
+.card li{margin:4px 0}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.badge{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:700;color:var(--ink)}
+.badge.green{color:var(--mint);border-color:rgba(16,185,129,.35)}
+.contact-cta{background:linear-gradient(135deg,var(--brand),var(--cyan));color:#fff;border-radius:18px;padding:28px;text-align:center;margin:26px 0}
+.contact-cta h2{justify-content:center;color:#fff}
+.contact-cta a{color:#fff;font-weight:800;text-decoration:underline}
+.muted{color:var(--muted);font-size:13.5px}
+footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid rgba(255,255,255,.1);padding:28px 0;font-size:13.5px;margin-top:30px}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;max-width:1080px;margin:0 auto;padding:0 24px}
+.foot a{color:#7C9BFF;font-weight:700}
+@media(max-width:640px){.hero h1{font-size:28px}.card{padding:20px}.nav-right a:not(.btn){display:none}}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="index.html">
+      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B5BDB"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"/><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"/><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"/><circle cx="45.5" cy="11" r="4" fill="#A7F3D0"/></svg>
+      <span><b>BD</b> Report</span>
+    </a>
+    <div class="nav-right">
+      <a href="index.html#tarifs" style="font-weight:600;font-size:14px;color:var(--muted)">Tarifs</a>
+      <a href="index.html#contact" style="font-weight:600;font-size:14px;color:var(--muted)">Contact</a>
+      <a class="btn btn-primary" href="app/">Se connecter</a>
+    </div>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="chip">🔒 Sécurité</span>
+    <h1>La sécurité de vos données, par conception</h1>
+    <p>BD Report protège vos informations commerciales avec les standards de l'industrie : hébergement en Union européenne, chiffrement de bout en bout, isolation stricte des données et conformité RGPD.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="intro">Cette page décrit les mesures techniques et organisationnelles mises en œuvre pour assurer la confidentialité, l'intégrité et la disponibilité de vos données.</p>
+
+  <section class="sec">
+    <div class="card">
+      <h2><span class="ic">🛡️</span> Sécurité des données</h2>
+      <p>La protection de vos données est au cœur de BD Report. Nous appliquons les meilleures pratiques de l'industrie pour garantir leur confidentialité, leur intégrité et leur disponibilité.</p>
+      <p><strong>Aucune donnée n'est vendue, partagée ou exploitée à des fins commerciales.</strong> Vos données vous appartiennent et ne servent qu'à faire fonctionner le service pour vous.</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">🏛️</span> Hébergement et infrastructure</h2>
+      <p>Vos données sont hébergées au sein de l'<strong>Union européenne</strong>, sur l'infrastructure de <strong>Supabase</strong>, opérée dans des centres de données professionnels. L'infrastructure bénéficie d'une isolation réseau et d'une surveillance continue.</p>
+      <div class="badges">
+        <span class="badge">🇪🇺 Hébergement UE</span>
+        <span class="badge">Surveillance 24/7</span>
+        <span class="badge">Isolation réseau</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">🔐</span> Chiffrement</h2>
+      <p>Toutes les données sont chiffrées <strong>au repos</strong> avec l'algorithme <strong>AES‑256</strong>, et <strong>en transit</strong> via <strong>HTTPS / TLS 1.2 ou supérieur</strong>. Les échanges entre votre navigateur et nos serveurs sont systématiquement sécurisés.</p>
+      <div class="badges">
+        <span class="badge green">AES‑256 au repos</span>
+        <span class="badge green">TLS 1.2+ en transit</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">👤</span> Accès et permissions</h2>
+      <p>Des règles de sécurité au niveau des lignes (<strong>Row Level Security</strong>) sont appliquées directement dans la base de données : elles empêchent tout accès non autorisé.</p>
+      <ul>
+        <li>Chaque utilisateur ne peut accéder qu'à <strong>ses propres données</strong>.</li>
+        <li>Les accès sont contrôlés par <strong>rôles</strong> (Fondateur, Manager, Membre, Support…) avec des permissions granulaires.</li>
+        <li>Les espaces de travail peuvent être protégés par un code d'accès.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">💾</span> Sauvegardes et continuité</h2>
+      <p>Des <strong>sauvegardes automatiques quotidiennes</strong> sont réalisées afin d'assurer la continuité de service et une restauration rapide en cas d'incident.</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">⚖️</span> Conformité RGPD</h2>
+      <p>BD Report respecte le <strong>Règlement général sur la protection des données (RGPD)</strong>. Vous disposez à tout moment des droits suivants :</p>
+      <ul>
+        <li><strong>Droit d'accès</strong> à vos données personnelles.</li>
+        <li><strong>Droit de rectification</strong> des informations inexactes.</li>
+        <li><strong>Droit à l'effacement</strong> (« droit à l'oubli »).</li>
+        <li><strong>Droit à la portabilité</strong> de vos données.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">📤</span> Suppression et export des données</h2>
+      <p>Vous pouvez <strong>exporter l'intégralité de vos données</strong> à tout moment depuis l'application (Paramètres → Télécharger), au format JSON.</p>
+      <p>Vous pouvez également demander la <strong>suppression complète de vos données</strong> via notre <a href="index.html#contact" style="color:var(--brand);font-weight:700">formulaire de contact</a> ou par e‑mail (voir ci‑dessous). Votre demande est traitée dans les meilleurs délais.</p>
+    </div>
+  </section>
+
+  <div class="contact-cta">
+    <h2><span class="ic" style="background:rgba(255,255,255,.15);border-color:transparent">✉️</span> Contact sécurité</h2>
+    <p style="color:rgba(255,255,255,.85);margin:8px 0 4px">Une question sur la sécurité, ou une vulnérabilité à signaler ?</p>
+    <p style="font-size:18px"><a id="secEmail" href="#">chargement…</a></p>
+  </div>
+
+  <p class="muted" style="margin:18px 0 30px">Dernière mise à jour : juin 2026. Ce document décrit nos engagements et pratiques de sécurité ; il pourra évoluer pour refléter les améliorations apportées au service.</p>
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2026 <b style="color:#7C9BFF">BD</b> Report — Pilotez votre prospection. Encaissez vos primes.</span>
+    <span><a href="index.html">← Retour au site</a></span>
+  </div>
+</footer>
+
+<script>
+  // E-mail de contact sécurité — à remplacer par une adresse dédiée à votre domaine si besoin.
+  var SECURITY_EMAIL = 'contact@bdreport.app';
+  var el = document.getElementById('secEmail');
+  el.textContent = SECURITY_EMAIL;
+  el.href = 'mailto:' + SECURITY_EMAIL + '?subject=' + encodeURIComponent('[Sécurité] BD Report');
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+[package]
+name = "bd-report"
+version = "1.16.0"
+description = "BD Report — espace sales tout-en-un"
+authors = ["BD Report"]
+edition = "2021"
+rust-version = "1.70"
+
+[lib]
+name = "bd_report_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+panic = "abort"
+codegen-units = 1

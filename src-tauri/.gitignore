@@ -1,0 +1,6 @@
+# Artefacts de build Rust / Tauri
+/target
+/gen/schemas
+
+# Icônes générées en CI par `tauri icon` (à partir de public/icon.svg)
+/icons

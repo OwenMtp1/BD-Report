@@ -243,9 +243,20 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
       )}
 
       {tab === 'download' && (
-        <div className="card p-4 space-y-3 max-w-2xl">
-          <h3 className="font-bold flex items-center gap-2"><Download size={17} className="text-brand" /> Télécharger l'application en local</h3>
-          <p className="text-sm text-muted">Téléchargez une copie autonome de BDR Flow Pro dans un seul fichier HTML. Ouvrez-le ensuite directement dans votre navigateur, sans connexion ni serveur — toutes les fonctionnalités restent disponibles et vos données sont conservées sur votre ordinateur.</p>
+        <div className="space-y-3 max-w-2xl">
+        <div className="card p-4 space-y-3">
+          <h3 className="font-bold flex items-center gap-2"><Download size={17} className="text-brand" /> Application de bureau (Windows / macOS)</h3>
+          <p className="text-sm text-muted">Installez BD Report en application native sur votre ordinateur. Même expérience, synchronisée dans le cloud.</p>
+          <div className="flex gap-2 flex-wrap">
+            <a className="btn-primary" href="https://github.com/OwenMtp1/Claude/releases/latest" target="_blank" rel="noopener"><Download size={15} /> Windows</a>
+            <a className="btn-primary" href="https://github.com/OwenMtp1/Claude/releases/latest" target="_blank" rel="noopener"><Download size={15} /> macOS</a>
+            <a className="btn-ghost text-xs" href="https://github.com/OwenMtp1/Claude/releases/latest" target="_blank" rel="noopener">Linux & autres versions</a>
+          </div>
+          <p className="text-xs text-muted">Les installeurs sont publiés dans les releases du projet. Build non signée au premier lancement : autorisez l'app (macOS : clic droit → Ouvrir).</p>
+        </div>
+        <div className="card p-4 space-y-3">
+          <h3 className="font-bold flex items-center gap-2"><Download size={17} className="text-brand" /> Version autonome (un seul fichier HTML)</h3>
+          <p className="text-sm text-muted">Téléchargez une copie autonome de BD Report dans un seul fichier HTML. Ouvrez-le directement dans votre navigateur, sans connexion ni serveur — toutes les fonctionnalités restent disponibles et vos données sont conservées sur votre ordinateur.</p>
           {isStandaloneCapable() ? (
             <button className="btn-primary" onClick={downloadStandaloneApp}><Download size={16} /> Télécharger BDR-Flow-Pro.html</button>
           ) : (
@@ -289,6 +300,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
             </div>
             {importMsg && <p className="text-xs font-semibold">{importMsg}</p>}
           </div>
+        </div>
         </div>
       )}
 

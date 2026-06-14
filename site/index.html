@@ -150,6 +150,7 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
       <a href="#tarifs" data-i18n="nav.pricing">Tarifs</a>
       <a href="#blog" data-i18n="nav.blog">Blog</a>
       <a href="#contact" data-i18n="nav.contact">Contact</a>
+      <a href="securite.html" data-i18n="nav.security">Sécurité</a>
     </div>
     <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧 EN</button>
     <a class="btn btn-primary" href="app/" data-i18n="nav.login">Se connecter</a>
@@ -273,6 +274,22 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
   </div>
 </section>
 
+<section id="apps" style="background:var(--surface)">
+  <div class="wrap">
+    <div class="sec-head fade">
+      <span class="chip" data-i18n="apps.chip">Applications</span>
+      <h2 data-i18n="apps.title">BD Report sur votre bureau</h2>
+      <p data-i18n="apps.sub">Installez l'application native sur Windows et macOS — même expérience, synchronisée dans le cloud.</p>
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:-20px">
+      <a class="btn btn-primary" href="https://github.com/OwenMtp1/Claude/releases/latest" id="dlWin">🪟 <span data-i18n="apps.win">Télécharger pour Windows</span></a>
+      <a class="btn btn-primary" href="https://github.com/OwenMtp1/Claude/releases/latest" id="dlMac">🍎 <span data-i18n="apps.mac">Télécharger pour macOS</span></a>
+      <a class="btn btn-ghost" style="border:1px solid var(--line)" href="app/" data-i18n="apps.web">Ou utiliser dans le navigateur</a>
+    </div>
+    <p class="muted" style="font-size:12.5px;color:var(--muted);margin-top:14px" data-i18n="apps.note">Disponible aussi sur Linux. Application gratuite, mises à jour régulières.</p>
+  </div>
+</section>
+
 <section id="contact">
   <div class="wrap">
     <div class="sec-head fade">
@@ -335,7 +352,10 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
 <footer>
   <div class="wrap foot">
     <span>© 2026 <b style="color:#7C9BFF">BD</b> Report — <span data-i18n="foot.tag">Pilotez votre prospection. Encaissez vos primes.</span></span>
-    <span><a href="app/" style="color:#7C9BFF;font-weight:700" data-i18n="foot.login">Se connecter →</a></span>
+    <span style="display:flex;gap:18px;flex-wrap:wrap">
+      <a href="securite.html" style="color:#7C9BFF;font-weight:700" data-i18n="nav.security">Sécurité</a>
+      <a href="app/" style="color:#7C9BFF;font-weight:700" data-i18n="foot.login">Se connecter →</a>
+    </span>
   </div>
 </footer>
 
@@ -470,7 +490,7 @@ const FEATURES = {
 // ---------- i18n ----------
 const I18N = {
   en: {
-    'nav.features':'Features','nav.pricing':'Pricing','nav.blog':'Blog','nav.contact':'Contact','nav.login':'Log in',
+    'nav.features':'Features','nav.pricing':'Pricing','nav.blog':'Blog','nav.contact':'Contact','nav.security':'Security','nav.login':'Log in',
     'hero.chip':'⚡ Built by and for BDRs / SDRs',
     'hero.title':'Run your pipeline.<br><span>Cash your bonuses.</span>',
     'hero.sub':'BD Report brings your meetings, pipeline, bonuses and dashboards into one workspace — with team steering for managers.',
@@ -493,10 +513,11 @@ const I18N = {
     'blog.t3':'Management','blog.a3':'The perfect daily standup lasts 9 minutes: here\'s the format','blog.soon3':'Coming soon',
     'contact.title':'Let\'s talk about your team','contact.sub':'A question, a demo, a partnership? Drop us a line.',
     'contact.name':'Your name & company','contact.email':'Your email','contact.msg':'Your message...','contact.send':'Send message',
+    'apps.chip':'Apps','apps.title':'BD Report on your desktop','apps.sub':'Install the native app on Windows and macOS — same experience, synced to the cloud.','apps.win':'Download for Windows','apps.mac':'Download for macOS','apps.web':'Or use it in the browser','apps.note':'Also available on Linux. Free app, regular updates.',
     'foot.tag':'Run your pipeline. Cash your bonuses.','foot.login':'Log in →',
   },
   es: {
-    'nav.features':'Funciones','nav.pricing':'Precios','nav.blog':'Blog','nav.contact':'Contacto','nav.login':'Iniciar sesión',
+    'nav.features':'Funciones','nav.pricing':'Precios','nav.blog':'Blog','nav.contact':'Contacto','nav.security':'Seguridad','nav.login':'Iniciar sesión',
     'hero.chip':'⚡ Hecho por y para BDR / SDR',
     'hero.title':'Dirige tu pipeline.<br><span>Cobra tus primas.</span>',
     'hero.sub':'BD Report reúne tus citas, tu pipeline, tus primas y tus paneles en un único espacio — con dirección de equipo para los managers.',
@@ -519,6 +540,7 @@ const I18N = {
     'blog.t3':'Management','blog.a3':'El daily standup perfecto dura 9 minutos: este es el formato','blog.soon3':'Próximamente',
     'contact.title':'Hablemos de tu equipo','contact.sub':'¿Una pregunta, una demo, una colaboración? Escríbenos.',
     'contact.name':'Tu nombre y empresa','contact.email':'Tu correo','contact.msg':'Tu mensaje...','contact.send':'Enviar mensaje',
+    'apps.chip':'Apps','apps.title':'BD Report en tu escritorio','apps.sub':'Instala la app nativa en Windows y macOS — la misma experiencia, sincronizada en la nube.','apps.win':'Descargar para Windows','apps.mac':'Descargar para macOS','apps.web':'O usarlo en el navegador','apps.note':'También disponible en Linux. App gratuita, actualizaciones frecuentes.',
     'foot.tag':'Dirige tu pipeline. Cobra tus primas.','foot.login':'Iniciar sesión →',
   },
 }
