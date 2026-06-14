@@ -51,6 +51,24 @@ export async function subscribeRemoteState(onChange) {
   return () => { try { c.removeChannel(ch) } catch (e) {} }
 }
 
+// ----- Test de connexion (bouton « Tester » dans les Réglages) -------------
+export async function testConnection() {
+  if (!isSupabaseConfigured()) return { ok: false, msg: 'Supabase non configuré (clés vides).' }
+  let c
+  try { c = await getClient() } catch (e) { c = null }
+  if (!c) return { ok: false, msg: "Impossible de charger le client Supabase (réseau bloqué ou CDN injoignable)." }
+  try {
+    const id = '__healthcheck__'
+    const up = await c.from('app_state').upsert({ id, data: { ok: true, ts: Date.now() }, updated_at: new Date().toISOString() })
+    if (up.error) return { ok: false, msg: 'Écriture refusée : ' + up.error.message + ' (le SQL a-t-il bien été exécuté ?)' }
+    const rd = await c.from('app_state').select('id').eq('id', id).maybeSingle()
+    if (rd.error) return { ok: false, msg: 'Lecture refusée : ' + rd.error.message }
+    return { ok: true, msg: 'Connexion Supabase OK ✓ — la synchronisation temps réel est active.' }
+  } catch (e) {
+    return { ok: false, msg: 'Erreur : ' + (e && e.message ? e.message : String(e)) }
+  }
+}
+
 // ----- Demandes de contact (site → app) -----------------------------------
 const mapReq = (r) => ({ id: r.id, name: r.name || '', email: r.email || '', message: r.message || '', lang: r.lang || 'fr', createdAt: r.created_at || new Date().toISOString() })
 

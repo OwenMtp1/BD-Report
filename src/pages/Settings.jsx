@@ -1,8 +1,35 @@
 import React, { useRef, useState } from 'react'
-import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock } from 'lucide-react'
+import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock, Cloud } from 'lucide-react'
 import { useStore, hashPw } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
 import { Modal, Field, Confirm, toast, CommitInput } from '../ui.jsx'
+import { testConnection } from '../supabaseSync.js'
+import { SUPABASE_URL, isSupabaseConfigured } from '../supabaseConfig.js'
+
+// Carte « Synchronisation cloud » : test de connexion Supabase en un clic (depuis le navigateur).
+function SupabaseCard() {
+  const [res, setRes] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const configured = isSupabaseConfigured()
+  const run = async () => { setBusy(true); setRes(null); setRes(await testConnection()); setBusy(false) }
+  return (
+    <div className="card p-4 space-y-3 max-w-2xl">
+      <h3 className="font-bold flex items-center gap-2"><Cloud size={17} className="text-brand" /> Synchronisation cloud (Supabase)</h3>
+      <p className="text-xs text-muted">{configured
+        ? 'Vos données sont synchronisées en temps réel entre tous vos appareils.'
+        : "Non configurée — l'app fonctionne en local sur cet appareil uniquement."}</p>
+      {configured && <div className="text-[11px] text-muted break-all">Projet : {SUPABASE_URL}</div>}
+      <button className="btn-primary !py-1.5 text-sm w-fit" onClick={run} disabled={busy || !configured}>
+        {busy ? 'Test en cours…' : 'Tester la connexion'}
+      </button>
+      {res && (
+        <div className={`text-sm rounded-xl p-3 ${res.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {res.msg}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Génère une copie autonome de l'app (HTML + scripts inlinés) téléchargeable pour un usage local hors-ligne.
 function downloadStandaloneApp() {
@@ -182,6 +209,8 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
       )}
 
       {tab === 'integrations' && (
+        <div className="space-y-3">
+        <SupabaseCard />
         <div className="card p-4 space-y-3 max-w-2xl">
           <div className="flex items-center justify-between">
             <h3 className="font-bold flex items-center gap-2"><Plug size={17} className="text-brand" /> HubSpot CRM</h3>
@@ -209,6 +238,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
             <span>La configuration est enregistrée ici. La synchronisation réelle vers HubSpot nécessite que l'app soit déployée en ligne avec un proxy serveur (les navigateurs bloquent les appels directs à l'API HubSpot pour des raisons de sécurité). Une fois déployée, la clé ci-dessus active la synchronisation automatique.</span>
           </div>
           <p className="text-xs text-muted">L'intégration LinkedIn a été retirée : LinkedIn ne propose pas d'API publique permettant de récupérer ou d'enrichir des contacts, elle n'était donc pas réalisable.</p>
+        </div>
         </div>
       )}
 
