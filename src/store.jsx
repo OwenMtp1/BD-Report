@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { isSupabaseConfigured } from './supabaseConfig.js'
+import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests } from './supabaseSync.js'
 
 const LS_KEY = 'bdrflow_db_v1'
 const SESSION_KEY = 'bdrflow_session_v1'
 // Boîte de réception partagée site ↔ app (même origine owenmtp1.github.io) : le
 // formulaire de contact du site y dépose ses messages, l'app les y récupère.
 export const CONTACT_INBOX_KEY = 'bdrflow_contact_inbox_v1'
-export const APP_VERSION = '1.14.0'
+export const APP_VERSION = '1.15.0'
 
 // ---------------------------------------------------------------- Format monétaire
 export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
@@ -814,16 +816,65 @@ export function StoreProvider({ children }) {
   const [uiLang, setUiLangState] = useState(() => localStorage.getItem('bdr_lang') || 'fr')
 
   const lastSavedAt = React.useRef(0)
+  const clientId = React.useRef(Math.random().toString(36).slice(2)) // identifiant d'onglet/appareil (anti-écho Supabase)
+  const applyingRemote = React.useRef(false) // vrai quand on vient d'adopter un état distant (ne pas re-pousser)
+  const remoteReady = React.useRef(false)    // vrai après la 1re synchro distante (évite d'écraser le distant au démarrage)
   useEffect(() => {
     // Sauvegarde sûre : capture l'erreur de quota au lieu d'échouer silencieusement (bug 5).
     try {
+      if (applyingRemote.current) {
+        // On vient d'adopter l'état distant : on conserve son estampille et on NE re-pousse PAS.
+        applyingRemote.current = false
+        const stamp = db._savedAt || Date.now()
+        lastSavedAt.current = stamp
+        localStorage.setItem(LS_KEY, JSON.stringify({ ...db, _savedAt: stamp }))
+        return
+      }
       const stamp = Date.now()
       lastSavedAt.current = stamp
-      localStorage.setItem(LS_KEY, JSON.stringify({ ...db, _savedAt: stamp }))
+      const payload = { ...db, _savedAt: stamp, _client: clientId.current }
+      localStorage.setItem(LS_KEY, JSON.stringify(payload))
+      // Synchro Supabase (inerte si non configuré) : seulement après la 1re synchro distante.
+      if (remoteReady.current) pushRemoteStateDebounced(payload)
     } catch (err) {
       window.dispatchEvent(new CustomEvent('app-toast', { detail: "⚠️ Stockage plein : sauvegarde impossible. Allégez vos photos/logos ou exportez vos données." }))
     }
   }, [db])
+
+  // Synchronisation Supabase temps réel (toute l'app + demandes de contact). Inerte si non configuré.
+  useEffect(() => {
+    if (!isSupabaseConfigured()) { remoteReady.current = true; return }
+    let unsubState = () => {}, unsubContact = () => {}, cancelled = false
+    ;(async () => {
+      // 1) État initial : on adopte le distant s'il est plus récent, sinon on y pousse l'état local.
+      const remote = await fetchRemoteState()
+      if (cancelled) return
+      if (remote && (remote._savedAt || 0) > lastSavedAt.current) {
+        applyingRemote.current = true
+        setDbState(migrate(remote))
+      } else {
+        pushRemoteState({ ...db, _savedAt: lastSavedAt.current || Date.now(), _client: clientId.current })
+      }
+      remoteReady.current = true
+      // 2) Temps réel sur l'état applicatif (on ignore nos propres échos).
+      unsubState = await subscribeRemoteState(remote => {
+        if (cancelled || !remote || remote._client === clientId.current) return
+        if ((remote._savedAt || 0) >= lastSavedAt.current) { applyingRemote.current = true; setDbState(migrate(remote)) }
+      })
+      // 3) Demandes de contact distantes (site → app), ingérées une seule fois.
+      const reqs = await fetchContactRequests()
+      if (!cancelled && reqs.length) setDbState(prev => {
+        const fresh = reqs.filter(r => shouldIngestRequest(prev, r))
+        if (!fresh.length) return prev
+        const next = structuredClone(prev); fresh.forEach(r => ingestRequest(next, r)); return next
+      })
+      unsubContact = await subscribeContactRequests(r => {
+        if (cancelled) return
+        setDbState(prev => { if (!shouldIngestRequest(prev, r)) return prev; const next = structuredClone(prev); ingestRequest(next, r); return next })
+      })
+    })()
+    return () => { cancelled = true; unsubState(); unsubContact() }
+  }, [])
   useEffect(() => { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)) }, [session])
 
   // Synchronisation multi-onglets : on n'adopte un état distant que s'il est plus récent

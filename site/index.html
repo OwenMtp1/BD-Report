@@ -6,6 +6,12 @@
 <title>BD Report — Pilotez votre prospection. Encaissez vos primes.</title>
 <meta name="description" content="BD Report est l'espace sales tout-en-un des BDR / SDR : rendez-vous, pipeline, primes & commissions, dashboards et pilotage d'équipe.">
 <link rel="icon" type="image/svg+xml" href="app/icon.svg">
+<script>
+  /* Supabase (synchro cross-device du formulaire de contact). Laisser vide tant que le projet
+     n'est pas créé → repli localStorage. Voir supabase/SETUP.md. Mêmes valeurs que src/supabaseConfig.js. */
+  window.BDR_SUPABASE_URL = '';
+  window.BDR_SUPABASE_ANON_KEY = '';
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -285,27 +291,35 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
       // Le site (/Claude/) et l'app (/Claude/app/) partagent la même origine : le message
       // est déposé dans le localStorage partagé, l'app le récupère dans « Nouvelles demandes »
       // (visible uniquement par les rôles Fondateur et Support BD Report).
-      function sendContact(e){
+      function localStoreContact(item){
+        var KEY='bdrflow_contact_inbox_v1';
+        var inbox=[];
+        try{ inbox=JSON.parse(localStorage.getItem(KEY))||[]; }catch(_){ inbox=[]; }
+        if(!Array.isArray(inbox)) inbox=[];
+        inbox.push({ id:item.id, name:item.name, email:item.email, message:item.message, lang:item.lang, createdAt:item.created_at });
+        if(inbox.length>200) inbox=inbox.slice(-200);
+        localStorage.setItem(KEY, JSON.stringify(inbox));
+      }
+      async function sendContact(e){
         e.preventDefault();
         var name=document.getElementById('cName').value.trim();
         var email=document.getElementById('cEmail').value.trim();
         var msg=document.getElementById('cMsg').value.trim();
         if(!name||!email||!msg) return false;
         var curLang=(localStorage.getItem('bdr_site_lang')||'fr');
+        var item={ id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,7), name:name, email:email, message:msg, lang:curLang, created_at:new Date().toISOString() };
         var ok=true;
         try{
-          var KEY='bdrflow_contact_inbox_v1';
-          var inbox=[];
-          try{ inbox=JSON.parse(localStorage.getItem(KEY))||[]; }catch(_){ inbox=[]; }
-          if(!Array.isArray(inbox)) inbox=[];
-          inbox.push({
-            id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),
-            name:name, email:email, message:msg,
-            lang:curLang,
-            createdAt:new Date().toISOString()
-          });
-          if(inbox.length>200) inbox=inbox.slice(-200);
-          localStorage.setItem(KEY, JSON.stringify(inbox));
+          if(window.BDR_SUPABASE_URL && window.BDR_SUPABASE_ANON_KEY){
+            // Cross-device : le message arrive réellement chez le support, sur tout appareil.
+            var mod=await import('https://esm.sh/@supabase/supabase-js@2');
+            var sb=mod.createClient(window.BDR_SUPABASE_URL, window.BDR_SUPABASE_ANON_KEY);
+            var res=await sb.from('contact_requests').insert(item);
+            if(res.error) throw res.error;
+            try{ localStoreContact(item); }catch(_){ /* cache local best-effort */ }
+          } else {
+            localStoreContact(item); // repli même-appareil tant que Supabase n'est pas configuré
+          }
         }catch(err){ ok=false; }
         var sent={fr:'Message envoyé ✓ L\'équipe BD Report vous répondra rapidement.',en:'Message sent ✓ The BD Report team will get back to you soon.',es:'Mensaje enviado ✓ El equipo de BD Report te responderá pronto.'};
         var fail={fr:'Échec de l\'envoi. Écrivez-nous directement à owen.mb.pro@gmail.com',en:'Sending failed. Please email us directly at owen.mb.pro@gmail.com',es:'Error al enviar. Escríbenos directamente a owen.mb.pro@gmail.com'};
