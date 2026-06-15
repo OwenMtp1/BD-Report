@@ -1,0 +1,63 @@
+name: Deploy site & app (gh-pages)
+
+# Build l'app + assemble le site et publie sur gh-pages avec le token GitHub
+# (contourne le proxy git de l'environnement de dev).
+on:
+  workflow_dispatch:
+  push:
+    branches: ['claude/adoring-tesla-t0fwpc']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install & build
+        run: |
+          npm install
+          npm run build
+
+      - name: Inline app into a single file
+        run: |
+          node -e '
+            const fs=require("fs"),path=require("path");const dist="dist";
+            let html=fs.readFileSync(path.join(dist,"index.html"),"utf8");
+            html=html.replace(/<script type="module"[^>]*src="([^"]+)"><\/script>/,(m,src)=>"<script type=\"module\">\n"+fs.readFileSync(path.join(dist,src.replace(/^\//,"")),"utf8")+"\n</script>");
+            html=html.replace(/<link rel="stylesheet"[^>]*href="([^"]+)">/,(m,href)=>"<style>"+fs.readFileSync(path.join(dist,href.replace(/^\//,"")),"utf8")+"</style>");
+            fs.writeFileSync(path.join(dist,"app-inline.html"),html);
+          '
+
+      - name: Assemble gh-pages tree (site at root, app under /app)
+        run: |
+          rm -rf out && mkdir -p out/app
+          cp site/index.html out/index.html
+          cp site/securite.html out/securite.html
+          cp -r site/produit out/produit
+          cp -r site/assets out/assets
+          touch out/.nojekyll
+          cp public/sw.js out/sw.js
+          cp dist/app-inline.html out/app/index.html
+          cp public/manifest.webmanifest out/app/manifest.webmanifest
+          cp public/icon.svg out/app/icon.svg
+          cp public/sw.js out/app/sw.js
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./out
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "Deploy site & app (${{ github.sha }})"
