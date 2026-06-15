@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { Target, Plus, Trash2, Building2, Users2, Briefcase, Sparkles, Save } from 'lucide-react'
-import { useStore, uid, todayISO } from '../store.jsx'
+import { Target, Plus, Trash2, Building2, Users2, Briefcase, Sparkles, Save, CalendarDays } from 'lucide-react'
+import { useStore, uid, todayISO, fmtDate } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 
 // Rang de progression d'un deal dans le tunnel (R1/R2 = 1, MQL = 2, SQL = 3, Signée = 4, KO = perdu).
@@ -26,6 +26,8 @@ function statsFor(deals) {
   const signed = deals.filter(d => maxRank(d) >= 4).length
   return { total, mql, sql, signed, r1ToMql: pct(mql, total), mqlToSql: pct(sql, mql), r1ToSql: pct(sql, total), signRate: pct(signed, total) }
 }
+// Date de référence d'un deal (ouverture) pour le filtrage par période.
+const dealDate = (d) => d.datePriseRdv || d.dateRdv || d.createdAt || ''
 function matchProfile(deal, p) {
   if (p.secteurs?.length && !p.secteurs.includes(deal.secteur)) return false
   const eff = Number(deal.effectif) || 0
@@ -34,6 +36,12 @@ function matchProfile(deal, p) {
   if (p.postes?.length) {
     const postes = (deal.contacts || []).map(c => c.poste).filter(Boolean)
     if (!postes.some(po => p.postes.includes(po))) return false
+  }
+  if (p.dateStart || p.dateEnd) {
+    const dd = dealDate(deal)
+    if (!dd) return false
+    if (p.dateStart && dd < p.dateStart) return false
+    if (p.dateEnd && dd > p.dateEnd) return false
   }
   return true
 }
@@ -46,6 +54,7 @@ const autoName = (p) => {
   if (p.secteurs?.length) parts.push(p.secteurs.join('/'))
   if (p.effMin != null || p.effMax != null) { const b = EFF_BANDS.find(x => x.min === p.effMin && x.max === p.effMax); parts.push(b ? b.label + ' empl.' : `${p.effMin ?? 0}–${p.effMax ?? '∞'} empl.`) }
   if (p.postes?.length) parts.push(p.postes.join('/'))
+  if (p.dateStart || p.dateEnd) parts.push(`${p.dateStart ? fmtDate(p.dateStart) : '…'}→${p.dateEnd ? fmtDate(p.dateEnd) : '…'}`)
   return parts.join(' · ') || 'Tous les deals'
 }
 
@@ -58,6 +67,7 @@ function ProfileCard({ profile, deals, global, onSave, onDelete }) {
   if (profile.secteurs?.length) chips.push({ icon: <Building2 size={11} />, txt: profile.secteurs.join(', ') })
   if (profile.effMin != null || profile.effMax != null) chips.push({ icon: <Users2 size={11} />, txt: (EFF_BANDS.find(b => b.min === profile.effMin && b.max === profile.effMax)?.label || `${profile.effMin ?? 0}–${profile.effMax ?? '∞'}`) + ' empl.' })
   if (profile.postes?.length) chips.push({ icon: <Briefcase size={11} />, txt: profile.postes.join(', ') })
+  if (profile.dateStart || profile.dateEnd) chips.push({ icon: <CalendarDays size={11} />, txt: `${profile.dateStart ? fmtDate(profile.dateStart) : '…'} → ${profile.dateEnd ? fmtDate(profile.dateEnd) : '…'}` })
   const bar = (val, color) => (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2.5 rounded-full bg-surface overflow-hidden"><div className="h-full rounded-full" style={{ width: `${val}%`, background: color }} /></div>
@@ -153,7 +163,7 @@ export default function Icp() {
   const saved = sub.icpProfiles || []
 
   const saveProfile = (p) => {
-    store.setSub(d => ({ ...d, icpProfiles: [...(d.icpProfiles || []), { id: uid(), name: p.name?.replace(/^🏆\s*/, '') || autoName(p), secteurs: p.secteurs || [], effMin: p.effMin ?? null, effMax: p.effMax ?? null, postes: p.postes || [], createdAt: todayISO() }] }))
+    store.setSub(d => ({ ...d, icpProfiles: [...(d.icpProfiles || []), { id: uid(), name: p.name?.replace(/^🏆\s*/, '') || autoName(p), secteurs: p.secteurs || [], effMin: p.effMin ?? null, effMax: p.effMax ?? null, postes: p.postes || [], dateStart: p.dateStart || null, dateEnd: p.dateEnd || null, createdAt: todayISO() }] }))
     toast('Profil ICP enregistré')
   }
   const deleteProfile = (id) => { store.setSub(d => ({ ...d, icpProfiles: (d.icpProfiles || []).filter(x => x.id !== id) })); setConfirmDel(null); toast('Profil supprimé') }
@@ -209,9 +219,11 @@ function CreateProfile({ secteurs, postes, onClose, onCreate }) {
   const [secSel, setSecSel] = useState([])
   const [band, setBand] = useState('') // '' = toutes
   const [posSel, setPosSel] = useState([])
+  const [dStart, setDStart] = useState('')
+  const [dEnd, setDEnd] = useState('')
   const toggle = (arr, setArr, v) => setArr(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v])
   const b = EFF_BANDS.find(x => x.id === band)
-  const build = () => ({ secteurs: secSel, effMin: b?.min ?? null, effMax: b?.max ?? null, postes: posSel, name: name.trim() })
+  const build = () => ({ secteurs: secSel, effMin: b?.min ?? null, effMax: b?.max ?? null, postes: posSel, dateStart: dStart || null, dateEnd: dEnd || null, name: name.trim() })
 
   return (
     <Modal title="Créer un profil ICP" onClose={onClose} wide>
@@ -236,6 +248,15 @@ function CreateProfile({ secteurs, postes, onClose, onCreate }) {
           <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
             {postes.length === 0 && <span className="text-xs text-muted">Aucun poste dans vos données.</span>}
             {postes.map(p => <button key={p} type="button" className={`chip ${posSel.includes(p) ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => toggle(posSel, setPosSel, p)}>{p}</button>)}
+          </div>
+        </div>
+        <div>
+          <span className="label">Période recherchée (date d'ouverture des deals)</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input type="date" className="input !w-auto" value={dStart} onChange={e => setDStart(e.target.value)} />
+            <span className="text-muted text-sm">→</span>
+            <input type="date" className="input !w-auto" value={dEnd} onChange={e => setDEnd(e.target.value)} />
+            {(dStart || dEnd) && <button type="button" className="text-xs text-brand underline" onClick={() => { setDStart(''); setDEnd('') }}>Effacer</button>}
           </div>
         </div>
         <p className="text-xs text-muted">Laissez une dimension vide pour ne pas filtrer dessus. Le profil affichera les taux de conversion des deals correspondants.</p>

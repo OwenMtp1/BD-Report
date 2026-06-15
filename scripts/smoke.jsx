@@ -176,6 +176,8 @@ async function main() {
   // 8. Le contact / l'entreprise alimente bien les données ; vérifie le kanban Leads
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Leads'))
   if (!text().includes('TestCorp')) throw new Error('New RDV not visible in Leads kanban')
+  // Le pipeline du fichier importé est bien injecté dans l'espace d'Owen (une seule fois).
+  if (!dbNow().data['sub-owen'].rdvs.some(r => r.entreprise === 'Derichebourg')) throw new Error('Pipeline xlsx not imported into Owen space')
 
   // 8b. Mes contacts : création manuelle d'un contact
   await click(navBtn('Mes contacts'))

@@ -9,7 +9,7 @@ const CREDS_KEY = 'bdrflow_creds_v1'       // identifiants enregistrés (pré-re
 // Boîte de réception partagée site ↔ app (même origine owenmtp1.github.io) : le
 // formulaire de contact du site y dépose ses messages, l'app les y récupère.
 export const CONTACT_INBOX_KEY = 'bdrflow_contact_inbox_v1'
-export const APP_VERSION = '1.17.0'
+export const APP_VERSION = '1.18.0'
 
 // ---------------------------------------------------------------- Format monétaire
 export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
@@ -762,6 +762,82 @@ function injectTestEnv(db) {
   return db
 }
 
+// ---------------------------------------------------------------- Pipeline réel d'Owen (PeopleSpheres)
+// Données importées d'un fichier fourni. Injecté UNE fois dans l'espace 'sub-owen' (flag _autoSeed.pipelineOwen).
+function seedPipelineRdvs() {
+  // [entreprise, effectif, contact, stage, date, source, commercial, résultat, suite]
+  const RAW = [
+    ['SOVAM', 250, 'Marion Lecointe', 'R1', '10/10', 'Cold call', '', 'Disqualifié', 'Reprise Q2 2026'],
+    ['Derichebourg', 5000, 'Didier Del Vasto', 'MQL', '14/01/2026', 'Cold call', 'Fabien Goutain', 'SQL long shot', 'Suivi'],
+    ['Yubo', 120, 'Gauvain Delauney', 'MQL', '28/10', 'Inbound', 'Jawed Rifai', 'Standby', 'Relance 2026'],
+    ['Eurometropole Metz', 280, 'Charlene Michels', 'MQL', '22/10', 'Inbound', 'Jawed Rifai', 'Closed Won', '-'],
+    ['ENS', 1000, 'Charles Dupre', 'MQL', '20/10', 'Outbound', 'Alexis Pfifferling', 'Disqualifié', '-'],
+    ['Barillet', 950, 'Michel Fraysignes', 'MQL', '31/10', 'Outbound', 'Aurelien Moulin', 'Standby', 'Relance 2026'],
+    ['Evoriel', 3200, 'Charlene Dejardin', 'MQL', '19/01/2026', 'Outbound', 'Jawed Rifai', 'En cours', 'En cours'],
+    ['Brest Metropole', 3500, 'Renaud Guidet', 'MQL', '24/11/2025', 'Outbound', 'Jawed Rifai', 'Projet 2026', 'Attente'],
+    ['Evernex', 1400, 'Nicolas Combemorel', 'MQL', '24/11', 'LinkedIn', 'Fabien Goutain', 'SQL long shot', 'Relancer'],
+    ['Otera', 300, 'Caroline Bel', 'MQL', '23/01', 'Outbound', 'Alexis Pfifferling', 'Lost', '-'],
+    ['Defontaine', 650, 'Christophe Herlin', 'MQL', '12/01', 'Email', 'Aurelien Moulin', 'En cours', 'Suivi'],
+    ['Verisure', 17000, 'Charles Devresse', 'R1', '14/01/2026', 'LinkedIn', '', 'No fit', '-'],
+    ['Odalia', 255, 'Remi Rommelard', 'MQL', '21/01', 'Inbound', 'Aurelien Moulin', 'SQL Engage', 'Suivi'],
+    ['Oreca', 400, 'Clemence Boutier', 'MQL', '19/12', 'Inbound', 'Fabien Goutain', 'SQL Engage', '-'],
+    ['ARJO', 0, 'Deltombe/Carré', 'MQL', '18/02/2026', 'Inbound', 'Jawed Rifai', 'SQL Qualify', '-'],
+    ['Cooperative U', 80000, 'Audrey Hillaert', 'MQL', '21/01', 'Inbound', 'Fabien Goutain', 'SQL Qualify', '-'],
+    ['FDJ', 5000, 'Assa Camara', 'R1', '23/02/2026', 'Outbound', '', 'Workday blocker', '-'],
+    ['Advans', 1200, 'Remy Ducret', 'MQL', '09/03/2026', 'Inbound', 'Fabien Goutain', 'SQL Qualify', '-'],
+    ['Clinique du Parc', 800, 'Lisa March', 'MQL', '03/03/2026', 'Inbound', 'Jawed Rifai', 'En cours', 'Suivi'],
+    ['Stratus', 500, 'Nassim Benchikh', 'R1', '19/03/2026', 'Inbound', 'Fabien Goutain', 'En cours', 'En cours'],
+    ['Thom Group', 6450, 'Florian Forthomme', 'R1', '11/06/2026', 'Outbound', '', 'No budget', '2027'],
+  ]
+  const parseD = (s) => {
+    const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/)
+    if (!m) return todayISO()
+    const dd = m[1].padStart(2, '0'), mm = m[2].padStart(2, '0')
+    const yyyy = m[3] || (Number(mm) >= 10 ? '2025' : '2026') // sans année : oct-déc = 2025, jan-sept = 2026
+    return `${yyyy}-${mm}-${dd}`
+  }
+  const SRC = {
+    'Cold call': { source: 'Outbound', prov: 'Cold Call' }, 'Outbound': { source: 'Outbound', prov: 'Cold Call' },
+    'Inbound': { source: 'Inbound', prov: 'Site Web' }, 'LinkedIn': { source: 'Outbound', prov: 'LinkedIn' },
+    'Email': { source: 'Outbound', prov: 'Emailing' },
+  }
+  const LOST = ['Disqualifié', 'Lost', 'No fit', 'No budget', 'Workday blocker']
+  const PHASES_BY_RANK = ['R1', 'R1', 'MQL', 'SQL', 'Signée']
+  return RAW.map(([ent, eff, contact, stage, date, src, sales, result, next]) => {
+    const d = parseD(date)
+    const stageRank = stage === 'MQL' ? 2 : 1
+    let phase, opp
+    if (result === 'Closed Won') { phase = 'Signée'; opp = 'Signée' }
+    else if (result === 'SQL Engage' || result === 'SQL Qualify') { phase = 'SQL'; opp = 'En cours' }
+    else if (LOST.includes(result)) { phase = 'KO'; opp = 'Perdue' }
+    else { phase = stage; opp = 'En cours' }
+    const phaseRank = phase === 'KO' ? 0 : (phase === 'Signée' ? 4 : phase === 'SQL' ? 3 : phase === 'MQL' ? 2 : 1)
+    const reached = Math.max(stageRank, phaseRank) // niveau atteint (pour l'historique / ICP)
+    const history = []
+    for (let r = 1; r <= reached; r++) { const v = PHASES_BY_RANK[r]; if (!history.find(h => h.value === v)) history.push({ type: 'phase', value: v, date: d }) }
+    const sm = SRC[src] || { source: 'Outbound', prov: 'Cold Call' }
+    return {
+      id: uid(), parentId: null, source: sm.source, phase, opportunite: opp,
+      entreprise: ent, effectif: eff, secteur: '', linkedin: '', provenance: sm.prov,
+      contacts: [{ id: uid(), nom: contact, poste: '', email: '', tel: '' }],
+      datePriseRdv: d, dateRdv: d, datePassageSQL: reached >= 3 ? d : '',
+      notes: `Commercial : ${sales || '—'} · Résultat : ${result}${next && next !== '-' ? ' · Suite : ' + next : ''}`,
+      history, createdAt: d,
+    }
+  })
+}
+function injectPipelineOwen(db) {
+  db._autoSeed = db._autoSeed || {}
+  if (db._autoSeed.pipelineOwen) return false
+  const data = db.data && db.data['sub-owen']
+  if (!data) return false
+  const existing = new Set((data.rdvs || []).map(r => (r.entreprise || '').trim().toLowerCase()))
+  const rows = seedPipelineRdvs().filter(r => !existing.has(r.entreprise.trim().toLowerCase()))
+  rows.forEach(r => { data.rdvs.push(r); syncContacts(data, r) })
+  db._autoSeed.pipelineOwen = true
+  return true
+}
+
 function migrate(db) {
   injectTestEnv(db)
   // Ajoute les nouvelles briques aux comptes qui avaient déjà l'accès cœur (proxy : brique "Leads").
@@ -884,6 +960,20 @@ export function StoreProvider({ children }) {
   const clientId = React.useRef(Math.random().toString(36).slice(2)) // identifiant d'onglet/appareil (anti-écho Supabase)
   const applyingRemote = React.useRef(false) // vrai quand on vient d'adopter un état distant (ne pas re-pousser)
   const remoteReady = React.useRef(false)    // vrai après la 1re synchro distante (évite d'écraser le distant au démarrage)
+  // Estampille du localStorage AU CHARGEMENT (avant que l'effet de sauvegarde ne la réécrive) :
+  // sert à décider, au démarrage, si le distant est vraiment plus récent que nos changements locaux.
+  const initialLocal = React.useRef((() => {
+    try { const raw = localStorage.getItem(LS_KEY); return raw ? { had: true, savedAt: JSON.parse(raw)._savedAt || 0 } : { had: false, savedAt: 0 } } catch (e) { return { had: false, savedAt: 0 } }
+  })())
+  const dbRef = React.useRef(db)
+  React.useEffect(() => { dbRef.current = db }, [db])
+  // Injecte une seule fois le pipeline d'Owen (mutation normale → poussée vers Supabase + persistée).
+  const maybeInjectPipeline = () => setDbState(prev => {
+    if (prev._autoSeed?.pipelineOwen || !prev.data?.['sub-owen']) return prev
+    const next = structuredClone(prev)
+    injectPipelineOwen(next)
+    return next
+  })
   useEffect(() => {
     // Sauvegarde sûre : capture l'erreur de quota au lieu d'échouer silencieusement (bug 5).
     try {
@@ -908,21 +998,25 @@ export function StoreProvider({ children }) {
 
   // Synchronisation Supabase temps réel (toute l'app + demandes de contact). Inerte si non configuré.
   useEffect(() => {
-    if (!isSupabaseConfigured()) { remoteReady.current = true; return }
+    if (!isSupabaseConfigured()) { remoteReady.current = true; setTimeout(maybeInjectPipeline, 0); return }
     let unsubState = () => {}, unsubContact = () => {}, cancelled = false
     ;(async () => {
-      // 1) État initial : le distant fait foi s'il existe (évite qu'un appareil fraîchement
-      //    chargé n'écrase l'état partagé à cause d'une horloge plus récente). Sinon (1re fois)
-      //    on initialise le distant avec l'état local.
+      // 1) État initial : on n'adopte le distant que s'il est VRAIMENT plus récent que nos données
+      //    locales (ou s'il n'y avait pas de local). Sinon on garde le local (changements non encore
+      //    synchronisés à cause du debounce / fermeture rapide) et on le repousse. Évite la perte de
+      //    modifications « après coupure de session ».
       const remote = await fetchRemoteState()
       if (cancelled) return
-      if (remote) {
+      const remoteNewer = (remote?._savedAt || 0) > initialLocal.current.savedAt
+      if (remote && (!initialLocal.current.had || remoteNewer)) {
         applyingRemote.current = true
         setDbState(migrate(remote))
       } else {
-        await pushRemoteState({ ...db, _savedAt: lastSavedAt.current || Date.now(), _client: clientId.current })
+        await pushRemoteState({ ...dbRef.current, _savedAt: lastSavedAt.current || initialLocal.current.savedAt || Date.now(), _client: clientId.current })
       }
       remoteReady.current = true
+      // Import unique du pipeline d'Owen, en mutation différée (commit séparé → poussé vers le cloud).
+      setTimeout(maybeInjectPipeline, 0)
       // 2) Temps réel sur l'état applicatif (on ignore nos propres échos).
       unsubState = await subscribeRemoteState(remote => {
         if (cancelled || !remote || remote._client === clientId.current) return
@@ -942,6 +1036,18 @@ export function StoreProvider({ children }) {
     })()
     return () => { cancelled = true; unsubState(); unsubContact() }
   }, [])
+
+  // Flush immédiat vers Supabase quand l'onglet se ferme / passe en arrière-plan : garantit que
+  // les derniers changements (sinon en attente via le debounce) sont bien enregistrés côté cloud.
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return
+    const flush = () => { if (remoteReady.current) try { pushRemoteState({ ...dbRef.current, _savedAt: lastSavedAt.current || Date.now(), _client: clientId.current }) } catch (e) { /* best-effort */ } }
+    const onVis = () => { if (document.visibilityState === 'hidden') flush() }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVis)
+    return () => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', onVis) }
+  }, [])
+
   useEffect(() => { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)) }, [session])
 
   // Synchronisation multi-onglets : on n'adopte un état distant que s'il est plus récent
