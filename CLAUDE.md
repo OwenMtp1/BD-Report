@@ -51,6 +51,10 @@ npm run dev        # serveur de dev
   realtime, dernier-écrit-gagne, anti-écho par `_client`) et `contact_requests`.
 - Logique : `src/supabaseSync.js` + effet dans `StoreProvider`. Au 1er chargement, **le distant fait foi s'il existe**.
   Bouton de test : Paramètres → Intégrations → « Tester la connexion ».
+- 🔒 **Blob chiffré au repos** : `src/blobCrypto.js` (AES-256-GCM) chiffre l'état avant push Supabase et le déchiffre
+  à la lecture/realtime (rétro-compatible avec l'ancien clair). Neutralise le pillage auto de la table via la clé anon.
+  Limite : app 100 % front ⇒ clé livrée au client (protège du scan opportuniste, pas d'un attaquant ciblé). Vrai
+  correctif = RLS par org (`supabase/schema_multitenant.sql` + `MIGRATION_MULTITENANT.md`, derrière `FEATURES.multiTenant`).
 - ⚠️ **Sécurité** : les mots de passe sont stockés **uniquement hashés** (`account.password` = `sha256:…`) — plus aucun
   `passwordPlain` (purgé du blob par `migrate`). L'admin peut **réinitialiser** un mot de passe mais ne le voit jamais.
   RESTE À DURCIR avant prod publique : la RLS de `app_state` est `using(true)` → la clé anon (publique, livrée au client)

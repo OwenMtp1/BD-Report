@@ -6,6 +6,7 @@
 //  (esm.sh) pour ne pas alourdir le bundle/déploiement mono-fichier.
 // ---------------------------------------------------------------------------
 import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from './supabaseConfig.js'
+import { encryptBlob, decryptBlob } from './blobCrypto.js'
 
 const STATE_ID = 'main'
 let clientPromise = null
@@ -26,13 +27,16 @@ export async function fetchRemoteState() {
   try {
     const { data, error } = await c.from('app_state').select('data').eq('id', STATE_ID).maybeSingle()
     if (error || !data) return null
-    return data.data
+    return await decryptBlob(data.data)   // rétro-compatible : déchiffre, ou renvoie l'ancien état en clair
   } catch (e) { return null }
 }
 
 export async function pushRemoteState(db) {
   const c = await getClient(); if (!c) return
-  try { await c.from('app_state').upsert({ id: STATE_ID, data: db, updated_at: new Date().toISOString() }) } catch (e) { /* offline */ }
+  try {
+    const data = await encryptBlob(db)    // chiffré au repos dans Supabase
+    await c.from('app_state').upsert({ id: STATE_ID, data, updated_at: new Date().toISOString() })
+  } catch (e) { /* offline */ }
 }
 
 let pushTimer = null
@@ -46,7 +50,11 @@ export async function subscribeRemoteState(onChange) {
   const c = await getClient(); if (!c) return () => {}
   const ch = c.channel('app_state_rt')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state', filter: `id=eq.${STATE_ID}` },
-      payload => { if (payload.new && payload.new.data) onChange(payload.new.data) })
+      async payload => {
+        if (!payload.new || !payload.new.data) return
+        const db = await decryptBlob(payload.new.data)
+        if (db) onChange(db)
+      })
     .subscribe()
   return () => { try { c.removeChannel(ch) } catch (e) {} }
 }
