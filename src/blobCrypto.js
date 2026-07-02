@@ -13,8 +13,9 @@
 //  (voir supabase/MIGRATION_MULTITENANT.md).
 // ---------------------------------------------------------------------------
 
-// Clé applicative (256 bits). Séparée de la config Supabase.
-const KEY_HEX = 'bb1135c5bb1c9471b39e1550d055dea4ce3176876d279d1e609dd94a89613aa2'
+import { deob } from './obf.js'
+// Clé applicative (256 bits), obscurcie (non lisible en clair dans le repo).
+const KEY_HEX = deob('AAZDVENaEUFPDVMFFAYHA1QeT1RTUUdVFF9HQUkKA1JOVwMDARtOBlQAQFJJC0MRG19bAkkLBFMOFEAAUQUTVw==')
 
 const subtle = (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) || null
 

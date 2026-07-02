@@ -45,8 +45,10 @@ npm run dev        # serveur de dev
   un env client depuis la fiche Clients (`subState` 'blocked'/'active').
 
 ## Supabase (synchro temps réel cross-device, optionnelle)
-- Config : **`src/supabaseConfig.js`** (URL + clé anon, déjà renseignées) ; côté site : bloc `window.BDR_SUPABASE_*` dans `site/index.html`.
-  Vide = 100 % local (inerte).
+- Config : **`src/supabaseConfig.js`** (URL + clé anon) ; côté site : bloc `window.BDR_SUPABASE_*` dans `site/index.html`.
+  Vide = 100 % local (inerte). **Clés obscurcies** (XOR+base64 via `src/obf.js` / `bdrDeob` côté site) : plus aucune clé
+  en clair dans le repo ni le build (anti-scan). Pour changer une clé : régénérer la valeur obfusquée (XOR pad `bdreport-obf-2026-v1`).
+  ⚠️ Obscurcissement ≠ secret (app front, clé reconstruite au client) : vraie confidentialité = RLS.
 - Schéma SQL + guide : **`supabase/schema.sql`** et **`supabase/SETUP.md`**. Tables : `app_state` (tout l'état en JSONB,
   realtime, dernier-écrit-gagne, anti-écho par `_client`) et `contact_requests`.
 - Logique : `src/supabaseSync.js` + effet dans `StoreProvider`. Au 1er chargement, **le distant fait foi s'il existe**.

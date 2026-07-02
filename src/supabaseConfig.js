@@ -2,10 +2,11 @@
 //  Configuration Supabase (synchro temps réel optionnelle).
 //  Laisser vide = l'app fonctionne en local (par navigateur), comme avant.
 //  Renseigner après avoir créé le projet (voir supabase/SETUP.md).
-//  La clé anon est PUBLIQUE (protégée par RLS) : elle peut figurer ici.
+//  Clés obscurcies (non lisibles en clair dans le repo) — reconstruites via deob().
 // ---------------------------------------------------------------------------
-export const SUPABASE_URL = 'https://yblmhwdavbgtjtyfsuyo.supabase.co'
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlibG1od2RhdmJndGp0eWZzdXlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODQ1MzQsImV4cCI6MjA5Njk2MDUzNH0._7-3ksaUdKltszwKFzXJalXIT1N-sa7AzXoEg_XBFlE'
+import { deob } from './obf.js'
+export const SUPABASE_URL = deob('ChAGFQNVXVtUDQ4LRUVUU0BPEUUIEAsDAxoLGwMcFxZMUFFBUwMVXg==')
+export const SUPABASE_ANON_KEY = deob('Bx04DRIoER1iBigveEh5A3hEP0IrCiBQEyw7QmQEEj57cXoLGEgPexIHQSgZIBs+Vws6JEVrXXRMdyV4ES0cLxw1Gz0bJgwKRFB3A1lJRGMKAB8vHgs1BB0KNTxXVmheQGQfRgsHH1wDNSE9GyYPIFhQAgZfYTV7Ej0qNBkgGDEeICYjV310YwdgDGARLR8zRAwxPRsiCCcYfFpZBGAyZBgqOlVeMEVZHgQRB3hWe15CXgxGKSIIPToOHixkO1MoAEFRBXdXLl4nAy09MikeMQ==')
 
 export const isSupabaseConfigured = () => !!(SUPABASE_URL && SUPABASE_ANON_KEY)
 

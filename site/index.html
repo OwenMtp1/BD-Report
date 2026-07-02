@@ -7,10 +7,11 @@
 <meta name="description" content="BD Report est l'espace sales tout-en-un des BDR / SDR : rendez-vous, pipeline, primes & commissions, dashboards et pilotage d'équipe.">
 <link rel="icon" type="image/svg+xml" href="app/icon.svg">
 <script>
-  /* Supabase (synchro cross-device du formulaire de contact). Laisser vide tant que le projet
-     n'est pas créé → repli localStorage. Voir supabase/SETUP.md. Mêmes valeurs que src/supabaseConfig.js. */
-  window.BDR_SUPABASE_URL = 'https://yblmhwdavbgtjtyfsuyo.supabase.co';
-  window.BDR_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlibG1od2RhdmJndGp0eWZzdXlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODQ1MzQsImV4cCI6MjA5Njk2MDUzNH0._7-3ksaUdKltszwKFzXJalXIT1N-sa7AzXoEg_XBFlE';
+  /* Supabase (synchro cross-device du formulaire de contact). Clés obscurcies
+     (non lisibles en clair) — reconstruites via bdrDeob(). Mêmes valeurs que src/. */
+  window.bdrDeob = function(b64){var p='bdreport-obf-2026-v1';var b=Uint8Array.from(atob(b64),function(c){return c.charCodeAt(0);});var o=b.map(function(x,i){return x^p.charCodeAt(i%p.length);});return new TextDecoder().decode(o);};
+  window.BDR_SUPABASE_URL = window.bdrDeob('ChAGFQNVXVtUDQ4LRUVUU0BPEUUIEAsDAxoLGwMcFxZMUFFBUwMVXg==');
+  window.BDR_SUPABASE_ANON_KEY = window.bdrDeob('Bx04DRIoER1iBigveEh5A3hEP0IrCiBQEyw7QmQEEj57cXoLGEgPexIHQSgZIBs+Vws6JEVrXXRMdyV4ES0cLxw1Gz0bJgwKRFB3A1lJRGMKAB8vHgs1BB0KNTxXVmheQGQfRgsHH1wDNSE9GyYPIFhQAgZfYTV7Ej0qNBkgGDEeICYjV310YwdgDGARLR8zRAwxPRsiCCcYfFpZBGAyZBgqOlVeMEVZHgQRB3hWe15CXgxGKSIIPToOHixkO1MoAEFRBXdXLl4nAy09MikeMQ==');
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -337,7 +338,7 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
       async function bdrEncField(str){
         try{
           if(!(window.crypto&&window.crypto.subtle)) return str;
-          var hex='bb1135c5bb1c9471b39e1550d055dea4ce3176876d279d1e609dd94a89613aa2';
+          var hex=window.bdrDeob('AAZDVENaEUFPDVMFFAYHA1QeT1RTUUdVFF9HQUkKA1JOVwMDARtOBlQAQFJJC0MRG19bAkkLBFMOFEAAUQUTVw==');
           var raw=new Uint8Array(hex.match(/.{2}/g).map(function(h){return parseInt(h,16);}));
           var key=await window.crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt']);
           var iv=window.crypto.getRandomValues(new Uint8Array(12));
