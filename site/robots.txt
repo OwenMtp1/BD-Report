@@ -3,4 +3,4 @@ Allow: /
 # L'application (SPA derrière connexion) n'a pas vocation à être indexée.
 Disallow: /app/
 
-Sitemap: https://owenmtp1.github.io/BD-Report/sitemap.xml
+Sitemap: https://bdreport.js.org/sitemap.xml

@@ -72,6 +72,8 @@ Le **proxy git de l'environnement de dev bloque la branche `gh-pages`** (seul le
   GitHub (tag `desktop-latest`). Déclencheur : tag `v*` ou manuel. ⚠️ Tauri : `src-tauri/Cargo.toml` désactive la feature
   `compression` de Tauri (`default-features=false, features=["wry"]`) pour éviter le crate `brotli` cassé.
 - App live : `owenmtp1.github.io/Claude/app/` (ou `/BD-Report/app/`). Site : la racine.
+  Domaine perso **`bdreport.js.org`** (js.org, gratuit) : fichier `CNAME` généré par le workflow ; une fois la
+  PR js.org fusionnée, le site sert à la racine du domaine. Toutes les URLs SEO (canonical/OG/sitemap) pointent dessus.
 - Déclencher/suivre via les outils GitHub MCP (`actions_run_trigger`, `actions_list`, `get_job_logs`).
 
 ## Conventions
