@@ -4,6 +4,51 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BD Report — Données : Votre donnée commerciale, propre et sous contrôle</title>
 <meta name="description" content="Contacts auto-alimentés à chaque RDV, exports CSV et Excel filtrés, logs d'audit horodatés, corbeille 30 jours et sauvegarde complète : votre donnée e">
+<!-- SEO:start -->
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/produit/donnees.html">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="BD Report">
+<meta name="theme-color" content="#3B5BDB">
+<meta name="keywords" content="gestion des données commerciales, import export, contacts, historique, logs, RGPD">
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/produit/donnees.html">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/produit/donnees.html?lang=en">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/produit/donnees.html?lang=es">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/produit/donnees.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:title" content="BD Report — Données : Votre donnée commerciale, propre et sous contrôle">
+<meta property="og:description" content="Contacts auto-alimentés à chaque RDV, exports CSV et Excel filtrés, logs d'audit horodatés, corbeille 30 jours et sauvegarde complète : votre donnée e">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/produit/donnees.html">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/logs.png">
+<meta property="og:image:alt" content="BD Report — Données : Votre donnée commerciale, propre et sous contrôle">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="es_ES">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BD Report — Données : Votre donnée commerciale, propre et sous contrôle">
+<meta name="twitter:description" content="Contacts auto-alimentés à chaque RDV, exports CSV et Excel filtrés, logs d'audit horodatés, corbeille 30 jours et sauvegarde complète : votre donnée e">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/logs.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Accueil",
+      "item": "https://owenmtp1.github.io/BD-Report/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Données",
+      "item": "https://owenmtp1.github.io/BD-Report/produit/donnees.html"
+    }
+  ]
+}
+</script>
+<!-- SEO:end -->
 <link rel="icon" type="image/svg+xml" href="../app/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -117,7 +162,7 @@ const DICTS = {
   es: {"nav.pricing":"Precios","nav.contact":"Contacto","nav.login":"Iniciar sesión","hero.cat":"Datos","hero.title":"Tus datos comerciales, limpios y bajo control","hero.pitch":"Contactos autoalimentados en cada cita, exportaciones CSV y Excel filtradas, registros de auditoría fechados, papelera de 30 días y copia completa: tus datos son un activo y BD Report los trata como tal.","pt.0.t":"Una agenda que se llena sola","pt.0.d":"Cada contacto de una cita entra automáticamente en Mis contactos, sin duplicar. Importa CSV, exporta CSV/Excel — filtrado o completo.","pt.1.t":"Todo queda trazado","pt.1.d":"Creación, edición, eliminación, paso a SQL, reasignación: cada acción queda fechada en los registros, filtrables por tarea y fecha.","pt.2.t":"Nada se pierde","pt.2.d":"Borrado accidental? La papelera lo guarda 30 días. Necesitas migrar? La copia JSON se lo lleva todo.","shot.0":"Contactos: búsqueda, filtros, selección, exportaciones CSV y Excel.","shot.1":"Registros de auditoría: cada acción fechada, filtrable por tarea y periodo.","ft.0":"Multientorno estanco protegido con PIN","ft.1":"Registros de auditoría filtrables","ft.2":"Papelera restaurable 30 días","ft.3":"Copia y restauración JSON","ft.4":"20 temas incluidos 10 ambientes animados","ft.5":"PWA instalable, funciona sin conexión","sec.feats":"Todo lo que incluye este módulo","cta.title":"Prueba BD Report hoy mismo","cta.sub":"Únete a la beta exclusiva — plazas limitadas.","cta.btn":"Entrar a mi espacio","foot.back":"← Volver al sitio","cat.pilotage":"Dirección","cat.activite":"Actividad","cat.pipeline":"Pipeline","cat.remuneration":"Remuneración","cat.collaboration":"Colaboración","cat.donnees":"Datos"},
 }
 const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
-let lang = localStorage.getItem('bdr_site_lang') || 'fr'
+let lang = (new URLSearchParams(location.search).get('lang') || localStorage.getItem('bdr_site_lang') || 'fr'); if(!['fr','en','es'].includes(lang)) lang='fr'
 const FR = {}
 document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
 function applyLang(){

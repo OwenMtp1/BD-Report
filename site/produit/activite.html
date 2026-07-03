@@ -4,6 +4,51 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BD Report — Activité : Votre journée de prospection, sans friction</title>
 <meta name="description" content="Créer un RDV prend 20 secondes, le faire suivre 5. Sous-rendez-vous pré-remplis, automatisations de phases, calendrier multi-vues et tâches priorisées">
+<!-- SEO:start -->
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/produit/activite.html">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="BD Report">
+<meta name="theme-color" content="#3B5BDB">
+<meta name="keywords" content="gestion des rendez-vous commerciaux, agenda BDR, suivi activité commerciale, prise de RDV">
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/produit/activite.html">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/produit/activite.html?lang=en">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/produit/activite.html?lang=es">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/produit/activite.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:title" content="BD Report — Activité : Votre journée de prospection, sans friction">
+<meta property="og:description" content="Créer un RDV prend 20 secondes, le faire suivre 5. Sous-rendez-vous pré-remplis, automatisations de phases, calendrier multi-vues et tâches priorisées">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/produit/activite.html">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/calendar.png">
+<meta property="og:image:alt" content="BD Report — Activité : Votre journée de prospection, sans friction">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="es_ES">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BD Report — Activité : Votre journée de prospection, sans friction">
+<meta name="twitter:description" content="Créer un RDV prend 20 secondes, le faire suivre 5. Sous-rendez-vous pré-remplis, automatisations de phases, calendrier multi-vues et tâches priorisées">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/calendar.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Accueil",
+      "item": "https://owenmtp1.github.io/BD-Report/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Activité",
+      "item": "https://owenmtp1.github.io/BD-Report/produit/activite.html"
+    }
+  ]
+}
+</script>
+<!-- SEO:end -->
 <link rel="icon" type="image/svg+xml" href="../app/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -118,7 +163,7 @@ const DICTS = {
   es: {"nav.pricing":"Precios","nav.contact":"Contacto","nav.login":"Iniciar sesión","hero.cat":"Actividad","hero.title":"Tu día de prospección, sin fricción","hero.pitch":"Crear una cita lleva 20 segundos, su seguimiento 5. Citas de seguimiento prerellenadas, automatizaciones de fases, calendario multivista y tareas priorizadas: BD Report quita lo administrativo para dejarte al teléfono.","pt.0.t":"La cita inteligente","pt.0.d":"Varios contactos, LinkedIn, sector, notas — y la cita siguiente se prerellena sola. Los duplicados se detectan antes de existir.","pt.1.t":"Automatizaciones de negocio","pt.1.d":"Ganada → SQL, Perdida → KO con motivo, fecha de SQL pedida en el momento justo: datos limpios sin esfuerzo.","pt.2.t":"Tu to-do ordenada por impacto","pt.2.d":"No-shows a reprogramar, oportunidades a impulsar, leads perdidos a recuperar tras 6 meses: la página Tareas prioritarias piensa por ti.","shot.0":"Mis Citas: todos los campos, filtros y orden, seguimientos anidados bajo su cita padre.","shot.1":"El calendario multivista: día, semana, mes, año — coloreado por fase.","shot.2":"Tareas prioritarias: no-shows, oportunidades abiertas, leads a recuperar.","ft.0":"Citas completas con varios contactos y campos configurables","ft.1":"Calendario día / semana / mes / año","ft.2":"Tareas prioritarias automáticas","ft.3":"Automatizaciones de fases y estados","ft.4":"Motivos de pérdida y de no-show guiados","ft.5":"Asistente integrado en lenguaje natural","sec.feats":"Todo lo que incluye este módulo","cta.title":"Prueba BD Report hoy mismo","cta.sub":"Únete a la beta exclusiva — plazas limitadas.","cta.btn":"Entrar a mi espacio","foot.back":"← Volver al sitio","cat.pilotage":"Dirección","cat.activite":"Actividad","cat.pipeline":"Pipeline","cat.remuneration":"Remuneración","cat.collaboration":"Colaboración","cat.donnees":"Datos"},
 }
 const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
-let lang = localStorage.getItem('bdr_site_lang') || 'fr'
+let lang = (new URLSearchParams(location.search).get('lang') || localStorage.getItem('bdr_site_lang') || 'fr'); if(!['fr','en','es'].includes(lang)) lang='fr'
 const FR = {}
 document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
 function applyLang(){

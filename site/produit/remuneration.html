@@ -4,6 +4,51 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BD Report — Rémunération : Vos primes, calculées au centime et gravées dans le marbre</title>
 <meta name="description" content="Le barème est configurable (tranches d'effectif × source), la règle du 15 est automatique, et chaque prime est figée au barème en vigueur au moment du">
+<!-- SEO:start -->
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/produit/remuneration.html">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="BD Report">
+<meta name="theme-color" content="#3B5BDB">
+<meta name="keywords" content="primes commerciales, commissions BDR, calcul de rémunération variable, barème de primes">
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/produit/remuneration.html">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/produit/remuneration.html?lang=en">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/produit/remuneration.html?lang=es">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/produit/remuneration.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:title" content="BD Report — Rémunération : Vos primes, calculées au centime et gravées dans le marbre">
+<meta property="og:description" content="Le barème est configurable (tranches d'effectif × source), la règle du 15 est automatique, et chaque prime est figée au barème en vigueur au moment du">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/produit/remuneration.html">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/primes.png">
+<meta property="og:image:alt" content="BD Report — Rémunération : Vos primes, calculées au centime et gravées dans le marbre">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="es_ES">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BD Report — Rémunération : Vos primes, calculées au centime et gravées dans le marbre">
+<meta name="twitter:description" content="Le barème est configurable (tranches d'effectif × source), la règle du 15 est automatique, et chaque prime est figée au barème en vigueur au moment du">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/primes.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Accueil",
+      "item": "https://owenmtp1.github.io/BD-Report/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Rémunération",
+      "item": "https://owenmtp1.github.io/BD-Report/produit/remuneration.html"
+    }
+  ]
+}
+</script>
+<!-- SEO:end -->
 <link rel="icon" type="image/svg+xml" href="../app/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -116,7 +161,7 @@ const DICTS = {
   es: {"nav.pricing":"Precios","nav.contact":"Contacto","nav.login":"Iniciar sesión","hero.cat":"Remuneración","hero.title":"Tus primas, calculadas al céntimo y grabadas en piedra","hero.pitch":"El baremo es configurable (tramos de plantilla × fuente), la regla del 15 es automática, y cada prima se congela con el baremo vigente al pasar a SQL. Se acabaron las discusiones de fin de mes con contabilidad.","pt.0.t":"La regla del 15, sin cálculos","pt.0.d":"SQL antes del 15: se paga este mes. Después: el mes siguiente. BD Report clasifica cada prima en el mes correcto, solo.","pt.1.t":"El pasado no cambia","pt.1.d":"Cambiar el baremo en marzo no reescribe las primas de enero: cada prima se versiona en su fecha de SQL.","pt.2.t":"Ver venir el dinero","pt.2.d":"La previsión pondera tus oportunidades abiertas por su probabilidad de fase: sabes lo que el próximo mes puede aportar.","shot.0":"Primas y comisiones: seguimiento gráfico, informe detallado, baremo editable y previsión ponderada.","ft.0":"Baremo configurable: tramos de plantilla × fuente","ft.1":"Primas versionadas, congeladas al pasar a SQL","ft.2":"Regla del 15 automática","ft.3":"Previsión ponderada por fase","ft.4":"Seguimiento gráfico por mes de pago","ft.5":"Reparto analítico fuentes × plantilla","sec.feats":"Todo lo que incluye este módulo","cta.title":"Prueba BD Report hoy mismo","cta.sub":"Únete a la beta exclusiva — plazas limitadas.","cta.btn":"Entrar a mi espacio","foot.back":"← Volver al sitio","cat.pilotage":"Dirección","cat.activite":"Actividad","cat.pipeline":"Pipeline","cat.remuneration":"Remuneración","cat.collaboration":"Colaboración","cat.donnees":"Datos"},
 }
 const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
-let lang = localStorage.getItem('bdr_site_lang') || 'fr'
+let lang = (new URLSearchParams(location.search).get('lang') || localStorage.getItem('bdr_site_lang') || 'fr'); if(!['fr','en','es'].includes(lang)) lang='fr'
 const FR = {}
 document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
 function applyLang(){

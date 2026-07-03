@@ -5,6 +5,94 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BD Report — Pilotez votre prospection. Encaissez vos primes.</title>
 <meta name="description" content="BD Report est l'espace sales tout-en-un des BDR / SDR : rendez-vous, pipeline, primes & commissions, dashboards et pilotage d'équipe.">
+<!-- SEO:start -->
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="BD Report">
+<meta name="theme-color" content="#3B5BDB">
+<meta name="keywords" content="CRM BDR, logiciel SDR, prospection commerciale, pipeline commercial, suivi de rendez-vous, primes et commissions, dashboard sales, pilotage équipe commerciale, espace sales">
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/?lang=en">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/?lang=es">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:title" content="BD Report — Pilotez votre prospection. Encaissez vos primes.">
+<meta property="og:description" content="BD Report est l'espace sales tout-en-un des BDR / SDR : rendez-vous, pipeline, primes &amp; commissions, dashboards et pilotage d'équipe.">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/dashboard.png">
+<meta property="og:image:alt" content="BD Report — Pilotez votre prospection. Encaissez vos primes.">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="es_ES">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BD Report — Pilotez votre prospection. Encaissez vos primes.">
+<meta name="twitter:description" content="BD Report est l'espace sales tout-en-un des BDR / SDR : rendez-vous, pipeline, primes &amp; commissions, dashboards et pilotage d'équipe.">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/dashboard.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://owenmtp1.github.io/BD-Report/#organization",
+  "name": "BD Report",
+  "url": "https://owenmtp1.github.io/BD-Report/",
+  "logo": "https://owenmtp1.github.io/BD-Report/app/icon.svg",
+  "description": "L'espace sales tout-en-un des BDR / SDR : rendez-vous, pipeline, primes & commissions, dashboards et pilotage d'équipe.",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "email": "owen.mb.pro@gmail.com",
+    "contactType": "customer support",
+    "availableLanguage": [
+      "French",
+      "English",
+      "Spanish"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": "https://owenmtp1.github.io/BD-Report/#website",
+  "name": "BD Report",
+  "url": "https://owenmtp1.github.io/BD-Report/",
+  "inLanguage": [
+    "fr",
+    "en",
+    "es"
+  ],
+  "publisher": {
+    "@id": "https://owenmtp1.github.io/BD-Report/#organization"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "BD Report",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web, Windows, macOS, Linux",
+  "url": "https://owenmtp1.github.io/BD-Report/app/",
+  "description": "L'espace sales tout-en-un des BDR / SDR : rendez-vous, pipeline, primes & commissions, dashboards et pilotage d'équipe.",
+  "inLanguage": [
+    "fr",
+    "en",
+    "es"
+  ],
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR",
+    "category": "Starter"
+  },
+  "publisher": {
+    "@id": "https://owenmtp1.github.io/BD-Report/#organization"
+  }
+}
+</script>
+<!-- SEO:end -->
 <link rel="icon" type="image/svg+xml" href="app/icon.svg">
 <script>
   /* Supabase (synchro cross-device du formulaire de contact). Clés obscurcies
@@ -578,7 +666,7 @@ const I18N = {
 }
 const LANGSEQ = ['fr', 'en', 'es']
 const LANGBTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
-let lang = localStorage.getItem('bdr_site_lang') || 'fr'
+let lang = (new URLSearchParams(location.search).get('lang') || localStorage.getItem('bdr_site_lang') || 'fr'); if(!['fr','en','es'].includes(lang)) lang='fr'
 const frDefaults = {}
 document.querySelectorAll('[data-i18n]').forEach(el => frDefaults[el.dataset.i18n] = el.innerHTML)
 document.querySelectorAll('[data-i18n-ph]').forEach(el => frDefaults[el.dataset.i18nPh] = el.placeholder)

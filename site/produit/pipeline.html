@@ -4,6 +4,51 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BD Report — Pipeline : Un kanban qui dit la vérité</title>
 <meta name="description" content="Une carte par entreprise — jamais de doublon. Glissez, déposez, et les phases se mettent à jour toutes seules. La timeline de vie de chaque lead vous ">
+<!-- SEO:start -->
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/produit/pipeline.html">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="BD Report">
+<meta name="theme-color" content="#3B5BDB">
+<meta name="keywords" content="pipeline commercial, kanban ventes, gestion des leads, suivi des opportunités, phases de vente">
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/produit/pipeline.html">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/produit/pipeline.html?lang=en">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/produit/pipeline.html?lang=es">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/produit/pipeline.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:title" content="BD Report — Pipeline : Un kanban qui dit la vérité">
+<meta property="og:description" content="Une carte par entreprise — jamais de doublon. Glissez, déposez, et les phases se mettent à jour toutes seules. La timeline de vie de chaque lead vous ">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/produit/pipeline.html">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/leads.png">
+<meta property="og:image:alt" content="BD Report — Pipeline : Un kanban qui dit la vérité">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="es_ES">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BD Report — Pipeline : Un kanban qui dit la vérité">
+<meta name="twitter:description" content="Une carte par entreprise — jamais de doublon. Glissez, déposez, et les phases se mettent à jour toutes seules. La timeline de vie de chaque lead vous ">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/leads.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Accueil",
+      "item": "https://owenmtp1.github.io/BD-Report/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Pipeline",
+      "item": "https://owenmtp1.github.io/BD-Report/produit/pipeline.html"
+    }
+  ]
+}
+</script>
+<!-- SEO:end -->
 <link rel="icon" type="image/svg+xml" href="../app/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -117,7 +162,7 @@ const DICTS = {
   es: {"nav.pricing":"Precios","nav.contact":"Contacto","nav.login":"Iniciar sesión","hero.cat":"Pipeline","hero.title":"Un kanban que dice la verdad","hero.pitch":"Una tarjeta por empresa — nunca un duplicado. Arrastra, suelta, y las fases se actualizan solas. La línea de vida de cada lead muestra dónde se atasca, y la alerta de conflicto evita que llames a la cuenta de un compañero.","pt.0.t":"Por empresa, no por cita","pt.0.d":"Tres citas en la misma empresa = una sola tarjeta, con historial fusionado. Tu pipeline refleja la realidad comercial.","pt.1.t":"La ficha 360°","pt.1.d":"Todas las citas, contactos, notas y comentarios de equipo de una cuenta en una página, enriquecible (facturación, web, LinkedIn, ubicación).","pt.2.t":"Cero colisiones","pt.2.d":"Si un compañero ya trabaja la empresa que escribes, BD Report te avisa al instante — con sus comentarios destacados.","shot.0":"El pipeline de empresa: la vista compartida de toda la organización, con propietario y comentarios.","shot.1":"La ficha de cuenta: citas, contactos, datos de empresa y el hilo de comentarios de equipo.","ft.0":"Kanban por empresa sin duplicados, drag & drop táctil","ft.1":"Línea de vida del lead fase por fase","ft.2":"Alertas de duplicado y conflicto de cuentas","ft.3":"Ficha de cuenta 360° enriquecible","ft.4":"Búsqueda global Ctrl+K","ft.5":"Contactos autoalimentados con importaciones/exportaciones","sec.feats":"Todo lo que incluye este módulo","cta.title":"Prueba BD Report hoy mismo","cta.sub":"Únete a la beta exclusiva — plazas limitadas.","cta.btn":"Entrar a mi espacio","foot.back":"← Volver al sitio","cat.pilotage":"Dirección","cat.activite":"Actividad","cat.pipeline":"Pipeline","cat.remuneration":"Remuneración","cat.collaboration":"Colaboración","cat.donnees":"Datos"},
 }
 const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
-let lang = localStorage.getItem('bdr_site_lang') || 'fr'
+let lang = (new URLSearchParams(location.search).get('lang') || localStorage.getItem('bdr_site_lang') || 'fr'); if(!['fr','en','es'].includes(lang)) lang='fr'
 const FR = {}
 document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
 function applyLang(){
