@@ -48,6 +48,7 @@ jobs:
           cp -r site/assets out/assets
           cp site/robots.txt out/robots.txt
           cp site/sitemap.xml out/sitemap.xml
+          cp site/google937eb87159aa06e1.html out/google937eb87159aa06e1.html
           echo 'bdreport.js.org' > out/CNAME
           touch out/.nojekyll
           cp public/sw.js out/sw.js
