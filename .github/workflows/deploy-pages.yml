@@ -46,9 +46,6 @@ jobs:
           cp site/securite.html out/securite.html
           cp -r site/produit out/produit
           cp -r site/assets out/assets
-          cp site/robots.txt out/robots.txt
-          cp site/sitemap.xml out/sitemap.xml
-          cp site/google937eb87159aa06e1.html out/google937eb87159aa06e1.html
           touch out/.nojekyll
           cp public/sw.js out/sw.js
           cp dist/app-inline.html out/app/index.html

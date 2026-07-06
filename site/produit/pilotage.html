@@ -4,51 +4,6 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BD Report — Pilotage : Vos chiffres décident, pas votre intuition</title>
 <meta name="description" content="Chaque RDV, chaque SQL, chaque euro de prime alimente des dashboards lisibles en un coup d'œil. Timelines flexibles, drill-down sur chaque chiffre, ra">
-<!-- SEO:start -->
-<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/produit/pilotage.html">
-<meta name="robots" content="index, follow, max-image-preview:large">
-<meta name="author" content="BD Report">
-<meta name="theme-color" content="#3B5BDB">
-<meta name="keywords" content="pilotage commercial, dashboard sales, KPI commerciaux, reporting équipe, objectifs de vente">
-<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/produit/pilotage.html">
-<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/produit/pilotage.html?lang=en">
-<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/produit/pilotage.html?lang=es">
-<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/produit/pilotage.html">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="BD Report">
-<meta property="og:title" content="BD Report — Pilotage : Vos chiffres décident, pas votre intuition">
-<meta property="og:description" content="Chaque RDV, chaque SQL, chaque euro de prime alimente des dashboards lisibles en un coup d'œil. Timelines flexibles, drill-down sur chaque chiffre, ra">
-<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/produit/pilotage.html">
-<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/dashboard.png">
-<meta property="og:image:alt" content="BD Report — Pilotage : Vos chiffres décident, pas votre intuition">
-<meta property="og:locale" content="fr_FR">
-<meta property="og:locale:alternate" content="en_US">
-<meta property="og:locale:alternate" content="es_ES">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="BD Report — Pilotage : Vos chiffres décident, pas votre intuition">
-<meta name="twitter:description" content="Chaque RDV, chaque SQL, chaque euro de prime alimente des dashboards lisibles en un coup d'œil. Timelines flexibles, drill-down sur chaque chiffre, ra">
-<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/dashboard.png">
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    {
-      "@type": "ListItem",
-      "position": 1,
-      "name": "Accueil",
-      "item": "https://owenmtp1.github.io/BD-Report/"
-    },
-    {
-      "@type": "ListItem",
-      "position": 2,
-      "name": "Pilotage",
-      "item": "https://owenmtp1.github.io/BD-Report/produit/pilotage.html"
-    }
-  ]
-}
-</script>
-<!-- SEO:end -->
 <link rel="icon" type="image/svg+xml" href="../app/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -162,7 +117,7 @@ const DICTS = {
   es: {"nav.pricing":"Precios","nav.contact":"Contacto","nav.login":"Iniciar sesión","hero.cat":"Dirección","hero.title":"Tus cifras deciden, no tu intuición","hero.pitch":"Cada cita, cada SQL, cada euro de prima alimenta paneles legibles de un vistazo. Líneas de tiempo flexibles, detalle en cada cifra, informes listos para tu 1:1 — BD Report convierte tu actividad en decisiones.","pt.0.t":"Todo es clicable","pt.0.d":"Una cifra te intriga? Haz clic: aparece la lista de citas detrás, filtrada por el periodo mostrado.","pt.1.t":"Objetivos que viven","pt.1.d":"Cuotas semanales y mensuales con barras de progreso y aviso de retraso — cada mañana sabes dónde estás.","pt.2.t":"El informe listo para presentar","pt.2.d":"Semanal, mensual, trimestral o anual: tus 6 indicadores con variación vs el periodo anterior, exportables a PDF.","shot.0":"El panel: citas concertadas / realizadas, MQL, SQL, primas, indicadores de rendimiento — widgets reorganizables.","shot.1":"Dirección de equipo: previsión del mes con proyección, daily standup y alertas de desvío automáticas.","ft.0":"Paneles completos con líneas de tiempo y detalle","ft.1":"Objetivos y cuotas con barras de progreso","ft.2":"Informes periódicos exportables a PDF","ft.3":"Velocidad del pipeline y cuellos de botella","ft.4":"Paneles generados por prompt de IA","ft.5":"Modo presentación a pantalla completa","sec.feats":"Todo lo que incluye este módulo","cta.title":"Prueba BD Report hoy mismo","cta.sub":"Únete a la beta exclusiva — plazas limitadas.","cta.btn":"Entrar a mi espacio","foot.back":"← Volver al sitio","cat.pilotage":"Dirección","cat.activite":"Actividad","cat.pipeline":"Pipeline","cat.remuneration":"Remuneración","cat.collaboration":"Colaboración","cat.donnees":"Datos"},
 }
 const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
-let lang = (new URLSearchParams(location.search).get('lang') || localStorage.getItem('bdr_site_lang') || 'fr'); if(!['fr','en','es'].includes(lang)) lang='fr'
+let lang = localStorage.getItem('bdr_site_lang') || 'fr'
 const FR = {}
 document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
 function applyLang(){

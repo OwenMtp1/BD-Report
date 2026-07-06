@@ -4,51 +4,6 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BD Report — Collaboration : L'équipe joue enfin sur le même terrain</title>
 <meta name="description" content="Pipeline partagé en lecture pour tous, commentaires et @mentions sur les comptes, pilotage manager avec forecast et standup, réassignation de leads en">
-<!-- SEO:start -->
-<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/produit/collaboration.html">
-<meta name="robots" content="index, follow, max-image-preview:large">
-<meta name="author" content="BD Report">
-<meta name="theme-color" content="#3B5BDB">
-<meta name="keywords" content="collaboration équipe commerciale, organigramme, gestion des équipes, support client">
-<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/produit/collaboration.html">
-<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/produit/collaboration.html?lang=en">
-<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/produit/collaboration.html?lang=es">
-<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/produit/collaboration.html">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="BD Report">
-<meta property="og:title" content="BD Report — Collaboration : L'équipe joue enfin sur le même terrain">
-<meta property="og:description" content="Pipeline partagé en lecture pour tous, commentaires et @mentions sur les comptes, pilotage manager avec forecast et standup, réassignation de leads en">
-<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/produit/collaboration.html">
-<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/orgchart.png">
-<meta property="og:image:alt" content="BD Report — Collaboration : L'équipe joue enfin sur le même terrain">
-<meta property="og:locale" content="fr_FR">
-<meta property="og:locale:alternate" content="en_US">
-<meta property="og:locale:alternate" content="es_ES">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="BD Report — Collaboration : L'équipe joue enfin sur le même terrain">
-<meta name="twitter:description" content="Pipeline partagé en lecture pour tous, commentaires et @mentions sur les comptes, pilotage manager avec forecast et standup, réassignation de leads en">
-<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/orgchart.png">
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    {
-      "@type": "ListItem",
-      "position": 1,
-      "name": "Accueil",
-      "item": "https://owenmtp1.github.io/BD-Report/"
-    },
-    {
-      "@type": "ListItem",
-      "position": 2,
-      "name": "Collaboration",
-      "item": "https://owenmtp1.github.io/BD-Report/produit/collaboration.html"
-    }
-  ]
-}
-</script>
-<!-- SEO:end -->
 <link rel="icon" type="image/svg+xml" href="../app/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -163,7 +118,7 @@ const DICTS = {
   es: {"nav.pricing":"Precios","nav.contact":"Contacto","nav.login":"Iniciar sesión","hero.cat":"Colaboración","hero.title":"El equipo por fin juega en el mismo campo","hero.pitch":"Pipeline compartido en lectura para todos, comentarios y @menciones en las cuentas, dirección de manager con previsión y standup, reasignación de leads en 3 clics: BD Report hace que el equipo funcione como una sola máquina.","pt.0.t":"Quién trabaja qué, visible","pt.0.d":"El pipeline de empresa agrega las cuentas de toda la organización con su propietario — los conflictos se ven antes de ocurrir.","pt.1.t":"Conversaciones que perduran","pt.1.d":"Los comentarios viven en la ficha de la cuenta, no en un chat que se desplaza. Menciona a @Sara: recibe aviso en su espacio.","pt.2.t":"El manager equipado","pt.2.d":"Previsión con proyección de fin de mes, daily standup en 30 segundos, alertas de desvío automáticas y reasignación trazada.","shot.0":"Dirección de equipo: previsión, standup, alertas y reasignación.","shot.1":"El organigrama jerárquico: managers y equipos, con fotos.","shot.2":"El hilo de comentarios de equipo con @menciones en cada cuenta.","ft.0":"Pipeline de empresa compartido en lectura","ft.1":"Comentarios y @menciones con avisos","ft.2":"Dirección de equipo: previsión, standup, alertas","ft.3":"Reasignación de leads trazada","ft.4":"Organigrama jerárquico","ft.5":"Roles y permisos por módulos","sec.feats":"Todo lo que incluye este módulo","cta.title":"Prueba BD Report hoy mismo","cta.sub":"Únete a la beta exclusiva — plazas limitadas.","cta.btn":"Entrar a mi espacio","foot.back":"← Volver al sitio","cat.pilotage":"Dirección","cat.activite":"Actividad","cat.pipeline":"Pipeline","cat.remuneration":"Remuneración","cat.collaboration":"Colaboración","cat.donnees":"Datos"},
 }
 const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
-let lang = (new URLSearchParams(location.search).get('lang') || localStorage.getItem('bdr_site_lang') || 'fr'); if(!['fr','en','es'].includes(lang)) lang='fr'
+let lang = localStorage.getItem('bdr_site_lang') || 'fr'
 const FR = {}
 document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
 function applyLang(){
