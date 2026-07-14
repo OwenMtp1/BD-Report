@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
-  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
+  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target, LayoutTemplate,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
@@ -35,6 +35,7 @@ import SupportTrash from './pages/SupportTrash.jsx'
 import SupportLogs from './pages/SupportLogs.jsx'
 import KnowledgeBase from './pages/KnowledgeBase.jsx'
 import CompanyModal from './pages/Company.jsx'
+import CvGenerator from './pages/CvGenerator.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
 
@@ -325,6 +326,7 @@ const NAV_GROUPS = [
     id: 'donnees', label: 'Données', items: [
       { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
       { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
+      { id: 'cv', label: 'Générateur de CV', icon: LayoutTemplate, brick: 'Générateur de CV' },
       { id: 'logs', label: 'Logs', icon: ScrollText, brick: 'Logs' },
       { id: 'corbeille', label: 'Corbeille', icon: Trash2 },
     ],
@@ -417,6 +419,7 @@ function MainApp() {
     mytasks: <MyTasks />,
     contacts: <Contacts />,
     notes: <Notes onCreateRdvFromNote={goCreateRdvFromNote} />,
+    cv: <CvGenerator />,
     primes: <Primes />,
     ai: <AiDashboard />,
     logs: <Logs />,

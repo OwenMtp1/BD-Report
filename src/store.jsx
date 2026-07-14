@@ -272,7 +272,7 @@ export const RDV_FIELDS = [
 
 export const BRICKS = [
   'Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes',
-  'Primes & Commissions', 'KPI Entreprise', 'ICP', 'Dashboard personnalisé', 'Logs',
+  'Primes & Commissions', 'KPI Entreprise', 'ICP', 'Générateur de CV', 'Dashboard personnalisé', 'Logs',
 ]
 
 // ---------------------------------------------------------------- Offres (plans)
@@ -427,6 +427,7 @@ function emptySubEnvData() {
     tasks: [], // Mes tâches : { id, title, description, dueDate, assignee, company, contact, rdvId, done, archived, pinned, createdAt }
     taskTrash: [], // corbeille des tâches : restaurables 30 jours
     icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
+    cvs: [], // Banque de CV : { id, name, answers{}, designId, overrides{}, createdAt, updatedAt }
   }
 }
 
@@ -847,7 +848,7 @@ function migrate(db) {
     a.bricks = a.bricks || []
     // Renommage de la brique "Tâches prioritaires" → "Recommandations prioritaires"
     a.bricks = a.bricks.map(b => b === 'Tâches prioritaires' ? 'Recommandations prioritaires' : b)
-    ;['Recommandations prioritaires', 'Mes tâches', 'ICP', 'Logs'].forEach(b => {
+    ;['Recommandations prioritaires', 'Mes tâches', 'ICP', 'Générateur de CV', 'Logs'].forEach(b => {
       if (a.bricks.includes('Leads') && !a.bricks.includes(b)) a.bricks.push(b)
     })
     // Offre par défaut : les comptes existants gardent l'accès complet (beta)
@@ -931,6 +932,7 @@ function migrate(db) {
     data.tasks = data.tasks || []
     data.taskTrash = data.taskTrash || []
     data.icpProfiles = data.icpProfiles || []
+    data.cvs = data.cvs || []
   })
   return db
 }

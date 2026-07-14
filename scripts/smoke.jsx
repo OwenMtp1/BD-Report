@@ -88,13 +88,29 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'ICP', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Base de connaissances', 'Logs Support', 'Gestion Administration']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Générateur de CV', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'ICP', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Base de connaissances', 'Logs Support', 'Gestion Administration']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
     await click(btn)
     if (!text().includes(label)) throw new Error(`Page ${label} did not render`)
   }
+
+  // 6a. Générateur de CV : questionnaire → choix du design → éditeur, puis enregistrement dans la banque.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Générateur de CV'))
+  await click(find('button', 'Nouveau CV'))
+  if (!text().includes('Identité')) throw new Error('CV questionnaire did not open')
+  const cvInputs = container.querySelectorAll('input')
+  await type(cvInputs[0], 'Jean')  // prénom
+  await type(cvInputs[1], 'Test')  // nom
+  let guard = 0
+  while (find('button', 'Suivant') && guard++ < 15) { await click(find('button', 'Suivant')) }
+  await click(find('button', 'Choisir un design'))
+  if (!text().includes('Choisissez un design')) throw new Error('CV design picker did not open')
+  await click(find('button', 'Azur Pro'))
+  if (!text().includes('Exporter en PDF')) throw new Error('CV editor did not open after picking a design')
+  await click(find('button', 'Terminer'))
+  if (!text().includes('Jean Test') && !text().includes('Azur Pro')) throw new Error('Saved CV not shown in the CV bank')
 
   // 6b. Support : créer un ticket, vérifier la conversation, le côté support et l'enrichissement client
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Support'))
