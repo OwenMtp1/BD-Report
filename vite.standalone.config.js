@@ -45,6 +45,12 @@ const inlineSingleFile = {
 </body>
 </html>`
     fs.writeFileSync(path.join(outDir, 'generateur-de-cv.html'), html)
+    // Variante « Artifact » : contenu seul (sans doctype/html/head/body), tout inliné,
+    // pour publication en page hébergée (lien accessible sur mobile).
+    const artifact = `<style>${css}</style>
+<div id="root"></div>
+<script type="module">${js}</script>`
+    fs.writeFileSync(path.join(outDir, 'generateur-de-cv.artifact.html'), artifact)
     // nettoyage des fichiers intermédiaires
     for (const f of Object.keys(bundle)) { try { fs.rmSync(path.join(outDir, f)) } catch (e) {} }
     try { fs.rmSync(path.join(outDir, 'assets'), { recursive: true, force: true }) } catch (e) {}
