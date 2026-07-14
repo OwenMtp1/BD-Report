@@ -3,3 +3,4 @@ dist
 .smoke
 .DS_Store
 *.local
+dist-standalone

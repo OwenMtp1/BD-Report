@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "smoke": "vite build --ssr scripts/smoke.jsx --outDir .smoke --emptyOutDir && node .smoke/smoke.js",
+    "build:cv": "vite build --config vite.standalone.config.js",
     "shots": "vite build && node scripts/screenshots.mjs",
     "tauri": "tauri"
   },
