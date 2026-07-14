@@ -28,7 +28,6 @@ jobs:
         run: |
           npm install
           npm run build
-          npm run build:cv
 
       - name: Inline app into a single file
         run: |
@@ -53,9 +52,6 @@ jobs:
           cp public/manifest.webmanifest out/app/manifest.webmanifest
           cp public/icon.svg out/app/icon.svg
           cp public/sw.js out/app/sw.js
-          # Générateur de CV autonome (fichier unique) publié en public sous /cv/
-          mkdir -p out/cv
-          cp dist-standalone/generateur-de-cv.html out/cv/index.html
 
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4
