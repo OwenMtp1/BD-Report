@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react'
-import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock, Cloud } from 'lucide-react'
+import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock, Cloud, GraduationCap } from 'lucide-react'
 import { useStore, hashPw } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
 import { Modal, Field, Confirm, toast, CommitInput } from '../ui.jsx'
@@ -269,6 +269,14 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
             <a className="btn-ghost text-xs" href={dlUrls?.linux || RELEASES_URL} target="_blank" rel="noopener">Linux & autres versions</a>
           </div>
           <p className="text-xs text-muted">Téléchargement direct du bon installeur. Build non signée au premier lancement : autorisez l'app (macOS : clic droit → Ouvrir ; Windows : Informations complémentaires → Exécuter quand même).</p>
+        </div>
+        <div className="card p-4 space-y-3">
+          <h3 className="font-bold flex items-center gap-2"><GraduationCap size={17} className="text-brand" /> Mode formation / données de démo</h3>
+          <p className="text-sm text-muted">Remplissez cet espace de données fictives pour explorer l'app ou former un nouveau BDR, puis videz-le — sans jamais toucher à vos autres espaces.</p>
+          <div className="flex gap-2 flex-wrap">
+            <button className="btn-primary text-xs" onClick={() => { store.seedDemoSpace(store.session.subEnvId); toast('Données de démo ajoutées à cet espace ✓') }}><GraduationCap size={14} /> Remplir de données de démo</button>
+            <button className="btn-danger text-xs" onClick={() => { if (window.confirm('Vider cet espace ? Tous les RDV, contacts et notes de CET espace seront supprimés (barème et objectifs conservés). Vos autres espaces ne sont pas touchés.')) { store.resetSpace(store.session.subEnvId); toast('Espace réinitialisé') } }}><Trash2 size={14} /> Réinitialiser cet espace (vider)</button>
+          </div>
         </div>
         <div className="card p-4 space-y-3">
           <div className="space-y-2">

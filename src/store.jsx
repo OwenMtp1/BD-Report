@@ -682,6 +682,30 @@ function makeTestRdvs(names, opts) {
   })
 }
 
+// Jeu de données de démonstration (mode formation) : palette variée de RDV
+// (SQL, signés, no-show, perdus) pour explorer toutes les pages sans données réelles.
+const DEMO_NAMES = [
+  ['Acme Corp', 'SaaS RH', 120, 'Marie Durand', 'DRH'],
+  ['Globex', 'Industrie', 450, 'Paul Martin', 'Directeur Ops'],
+  ['Initech', 'Finance', 80, 'Sophie Bernard', 'CFO'],
+  ['Umbrella', 'Santé', 900, 'Luc Petit', 'VP Sales'],
+  ['Hooli', 'Tech', 300, 'Emma Roux', 'CTO'],
+  ['Soylent', 'Agro', 60, 'Nadia Blanc', 'CEO'],
+  ['Wonka Ind.', 'Retail', 220, 'Karim Haddad', 'Head of Sales'],
+  ['Stark', 'Énergie', 1500, 'Julie Moreau', 'Directrice'],
+]
+const DEMO_OPTS = [
+  { phase: 'SQL', opp: 'En cours', sql: 8, source: 'Outbound' },
+  { phase: 'Signée', opp: 'Gagnée', sql: 22, source: 'Inbound' },
+  { phase: 'R2', opp: 'En cours', source: 'Outbound' },
+  { phase: 'R1', opp: 'No Show R1', source: 'Outbound', motifNoShow: 'Injoignable' },
+  { phase: 'SQL', opp: 'En cours', sql: 12, source: 'Inbound' },
+  { phase: 'R1', opp: 'Perdue', motifKo: 'Pas de budget', source: 'Outbound' },
+  { phase: 'R2', opp: 'En cours', source: 'Inbound' },
+  { phase: 'Signée', opp: 'Gagnée', sql: 26, source: 'Outbound' },
+]
+export function makeDemoRdvs() { return makeTestRdvs(DEMO_NAMES, DEMO_OPTS) }
+
 function injectTestEnv(db) {
   if (db.environments.some(e => e.id === 'env-test')) return db
   const mkAcc = (id, prenom, nom, pseudo, role, teamOf) => ({
@@ -1223,6 +1247,30 @@ export function StoreProvider({ children }) {
           }, ...(data.notifs || [])].slice(0, 100)
           return d
         })
+      },
+      // ----- Mode formation / données de démo -----
+      // Remplit l'espace courant de RDV de démonstration (sans toucher aux autres espaces).
+      seedDemoSpace(subId) {
+        if (roBlocked()) return
+        setDb(d => {
+          const data = d.data[subId] || (d.data[subId] = emptySubEnvData())
+          data.rdvs = [...(data.rdvs || []), ...makeDemoRdvs()]
+          syncContacts(data)
+          return d
+        })
+        this.logAction?.('Formation', 'Données de démo ajoutées', `espace ${subId}`)
+      },
+      // Vide l'espace courant (repart à zéro) en conservant barème, objectifs et devise.
+      resetSpace(subId) {
+        if (roBlocked()) return
+        setDb(d => {
+          const cur = d.data[subId]
+          const fresh = emptySubEnvData()
+          if (cur) { fresh.bareme = cur.bareme; fresh.goals = cur.goals; fresh.currency = cur.currency }
+          d.data[subId] = fresh
+          return d
+        })
+        this.logAction?.('Formation', 'Espace réinitialisé', `espace ${subId}`)
       },
       // ----- journal d'audit (traçabilité)
       logAction(type, action, details = '') {
