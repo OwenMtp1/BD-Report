@@ -6,7 +6,7 @@ import { safeUrl } from '../security.js'
 import { Empty, Confirm, Select, Modal, Field, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
-function emptyContact() { return { nom: '', poste: '', entreprise: '', email: '', tel: '', secteur: '', linkedin: '', source: '' } }
+function emptyContact() { return { nom: '', poste: '', entreprise: '', email: '', tel: '', secteur: '', linkedin: '', source: '', consent: false } }
 
 const COLS = [
   ['nom', 'Nom & Prénom'], ['poste', 'Poste'], ['entreprise', 'Entreprise'],
@@ -77,7 +77,7 @@ export default function Contacts() {
 
   const createContact = () => {
     if (!form.nom.trim() && !form.email.trim()) { toast('Renseignez au moins un nom ou un email.'); return }
-    store.setSub(d => ({ ...d, contacts: [...d.contacts, { ...form, id: uid(), createdAt: todayISO() }] }))
+    store.setSub(d => ({ ...d, contacts: [...d.contacts, { ...form, consentAt: form.consent ? todayISO() : null, id: uid(), createdAt: todayISO() }] }))
     store.logAction('Contact', 'Contact créé manuellement', form.nom || form.email)
     toast('Contact créé')
     setForm(null)
@@ -195,7 +195,7 @@ export default function Contacts() {
                 <td className="font-semibold">{c.nom || '—'}</td>
                 <td className="text-muted">{c.poste || '—'}</td>
                 <td>{c.entreprise ? <button className="hover:text-brand hover:underline" title="Ouvrir la fiche entreprise" onClick={() => openCompany(c.entreprise)}>{c.entreprise}</button> : '—'}</td>
-                <td className="text-xs">{c.email || '—'}</td>
+                <td className="text-xs">{c.email || '—'}{c.consent && <span className="ml-1 text-emerald-600 font-bold" title={`Consentement RGPD recueilli${c.consentAt ? ' le ' + c.consentAt : ''}`}>✓</span>}</td>
                 <td className="text-xs">{c.tel || '—'}</td>
                 <td className="text-muted text-xs">{c.secteur || '—'}</td>
                 <td className="text-xs">{safeUrl(c.linkedin) ? <a href={safeUrl(c.linkedin)} target="_blank" rel="noreferrer" className="text-brand underline">Profil</a> : '—'}</td>
@@ -218,6 +218,10 @@ export default function Contacts() {
             <Field label="Téléphone"><input className="input" value={form.tel} onChange={e => setForm(f => ({ ...f, tel: e.target.value }))} /></Field>
             <Field label="LinkedIn"><input className="input" value={form.linkedin} onChange={e => setForm(f => ({ ...f, linkedin: e.target.value }))} placeholder="https://linkedin.com/in/…" /></Field>
             <Field label="Source"><Select value={form.source} onChange={v => setForm(f => ({ ...f, source: v }))} options={SOURCES} placeholder="—" /></Field>
+            <label className="col-span-2 flex items-center gap-2 text-sm cursor-pointer mt-1">
+              <input type="checkbox" checked={!!form.consent} onChange={e => setForm(f => ({ ...f, consent: e.target.checked }))} className="w-4 h-4 accent-brand" />
+              Consentement RGPD recueilli (traitement des données accepté)
+            </label>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button className="btn-ghost" onClick={() => setForm(null)}>Annuler</button>

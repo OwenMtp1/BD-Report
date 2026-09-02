@@ -1272,6 +1272,25 @@ export function StoreProvider({ children }) {
         })
         this.logAction?.('Formation', 'Espace réinitialisé', `espace ${subId}`)
       },
+      // ----- RGPD : droit à l'effacement -----
+      // Supprime les données personnelles d'une personne (par e-mail) de l'espace :
+      // ses contacts + ses coordonnées dans les RDV. Renvoie le nombre d'éléments retirés.
+      erasePersonData(subId, email) {
+        if (roBlocked()) return { error: 'Lecture seule' }
+        const e = (email || '').trim().toLowerCase()
+        if (!e) return { error: 'email requis' }
+        let removed = 0
+        setDb(d => {
+          const data = d.data[subId]; if (!data) return d
+          data.contacts = (data.contacts || []).filter(c => { const m = (c.email || '').toLowerCase() === e; if (m) removed++; return !m })
+          ;(data.rdvs || []).forEach(r => {
+            if (Array.isArray(r.contacts)) { const before = r.contacts.length; r.contacts = r.contacts.filter(c => (c.email || '').toLowerCase() !== e); removed += before - r.contacts.length }
+          })
+          return d
+        })
+        this.logAction?.('RGPD', 'Effacement de données personnelles', email)
+        return { ok: true, removed }
+      },
       // ----- journal d'audit (traçabilité)
       logAction(type, action, details = '') {
         const subId = session?.subEnvId

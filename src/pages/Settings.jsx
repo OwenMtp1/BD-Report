@@ -6,6 +6,49 @@ import { Modal, Field, Confirm, toast, CommitInput } from '../ui.jsx'
 import { testConnection } from '../supabaseSync.js'
 import { SUPABASE_URL, isSupabaseConfigured } from '../supabaseConfig.js'
 
+// Outil RGPD : droit d'accès (export JSON) et droit à l'effacement des données
+// personnelles d'une personne (recherchée par e-mail) dans l'espace courant.
+function RgpdTool({ store }) {
+  const [email, setEmail] = useState('')
+  const sub = store.sub
+  const e = email.trim().toLowerCase()
+  const matches = e ? {
+    contacts: (sub.contacts || []).filter(c => (c.email || '').toLowerCase() === e),
+    coordonneesRdv: (sub.rdvs || []).flatMap(r => (r.contacts || []).filter(c => (c.email || '').toLowerCase() === e).map(c => ({ entreprise: r.entreprise, ...c }))),
+    notes: (sub.notes || []).filter(n => (n.content || '').toLowerCase().includes(e) || (n.title || '').toLowerCase().includes(e)),
+  } : null
+  const count = matches ? matches.contacts.length + matches.coordonneesRdv.length + matches.notes.length : 0
+  const exportJson = () => {
+    const blob = new Blob([JSON.stringify({ email, exportedAt: new Date().toISOString(), matches }, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    a.download = `rgpd-${e.replace(/[^a-z0-9]/g, '_')}-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href)
+  }
+  const erase = () => {
+    if (!e) return
+    if (window.confirm(`Supprimer définitivement les données personnelles de ${email} de cet espace (contacts + coordonnées dans les RDV) ? Action irréversible.`)) {
+      const r = store.erasePersonData(store.session.subEnvId, e)
+      toast(r?.error ? `Erreur : ${r.error}` : `${r.removed || 0} élément(s) personnel(s) supprimé(s)`)
+      if (!r?.error) setEmail('')
+    }
+  }
+  return (
+    <div className="card p-4 space-y-3">
+      <h3 className="font-bold flex items-center gap-2"><ShieldCheck size={17} className="text-brand" /> Conformité RGPD</h3>
+      <p className="text-sm text-muted">Droit d'accès et droit à l'effacement : recherchez une personne par e‑mail pour exporter ou supprimer ses données personnelles de cet espace.</p>
+      <div className="flex gap-2 flex-wrap items-center">
+        <input className="input !w-64 text-sm" type="email" placeholder="email de la personne" value={email} onChange={ev => setEmail(ev.target.value)} />
+        {e && <span className="text-xs text-muted">{count} enregistrement(s) trouvé(s)</span>}
+      </div>
+      {e && (
+        <div className="flex gap-2 flex-wrap">
+          <button className="btn-ghost text-xs" disabled={!count} onClick={exportJson}><Download size={14} /> Exporter ses données (JSON)</button>
+          <button className="btn-danger text-xs" disabled={!count} onClick={erase}><Trash2 size={14} /> Supprimer ses données</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Carte « Synchronisation cloud » : test de connexion Supabase en un clic (depuis le navigateur).
 function SupabaseCard() {
   const [res, setRes] = useState(null)
@@ -278,6 +321,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
             <button className="btn-danger text-xs" onClick={() => { if (window.confirm('Vider cet espace ? Tous les RDV, contacts et notes de CET espace seront supprimés (barème et objectifs conservés). Vos autres espaces ne sont pas touchés.')) { store.resetSpace(store.session.subEnvId); toast('Espace réinitialisé') } }}><Trash2 size={14} /> Réinitialiser cet espace (vider)</button>
           </div>
         </div>
+        <RgpdTool store={store} />
         <div className="card p-4 space-y-3">
           <div className="space-y-2">
             <h4 className="font-bold text-sm">Sauvegarde & restauration des données</h4>
