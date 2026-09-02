@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { Clock, Building2, Users, UserRound, MessageSquare } from 'lucide-react'
+import { Clock, Building2, Users, UserRound, MessageSquare, Trash2, CheckSquare } from 'lucide-react'
 import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS, phaseColor, oppColor, companyKey } from '../store.jsx'
-import { Modal, SlideOver, Empty, toast, confetti } from '../ui.jsx'
+import { Modal, SlideOver, Confirm, Empty, toast, confetti } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
 const recentDate = (r) => r.dateRdv || r.datePriseRdv || r.createdAt || ''
@@ -134,6 +134,43 @@ export default function Leads() {
     setDragKey(null)
   }
 
+  // ----- Sélection multiple + actions groupées (souris + tactile via cases à cocher) -----
+  const [sel, setSel] = useState(new Set())
+  const [confirmBulkDel, setConfirmBulkDel] = useState(false)
+  const toggleSel = (key) => setSel(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  const clearSel = () => setSel(new Set())
+  const selGroups = groups.filter(g => sel.has(g.key))
+
+  const bulkMove = (opp) => {
+    if (!opp || !selGroups.length) return
+    selGroups.forEach(g => {
+      if (g.rep.opportunite === opp) return
+      const subId = scope === 'me' ? store.session.subEnvId : g.rep._subId
+      store.setSubData(subId, d => { const r = d.rdvs.find(x => x.id === g.rep.id); if (r) Object.assign(r, applyRdvAutomations(r, { opportunite: opp })); return d })
+    })
+    store.logAction('Lead', 'Déplacement en lot (kanban)', `${selGroups.length} lead(s) → ${opp}`)
+    toast(`${selGroups.length} lead(s) → ${opp}`)
+    clearSel()
+  }
+
+  const bulkDelete = () => {
+    const n = selGroups.length
+    const deletedAt = Date.now()
+    selGroups.forEach(g => {
+      const subId = scope === 'me' ? store.session.subEnvId : g.rep._subId
+      const ids = new Set(g.rdvs.map(r => r.id))
+      store.setSubData(subId, d => {
+        const family = d.rdvs.filter(r => ids.has(r.id))
+        d.rdvTrash = [...(d.rdvTrash || []), ...family.map(r => ({ ...r, deletedAt }))]
+        d.rdvs = d.rdvs.filter(r => !ids.has(r.id))
+        return d
+      })
+    })
+    store.logAction('Lead', 'Suppression en lot', `${n} lead(s) → corbeille`)
+    toast(`${n} lead(s) déplacé(s) vers la corbeille`)
+    clearSel(); setConfirmBulkDel(false)
+  }
+
   // Drag & drop tactile : suit le doigt et dépose sur la colonne sous le point de contact.
   const touchDrop = (e) => {
     if (!dragKey) return
@@ -185,6 +222,18 @@ export default function Leads() {
         {hasFilter && <button className="text-brand underline pb-2" onClick={() => { setFOwner(''); setFOpen({ start: '', end: '' }); setFClose({ start: '', end: '' }); setFActivity({ start: '', end: '' }) }}>Réinitialiser</button>}
       </div>
 
+      {selGroups.length > 0 && (
+        <div className="sticky top-14 z-20 card p-2.5 flex flex-wrap items-center gap-2 !border-brand/50 shadow-md">
+          <span className="text-sm font-bold px-1 flex items-center gap-1.5"><CheckSquare size={15} className="text-brand" /> {selGroups.length} sélectionné(s)</span>
+          <select className="input !py-1.5 !w-auto text-sm" value="" onChange={e => bulkMove(e.target.value)}>
+            <option value="">Déplacer vers…</option>
+            {cols.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <button className="btn-danger !py-1.5 text-sm" onClick={() => setConfirmBulkDel(true)}><Trash2 size={14} /> Supprimer</button>
+          <button className="btn-ghost !py-1.5 text-sm ml-auto" onClick={clearSel}>Tout désélectionner</button>
+        </div>
+      )}
+
       <div className="flex gap-3 overflow-x-auto pb-3">
         {cols.map(opp => {
           const cards = groups.filter(g => g.opportunite === opp)
@@ -202,9 +251,14 @@ export default function Leads() {
                   return (
                     <div key={g.key} draggable onDragStart={() => setDragKey(g.key)} onDragEnd={() => setDragKey(null)}
                       onTouchStart={() => setDragKey(g.key)} onTouchEnd={touchDrop}
-                      className={`card !rounded-xl p-3 cursor-grab active:cursor-grabbing touch-none ${dragKey === g.key ? 'dragging' : ''}`}>
-                      <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline" title="Ouvrir la fiche entreprise"
-                        onClick={() => openCompany(g.entreprise)}><Building2 size={13} className="text-muted shrink-0" /> {g.entreprise}</button>
+                      className={`card !rounded-xl p-3 cursor-grab active:cursor-grabbing touch-none ${dragKey === g.key ? 'dragging' : ''} ${sel.has(g.key) ? 'ring-2 ring-brand' : ''}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline min-w-0" title="Ouvrir la fiche entreprise"
+                          onClick={() => openCompany(g.entreprise)}><Building2 size={13} className="text-muted shrink-0" /> <span className="truncate">{g.entreprise}</span></button>
+                        <input type="checkbox" checked={sel.has(g.key)} onChange={() => toggleSel(g.key)}
+                          onClick={e => e.stopPropagation()} onDragStart={e => e.preventDefault()}
+                          className="mt-0.5 w-4 h-4 accent-brand shrink-0 cursor-pointer" title="Sélectionner ce lead" />
+                      </div>
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                         <span className={`chip ${phaseColor(g.rep.phase)}`}>{g.rep.phase}</span>
                         {g.rdvs.length > 1 && <span className="chip bg-surface text-muted">{g.rdvs.length} RDV</span>}
@@ -224,6 +278,8 @@ export default function Leads() {
       </div>
       {groups.length === 0 && <Empty text="Aucun lead. Créez un rendez-vous pour alimenter le pipeline." />}
       {detail && <TimelineDetail group={detail} onClose={() => setDetail(null)} />}
+      {confirmBulkDel && <Confirm message={`Déplacer ${selGroups.length} lead(s) vers la corbeille ? (restaurable 30 jours)`}
+        onYes={bulkDelete} onNo={() => setConfirmBulkDel(false)} />}
     </div>
   )
 }
