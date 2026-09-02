@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # historique complet pour générer le changelog
 
       - uses: actions/setup-node@v4
         with:
@@ -49,6 +51,7 @@ jobs:
           touch out/.nojekyll
           cp public/sw.js out/sw.js
           cp dist/app-inline.html out/app/index.html
+          node scripts/gen-changelog.mjs   # génère out/app/changelog.json depuis les commits
           cp public/manifest.webmanifest out/app/manifest.webmanifest
           cp public/icon.svg out/app/icon.svg
           cp public/sw.js out/app/sw.js

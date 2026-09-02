@@ -3,7 +3,7 @@ import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
-  AtSign, CalendarClock, AlertTriangle, Clock, Check,
+  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
@@ -575,6 +575,7 @@ function MainApp() {
               <Search size={14} /> <span className="hidden sm:inline">{tr('common.search')}</span> <kbd className="hidden sm:inline text-[10px] border border-line rounded px-1">⌘K</kbd>
             </button>
             <LangPicker />
+            <WhatsNew />
             <NotificationsBell />
             <button title="Organigramme" className={`p-2 rounded-xl hover:bg-surface ${page === 'org' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('org')}>
               <Network size={19} />
@@ -803,6 +804,49 @@ function OnboardingChecklist({ store, goto }) {
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+// « Nouveautés » : lit app/changelog.json (auto-généré au déploiement depuis les
+// commits) et affiche les dernières évolutions. Pastille tant qu'elles ne sont pas vues.
+function WhatsNew() {
+  const [entries, setEntries] = useState([])
+  const [open, setOpen] = useState(false)
+  const [seen, setSeen] = useState(() => { try { return localStorage.getItem('bdr_changelog_seen') || '' } catch (e) { return '' } })
+  useEffect(() => {
+    fetch('changelog.json', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => { if (Array.isArray(d)) setEntries(d) })
+      .catch(() => {})
+  }, [])
+  if (!entries.length) return null
+  const latestKey = (entries[0]?.date || '') + '|' + (entries[0]?.text || '')
+  const hasNew = latestKey && latestKey !== seen
+  const markSeen = () => { setSeen(latestKey); try { localStorage.setItem('bdr_changelog_seen', latestKey) } catch (e) {} }
+  return (
+    <div className="relative">
+      <button title="Nouveautés" className={`p-2 rounded-xl hover:bg-surface relative ${open ? 'text-brand' : 'text-muted'}`}
+        onClick={() => { if (!open) markSeen(); setOpen(o => !o) }}>
+        <Gift size={19} />
+        {hasNew && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-11 z-40 card shadow-xl w-80 p-2 fade-in">
+            <div className="px-2 py-1 text-xs font-bold uppercase text-muted flex items-center gap-1.5"><Gift size={13} /> Nouveautés</div>
+            <div className="max-h-96 overflow-y-auto space-y-0.5">
+              {entries.slice(0, 25).map((e, i) => (
+                <div key={i} className="p-2 rounded-lg hover:bg-surface">
+                  <div className="text-sm font-semibold first-letter:uppercase">{e.text}</div>
+                  <div className="text-[10px] text-muted">{e.date}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft } from 'lucide-react'
+import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus } from 'lucide-react'
+import { googleCalUrl, downloadIcs } from '../calendar.js'
 import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
@@ -83,6 +84,13 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
         </Field>}
         {visible('dateRdv') && <Field label="Date du RDV">
           <input type="date" className="input" value={f.dateRdv} onChange={e => set('dateRdv', e.target.value)} />
+          {f.dateRdv && (
+            <div className="flex gap-2 flex-wrap items-center mt-1.5 text-xs">
+              <span className="text-muted flex items-center gap-1"><CalendarPlus size={12} /> Ajouter au calendrier :</span>
+              <a className="btn-ghost !py-0.5 text-xs" href={googleCalUrl(f)} target="_blank" rel="noopener">Google Agenda</a>
+              <button type="button" className="btn-ghost !py-0.5 text-xs" onClick={() => downloadIcs(f)}>.ics (Outlook / Apple)</button>
+            </div>
+          )}
         </Field>}
         {/* Champ affiché seulement si pertinent : phase SQL/Signée ou opportunité Gagnée/Signée (micro 8) */}
         {(['SQL', 'Signée'].includes(f.phase) || ['Gagnée', 'Signée'].includes(f.opportunite) || f.datePassageSQL) && (
