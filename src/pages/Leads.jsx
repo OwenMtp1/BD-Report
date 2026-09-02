@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Clock, Building2, Users, UserRound, MessageSquare } from 'lucide-react'
 import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS, phaseColor, oppColor, companyKey } from '../store.jsx'
-import { Modal, Empty, toast, confetti } from '../ui.jsx'
+import { Modal, SlideOver, Empty, toast, confetti } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
 const recentDate = (r) => r.dateRdv || r.datePriseRdv || r.createdAt || ''
@@ -53,10 +53,12 @@ function TimelineDetail({ group, onClose }) {
   })
   const closed = ['Gagnée', 'Perdue', 'Signée'].includes(group.opportunite)
   return (
-    <Modal title={`Timeline — ${group.entreprise}`} onClose={onClose}>
-      <p className="text-sm text-muted mb-4">
-        {closed ? 'Lead clôturé' : `Actif depuis ${companyLifeDays(group)} jour(s)`} · {group.rdvs.length} rendez-vous
-      </p>
+    <SlideOver
+      title={group.entreprise}
+      subtitle={`${closed ? 'Lead clôturé' : `Actif depuis ${companyLifeDays(group)} j`} · ${group.rdvs.length} RDV${group.opportunite ? ' · ' + group.opportunite : ''}`}
+      onClose={onClose}
+      footer={<button className="btn-primary w-full justify-center" onClick={() => { openCompany(group.entreprise); onClose() }}><Building2 size={15} /> Ouvrir la fiche entreprise</button>}
+    >
       <div className="space-y-0">
         {rows.map((e, i) => (
           <div key={i} className="flex gap-3">
@@ -73,7 +75,7 @@ function TimelineDetail({ group, onClose }) {
           </div>
         ))}
       </div>
-    </Modal>
+    </SlideOver>
   )
 }
 

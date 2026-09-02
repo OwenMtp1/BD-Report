@@ -16,6 +16,30 @@ export function Modal({ title, onClose, children, wide }) {
   )
 }
 
+// Panneau latéral « peek » : détail glissant depuis la droite, sans quitter la liste.
+export function SlideOver({ title, subtitle, onClose, children, wide, footer }) {
+  useEffect(() => {
+    const onEsc = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onEsc)
+    return () => window.removeEventListener('keydown', onEsc)
+  }, [onClose])
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onMouseDown={e => e.target === e.currentTarget && onClose()}>
+      <div className={`h-full bg-card w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl border-l border-line flex flex-col slide-over-panel`}>
+        <div className="flex items-start justify-between px-5 py-4 border-b border-line shrink-0">
+          <div className="min-w-0 pr-3">
+            <h3 className="font-bold text-lg truncate">{title}</h3>
+            {subtitle && <p className="text-xs text-muted truncate">{subtitle}</p>}
+          </div>
+          <button className="p-1.5 rounded-lg hover:bg-surface shrink-0" onClick={onClose} title="Fermer (Échap)"><X size={18} /></button>
+        </div>
+        <div className="p-5 overflow-y-auto flex-1">{children}</div>
+        {footer && <div className="px-5 py-3 border-t border-line shrink-0 bg-card">{footer}</div>}
+      </div>
+    </div>
+  )
+}
+
 export function Confirm({ message, onYes, onNo, yesLabel = 'Supprimer' }) {
   return (
     <Modal title="Confirmation" onClose={onNo}>
