@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, AlertTriangle } from 'lucide-react'
 import { useStore, computePrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, uid, SOURCES } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
@@ -41,7 +41,9 @@ function filterPrimes(primes, tl, custom) {
 export default function Primes() {
   const store = useStore()
   const sub = store.sub
-  const primes = useMemo(() => computePrimes(sub.rdvs, sub.bareme), [sub.rdvs, sub.bareme])
+  const allPrimes = useMemo(() => computePrimes(sub.rdvs, sub.bareme), [sub.rdvs, sub.bareme])
+  const primes = allPrimes.filter(p => !p.invalidated)   // stats & sommes : primes valides uniquement
+  const invalidated = allPrimes.filter(p => p.invalidated)
 
   const [repTl, setRepTl] = useState('cur')
   const [repCustom, setRepCustom] = useState({})
@@ -73,6 +75,21 @@ export default function Primes() {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-extrabold">Primes & Commissions</h2>
+
+      {invalidated.length > 0 && (
+        <div className="card p-4 !border-amber-300 bg-amber-50/60">
+          <h3 className="font-bold flex items-center gap-2 text-amber-700"><AlertTriangle size={16} /> Primes invalidées ({invalidated.length})</h3>
+          <p className="text-xs text-muted mb-2">Invalidées par un manager — elles ne comptent pas dans vos statistiques.</p>
+          <div className="space-y-1">
+            {invalidated.map(p => (
+              <div key={p.rdvId} className="flex items-center justify-between gap-2 text-sm p-2 rounded-lg bg-card">
+                <span className="font-semibold line-through text-muted truncate">{p.entreprise} — {fmtMoney(p.montant)}</span>
+                <span className="text-xs text-muted shrink-0">par {p.invalidatedBy}{p.invalidatedReason ? ` · ${p.invalidatedReason}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Tableau de suivi primes (graphique) */}

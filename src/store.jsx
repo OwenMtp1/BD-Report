@@ -643,6 +643,10 @@ export function computePrimes(rdvs, bareme) {
       triggerDate: trigger,
       payMonth, payMonthKey: payMonth ? monthKey(payMonth) : null,
       payMonthLabel: payMonth ? monthLabel(payMonth) : '—',
+      // Validée d'office ; un manager peut l'invalider (retirée des stats).
+      invalidated: !!r.primeInvalidated,
+      invalidatedBy: r.primeInvalidated?.by || null,
+      invalidatedReason: r.primeInvalidated?.reason || '',
     })
   })
   return primes
@@ -1198,6 +1202,27 @@ export function StoreProvider({ children }) {
         if (!subId) return
         if (readOnly) { window.dispatchEvent(new CustomEvent('app-toast', { detail: '🔒 Accès en lecture seule.' })); return }
         setDb(d => { if (d.data[subId]) d.data[subId] = fn(d.data[subId]); return d })
+      },
+      // Valide/invalide la prime d'un RDV (action manager). Invalidée = retirée des stats
+      // du collaborateur + notification déposée dans son espace (centre de notifications).
+      invalidatePrime(subId, rdvId, invalidate, reason = '') {
+        if (readOnly) return
+        setDb(d => {
+          const data = d.data[subId]; if (!data) return d
+          const r = (data.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          const by = account?.pseudo || 'Manager'
+          const ts = new Date().toISOString()
+          if (invalidate) r.primeInvalidated = { by, at: ts, reason: reason || '' }
+          else delete r.primeInvalidated
+          data.notifs = [{
+            id: uid(), ts, read: false, type: 'prime', page: 'primes',
+            title: invalidate ? 'Prime invalidée' : 'Prime revalidée',
+            text: invalidate
+              ? `${r.entreprise || 'Lead'} — prime retirée de vos statistiques par ${by}${reason ? ' (' + reason + ')' : ''}`
+              : `${r.entreprise || 'Lead'} — prime rétablie par ${by}`,
+          }, ...(data.notifs || [])].slice(0, 100)
+          return d
+        })
       },
       // ----- journal d'audit (traçabilité)
       logAction(type, action, details = '') {

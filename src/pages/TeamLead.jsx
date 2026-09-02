@@ -1,11 +1,45 @@
 import React, { useMemo, useState } from 'react'
-import { TrendingUp, Sun, AlertTriangle, ArrowRightLeft } from 'lucide-react'
+import { TrendingUp, Sun, AlertTriangle, ArrowRightLeft, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react'
 import { useStore, inTimeline, computePrimes, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, fmtMoney, PHASE_COLORS, phaseColor } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
 
 const dayISO = (offset = 0) => {
   const d = new Date(); d.setDate(d.getDate() + offset)
   return d.toISOString().slice(0, 10)
+}
+
+// Validation des primes d'un collaborateur (manager) : les primes sont validées
+// d'office ; on peut en invalider (retirée des stats du collab + notification).
+function MemberPrimes({ m, store }) {
+  const [open, setOpen] = useState(false)
+  const data = store.db.data[m.id] || { rdvs: [], bareme: [] }
+  const primes = computePrimes(data.rdvs || [], data.bareme || []).sort((a, b) => (b.triggerDate || '').localeCompare(a.triggerDate || ''))
+  if (!primes.length) return null
+  const total = primes.filter(p => !p.invalidated).reduce((a, p) => a + p.montant, 0)
+  const nbInval = primes.filter(p => p.invalidated).length
+  return (
+    <div className="border border-line rounded-xl">
+      <button className="w-full flex items-center justify-between gap-2 p-3 text-left" onClick={() => setOpen(o => !o)}>
+        <span className="font-semibold text-sm flex items-center gap-1.5">{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />} {m.prenom} {m.nom}</span>
+        <span className="text-sm text-muted">{fmtMoney(total)} · {primes.length} prime(s){nbInval ? ` · ${nbInval} invalidée(s)` : ''}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-1">
+          {primes.map(p => (
+            <div key={p.rdvId} className="flex items-center justify-between gap-2 text-sm p-2 rounded-lg bg-surface">
+              <div className="min-w-0">
+                <div className={`font-semibold truncate ${p.invalidated ? 'line-through text-muted' : ''}`}>{p.entreprise || '—'} — {fmtMoney(p.montant)}</div>
+                <div className="text-[11px] text-muted">{p.payMonthLabel}{p.invalidated ? ` · invalidée par ${p.invalidatedBy}` : ''}</div>
+              </div>
+              {p.invalidated
+                ? <button className="btn-ghost !py-1 text-xs shrink-0" onClick={() => store.invalidatePrime(m.id, p.rdvId, false)}>Revalider</button>
+                : <button className="btn-ghost !py-1 text-xs shrink-0 !text-red-600" onClick={() => { const reason = window.prompt('Motif de l’invalidation (optionnel) :') ?? ''; store.invalidatePrime(m.id, p.rdvId, true, reason.trim()); toast('Prime invalidée — le collaborateur est notifié') }}>Invalider</button>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Dernière activité d'un RDV (dernier événement d'historique, sinon prise de RDV)
@@ -138,6 +172,15 @@ export default function TeamLead() {
             </tr>
           </tbody>
         </table>
+      </div>
+
+      {/* Validation des primes (manager) */}
+      <div className="card p-4">
+        <h3 className="font-bold mb-1 flex items-center gap-2"><ShieldCheck size={17} className="text-emerald-600" /> Validation des primes</h3>
+        <p className="text-xs text-muted mb-3">Les primes sont validées d'office. Invalidez celles qui ne doivent pas être payées : elles sortent des statistiques du collaborateur, qui reçoit une notification.</p>
+        <div className="space-y-2">
+          {stats.map(({ m }) => <MemberPrimes key={m.id} m={m} store={store} />)}
+        </div>
       </div>
 
       {/* Daily standup */}
