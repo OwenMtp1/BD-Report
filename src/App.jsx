@@ -3,8 +3,9 @@ import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
+  AtSign, CalendarClock, AlertTriangle, Clock,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -543,7 +544,7 @@ function MainApp() {
               <Search size={14} /> <span className="hidden sm:inline">{tr('common.search')}</span> <kbd className="hidden sm:inline text-[10px] border border-line rounded px-1">⌘K</kbd>
             </button>
             <LangPicker />
-            <MentionsBell />
+            <NotificationsBell />
             <button title="Organigramme" className={`p-2 rounded-xl hover:bg-surface ${page === 'org' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('org')}>
               <Network size={19} />
             </button>
@@ -606,42 +607,108 @@ function LangPicker() {
   )
 }
 
-// Cloche de notifications : @mentions reçues dans les commentaires d'entreprise
-function MentionsBell() {
+// Cloche de notifications UNIFIÉE : @mentions, RDV du jour, no-shows à replanifier,
+// SLA tickets qui approchent/dépassent, et événements stockés (ex. prime invalidée).
+// Fil trié par récence. L'état « lu » des mentions/notifs est persisté dans la donnée ;
+// celui des éléments dérivés (RDV/SLA…) dans localStorage (par appareil).
+function NotificationsBell() {
   const store = useStore()
   const [open, setOpen] = useState(false)
-  const mentions = store.sub?.mentions || []
-  const unread = mentions.filter(m => !m.read).length
-  const openMention = (m) => {
-    store.setSub(d => ({ ...d, mentions: d.mentions.map(x => x.id === m.id ? { ...x, read: true } : x) }))
+  const sub = store.sub
+  const me = store.account
+  const isSupport = SUPPORT_ROLES.includes(me?.role)
+  const today = todayISO()
+
+  const SEEN_KEY = 'bdr_notif_seen_' + (me?.id || '')
+  const [seen, setSeen] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)) || []) } catch (e) { return new Set() } })
+  const markSeen = (...ids) => setSeen(prev => {
+    const n = new Set(prev); ids.forEach(i => n.add(i))
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify([...n])) } catch (e) {}
+    return n
+  })
+
+  const nav = (page, company) => {
     setOpen(false)
-    window.dispatchEvent(new CustomEvent('open-company', { detail: m.company }))
+    if (company) window.dispatchEvent(new CustomEvent('open-company', { detail: company }))
+    else if (page) window.dispatchEvent(new CustomEvent('app-navigate', { detail: page }))
   }
+
+  const items = []
+  ;(sub?.mentions || []).forEach(m => items.push({
+    id: 'mention-' + m.id, read: m.read, ts: m.ts,
+    icon: <AtSign size={14} className="text-brand" />,
+    title: `${m.from} vous a mentionné`, text: `${m.company} — ${m.text}`,
+    onClick: () => { store.setSub(d => ({ ...d, mentions: d.mentions.map(x => x.id === m.id ? { ...x, read: true } : x) })); nav(null, m.company) },
+  }))
+  ;(sub?.notifs || []).forEach(n => items.push({
+    id: 'notif-' + n.id, read: n.read, ts: n.ts,
+    icon: <Coins size={14} className="text-amber-600" />,
+    title: n.title || 'Notification', text: n.text || '',
+    onClick: () => { store.setSub(d => ({ ...d, notifs: (d.notifs || []).map(x => x.id === n.id ? { ...x, read: true } : x) })); nav(n.page) },
+  }))
+  ;(sub?.rdvs || []).filter(r => r.dateRdv === today).forEach(r => {
+    const id = 'rdv-' + r.id + '-' + today
+    items.push({ id, read: seen.has(id), ts: today + 'T07:00',
+      icon: <CalendarClock size={14} className="text-sky-600" />,
+      title: 'RDV aujourd’hui', text: r.entreprise || 'Rendez-vous',
+      onClick: () => { markSeen(id); nav('rdv') } })
+  })
+  ;(sub?.rdvs || []).filter(r => r.opportunite === 'No Show R1').forEach(r => {
+    const id = 'noshow-' + r.id
+    items.push({ id, read: seen.has(id), ts: r.dateRdv || today,
+      icon: <AlertTriangle size={14} className="text-orange-600" />,
+      title: 'No-show à replanifier', text: r.entreprise || 'Rendez-vous',
+      onClick: () => { markSeen(id); nav('tasks') } })
+  })
+  ;(store.db.tickets || []).filter(t => (isSupport ? true : t.userAccountId === me?.id) && t.status !== 'closed').forEach(t => {
+    const s = slaInfo(t)
+    const soon = !s.responded && !s.breached && s.ms > s.targetMs * 0.75
+    const breached = !s.responded && s.breached
+    if (!soon && !breached) return
+    const id = 'sla-' + t.id
+    items.push({ id, read: seen.has(id), ts: t.createdAt,
+      icon: <Clock size={14} className={breached ? 'text-red-600' : 'text-amber-600'} />,
+      title: breached ? 'SLA dépassé' : 'SLA bientôt dépassé', text: t.category || t.clientName || 'Ticket',
+      onClick: () => { markSeen(id); nav(isSupport ? 'tickets' : 'support') } })
+  })
+
+  items.sort((a, b) => new Date(b.ts) - new Date(a.ts))
+  const unread = items.filter(i => !i.read).length
+
+  const markAllRead = () => {
+    store.setSub(d => ({ ...d, mentions: (d.mentions || []).map(x => ({ ...x, read: true })), notifs: (d.notifs || []).map(x => ({ ...x, read: true })) }))
+    markSeen(...items.map(i => i.id))
+  }
+
   return (
     <div className="relative">
       <button title="Notifications" className={`p-2 rounded-xl hover:bg-surface relative ${open ? 'text-brand' : 'text-muted'}`} onClick={() => setOpen(o => !o)}>
         <Bell size={19} />
-        {unread > 0 && <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-extrabold rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center">{unread}</span>}
+        {unread > 0 && <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-extrabold rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
       </button>
       {open && (
-        <div className="absolute right-0 top-11 z-40 card shadow-xl w-80 p-2 fade-in">
-          <div className="flex items-center justify-between px-2 py-1">
-            <span className="text-xs font-bold uppercase text-muted">Mentions</span>
-            {mentions.length > 0 && <button className="text-[11px] text-brand underline"
-              onClick={() => store.setSub(d => ({ ...d, mentions: d.mentions.map(x => ({ ...x, read: true })) }))}>Tout marquer lu</button>}
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-11 z-40 card shadow-xl w-80 p-2 fade-in">
+            <div className="flex items-center justify-between px-2 py-1">
+              <span className="text-xs font-bold uppercase text-muted">Notifications</span>
+              {items.length > 0 && <button className="text-[11px] text-brand underline" onClick={markAllRead}>Tout marquer lu</button>}
+            </div>
+            {items.length === 0 && <p className="text-xs text-muted text-center py-5">Aucune notification. Vous êtes à jour ✨</p>}
+            <div className="max-h-96 overflow-y-auto space-y-1">
+              {items.slice(0, 30).map(i => (
+                <button key={i.id} onClick={i.onClick} className={`w-full text-left p-2 rounded-lg hover:bg-surface flex gap-2 ${i.read ? 'opacity-55' : ''}`}>
+                  <div className="mt-0.5 shrink-0">{i.icon}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold truncate">{i.title}</div>
+                    <div className="text-xs text-muted line-clamp-2">{i.text}</div>
+                    <div className="text-[10px] text-muted">{new Date(i.ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
-          {mentions.length === 0 && <p className="text-xs text-muted text-center py-5">Aucune mention. Vos collègues peuvent vous citer avec @{store.db.subenvs.find(s => s.id === store.session.subEnvId)?.prenom} dans les commentaires d'entreprise.</p>}
-          <div className="max-h-72 overflow-y-auto space-y-1">
-            {mentions.slice(0, 20).map(m => (
-              <button key={m.id} onClick={() => openMention(m)}
-                className={`w-full text-left p-2 rounded-lg hover:bg-surface ${m.read ? 'opacity-60' : ''}`}>
-                <div className="text-xs"><b>{m.from}</b> vous a mentionné sur <b>{m.company}</b></div>
-                <div className="text-xs text-muted line-clamp-2">{m.text}</div>
-                <div className="text-[10px] text-muted">{new Date(m.ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
-              </button>
-            ))}
-          </div>
-        </div>
+        </>
       )}
     </div>
   )

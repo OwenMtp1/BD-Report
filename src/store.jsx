@@ -422,6 +422,7 @@ function emptySubEnvData() {
     noteTrash: [],
     goals: { rdvSemaine: 10, sqlMois: 5, primesMois: 1000 }, // objectifs & quotas
     mentions: [], // notifications @mention reçues : { id, ts, company, from, text, read }
+    notifs: [],   // notifications d'événements : { id, ts, type, title, text, page, read }
     lostReasons: ['Pas de budget', 'Concurrent retenu', 'Mauvais timing', 'Pas décideur', 'Injoignable'],
     noShowReasons: ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date'],
     currency: 'EUR', // devise des primes (EUR ou USD)
@@ -926,6 +927,7 @@ function migrate(db) {
     data.taskTrash = (data.taskTrash || []).filter(t => t.deletedAt > cutoff)
     data.goals = data.goals || { rdvSemaine: 10, sqlMois: 5, primesMois: 1000 }
     data.mentions = data.mentions || []
+    data.notifs = data.notifs || []
     data.lostReasons = data.lostReasons || ['Pas de budget', 'Concurrent retenu', 'Mauvais timing', 'Pas décideur', 'Injoignable']
     data.noShowReasons = data.noShowReasons || ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date']
     data.currency = data.currency || 'EUR'
