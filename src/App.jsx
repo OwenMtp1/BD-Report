@@ -604,6 +604,25 @@ function MainApp() {
           {booting ? <PageSkeleton /> : pageEl}
         </main>
       </div>
+      {/* Barre de navigation basse (mobile) : accès rapide + bouton Menu vers la sidebar complète. */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-card/95 backdrop-blur border-t border-line flex items-stretch justify-around h-14"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {[
+          { id: 'dashboard', icon: LayoutDashboard, label: 'Accueil' },
+          { id: 'rdv', icon: CalendarDays, label: 'RDV' },
+          { id: 'leads', icon: KanbanSquare, label: 'Leads' },
+          { id: 'mytasks', icon: CheckSquare, label: 'Tâches' },
+        ].filter(i => groups.some(g => g.items.some(it => it.id === i.id))).map(i => (
+          <button key={i.id} onClick={() => goto(i.id)}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${page === i.id ? 'text-brand' : 'text-muted'}`}>
+            <i.icon size={19} /> {i.label}
+          </button>
+        ))}
+        <button onClick={() => setSidebarOpen(true)}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-muted">
+          <Menu size={19} /> Menu
+        </button>
+      </nav>
       <CompanyModal />
       <GlobalSearch onNavigate={goto} />
       <Chatbot />

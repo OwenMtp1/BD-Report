@@ -174,10 +174,14 @@ function RdvPill({ r, onOpen, full }) {
   )
 }
 
-function CalendarView({ rdvs, onOpen }) {
+function CalendarView({ rdvs, onOpen, onReschedule }) {
   const [mode, setMode] = useState('month') // 'day' | 'week' | 'month' | 'year'
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })
   const today = todayISO()
+  const [dragId, setDragId] = useState(null)
+  // Glisser un RDV d'un jour à l'autre pour le replanifier.
+  const dragProps = (r) => ({ draggable: true, onDragStart: () => setDragId(r.id), onDragEnd: () => setDragId(null), className: 'cursor-grab active:cursor-grabbing' })
+  const dropProps = (isoDay) => ({ onDragOver: (e) => e.preventDefault(), onDrop: () => { if (dragId) { onReschedule?.(dragId, isoDay); setDragId(null) } } })
 
   const shift = (dir) => setCursor(c => {
     const d = new Date(c)
@@ -234,11 +238,11 @@ function CalendarView({ rdvs, onOpen }) {
               const k = dayISO(d)
               const list = rdvs.filter(r => r.dateRdv === k)
               return (
-                <div key={k} className={`min-h-[8rem] rounded-lg border p-1.5 ${k === today ? 'border-brand bg-brand/5' : 'border-line bg-surface/50'}`}>
+                <div key={k} {...dropProps(k)} className={`min-h-[8rem] rounded-lg border p-1.5 ${k === today ? 'border-brand bg-brand/5' : 'border-line bg-surface/50'} ${dragId ? 'hover:border-brand hover:bg-brand/10' : ''}`}>
                   <div className={`text-[11px] font-bold mb-1 ${k === today ? 'text-brand' : 'text-muted'}`}>
                     {d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}
                   </div>
-                  {list.map(r => <RdvPill key={r.id} r={r} onOpen={onOpen} />)}
+                  {list.map(r => <div key={r.id} {...dragProps(r)}><RdvPill r={r} onOpen={onOpen} /></div>)}
                 </div>
               )
             })}
@@ -261,9 +265,9 @@ function CalendarView({ rdvs, onOpen }) {
               if (!d) return <div key={'e' + i} />
               const dayRdvs = rdvs.filter(r => r.dateRdv === iso(d))
               return (
-                <div key={d} className={`min-h-[4.5rem] rounded-lg border p-1 text-left ${iso(d) === today ? 'border-brand bg-brand/5' : 'border-line bg-surface/50'}`}>
+                <div key={d} {...dropProps(iso(d))} className={`min-h-[4.5rem] rounded-lg border p-1 text-left ${iso(d) === today ? 'border-brand bg-brand/5' : 'border-line bg-surface/50'} ${dragId ? 'hover:border-brand hover:bg-brand/10' : ''}`}>
                   <div className={`text-[11px] font-bold ${iso(d) === today ? 'text-brand' : 'text-muted'}`}>{d}</div>
-                  {dayRdvs.map(r => <RdvPill key={r.id} r={r} onOpen={onOpen} />)}
+                  {dayRdvs.map(r => <div key={r.id} {...dragProps(r)}><RdvPill r={r} onOpen={onOpen} /></div>)}
                 </div>
               )
             })}
@@ -531,7 +535,8 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       </div>
 
       {view === 'calendar' && (
-        <CalendarView rdvs={sub.rdvs} onOpen={(r) => setForm({ mode: 'edit', id: r.id, data: { ...r } })} />
+        <CalendarView rdvs={sub.rdvs} onOpen={(r) => setForm({ mode: 'edit', id: r.id, data: { ...r } })}
+          onReschedule={(id, date) => { store.setSub(d => { const r = d.rdvs.find(x => x.id === id); if (r) r.dateRdv = date; return d }); toast('Rendez-vous replanifié') }} />
       )}
 
       {view === 'table' && <>
