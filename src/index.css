@@ -21,6 +21,13 @@ body {
   background-size: 400% 400%;
 }
 
+/* Typographie — chiffres à chasse fixe (tabular figures) : alignement propre des
+   KPI, des montants et des colonnes chiffrées dans toute l'app. */
+body { font-variant-numeric: tabular-nums; }
+h1, h2, h3 { letter-spacing: -0.015em; }
+/* Grands nombres : chasse fixe + espacement resserré (KPI, montants, primes). */
+.stat-num, .kpi-num { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; font-feature-settings: "tnum" 1; }
+
 body.animated-bg { animation: bgshift 18s ease infinite; }
 @keyframes bgshift {
   0% { background-position: 0% 50%; }
