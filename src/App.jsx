@@ -375,6 +375,14 @@ function MainApp() {
   const [theme, setTheme] = useState(() => store.sub?.theme || 'ocean-pro')
 
   useEffect(() => { applyTheme(store.sub?.theme || 'ocean-pro') }, [session.subEnvId])
+  // Mode « Auto (système)» : réagit en direct au basculement clair/sombre de l'appareil.
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => { if ((store.sub?.theme || 'ocean-pro') === 'auto') applyTheme('auto') }
+    mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener?.(onChange)
+    return () => { mq.removeEventListener ? mq.removeEventListener('change', onChange) : mq.removeListener?.(onChange) }
+  }, [store.sub?.theme])
   useEffect(() => { setCurrentCurrency(store.sub?.currency || 'EUR') }, [session.subEnvId, store.sub?.currency])
 
   const themeObj = THEMES.find(t => t.id === (store.sub?.theme || theme)) || THEMES[0]

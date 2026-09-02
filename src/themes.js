@@ -5,6 +5,8 @@ export const THEMES = [
   { id: 'hubspot', name: 'Orange Corail', type: 'static', vars: { brand: '255 122 89', brand2: '255 156 102', surface: '250 247 245', card: '255 255 255', ink: '33 53 71', muted: '112 124 138', line: '234 227 222' } },
   { id: 'emeraude', name: 'Émeraude', type: 'static', vars: { brand: '16 150 110', brand2: '52 211 153', surface: '243 249 246', card: '255 255 255', ink: '20 45 38', muted: '95 115 105', line: '222 235 228' } },
   { id: 'nuit', name: 'Mode Nuit', type: 'static', vars: { brand: '99 132 255', brand2: '56 189 248', surface: '15 20 32', card: '24 31 46', ink: '230 236 246', muted: '140 152 175', line: '45 55 75' } },
+  // Vrai mode sombre : palette neutre pensée (fond ardoise profond, cartes surélevées, texte off-white).
+  { id: 'sombre', name: 'Sombre', type: 'static', vars: { brand: '96 130 255', brand2: '56 189 248', surface: '15 18 25', card: '25 30 41', ink: '226 232 240', muted: '148 163 184', line: '42 50 64' } },
   { id: 'violet-saas', name: 'Violet SaaS', type: 'static', vars: { brand: '124 58 237', brand2: '167 139 250', surface: '247 245 252', card: '255 255 255', ink: '35 28 60', muted: '110 102 135', line: '231 226 243' } },
   { id: 'graphite', name: 'Graphite', type: 'static', vars: { brand: '51 65 85', brand2: '100 116 139', surface: '241 243 245', card: '255 255 255', ink: '20 28 40', muted: '105 115 130', line: '224 228 234' } },
   { id: 'rose-punch', name: 'Rose Punch', type: 'static', vars: { brand: '219 39 119', brand2: '244 114 182', surface: '252 246 249', card: '255 255 255', ink: '55 22 40', muted: '130 100 115', line: '240 224 232' } },
@@ -24,8 +26,15 @@ export const THEMES = [
   { id: 'minuit-or', name: 'Minuit & Or', type: 'animated', bg: 'linear-gradient(135deg,#10131c,#1c2030,#241f12,#10131c)', bubbles: ['#facc15', '#fbbf24', '#fde68a'], vars: { brand: '250 204 21', brand2: '251 191 36', surface: '16 19 28', card: '26 30 42', ink: '240 238 228', muted: '158 152 132', line: '52 56 70' } },
 ]
 
+// Vrai/faux : le mode système est-il sombre ?
+export function prefersDark() {
+  return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
 export function applyTheme(themeId) {
-  const theme = THEMES.find(t => t.id === themeId) || THEMES[0]
+  // 'auto' = suit la préférence système (clair → Océan Pro, sombre → Sombre).
+  const resolvedId = themeId === 'auto' ? (prefersDark() ? 'sombre' : 'ocean-pro') : themeId
+  const theme = THEMES.find(t => t.id === resolvedId) || THEMES[0]
   const root = document.documentElement
   Object.entries(theme.vars).forEach(([k, v]) => root.style.setProperty(`--${k}`, v))
   if (theme.type === 'animated') {

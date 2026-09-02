@@ -112,6 +112,18 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
       {tab === 'ux' && (
         <div className="card p-4 space-y-4">
           <h3 className="font-bold">Thèmes de design</h3>
+          <div>
+            <p className="label">Automatique</p>
+            <button onClick={() => setPendingTheme('auto')}
+              className={`rounded-xl border-2 p-2 text-left transition w-full sm:w-56 ${pendingTheme === 'auto' ? 'border-brand' : 'border-line hover:border-muted'}`}>
+              <div className="h-10 rounded-lg mb-1.5" style={{ background: 'linear-gradient(120deg, #f4f6fa 0 50%, #11141b 50% 100%)' }} />
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold">Auto (système)</span>
+                {pendingTheme === 'auto' && <Check size={13} className="text-brand" />}
+              </div>
+            </button>
+            <p className="text-[11px] text-muted mt-1">Suit le mode clair/sombre de votre appareil.</p>
+          </div>
           {['static', 'animated'].map(type => (
             <div key={type}>
               <p className="label">{type === 'static' ? 'Thèmes classiques' : 'Ambiances animées'}</p>
