@@ -3,7 +3,7 @@ import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
-  AtSign, CalendarClock, AlertTriangle, Clock,
+  AtSign, CalendarClock, AlertTriangle, Clock, Check,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
@@ -600,6 +600,7 @@ function MainApp() {
               <button className="btn-primary !py-1 text-xs shrink-0" onClick={() => goto('support')}>Aller au Support</button>
             </div>
           )}
+          {!booting && !store.readOnly && <OnboardingChecklist store={store} goto={goto} />}
           {booting ? <PageSkeleton /> : pageEl}
         </main>
       </div>
@@ -741,6 +742,48 @@ function NotificationsBell() {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+// Onboarding « Premiers pas » : checklist actionnable au premier lancement, skippable.
+// Se masque quand tout est fait ou quand l'utilisateur clique « Passer » (mémorisé).
+function OnboardingChecklist({ store, goto }) {
+  const me = store.account
+  const sub = store.sub
+  const KEY = 'bdr_onboarding_skipped_' + (me?.id || '')
+  const [skipped, setSkipped] = useState(() => { try { return localStorage.getItem(KEY) === '1' } catch (e) { return false } })
+  if (skipped || !sub) return null
+  const steps = [
+    { done: (sub.rdvs || []).length > 0, label: 'Créer votre premier rendez-vous', page: 'rdv' },
+    { done: (sub.contacts || []).length > 0, label: 'Ajouter un contact', page: 'contacts' },
+    { done: (sub.rdvs || []).length > 0, label: 'Explorer votre pipeline de leads', page: 'leads' },
+    { done: !!(sub.bareme && sub.bareme.length), label: 'Configurer votre barème de primes', page: 'primes' },
+    { done: !!(sub.theme && sub.theme !== 'ocean-pro'), label: 'Personnaliser votre thème', page: 'settings' },
+  ]
+  const doneCount = steps.filter(s => s.done).length
+  if (doneCount === steps.length) return null
+  const skip = () => { try { localStorage.setItem(KEY, '1') } catch (e) {} setSkipped(true) }
+  return (
+    <div className="card p-4 mb-4 !border-brand/40 fade-in">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-extrabold flex items-center gap-2"><Sparkles size={17} className="text-brand" /> Bienvenue ! Premiers pas</h3>
+          <p className="text-xs text-muted">{doneCount}/{steps.length} — quelques étapes pour prendre en main votre espace.</p>
+        </div>
+        <button className="btn-ghost !py-1 text-xs shrink-0" onClick={skip}>Passer</button>
+      </div>
+      <div className="mt-3 grid sm:grid-cols-2 gap-2">
+        {steps.map((s, i) => (
+          <button key={i} onClick={() => goto(s.page)}
+            className={`flex items-center gap-2 p-2 rounded-lg text-sm text-left border transition ${s.done ? 'border-line bg-surface' : 'border-line hover:border-brand'}`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${s.done ? 'bg-brand text-white' : 'border-2 border-line'}`}>
+              {s.done && <Check size={12} />}
+            </span>
+            <span className={s.done ? 'line-through text-muted' : 'font-semibold'}>{s.label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
