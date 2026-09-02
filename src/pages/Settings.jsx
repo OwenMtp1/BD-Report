@@ -278,8 +278,8 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
                 r.onload = () => {
                   try {
                     const data = JSON.parse(String(r.result))
-                    if (!data.accounts || !data.environments) throw new Error('format')
-                    store.setDb(data)
+                    const res = store.restoreBackup(data)
+                    if (res?.error) throw new Error(res.error)
                     setImportMsg('✅ Données restaurées avec succès.')
                   } catch (err) {
                     setImportMsg('❌ Fichier invalide : ce n\'est pas une sauvegarde BDR Flow Pro.')

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
 <title>BD Report — Pilotez votre prospection. Encaissez vos primes.</title>
 <meta name="description" content="BD Report est l'espace sales tout-en-un des BDR / SDR : rendez-vous, pipeline, primes & commissions, dashboards et pilotage d'équipe.">
 <link rel="icon" type="image/svg+xml" href="app/icon.svg">
@@ -359,7 +360,7 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
         try{
           if(window.BDR_SUPABASE_URL && window.BDR_SUPABASE_ANON_KEY){
             // Cross-device : le message arrive réellement chez le support, sur tout appareil.
-            var mod=await import('https://esm.sh/@supabase/supabase-js@2');
+            var mod=await import('https://esm.sh/@supabase/supabase-js@2.45.4');
             var sb=mod.createClient(window.BDR_SUPABASE_URL, window.BDR_SUPABASE_ANON_KEY);
             // Chiffre les champs sensibles au repos dans Supabase (déchiffrés par l'app).
             var encItem={ id:item.id, name:await bdrEncField(name), email:await bdrEncField(email), message:await bdrEncField(msg), lang:curLang, created_at:item.created_at };

@@ -7,6 +7,7 @@
 // ---------------------------------------------------------------------------
 import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from './supabaseConfig.js'
 import { encryptBlob, decryptBlob, decryptString } from './blobCrypto.js'
+import { stripDangerousKeys } from './security.js'
 
 const STATE_ID = 'main'
 let clientPromise = null
@@ -14,7 +15,7 @@ let clientPromise = null
 async function getClient() {
   if (!isSupabaseConfigured()) return null
   if (!clientPromise) {
-    clientPromise = import(/* @vite-ignore */ 'https://esm.sh/@supabase/supabase-js@2')
+    clientPromise = import(/* @vite-ignore */ 'https://esm.sh/@supabase/supabase-js@2.45.4')
       .then(m => m.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 5 } } }))
       .catch(() => null)
   }
@@ -27,7 +28,8 @@ export async function fetchRemoteState() {
   try {
     const { data, error } = await c.from('app_state').select('data').eq('id', STATE_ID).maybeSingle()
     if (error || !data) return null
-    return await decryptBlob(data.data)   // rétro-compatible : déchiffre, ou renvoie l'ancien état en clair
+    // déchiffre (rétro-compatible clair) + neutralise __proto__/constructor d'un blob distant malveillant
+    return stripDangerousKeys(await decryptBlob(data.data))
   } catch (e) { return null }
 }
 
@@ -52,7 +54,7 @@ export async function subscribeRemoteState(onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state', filter: `id=eq.${STATE_ID}` },
       async payload => {
         if (!payload.new || !payload.new.data) return
-        const db = await decryptBlob(payload.new.data)
+        const db = stripDangerousKeys(await decryptBlob(payload.new.data))
         if (db) onChange(db)
       })
     .subscribe()

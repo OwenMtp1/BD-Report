@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { isSupabaseConfigured } from './supabaseConfig.js'
+import { stripDangerousKeys } from './security.js'
 import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests } from './supabaseSync.js'
 
 const LS_KEY = 'bdrflow_db_v1'
@@ -1124,8 +1125,9 @@ export function StoreProvider({ children }) {
           // « Rester connecté 30 jours »
           if (opts.remember) localStorage.setItem(REMEMBER_KEY, JSON.stringify({ accountId: acc.id, expires: Date.now() + 30 * 86400000 }))
           else localStorage.removeItem(REMEMBER_KEY)
-          // « Enregistrer mon mot de passe » (pré-remplissage de l'écran de connexion)
-          if (opts.savePw) localStorage.setItem(CREDS_KEY, JSON.stringify({ id: identifier, pw: password }))
+          // Pré-remplissage de l'écran de connexion : on n'enregistre QUE l'identifiant,
+          // jamais le mot de passe (le gestionnaire du navigateur s'en charge nativement).
+          if (opts.savePw) localStorage.setItem(CREDS_KEY, JSON.stringify({ id: identifier }))
           else localStorage.removeItem(CREDS_KEY)
         }
         return acc
@@ -1271,8 +1273,27 @@ export function StoreProvider({ children }) {
         setSession(s => (s && s.accountId === oldId ? { ...s, accountId: newId } : s))
       },
       // ----- comptes (administration)
-      updateAccount(id, patch) { if (roBlocked()) return; setDb(d => { Object.assign(d.accounts.find(a => a.id === id), patch); return d }) },
+      updateAccount(id, patch) {
+        if (roBlocked()) return
+        // Palliatif d'autorisation : seuls Fondateur/Support/Administrateur peuvent modifier
+        // rôle, offre, briques ou statut développeur d'un compte (le reste = self-edit permis).
+        const elevated = ['Fondateur', 'Support BD Report', 'Administrateur'].includes(account?.role)
+        const safe = stripDangerousKeys({ ...patch })
+        if (!elevated) { delete safe.role; delete safe.plan; delete safe.bricks; delete safe.developer }
+        setDb(d => { const a = d.accounts.find(x => x.id === id); if (a) Object.assign(a, safe); return d })
+      },
       deleteAccount(id) { if (roBlocked()) return; setDb(d => { d.accounts = d.accounts.filter(a => a.id !== id); return d }) },
+      // Restauration d'une sauvegarde importée : neutralise les clés dangereuses
+      // (pollution de prototype), valide la structure et passe par migrate avant d'appliquer.
+      restoreBackup(raw) {
+        if (roBlocked()) return { error: 'Lecture seule' }
+        const clean = stripDangerousKeys(raw)
+        if (!clean || typeof clean !== 'object' || !Array.isArray(clean.accounts) || !Array.isArray(clean.environments)) {
+          return { error: 'format' }
+        }
+        setDb(() => migrate(clean))
+        return { ok: true }
+      },
       addAccount(acc) {
         if (roBlocked()) return null
         // Compte créé par un manager/admin = accès complet de l'offre de l'environnement courant (Beta par défaut).

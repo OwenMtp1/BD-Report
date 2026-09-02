@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react'
 import { Download, Upload, Trash2, Search, FileSpreadsheet, Plus } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { useStore, uid, todayISO, fmtDate, SOURCES } from '../store.jsx'
+import { safeUrl } from '../security.js'
 import { Empty, Confirm, Select, Modal, Field, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
@@ -197,7 +198,7 @@ export default function Contacts() {
                 <td className="text-xs">{c.email || '—'}</td>
                 <td className="text-xs">{c.tel || '—'}</td>
                 <td className="text-muted text-xs">{c.secteur || '—'}</td>
-                <td className="text-xs">{c.linkedin ? <a href={c.linkedin} target="_blank" rel="noreferrer" className="text-brand underline">Profil</a> : '—'}</td>
+                <td className="text-xs">{safeUrl(c.linkedin) ? <a href={safeUrl(c.linkedin)} target="_blank" rel="noreferrer" className="text-brand underline">Profil</a> : '—'}</td>
                 <td><span className="chip bg-surface text-muted">{c.source || '—'}</span></td>
                 <td className="text-xs text-muted">{fmtDate(c.createdAt)}</td>
               </tr>

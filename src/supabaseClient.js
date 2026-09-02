@@ -10,7 +10,7 @@ let clientPromise = null
 export async function getClient() {
   if (!isSupabaseConfigured()) return null
   if (!clientPromise) {
-    clientPromise = import(/* @vite-ignore */ 'https://esm.sh/@supabase/supabase-js@2')
+    clientPromise = import(/* @vite-ignore */ 'https://esm.sh/@supabase/supabase-js@2.45.4')
       .then((m) => m.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         realtime: { params: { eventsPerSecond: 5 } },
         auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { CalendarClock, Flame, RotateCcw, Phone, Mail, ExternalLink, Building2 } from 'lucide-react'
 import { useStore, parseISO, fmtDate, applyRdvAutomations, PHASE_COLORS, phaseColor } from '../store.jsx'
+import { safeUrl } from '../security.js'
 import { Empty } from '../ui.jsx'
 
 // Date à laquelle un RDV est passé "Perdu" (depuis l'historique), sinon sa date de RDV.
@@ -30,7 +31,7 @@ function TaskCard({ r, tone, action, store }) {
       <div className="flex items-center gap-1 shrink-0">
         {contact?.tel && <a href={`tel:${contact.tel}`} className="p-2 rounded-lg hover:bg-surface text-muted" title={contact.tel}><Phone size={15} /></a>}
         {contact?.email && <a href={`mailto:${contact.email}`} className="p-2 rounded-lg hover:bg-surface text-muted" title={contact.email}><Mail size={15} /></a>}
-        {r.linkedin && <a href={r.linkedin} target="_blank" rel="noreferrer" className="p-2 rounded-lg hover:bg-surface text-muted" title="LinkedIn"><ExternalLink size={15} /></a>}
+        {safeUrl(r.linkedin) && <a href={safeUrl(r.linkedin)} target="_blank" rel="noreferrer" className="p-2 rounded-lg hover:bg-surface text-muted" title="LinkedIn"><ExternalLink size={15} /></a>}
         <button className={`btn text-xs ${tone}`} onClick={action}>{action.label}</button>
       </div>
     </div>
