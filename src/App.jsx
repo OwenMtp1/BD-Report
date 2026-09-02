@@ -367,7 +367,10 @@ function MainApp() {
   const sub = store.db.subenvs.find(s => s.id === session.subEnvId)
   const env = store.db.environments.find(e => e.id === session.envId)
   const { t: tr } = useT()
-  const [page, setPage] = useState('dashboard')
+  const [page, setPage] = useState(() => {
+    const seg = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, '')).split('/')
+    return (seg[0] && seg[0] !== 'company') ? seg[0] : 'dashboard'
+  })
   const [pendingNote, setPendingNote] = useState('')
   const [theme, setTheme] = useState(() => store.sub?.theme || 'ocean-pro')
 
@@ -400,6 +403,26 @@ function MainApp() {
 
   // Au changement d'onglet, remonter automatiquement en haut de la page.
   useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }) }, [page])
+
+  // Deep-links : l'onglet courant se reflète dans l'URL (#/page) → bookmarkable + back/forward.
+  // On n'écrase jamais un lien de fiche entreprise (#/company/<nom>), géré par CompanyModal.
+  useEffect(() => {
+    const raw = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, ''))
+    if (raw.startsWith('company/')) return
+    if (raw.split('/')[0] !== page) window.location.hash = '/' + page
+  }, [page])
+
+  useEffect(() => {
+    const seg = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, '')).split('/')
+    if (seg[0] === 'company' && seg[1]) setTimeout(() => window.dispatchEvent(new CustomEvent('open-company', { detail: seg[1] })), 300)
+    const onHash = () => {
+      const parts = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, '')).split('/')
+      if (parts[0] === 'company' && parts[1]) window.dispatchEvent(new CustomEvent('open-company', { detail: parts[1] }))
+      else if (parts[0]) setPage(parts[0])
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   // Navigation déclenchée par d'autres composants (ex : l'assistant IA renvoie vers le Support).
   useEffect(() => {

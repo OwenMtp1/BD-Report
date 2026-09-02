@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2 } from 'lucide-react'
 import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor } from '../store.jsx'
 import { Modal, Field, Empty } from '../ui.jsx'
@@ -76,12 +76,29 @@ function CommentThread({ name, store }) {
 export default function CompanyModal() {
   const store = useStore()
   const [name, setName] = useState(null)
+  const prevHash = useRef(null) // hash de l'onglet avant ouverture, pour le restaurer à la fermeture
 
   useEffect(() => {
     const h = (e) => setName(e.detail)
     window.addEventListener('open-company', h)
     return () => window.removeEventListener('open-company', h)
   }, [])
+
+  // URL partageable : la fiche ouverte se reflète dans #/company/<nom> ; à la fermeture,
+  // on restaure l'onglet précédent (ou le tableau de bord si on venait d'un lien direct).
+  useEffect(() => {
+    if (name) {
+      const target = '#/company/' + encodeURIComponent(name)
+      if (prevHash.current === null && !window.location.hash.startsWith('#/company/')) {
+        prevHash.current = window.location.hash || '#/dashboard'
+      }
+      if (window.location.hash !== target) window.location.hash = target
+    } else if (window.location.hash.startsWith('#/company/')) {
+      const restore = prevHash.current || '#/dashboard'
+      prevHash.current = null
+      window.location.hash = restore
+    }
+  }, [name])
 
   const sub = store.sub
   if (!name || !sub) return null
