@@ -23,7 +23,7 @@ import Kpi from './pages/Kpi.jsx'
 import Icp from './pages/Icp.jsx'
 import Settings from './pages/Settings.jsx'
 import OrgChart from './pages/OrgChart.jsx'
-import AiDashboard from './pages/AiDashboard.jsx'
+import SupportHub from './pages/SupportHub.jsx'
 import Logs from './pages/Logs.jsx'
 import Trash from './pages/Trash.jsx'
 import TeamLead from './pages/TeamLead.jsx'
@@ -308,7 +308,6 @@ const NAV_GROUPS = [
   {
     id: 'pilotage', label: 'Pilotage', items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
-      { id: 'ai', label: 'Dashboard personnalisé', icon: Sparkles, brick: 'Dashboard personnalisé' },
       { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
       { id: 'icp', label: 'ICP', icon: Target, brick: 'ICP' },
       { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
@@ -320,41 +319,27 @@ const NAV_GROUPS = [
       { id: 'leads', label: 'Leads', icon: KanbanSquare, brick: 'Leads' },
       { id: 'tasks', label: 'Recommandations prioritaires', icon: ListChecks, brick: 'Recommandations prioritaires' },
       { id: 'mytasks', label: 'Mes tâches', icon: CheckSquare, brick: 'Mes tâches' },
-    ],
-  },
-  {
-    id: 'donnees', label: 'Données', items: [
-      { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
-      { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
-      { id: 'logs', label: 'Logs', icon: ScrollText, brick: 'Logs' },
-      { id: 'corbeille', label: 'Corbeille', icon: Trash2 },
-    ],
-  },
-  {
-    id: 'remuneration', label: 'Rémunération', items: [
       { id: 'primes', label: 'Primes & Commissions', icon: Coins, brick: 'Primes & Commissions' },
     ],
   },
   {
-    id: 'aide', label: 'Aide', items: [
+    id: 'donnees', label: 'Mes données', items: [
+      { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
+      { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
+      { id: 'logs', label: 'Logs', icon: ScrollText, brick: 'Logs' },
+      { id: 'corbeille', label: 'Corbeille', icon: Trash2 },
       { id: 'support', label: 'Support', icon: LifeBuoy },
-    ],
-  },
-  {
-    id: 'supportbdr', label: 'Support Client BD Report', items: [
-      { id: 'requests', label: 'Nouvelles demandes', icon: Inbox, roles: SUPPORT_ROLES },
-      { id: 'tickets', label: 'Tickets Techniques', icon: LifeBuoy, roles: SUPPORT_ROLES },
-      { id: 'clients', label: 'Clients', icon: Users2, roles: SUPPORT_ROLES },
-      { id: 'projects', label: 'Gestion de Projet', icon: FolderKanban, roles: SUPPORT_ROLES },
-      { id: 'kb', label: 'Base de connaissances', icon: BookOpen, roles: SUPPORT_ROLES },
-      { id: 'supportlogs', label: 'Logs Support', icon: ScrollText, roles: SUPPORT_ROLES },
-      { id: 'supporttrash', label: 'Corbeille', icon: Trash2, roles: SUPPORT_ROLES },
     ],
   },
   {
     id: 'administration', label: 'Administration', items: [
       { id: 'admin', label: 'Gestion Administration', icon: Shield, roles: ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'] },
       { id: 'teams', label: 'Gérez mes équipes', icon: Users, roles: ['Manager'] },
+    ],
+  },
+  {
+    id: 'supportbdr', label: 'Support Client BD Report', items: [
+      { id: 'supporthub', label: 'Équipe support', icon: LifeBuoy, roles: SUPPORT_ROLES },
     ],
   },
 ]
@@ -390,10 +375,12 @@ function MainApp() {
   // Pastilles « nouveaux messages » : côté client (mes tickets) et côté support (tous les tickets).
   const isSupportUser = SUPPORT_ROLES.includes(me.role)
   const myTickets = (store.db.tickets || []).filter(t => t.userAccountId === me.id)
+  const supportUnread = isSupportUser ? (store.db.tickets || []).filter(t => ticketHasUnread(t, 'support')).length : 0
+  const newRequests = isSupportUser ? (store.db.supportRequests || []).filter(r => !r.archived && r.status === 'new').length : 0
   const badges = {
     support: myTickets.filter(t => ticketHasUnread(t, 'user')).length,
-    tickets: isSupportUser ? (store.db.tickets || []).filter(t => ticketHasUnread(t, 'support')).length : 0,
-    requests: isSupportUser ? (store.db.supportRequests || []).filter(r => !r.archived && r.status === 'new').length : 0,
+    // La console Support unifie tickets + demandes : pastille cumulée sur « Équipe support ».
+    supporthub: supportUnread + newRequests,
   }
 
   const myBricks = allowedBricks(me) // briques permises par l'offre (Starter limité / Beta complet)
@@ -450,7 +437,7 @@ function MainApp() {
     contacts: <Contacts />,
     notes: <Notes onCreateRdvFromNote={goCreateRdvFromNote} />,
     primes: <Primes />,
-    ai: <AiDashboard />,
+    supporthub: <SupportHub />,
     logs: <Logs />,
     corbeille: <Trash />,
     support: <Support />,

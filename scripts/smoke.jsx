@@ -88,7 +88,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'ICP', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Base de connaissances', 'Logs Support', 'Gestion Administration']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'KPI Entreprise', 'ICP', 'Support', 'Gestion Administration', 'Équipe support']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
@@ -106,10 +106,13 @@ async function main() {
   const dbNow = () => JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
   const psClient = () => dbNow().clients.find(c => c.envId === 'env-peoplespheres')
   if (psClient()?.status !== 'attente') throw new Error('Client not set to "en attente" on ticket open: ' + psClient()?.status)
-  // Les onglets support peuvent porter une pastille de messages non lus (chiffre accolé au libellé).
+  // Console Support unifiée : navBtn ouvre le hub, hubTab change d'onglet interne.
   const navBtn = (label) => [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
-  await click(navBtn('Tickets Techniques'))
-  if (!text().includes('Connexion & authentification')) throw new Error('Ticket not visible in Tickets Techniques')
+  const hubTab = (label) => [...container.querySelectorAll('main button')].find(b => b.textContent.trim() === label)
+  await click(navBtn('Équipe support'))
+  if (!text().includes('Console Support')) throw new Error('Support hub did not render')
+  await click(hubTab('Tickets'))
+  if (!text().includes('Connexion & authentification')) throw new Error('Ticket not visible in support Tickets tab')
   // Clôture du ticket → le client repasse en « Clients actifs »
   await click(find('button', 'Connexion & authentification'))
   await click(find('button', 'Clôturer'))
@@ -123,17 +126,18 @@ async function main() {
   await click(container.querySelector('button[title="4/5"]'))
   await click(find('button', 'Envoyer mon avis'))
   if (myTicket()?.csat?.score !== 4) throw new Error('CSAT rating not saved: ' + JSON.stringify(myTicket()?.csat))
-  // Tableau de bord CSAT côté support
-  await click(navBtn('Tickets Techniques'))
+  // Retour à la Console Support pour les vérifications back-office.
+  await click(navBtn('Équipe support'))
+  await click(hubTab('Tickets'))
   if (!text().includes('Satisfaction (CSAT)')) throw new Error('CSAT dashboard not shown')
-  await click(navBtn('Clients'))
+  await click(hubTab('Clients'))
   // Chaque environnement existant est forcément un client (PeopleSpheres + Test).
   if (!text().includes('PeopleSpheres') || !text().includes('Test')) throw new Error('Environments not turned into clients')
-  // La demande du site est arrivée dans Nouvelles demandes...
-  await click(navBtn('Nouvelles demandes'))
-  if (!text().includes('ACME Corp')) throw new Error('Contact request not ingested into Nouvelles demandes')
+  // La demande du site est arrivée dans « Demandes »...
+  await click(hubTab('Demandes'))
+  if (!text().includes('ACME Corp')) throw new Error('Contact request not ingested into Demandes')
   // ...et a généré automatiquement un projet ; chaque environnement a aussi son projet d'implémentation.
-  await click(navBtn('Gestion de Projet'))
+  await click(hubTab('Projets'))
   if (!text().includes('ACME Corp')) throw new Error('Auto-project from request not created')
   if (!text().includes('PeopleSpheres')) throw new Error('Environment project not created')
   // Création manuelle d'un projet : le formulaire + le planning Gantt doivent fonctionner.
@@ -144,11 +148,11 @@ async function main() {
   if (!text().includes('Avancement')) throw new Error('Project not created / Gantt did not render')
 
   // 6c. Logs Support : la création de ticket a bien été journalisée.
-  await click(navBtn('Logs Support'))
+  await click(hubTab('Logs'))
   if (!text().includes('Ticket créé')) throw new Error('Support log for ticket creation missing')
 
   // 6d. Le support peut bloquer puis débloquer un environnement client.
-  await click(navBtn('Clients'))
+  await click(hubTab('Clients'))
   await click(find('button', 'PeopleSpheres'))
   await click(find('button', 'Bloquer le client'))
   await click(findExact('Bloquer')) // confirmation

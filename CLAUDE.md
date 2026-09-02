@@ -26,9 +26,11 @@ npm run dev        # serveur de dev
   Login avec « rester connecté 30 j » + « enregistrer mot de passe ». Pastilles non-lus support. Bandeau lecture seule.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
 - **`src/pages/*`** — Dashboard, Rdv, Leads (kanban + pipeline entreprise), Tasks, MyTasks, Contacts, Notes, Primes,
-  Kpi, TeamLead, AiDashboard, Trash, Settings, Admin, OrgChart, Company.
-  Support back-office (rôles support) : `Support` (client), `Requests` (Nouvelles demandes), `Tickets`, `TicketChat`,
-  `Clients` (kanban), `Projects` (Gantt), `KnowledgeBase`, `SupportLogs`, `SupportTrash`.
+  Kpi, TeamLead, Trash, Settings, Admin, OrgChart, Company. (Ancien `AiDashboard` retiré du menu.)
+  Support back-office : **`SupportHub`** (onglet unique « Équipe support », rôles support) = console à onglets qui
+  regroupe `Requests`/`Tickets`/`TicketChat`/`Clients`/`Projects`/`KnowledgeBase`/`SupportLogs`/`SupportTrash` + KPI.
+  `Support` (client) reste dans « Mes données ». Menu simplifié : 5 catégories (Pilotage, Activité, Mes données,
+  Administration, Support Client BD Report).
 - **`src/ui.jsx`** — Modal, Confirm (prop `yesLabel`), Field, Select, CommitInput/CommitTextarea (commit au blur = perf),
   toast/Toasts, confetti, DictateButton, etc.
 - **`site/`** — site vitrine statique (index.html monofichier i18n FR/EN/ES, `securite.html`, `produit/*.html`, `assets/`).
