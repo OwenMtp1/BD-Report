@@ -229,6 +229,14 @@ async function main() {
   if (JSON.parse(win.localStorage.getItem('bdrflow_db_v1')).accounts.find(a => a.id === '01').presence !== 'offline') throw new Error('Presence not updated')
   await click(find('button', 'En ligne')) // remet en ligne pour la suite
 
+  // 9b. Recherche globale d'un collaborateur : la personne apparaît comme résultat « Collaborateur ».
+  await act(async () => { win.dispatchEvent(new win.CustomEvent('open-global-search')) })
+  const gsInput = container.querySelector('input[placeholder^="Rechercher"]')
+  if (!gsInput) throw new Error('Global search did not open')
+  await type(gsInput, 'Owen')
+  if (!text().includes('Collaborateur')) throw new Error('Collaborator not surfaced in global search')
+  await act(async () => { win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' })) })
+
   // 9b. Résiliation d'abonnement : ouvre un ticket support + bascule l'environnement en lecture seule.
   await click(find('button', 'Gérer mes environnements'))
   await click(find('button', 'Résilier mon abonnement'))

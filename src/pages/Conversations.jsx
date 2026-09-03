@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MessagesSquare, Plus, Hash, Radio, Send, ImagePlus, Smile, Trash2, Settings2, Users2,
   Lock, Globe, X, ChevronLeft, Bell, BellOff, Paperclip, MoreVertical, Reply, Forward,
-  Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft,
+  Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft, User,
 } from 'lucide-react'
 import { useStore, reportEventsFor, PRESENCE_META } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
@@ -58,9 +58,24 @@ export default function Conversations({ scope = 'team' }) {
   const sel = channels.find(c => c.id === selId) || channels[0] || null
   useEffect(() => { if (!channels.some(c => c.id === selId)) setSelId(channels[0]?.id || null) }, [channels.length]) // eslint-disable-line
 
+  // Ouverture d'une conversation ciblée (ex : depuis la recherche → message direct).
+  useEffect(() => {
+    if (isSupport) return
+    if (window.__pendingChannel) { setSelId(window.__pendingChannel); window.__pendingChannel = null }
+    const h = (e) => { if (e.detail) setSelId(e.detail) }
+    window.addEventListener('open-conversation', h)
+    return () => window.removeEventListener('open-conversation', h)
+  }, [isSupport])
+
   const people = isSupport ? store.db.accounts : store.db.subenvs.filter(s => s.envId === session?.envId)
   const services = isSupport ? store.staffServices() : store.envServices()
   const personName = (p) => isSupport ? (p.pseudo || p.email || '—') : `${p.prenom || ''} ${p.nom || ''}`.trim()
+  // Nom affiché d'un canal (pour un message direct : le nom de l'autre interlocuteur).
+  const chName = (c) => {
+    if (c.dm) { const others = store.channelMembers(c).filter(m => m.subId !== meId && m.accountId !== meId); return others.map(o => o.name).join(', ') || 'Conversation' }
+    return c.name
+  }
+  const chIcon = (c) => c.dm ? User : c.personal ? FileText : c.kind === 'reporting' ? Radio : Hash
 
   return (
     <div className="space-y-4">
@@ -87,13 +102,14 @@ export default function Conversations({ scope = 'team' }) {
           <div className="space-y-1">
             {channels.map(c => {
               const unread = store.isChannelMuted(c.id) ? 0 : store.channelUnread(c.id)
+              const Ic = chIcon(c)
               return (
                 <button key={c.id} onClick={() => setSelId(c.id)}
                   className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-sm ${sel?.id === c.id ? 'bg-brand/10 text-brand font-bold' : 'hover:bg-surface'}`}>
-                  {c.kind === 'reporting' ? <Radio size={15} className="shrink-0 text-amber-500" /> : <Hash size={15} className="shrink-0 opacity-60" />}
-                  <span className="truncate flex-1">{c.name}</span>
+                  <Ic size={15} className={`shrink-0 ${c.kind === 'reporting' ? 'text-amber-500' : c.dm ? 'text-brand' : 'opacity-60'}`} />
+                  <span className="truncate flex-1">{chName(c)}</span>
                   {store.isChannelMuted(c.id) && <BellOff size={12} className="opacity-40 shrink-0" />}
-                  {c.access !== 'all' && <Lock size={12} className="opacity-40 shrink-0" />}
+                  {!c.dm && !c.personal && c.access !== 'all' && <Lock size={12} className="opacity-40 shrink-0" />}
                   {unread > 0 && <span className="shrink-0 text-[10px] font-extrabold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white">{unread > 9 ? '9+' : unread}</span>}
                 </button>
               )
@@ -103,7 +119,7 @@ export default function Conversations({ scope = 'team' }) {
 
         {/* Thread du canal sélectionné */}
         {sel ? (
-          <ChannelThread key={sel.id} channel={sel} store={store} meId={meId} canManage={canManage}
+          <ChannelThread key={sel.id} channel={sel} title={chName(sel)} store={store} meId={meId} canManage={canManage}
             onEdit={() => setEditing(sel)} onDelete={() => setConfirmDel(sel)} onBack={() => setSelId(null)} />
         ) : (
           <div className="card p-8"><Empty text={canManage ? 'Créez un premier canal pour démarrer.' : 'Aucune conversation pour le moment.'} /></div>
@@ -130,7 +146,7 @@ export default function Conversations({ scope = 'team' }) {
 }
 
 // -------------------------------------------------- Fil de discussion d'un canal
-function ChannelThread({ channel, store, meId, canManage, onEdit, onDelete, onBack }) {
+function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelete, onBack }) {
   const msgs = store.channelMessages(channel.id)
   const [text, setText] = useState('')
   const [image, setImage] = useState('')
@@ -164,13 +180,14 @@ function ChannelThread({ channel, store, meId, canManage, onEdit, onDelete, onBa
       {/* En-tête */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
         <button className="md:hidden btn-ghost !p-1.5" onClick={onBack}><ChevronLeft size={18} /></button>
-        {personal ? <FileText size={17} className="text-brand" /> : channel.kind === 'reporting' ? <Radio size={17} className="text-amber-500" /> : <Hash size={17} className="opacity-60" />}
+        {channel.dm ? <User size={17} className="text-brand" /> : personal ? <FileText size={17} className="text-brand" /> : channel.kind === 'reporting' ? <Radio size={17} className="text-amber-500" /> : <Hash size={17} className="opacity-60" />}
         <div className="min-w-0">
-          <div className="font-bold truncate flex items-center gap-2">{channel.name}
+          <div className="font-bold truncate flex items-center gap-2">{title || channel.name}
+            {channel.dm && <span className="chip bg-surface text-muted !text-[10px]"><Lock size={10} /> message direct</span>}
             {personal && <span className="chip bg-surface text-muted !text-[10px]"><Lock size={10} /> privé</span>}
-            {!personal && channel.access === 'members' && <span className="chip bg-surface text-muted !text-[10px]"><Lock size={10} /> restreint</span>}
-            {!personal && channel.access === 'services' && <span className="chip bg-surface text-muted !text-[10px]"><Users2 size={10} /> par service</span>}
-            {!personal && channel.access === 'all' && <span className="chip bg-surface text-muted !text-[10px]"><Globe size={10} /> ouvert</span>}
+            {!personal && !channel.dm && channel.access === 'members' && <span className="chip bg-surface text-muted !text-[10px]"><Lock size={10} /> restreint</span>}
+            {!personal && !channel.dm && channel.access === 'services' && <span className="chip bg-surface text-muted !text-[10px]"><Users2 size={10} /> par service</span>}
+            {!personal && !channel.dm && channel.access === 'all' && <span className="chip bg-surface text-muted !text-[10px]"><Globe size={10} /> ouvert</span>}
           </div>
           {channel.kind === 'reporting' && <div className="text-[11px] text-muted">Reporting automatique BD Report</div>}
           {personal && <div className="text-[11px] text-muted">Votre espace personnel — visible de vous seul</div>}
@@ -179,7 +196,7 @@ function ChannelThread({ channel, store, meId, canManage, onEdit, onDelete, onBa
           {!personal && <button className={`btn-ghost !p-1.5 ${muted ? 'text-red-500' : ''}`} title={muted ? 'Réactiver les notifications' : 'Couper les notifications de ce canal'} onClick={() => store.toggleMuteChannel(channel.id)}>
             {muted ? <BellOff size={16} /> : <Bell size={16} />}
           </button>}
-          {canManage && !personal && !channel._general && <>
+          {canManage && !personal && !channel._general && !channel.dm && <>
             <button className="btn-ghost !p-1.5" title="Réglages du canal" onClick={onEdit}><Settings2 size={16} /></button>
             <button className="btn-ghost !p-1.5 text-red-500" title="Supprimer" onClick={onDelete}><Trash2 size={16} /></button>
           </>}

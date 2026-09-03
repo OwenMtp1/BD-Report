@@ -1537,6 +1537,8 @@ export function StoreProvider({ children, demo = false }) {
           return true
         }
         if (c.envId !== session?.envId) return false
+        // Messages directs (1:1) : visibles uniquement des deux interlocuteurs, même pour un manager.
+        if (c.dm) return (c.members || []).includes(session?.subEnvId)
         if (c.createdBy === account?.id) return true
         if (['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role)) return true
         const subId = session?.subEnvId
@@ -1559,6 +1561,19 @@ export function StoreProvider({ children, demo = false }) {
         }
         setDb(d => { d.channels = d.channels || []; d.channels.push(c); d.channelMessages = d.channelMessages || {}; d.channelMessages[c.id] = []; return d })
         return c
+      },
+      // Ouvre (ou crée) une conversation directe 1:1 avec un collaborateur (par sous-espace).
+      openOrCreateDM(otherSubId) {
+        const mySubId = session?.subEnvId
+        if (!mySubId || !otherSubId || mySubId === otherSubId) return null
+        const envId = session?.envId
+        const key = [mySubId, otherSubId].sort().join('|')
+        const found = (db.channels || []).find(c => c.dm && c.envId === envId && [...(c.members || [])].sort().join('|') === key)
+        if (found) return found.id
+        const id = uid()
+        const c = { id, scope: 'team', envId, name: '', kind: 'chat', access: 'members', members: [mySubId, otherSubId], services: [], reporting: null, dm: true, createdBy: account?.id, _seen: {}, createdAt: new Date().toISOString() }
+        setDb(d => { d.channels = d.channels || []; d.channels.push(c); d.channelMessages = d.channelMessages || {}; d.channelMessages[id] = []; return d })
+        return id
       },
       updateChannel(id, patch) {
         if (roBlocked()) return

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, Building2, User, StickyNote, CalendarDays } from 'lucide-react'
+import { Search, Building2, User, StickyNote, CalendarDays, Users2 } from 'lucide-react'
 import { useStore, fmtDate } from './store.jsx'
 import { openCompany } from './pages/Company.jsx'
 
@@ -29,6 +29,14 @@ export default function GlobalSearch({ onNavigate }) {
     const needle = q.trim().toLowerCase()
     const match = (v) => (v || '').toLowerCase().includes(needle)
     const out = []
+    // Collaborateurs de l'environnement : accès à leur fiche + conversation directe.
+    const mySubId = store.session?.subEnvId
+    store.db.subenvs.filter(s => s.envId === store.session?.envId && (match(s.prenom) || match(s.nom) || match(s.poste) || match(`${s.prenom} ${s.nom}`)))
+      .slice(0, 5).forEach(s => out.push({
+        kind: 'Collaborateur', icon: Users2, label: `${s.prenom} ${s.nom}`.trim() || 'Collaborateur',
+        sub: [s.poste, s.id === mySubId ? 'vous' : null].filter(Boolean).join(' · '),
+        go: () => window.dispatchEvent(new CustomEvent('open-collaborator', { detail: s.id })),
+      }))
     const companies = [...new Set(sub.rdvs.map(r => (r.entreprise || '').trim()).filter(Boolean))]
     companies.filter(c => c.toLowerCase().includes(needle)).slice(0, 5).forEach(c =>
       out.push({ kind: 'Entreprise', icon: Building2, label: c, sub: `${sub.rdvs.filter(r => r.entreprise === c).length} RDV`, go: () => openCompany(c) }))

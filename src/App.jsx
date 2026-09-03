@@ -366,6 +366,7 @@ function MainApp() {
   const [pendingNote, setPendingNote] = useState('')
   const [theme, setTheme] = useState(() => store.sub?.theme || 'ocean-pro')
   const [profileOpen, setProfileOpen] = useState(false)
+  const [collabSub, setCollabSub] = useState(null) // fiche d'un collaborateur (depuis la recherche)
 
   useEffect(() => { applyTheme(store.sub?.theme || 'ocean-pro') }, [session.subEnvId])
   // Mode « Auto (système)» : réagit en direct au basculement clair/sombre de l'appareil.
@@ -445,6 +446,12 @@ function MainApp() {
     window.addEventListener('demo-navigate', h)
     return () => window.removeEventListener('demo-navigate', h)
   }, [store.demo])
+  // Fiche d'un collaborateur ouverte depuis la recherche globale.
+  useEffect(() => {
+    const h = (e) => { if (e.detail) setCollabSub(e.detail) }
+    window.addEventListener('open-collaborator', h)
+    return () => window.removeEventListener('open-collaborator', h)
+  }, [])
 
   const goCreateRdvFromNote = (content) => { setPendingNote(content); setPage('rdv') }
 
@@ -600,6 +607,7 @@ function MainApp() {
           </div>
         </header>
         {profileOpen && <ProfileModal store={store} onClose={() => setProfileOpen(false)} />}
+        {collabSub && <CollaboratorCard store={store} subId={collabSub} onClose={() => setCollabSub(null)} />}
         <main className="p-3 sm:p-5 pb-24 max-w-[1400px] mx-auto">
           {store.readOnly && page !== 'support' && (
             <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3 flex items-center gap-2 fade-in">
@@ -733,6 +741,67 @@ function ProfileModal({ store, onClose }) {
             ))}
           </div>
         </div>
+      </div>
+    </Modal>
+  )
+}
+
+// Fiche d'un collaborateur (depuis la recherche) : récap + démarrage d'une conversation directe.
+function CollaboratorCard({ store, subId, onClose }) {
+  const sub = store.db.subenvs.find(s => s.id === subId)
+  if (!sub) return null
+  const env = store.db.environments.find(e => e.id === sub.envId)
+  const owner = store.db.accounts.find(a => a.id === sub.ownerId)
+  const managerAcc = owner?.teamOf ? store.db.accounts.find(a => a.id === owner.teamOf) : null
+  const managerSub = managerAcc ? store.db.subenvs.find(s => s.ownerId === managerAcc.id && s.envId === sub.envId) : null
+  const managerName = managerSub ? `${managerSub.prenom} ${managerSub.nom}`.trim() : (managerAcc?.pseudo || null)
+  const svc = (store.envServices(sub.envId) || []).find(v => v.id === sub.serviceId)
+  const presence = store.presenceOf(owner?.id)
+  const name = `${sub.prenom || ''} ${sub.nom || ''}`.trim() || 'Collaborateur'
+  const isMe = sub.id === store.session?.subEnvId
+  const rows = [
+    ['Entreprise', env?.name || '—'],
+    ['Poste', sub.poste || '—'],
+    ['Service', svc?.name || sub.service || '—'],
+    ['Manager direct', managerName || 'Aucun (responsable)'],
+  ]
+  const startConversation = () => {
+    const id = store.openOrCreateDM(sub.id)
+    onClose()
+    if (!id) return
+    window.__pendingChannel = id
+    window.dispatchEvent(new CustomEvent('app-navigate', { detail: 'conversations' }))
+    window.dispatchEvent(new CustomEvent('demo-navigate', { detail: 'conversations' }))
+    setTimeout(() => window.dispatchEvent(new CustomEvent('open-conversation', { detail: id })), 80)
+  }
+  return (
+    <Modal title="Profil du collaborateur" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            {sub.photo
+              ? <img src={sub.photo} alt="" className="w-16 h-16 rounded-full object-cover" />
+              : <div className="w-16 h-16 rounded-full bg-brand/15 text-brand text-xl font-extrabold flex items-center justify-center">{(name).slice(0, 2).toUpperCase()}</div>}
+            <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ring-2 ring-card ${PRESENCE_META[presence]?.dot}`} title={PRESENCE_META[presence]?.label} />
+          </div>
+          <div className="min-w-0">
+            <div className="font-extrabold text-lg truncate">{name}{isMe && <span className="text-xs text-muted font-normal"> (vous)</span>}</div>
+            <div className={`text-xs font-semibold ${PRESENCE_META[presence]?.text}`}>{PRESENCE_META[presence]?.label}</div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-line divide-y divide-line">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex items-center justify-between px-3 py-2 text-sm">
+              <span className="text-muted">{k}</span>
+              <span className="font-semibold text-right truncate ml-3">{v}</span>
+            </div>
+          ))}
+        </div>
+        {!isMe && (
+          <button className="btn-primary w-full justify-center" onClick={startConversation}>
+            <MessagesSquare size={16} /> Démarrer une conversation
+          </button>
+        )}
       </div>
     </Modal>
   )
