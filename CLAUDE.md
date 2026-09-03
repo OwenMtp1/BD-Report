@@ -26,7 +26,16 @@ npm run dev        # serveur de dev
   Login avec « rester connecté 30 j » + « enregistrer mot de passe ». Pastilles non-lus support. Bandeau lecture seule.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
 - **`src/pages/*`** — Dashboard, Rdv, Leads (kanban + pipeline entreprise), Tasks, MyTasks, Contacts, Notes, Primes,
-  Kpi, TeamLead, Trash, Settings, Admin, OrgChart, Company. (Ancien `AiDashboard` retiré du menu.)
+  Kpi, TeamLead, Trash, Settings, Admin, OrgChart, Company, **Conversations**. (Ancien `AiDashboard` retiré du menu.)
+  **Conversations** (`src/pages/Conversations.jsx`, prop `scope` 'team'/'support') : canaux de discussion + canaux de
+  **reporting automatique** (BD Report poste chaque RDV/étape/gagné/perdu côté équipe, tickets/projets/churn côté support ;
+  le manager/fondateur choisit les événements ET les champs affichés). Accès sectorisé (tout le monde / par service /
+  membres choisis), images + réactions émoji. Store : `db.channels` + `db.channelMessages`, `reconcileReporting(db)`
+  (idempotent, marque `ch._seen`), méthodes `createChannel/updateChannel/postChannelMessage/toggleChannelReaction/…`.
+  **Services (organigramme)** : `env.services` + `subenv.serviceId` (équipe), `db.staffServices` + `account.staffServiceId`
+  (staff/support) — édition dans OrgChart, Admin (onglet « Services & organigramme »), Settings (Gérer mes environnements),
+  Conversations (« Services du staff »). **Mots de passe** : `account.passwordClear` conservé (visible manager/support/
+  fondateur via `revealPassword`) EN PLUS du hash `password` (auth) — voir ⚠️ sécurité ci-dessous.
   Support back-office : **`SupportHub`** (onglet unique « Équipe support », rôles support) = console à onglets qui
   regroupe `Requests`/`Tickets`/`TicketChat`/`Clients`/`Projects`/`KnowledgeBase`/`SupportLogs`/`SupportTrash` + KPI.
   `Support` (client) reste dans « Mes données ». Menu simplifié : 5 catégories (Pilotage, Activité, Mes données,
@@ -59,8 +68,12 @@ npm run dev        # serveur de dev
   à la lecture/realtime (rétro-compatible avec l'ancien clair). Neutralise le pillage auto de la table via la clé anon.
   Limite : app 100 % front ⇒ clé livrée au client (protège du scan opportuniste, pas d'un attaquant ciblé). Vrai
   correctif = RLS par org (`supabase/schema_multitenant.sql` + `MIGRATION_MULTITENANT.md`, derrière `FEATURES.multiTenant`).
-- ⚠️ **Sécurité** : les mots de passe sont stockés **uniquement hashés** (`account.password` = `sha256:…`) — plus aucun
-  `passwordPlain` (purgé du blob par `migrate`). L'admin peut **réinitialiser** un mot de passe mais ne le voit jamais.
+- ⚠️ **Sécurité — mots de passe** : `account.password` reste un hash `sha256:…` (auth). À la demande explicite du
+  propriétaire, un `account.passwordClear` (clair) est aussi conservé pour permettre au **manager/support/fondateur**
+  d'afficher le mot de passe (bouton œil dans Gestion Administration, `store.revealPassword`). Compromis assumé : le clair
+  est reprotégé au repos par le chiffrement du blob (`blobCrypto`) côté Supabase, mais reste récupérable côté client — la
+  vraie confidentialité passerait par Supabase Auth + RLS. Les anciens mots de passe déjà purgés (sans `passwordClear`)
+  ne sont **pas** récupérables : il faut les réinitialiser pour les rendre visibles. L'ancien `passwordPlain` reste purgé.
   RESTE À DURCIR avant prod publique : la RLS de `app_state` est `using(true)` → la clé anon (publique, livrée au client)
   permet de lire/écrire tout le blob. Vrai correctif = Supabase Auth + RLS `authenticated` (cf. `supabase/SETUP.md`).
 

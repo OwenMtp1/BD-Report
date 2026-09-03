@@ -88,13 +88,22 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'KPI Entreprise', 'ICP', 'Support', 'Gestion Administration', 'Équipe support']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Conversations', 'Logs', 'Primes & Commissions', 'KPI Entreprise', 'ICP', 'Support', 'Gestion Administration', 'Équipe support']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
     await click(btn)
     if (!text().includes(label)) throw new Error(`Page ${label} did not render`)
   }
+
+  // 6a. Conversations : création d'un canal par le manager/fondateur.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Conversations'))
+  await click(find('button', 'Nouveau canal'))
+  const chanName = container.querySelector('input[placeholder^="ex :"]')
+  if (!chanName) throw new Error('Channel editor did not open')
+  await type(chanName, 'Canal Smoke')
+  await click(find('button', 'Créer le canal'))
+  if (!text().includes('Canal Smoke')) throw new Error('Channel not created')
 
   // 6b. Support : créer un ticket, vérifier la conversation, le côté support et l'enrichissement client
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Support'))

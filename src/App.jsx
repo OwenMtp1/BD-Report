@@ -3,7 +3,7 @@ import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
-  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift,
+  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
@@ -24,6 +24,7 @@ import Icp from './pages/Icp.jsx'
 import Settings from './pages/Settings.jsx'
 import OrgChart from './pages/OrgChart.jsx'
 import SupportHub from './pages/SupportHub.jsx'
+import Conversations from './pages/Conversations.jsx'
 import Logs from './pages/Logs.jsx'
 import Trash from './pages/Trash.jsx'
 import TeamLead from './pages/TeamLead.jsx'
@@ -323,6 +324,11 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: 'echanges', label: 'Échanges', items: [
+      { id: 'conversations', label: 'Conversations', icon: MessagesSquare },
+    ],
+  },
+  {
     id: 'donnees', label: 'Mes données', items: [
       { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
       { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
@@ -438,6 +444,7 @@ function MainApp() {
     notes: <Notes onCreateRdvFromNote={goCreateRdvFromNote} />,
     primes: <Primes />,
     supporthub: <SupportHub />,
+    conversations: <Conversations scope="team" />,
     logs: <Logs />,
     corbeille: <Trash />,
     support: <Support />,

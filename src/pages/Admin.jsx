@@ -1,20 +1,52 @@
 import React, { useState } from 'react'
-import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus, Search, UserCog } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus, Search, UserCog, Eye, EyeOff, Network, X, Pencil, Check } from 'lucide-react'
 import { useStore, ROLES, BRICKS, uid, hashPw, isSupportRole } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 
-// Réinitialise le mot de passe d'un compte. Les mots de passe ne sont jamais
-// stockés ni affichés en clair (sécurité) : on ne peut que définir un nouveau.
+// Gestion du mot de passe d'un compte. Le manager/support/fondateur peut désormais afficher
+// le mot de passe (comptes créés/réinitialisés depuis l'app) et en définir un nouveau.
 function PasswordCell({ u, editable, store }) {
   const [val, setVal] = useState('')
+  const [shown, setShown] = useState(false)
+  const canView = store.canViewPasswords()
+  const clear = canView && shown ? store.revealPassword(u.id) : null
   const reset = () => { if (val.trim()) { store.setAccountPassword(u.id, val.trim()); setVal(''); toast('Mot de passe mis à jour') } }
-  if (!editable) return <span className="text-xs text-muted">••••••••</span>
   return (
-    <div className="flex items-center gap-1">
-      <input className="input !py-1 text-xs" placeholder="Nouveau mot de passe…" value={val} onChange={e => setVal(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') reset() }} />
-      <button type="button" className="btn-ghost !py-1 text-xs shrink-0" disabled={!val.trim()} onClick={reset}>Réinitialiser</button>
+    <div className="space-y-1.5">
+      {canView && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-mono px-2 py-1 rounded bg-surface min-w-[90px]">
+            {shown ? (clear || 'non disponible') : '••••••••'}
+          </span>
+          <button type="button" className="btn-ghost !p-1.5" title={shown ? 'Masquer' : 'Afficher'} onClick={() => setShown(s => !s)}>
+            {shown ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+          {shown && !clear && <span className="text-[10px] text-muted">(défini avant l'affichage — réinitialisez pour le voir)</span>}
+        </div>
+      )}
+      {editable && (
+        <div className="flex items-center gap-1">
+          <input className="input !py-1 text-xs" placeholder="Nouveau mot de passe…" value={val} onChange={e => setVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') reset() }} />
+          <button type="button" className="btn-ghost !py-1 text-xs shrink-0" disabled={!val.trim()} onClick={reset}>Réinitialiser</button>
+        </div>
+      )}
+      {!editable && !canView && <span className="text-xs text-muted">••••••••</span>}
     </div>
+  )
+}
+
+// Affecte la personne (sous-espace) d'un compte à un service de l'environnement courant.
+function ServiceCell({ u, store }) {
+  const envId = store.session?.envId
+  const sub = store.db.subenvs.find(s => s.ownerId === u.id && s.envId === envId)
+  const services = store.envServices(envId)
+  if (!sub) return <span className="text-xs text-muted italic">Aucun espace dans cet environnement</span>
+  return (
+    <select className="input" value={sub.serviceId || ''} onChange={e => store.assignSubService(sub.id, e.target.value || null)}>
+      <option value="">— Sans service —</option>
+      {services.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+    </select>
   )
 }
 
@@ -103,6 +135,71 @@ function TeamInvite({ store, actor }) {
   )
 }
 
+// ---- Services & organigramme : création de services + affectation des personnes de l'environnement
+function ServicesPanel({ store }) {
+  const envId = store.session?.envId
+  const env = store.db.environments.find(e => e.id === envId)
+  const services = store.envServices(envId)
+  const subs = store.db.subenvs.filter(s => s.envId === envId)
+  const [name, setName] = useState('')
+  const countOf = (sid) => subs.filter(s => s.serviceId === sid).length
+  const unassigned = subs.filter(s => !s.serviceId).length
+  const add = () => { if (name.trim()) { store.addService(name.trim()); setName('') } }
+  return (
+    <div className="space-y-4">
+      <div className="card p-4 space-y-3">
+        <div className="flex items-center gap-2"><Network size={17} className="text-brand" /><h3 className="font-bold">Services de « {env?.name} »</h3></div>
+        <p className="text-xs text-muted">Créez des services, affectez les personnes et sectorisez l'accès aux conversations par service.</p>
+        <div className="flex gap-2 max-w-md">
+          <input className="input flex-1" placeholder="Nom du service (ex : Sales, SDR, CSM…)" value={name}
+            onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} />
+          <button className="btn-primary whitespace-nowrap" onClick={add}><Plus size={15} /> Ajouter</button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {services.map(v => <SvcChip key={v.id} svc={v} count={countOf(v.id)} store={store} />)}
+          {services.length === 0 && <span className="text-xs text-muted italic">Aucun service pour l'instant.</span>}
+        </div>
+      </div>
+
+      <div className="card p-4">
+        <div className="flex items-center gap-2 mb-3"><Users size={17} className="text-brand" /><h3 className="font-bold">Affectation des personnes</h3>
+          {unassigned > 0 && <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-500/15">{unassigned} sans service</span>}</div>
+        {subs.length === 0 && <Empty text="Aucune personne dans cet environnement." />}
+        <div className="space-y-1.5">
+          {subs.map(s => (
+            <div key={s.id} className="flex items-center gap-2 text-sm">
+              <div className="w-7 h-7 rounded-full bg-brand/15 text-brand text-[10px] font-extrabold flex items-center justify-center shrink-0">{(s.prenom?.[0] || '') + (s.nom?.[0] || '')}</div>
+              <span className="flex-1 truncate">{s.prenom} {s.nom} <span className="text-muted text-xs">· {s.poste}</span></span>
+              <select className="input !w-auto !py-1 text-xs" value={s.serviceId || ''} onChange={e => store.assignSubService(s.id, e.target.value || null)}>
+                <option value="">— Sans service —</option>
+                {services.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+function SvcChip({ svc, count, store }) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(svc.name)
+  if (editing) return (
+    <span className="chip bg-surface">
+      <input className="bg-transparent outline-none text-sm w-24" value={name} onChange={e => setName(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { store.renameService(svc.id, name); setEditing(false) } }} autoFocus />
+      <button className="text-emerald-600" onClick={() => { store.renameService(svc.id, name); setEditing(false) }}><Check size={13} /></button>
+    </span>
+  )
+  return (
+    <span className="chip bg-brand/10 text-brand">
+      {svc.name} <span className="opacity-60">· {count}</span>
+      <button className="ml-1 opacity-70 hover:opacity-100" onClick={() => setEditing(true)}><Pencil size={11} /></button>
+      <button className="ml-0.5 text-red-500" onClick={() => store.removeService(svc.id)}><X size={12} /></button>
+    </span>
+  )
+}
+
 // canManage(actor, target) : règles de hiérarchie des permissions
 // « Support BD Report » a exactement les mêmes permissions que « Fondateur » (équipe BD Report).
 function canManage(actor, target) {
@@ -169,7 +266,8 @@ function UserRow({ u, actor, store, onDelete, defaultOpen }) {
                 </select>
               </Field>
             )}
-            <Field label="Réinitialiser le mot de passe"><PasswordCell u={u} editable={editable} store={store} /></Field>
+            <Field label="Mot de passe"><PasswordCell u={u} editable={editable} store={store} /></Field>
+            <Field label="Service (organigramme)"><ServiceCell u={u} store={store} /></Field>
             {idEditable && <Field label="Identifiant technique"><input className="input" defaultValue={u.id}
               onBlur={e => { if (e.target.value && e.target.value !== u.id) store.changeAccountId(u.id, e.target.value) }} /></Field>}
           </div>
@@ -254,17 +352,17 @@ export default function Admin({ mode }) {
       {mode === 'teams' && <TeamInvite store={store} actor={actor} />}
 
       {mode === 'admin' && (
-        <div className="flex gap-1.5 border-b border-line">
-          {[['users', 'Utilisateurs', UserCog], ['env', 'Accès environnements', Globe]].map(([id, label, Icon]) => (
+        <div className="flex gap-1.5 border-b border-line overflow-x-auto">
+          {[['users', 'Utilisateurs', UserCog], ['services', 'Services & organigramme', Network], ['env', 'Accès environnements', Globe]].map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border-b-2 -mb-px ${tab === id ? 'border-brand text-brand' : 'border-transparent text-muted hover:bg-surface'}`}>
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border-b-2 -mb-px whitespace-nowrap ${tab === id ? 'border-brand text-brand' : 'border-transparent text-muted hover:bg-surface'}`}>
               <Icon size={15} /> {label}
             </button>
           ))}
         </div>
       )}
 
-      {mode === 'admin' && tab === 'env' ? <EnvAccess store={store} /> : (
+      {mode === 'admin' && tab === 'env' ? <EnvAccess store={store} /> : mode === 'admin' && tab === 'services' ? <ServicesPanel store={store} /> : (
         <div className="space-y-3">
           <div className="flex gap-2 flex-wrap items-center">
             <div className="flex items-center gap-2 flex-1 min-w-[180px] input !py-1.5">

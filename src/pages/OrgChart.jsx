@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useState } from 'react'
+import { Plus, X, Pencil, Check, Network, Users2 } from 'lucide-react'
 import { useStore } from '../store.jsx'
-import { Empty } from '../ui.jsx'
+import { Empty, toast } from '../ui.jsx'
 
 export default function OrgChart({ onOpenProfile }) {
   const store = useStore()
@@ -8,13 +9,22 @@ export default function OrgChart({ onOpenProfile }) {
   const env = store.db.environments.find(e => e.id === session.envId)
   const subs = store.db.subenvs.filter(s => s.envId === session.envId)
   const isManager = ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(store.account.role)
+  const services = store.envServices()
+  const [editServices, setEditServices] = useState(false)
+  const [newSvc, setNewSvc] = useState('')
+
   const accOf = (s) => store.db.accounts.find(a => a.id === s.ownerId)
   // Hiérarchie par manager : un espace est rattaché au manager (teamOf) de son propriétaire.
   const managerSubs = subs.filter(s => subs.some(x => accOf(x)?.teamOf === s.ownerId))
   const teamOfManager = (m) => subs.filter(s => accOf(s)?.teamOf === m.ownerId)
   const attached = new Set([...managerSubs.map(s => s.id), ...managerSubs.flatMap(m => teamOfManager(m).map(s => s.id))])
   const unattached = subs.filter(s => !attached.has(s.id))
-  const services = [...new Set(unattached.map(s => s.service).filter(Boolean))]
+  // Regroupe les personnes non rattachées par service (id), avec repli sur l'ancien libellé.
+  const svcName = (s) => services.find(v => v.id === s.serviceId)?.name || s.service || 'Sans service'
+  const groups = {}
+  unattached.forEach(s => { const k = svcName(s); (groups[k] = groups[k] || []).push(s) })
+
+  const addService = () => { if (newSvc.trim()) { store.addService(newSvc.trim()); setNewSvc(''); toast('Service ajouté') } }
 
   const PersonCard = ({ s, small }) => (
     <div className={`card p-4 text-center ${small ? 'w-40' : 'w-44'}`}>
@@ -25,7 +35,13 @@ export default function OrgChart({ onOpenProfile }) {
           </div>}
       <div className="font-bold text-sm">{s.prenom} {s.nom}</div>
       <div className="text-xs text-muted">{s.poste}</div>
-      {isManager && (
+      {isManager && editServices && (
+        <select className="input !py-1 text-xs mt-2" value={s.serviceId || ''} onChange={e => store.assignSubService(s.id, e.target.value || null)}>
+          <option value="">— Sans service —</option>
+          {services.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+        </select>
+      )}
+      {isManager && !editServices && (
         <button className="btn-ghost !py-1 text-xs mt-2 w-full justify-center" onClick={() => onOpenProfile(s)}>
           Afficher le profil
         </button>
@@ -35,7 +51,31 @@ export default function OrgChart({ onOpenProfile }) {
 
   return (
     <div className="space-y-5">
-      <h2 className="text-xl font-extrabold">Organigramme — {env?.name}</h2>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-extrabold flex items-center gap-2"><Network size={20} className="text-brand" /> Organigramme — {env?.name}</h2>
+        {isManager && (
+          <button className={`btn-${editServices ? 'primary' : 'ghost'}`} onClick={() => setEditServices(v => !v)}>
+            {editServices ? <><Check size={15} /> Terminer</> : <><Users2 size={15} /> Gérer les services</>}
+          </button>
+        )}
+      </div>
+
+      {isManager && editServices && (
+        <div className="card p-4 space-y-3">
+          <div className="text-sm font-bold flex items-center gap-1.5"><Users2 size={16} className="text-brand" /> Services de l'organigramme</div>
+          <p className="text-xs text-muted">Créez des services et affectez chaque personne (menu sous sa carte). Les services servent aussi à sectoriser l'accès aux conversations.</p>
+          <div className="flex gap-2 max-w-md">
+            <input className="input flex-1" placeholder="Nom du service (ex : Sales, SDR, CSM…)" value={newSvc}
+              onChange={e => setNewSvc(e.target.value)} onKeyDown={e => e.key === 'Enter' && addService()} />
+            <button className="btn-primary whitespace-nowrap" onClick={addService}><Plus size={15} /> Ajouter</button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {services.map(v => <ServiceChip key={v.id} svc={v} store={store} />)}
+            {services.length === 0 && <span className="text-xs text-muted italic">Aucun service pour l'instant.</span>}
+          </div>
+        </div>
+      )}
+
       {subs.length === 0 && <Empty text="Aucun profil dans cet environnement." />}
       <div className="flex flex-col items-center gap-6">
         {env && (
@@ -61,17 +101,38 @@ export default function OrgChart({ onOpenProfile }) {
         )}
         {/* Espaces sans rattachement : regroupés par service */}
         <div className="flex flex-wrap justify-center gap-8 w-full">
-          {services.map(service => (
+          {Object.entries(groups).map(([service, list]) => (
             <div key={service} className="flex flex-col items-center gap-3">
               <div className="chip bg-brand/15 text-brand !text-sm !px-4 !py-1.5 font-extrabold">{service}</div>
               <div className="w-px h-4 bg-line" />
               <div className="flex flex-wrap justify-center gap-3">
-                {unattached.filter(s => s.service === service).map(s => <PersonCard key={s.id} s={s} />)}
+                {list.map(s => <PersonCard key={s.id} s={s} />)}
               </div>
             </div>
           ))}
         </div>
       </div>
     </div>
+  )
+}
+
+function ServiceChip({ svc, store }) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(svc.name)
+  if (editing) {
+    return (
+      <span className="chip bg-surface">
+        <input className="bg-transparent outline-none text-sm w-24" value={name} onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { store.renameService(svc.id, name); setEditing(false) } }} autoFocus />
+        <button className="text-emerald-600" onClick={() => { store.renameService(svc.id, name); setEditing(false) }}><Check size={13} /></button>
+      </span>
+    )
+  }
+  return (
+    <span className="chip bg-brand/10 text-brand">
+      {svc.name}
+      <button className="ml-1 opacity-70 hover:opacity-100" onClick={() => setEditing(true)}><Pencil size={11} /></button>
+      <button className="ml-0.5 text-red-500" onClick={() => store.removeService(svc.id)}><X size={12} /></button>
+    </span>
   )
 }

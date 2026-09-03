@@ -891,6 +891,89 @@ function injectPipelineOwen(db) {
   return true
 }
 
+// ================================================================ Conversations / Canaux
+// Catalogue des événements de reporting automatique et des champs affichables par événement.
+// Le manager (équipe) / le fondateur (support) choisit quels événements et quels champs
+// apparaissent dans chaque canal de reporting.
+export const TEAM_REPORT_EVENTS = {
+  rdvCreated: { label: 'Nouveaux rendez-vous', emoji: '🗓️', title: 'Nouveau rendez-vous', fields: { creator: 'Créé par', client: 'Client', date: 'Date du RDV', effectif: 'Effectif (collab.)', contact: 'Contact', poste: 'Poste', source: 'Source', phase: 'Étape' } },
+  stageChange: { label: 'Avancement des deals', emoji: '📈', title: 'Avancement de deal', fields: { creator: 'Commercial', client: 'Client', phase: 'Nouvelle étape', date: 'Date', effectif: 'Effectif (collab.)' } },
+  clientWon: { label: 'Clients gagnés', emoji: '🏆', title: 'Client gagné', fields: { creator: 'Commercial', client: 'Client', effectif: 'Effectif (collab.)', date: 'Date', source: 'Source' } },
+  clientLost: { label: 'Clients perdus', emoji: '❌', title: 'Client perdu', fields: { creator: 'Commercial', client: 'Client', motif: 'Motif', effectif: 'Effectif (collab.)', date: 'Date' } },
+}
+export const SUPPORT_REPORT_EVENTS = {
+  ticketOpened: { label: 'Tickets ouverts', emoji: '🎫', title: 'Ticket ouvert', fields: { client: 'Client', category: 'Catégorie', priority: 'Priorité', date: 'Date' } },
+  ticketClosed: { label: 'Tickets fermés', emoji: '✅', title: 'Ticket fermé', fields: { client: 'Client', category: 'Catégorie', csat: 'Satisfaction', date: 'Date' } },
+  projectOpened: { label: 'Nouveaux projets', emoji: '📁', title: 'Projet ouvert', fields: { name: 'Projet', client: 'Client', date: 'Date' } },
+  projectClosed: { label: 'Projets terminés', emoji: '🏁', title: 'Projet terminé', fields: { name: 'Projet', client: 'Client', date: 'Date' } },
+  projectPhase: { label: 'Changements de phase projet', emoji: '🔄', title: 'Changement de phase', fields: { name: 'Projet', phase: 'Nouvelle phase', date: 'Date' } },
+  churn: { label: 'Clients qui partent (churn)', emoji: '📉', title: 'Client parti (churn)', fields: { client: 'Client', date: 'Date' } },
+}
+export function reportEventsFor(scope) { return scope === 'support' ? SUPPORT_REPORT_EVENTS : TEAM_REPORT_EVENTS }
+
+const fmtReportD = (iso) => { const s = String(iso || ''); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : (s.slice(0, 10) || '—') }
+// Construit le texte d'un message de reporting à partir des champs sélectionnés.
+function buildReportText(catalog, eventKey, selectedFields, values) {
+  const ev = catalog[eventKey]; if (!ev) return ''
+  const chosen = (selectedFields && selectedFields.length ? selectedFields : Object.keys(ev.fields))
+  const parts = chosen
+    .filter(f => ev.fields[f] && values[f] !== undefined && values[f] !== null && values[f] !== '')
+    .map(f => `${ev.fields[f]} : ${values[f]}`)
+  return `${ev.emoji} ${ev.title}${parts.length ? ' — ' + parts.join(' · ') : ''}`
+}
+function pushChannelSystemMsg(db, ch, text, ts) {
+  db.channelMessages = db.channelMessages || {}
+  db.channelMessages[ch.id] = db.channelMessages[ch.id] || []
+  db.channelMessages[ch.id].push({ id: uid(), ts: ts || todayISO(), system: true, text, reactions: {} })
+}
+
+// Reconciliation idempotente : génère les messages de reporting manquants à partir de l'état
+// courant (RDV, tickets, projets, clients). Chaque événement est marqué (ch._seen) pour n'être
+// posté qu'une fois — respecte les suppressions et ne double jamais. Renvoie true si modifié.
+function reconcileReporting(db) {
+  let changed = false
+  const channels = (db.channels || []).filter(c => c.kind === 'reporting')
+  channels.forEach(ch => {
+    ch._seen = ch._seen || {}
+    const seen = ch._seen
+    const events = ch.reporting?.events || {}
+    const mark = (key, text, ts) => { if (!seen[key]) { seen[key] = 1; pushChannelSystemMsg(db, ch, text, ts); changed = true } }
+
+    if (ch.scope === 'support') {
+      const cat = SUPPORT_REPORT_EVENTS
+      const fieldsOf = (k) => events[k]?.fields || []
+      const clientName = (envId, accId) => (db.clients || []).find(c => (envId && c.envId === envId) || (accId && c.accountId === accId))?.name || (db.environments.find(e => e.id === envId)?.name) || '—'
+      if (events.ticketOpened?.on) (db.tickets || []).forEach(t => mark('topen:' + t.id, buildReportText(cat, 'ticketOpened', fieldsOf('ticketOpened'), { client: t.clientName || clientName(t.envId, t.userAccountId), category: t.category, priority: t.priority, date: fmtReportD(t.createdAt) }), t.createdAt))
+      if (events.ticketClosed?.on) (db.tickets || []).filter(t => t.status === 'closed').forEach(t => mark('tclose:' + t.id, buildReportText(cat, 'ticketClosed', fieldsOf('ticketClosed'), { client: t.clientName || clientName(t.envId, t.userAccountId), category: t.category, csat: t.csat ? `${t.csat}/5` : '—', date: fmtReportD(t.closedAt || t.updatedAt) }), t.closedAt || t.updatedAt))
+      if (events.projectOpened?.on) (db.projects || []).forEach(p => mark('popen:' + p.id, buildReportText(cat, 'projectOpened', fieldsOf('projectOpened'), { name: p.name, client: p.clientName || '—', date: fmtReportD(p.createdAt) }), p.createdAt))
+      if (events.projectClosed?.on) (db.projects || []).filter(p => p.status === 'termine').forEach(p => mark('pclose:' + p.id, buildReportText(cat, 'projectClosed', fieldsOf('projectClosed'), { name: p.name, client: p.clientName || '—', date: fmtReportD(p.updatedAt || p.createdAt) })))
+      if (events.projectPhase?.on) (db.projects || []).forEach(p => mark('pphase:' + p.id + ':' + p.status, buildReportText(cat, 'projectPhase', fieldsOf('projectPhase'), { name: p.name, phase: (PROJECT_STATUSES.find(s => s.id === p.status)?.label || p.status), date: fmtReportD(todayISO()) })))
+      if (events.churn?.on) (db.clients || []).filter(c => c.status === 'anciens').forEach(c => mark('churn:' + c.id, buildReportText(cat, 'churn', fieldsOf('churn'), { client: c.name, date: fmtReportD(c.lastActivity || c.createdAt) })))
+      return
+    }
+
+    // Canaux d'équipe : événements dérivés des RDV de tous les espaces de l'environnement.
+    const cat = TEAM_REPORT_EVENTS
+    const fieldsOf = (k) => events[k]?.fields || []
+    const subs = (db.subenvs || []).filter(s => s.envId === ch.envId)
+    subs.forEach(sub => {
+      const data = db.data?.[sub.id]; if (!data) return
+      const author = `${sub.prenom || ''} ${sub.nom || ''}`.trim() || 'Commercial'
+      ;(data.rdvs || []).forEach(r => {
+        const contact = Array.isArray(r.contacts) && r.contacts[0] ? r.contacts[0] : {}
+        const base = { creator: author, client: r.entreprise || 'Lead', date: fmtReportD(r.dateRdv || r.datePriseRdv), effectif: r.effectif || '—', contact: contact.nom || '—', poste: contact.poste || '—', source: r.source || '—', phase: r.phase || '—' }
+        if (events.rdvCreated?.on) mark('new:' + r.id, buildReportText(cat, 'rdvCreated', fieldsOf('rdvCreated'), base), r.createdAt || r.datePriseRdv)
+        if (events.stageChange?.on && Array.isArray(r.history)) {
+          r.history.filter(h => h.type === 'phase').forEach((h, i) => mark('stage:' + r.id + ':' + i + ':' + h.value, buildReportText(cat, 'stageChange', fieldsOf('stageChange'), { ...base, phase: h.value, date: fmtReportD(h.date) }), h.date))
+        }
+        if (events.clientWon?.on && (r.opportunite === 'Gagnée' || r.opportunite === 'Signée')) mark('won:' + r.id, buildReportText(cat, 'clientWon', fieldsOf('clientWon'), base), r.dateRdv)
+        if (events.clientLost?.on && r.opportunite === 'Perdue') mark('lost:' + r.id, buildReportText(cat, 'clientLost', fieldsOf('clientLost'), { ...base, motif: r.motifKo || '—' }), r.dateRdv)
+      })
+    })
+  })
+  return changed
+}
+
 function migrate(db) {
   injectTestEnv(db)
   // Ajoute les nouvelles briques aux comptes qui avaient déjà l'accès cœur (proxy : brique "Leads").
@@ -903,8 +986,9 @@ function migrate(db) {
     })
     // Offre par défaut : les comptes existants gardent l'accès complet (beta)
     if (!a.plan) a.plan = 'beta'
-    // Hashage des mots de passe hérités + purge de tout mot de passe en clair (sécurité : jamais stocké).
-    if (a.password && !String(a.password).startsWith('sha256:')) { a.password = hashPw(a.password) }
+    // Hashage des mots de passe hérités. On mémorise le clair (passwordClear) pour la visibilité
+    // manager/support avant de ne stocker QUE le hash pour l'authentification.
+    if (a.password && !String(a.password).startsWith('sha256:')) { if (!a.passwordClear) a.passwordClear = a.password; a.password = hashPw(a.password) }
     delete a.passwordPlain
   })
   ;(db.environments || []).forEach(e => { if (!e.plan) e.plan = 'beta' })
@@ -984,6 +1068,14 @@ function migrate(db) {
     data.taskTrash = data.taskTrash || []
     data.icpProfiles = data.icpProfiles || []
   })
+  // ---- Conversations / canaux + services (organigramme) ----
+  db.channels = db.channels || []
+  db.channelMessages = db.channelMessages || {}
+  db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
+  ;(db.environments || []).forEach(e => {
+    if (!Array.isArray(e.services)) e.services = (e.departments && e.departments.length ? e.departments : ['Sales', 'Marketing']).map(n => ({ id: uid(), name: n }))
+  })
+  reconcileReporting(db)
   return db
 }
 
@@ -1146,6 +1238,16 @@ export function StoreProvider({ children, demo = false }) {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
+  // Génère les messages de reporting automatique manquants dès que l'état change (RDV, tickets,
+  // projets, clients). Idempotent : ne re-rend que si de nouveaux messages ont été ajoutés.
+  useEffect(() => {
+    if (!(db.channels || []).some(c => c.kind === 'reporting')) return
+    setDbState(prev => {
+      const next = structuredClone(prev)
+      return reconcileReporting(next) ? next : prev
+    })
+  }, [db])
+
   const api = useMemo(() => {
     const setDb = (fn) => setDbState(prev => {
       const next = typeof fn === 'function' ? fn(structuredClone(prev)) : fn
@@ -1194,7 +1296,7 @@ export function StoreProvider({ children, demo = false }) {
         const wanted = (pseudo || email.split('@')[0]).trim()
         if (wanted && db.accounts.some(a => a.pseudo.toLowerCase() === wanted.toLowerCase())) return { error: 'Ce pseudo est déjà pris, choisissez-en un autre.' }
         // Inscription libre = offre Starter (accès très limité), avec son propre environnement starter.
-        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), role: 'Fondateur', developer: false, plan: 'starter', photo: '', bricks: [...STARTER_BRICKS], teamOf: null }
+        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), passwordClear: password, role: 'Fondateur', developer: false, plan: 'starter', photo: '', bricks: [...STARTER_BRICKS], teamOf: null }
         setDb(d => { d.accounts.push(acc); return d })
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return { account: acc }
@@ -1375,6 +1477,143 @@ export function StoreProvider({ children, demo = false }) {
         const env = db.environments.find(e => e.id === session?.envId)
         return (env?.comments || {})[companyKey(company)] || []
       },
+      // ===================================================== Conversations / canaux
+      // Le sous-espace (personne) de l'utilisateur courant, pour l'auteur des messages.
+      currentSub() { return db.subenvs.find(s => s.id === session?.subEnvId) || null },
+      // Peut créer/administrer des canaux : manager (équipe) ou support/fondateur (staff).
+      canManageChannels(scope) {
+        if (scope === 'support') return isSupportRole(account?.role)
+        return ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role)
+      },
+      // Un canal est-il visible pour l'utilisateur courant ?
+      canSeeChannel(c) {
+        if (!c) return false
+        if (c.scope === 'support') {
+          if (!isSupportRole(account?.role)) return false
+          if (c.createdBy === account?.id || account?.role === 'Fondateur') return true
+          if (c.access === 'members') return (c.members || []).includes(account?.id)
+          if (c.access === 'services') return (c.services || []).includes(account?.staffServiceId)
+          return true
+        }
+        if (c.envId !== session?.envId) return false
+        if (c.createdBy === account?.id) return true
+        if (['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role)) return true
+        const subId = session?.subEnvId
+        const sub = db.subenvs.find(s => s.id === subId)
+        if (c.access === 'members') return (c.members || []).includes(subId)
+        if (c.access === 'services') return !!sub && (c.services || []).includes(sub.serviceId)
+        return true // 'all'
+      },
+      // Liste des canaux d'un périmètre ('team' ou 'support'), filtrés par visibilité.
+      listChannels(scope) {
+        return (db.channels || []).filter(c => c.scope === scope && (scope === 'support' || c.envId === session?.envId) && this.canSeeChannel(c))
+      },
+      createChannel({ scope = 'team', name, kind = 'chat', access = 'all', members = [], services = [], reporting = null }) {
+        if (roBlocked()) return null
+        const c = {
+          id: uid(), scope, envId: scope === 'support' ? null : session?.envId,
+          name: (name || 'Nouveau canal').trim(), kind, access, members, services,
+          reporting: kind === 'reporting' ? (reporting || { events: {} }) : null,
+          createdBy: account?.id, _seen: {}, createdAt: new Date().toISOString(),
+        }
+        setDb(d => { d.channels = d.channels || []; d.channels.push(c); d.channelMessages = d.channelMessages || {}; d.channelMessages[c.id] = []; return d })
+        return c
+      },
+      updateChannel(id, patch) {
+        if (roBlocked()) return
+        setDb(d => { const c = (d.channels || []).find(x => x.id === id); if (c) { Object.assign(c, patch); if (c.kind === 'reporting') c._seen = c._seen || {} } return d })
+      },
+      deleteChannel(id) {
+        if (roBlocked()) return
+        setDb(d => { d.channels = (d.channels || []).filter(c => c.id !== id); if (d.channelMessages) delete d.channelMessages[id]; return d })
+      },
+      channelMessages(id) {
+        const arr = (db.channelMessages || {})[id] || []
+        return [...arr].sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')))
+      },
+      postChannelMessage(id, { text, image } = {}) {
+        if (roBlocked()) return
+        if (!String(text || '').trim() && !image) return
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const name = sub ? `${sub.prenom} ${sub.nom}`.trim() : (account?.pseudo || 'Moi')
+        setDb(d => {
+          d.channelMessages = d.channelMessages || {}
+          d.channelMessages[id] = d.channelMessages[id] || []
+          d.channelMessages[id].push({
+            id: uid(), ts: new Date().toISOString(),
+            authorId: account?.id || null, authorSubId: sub?.id || null, authorName: name,
+            authorPhoto: sub?.photo || account?.photo || '', text: String(text || '').trim(), image: image || '', reactions: {},
+          })
+          return d
+        })
+      },
+      deleteChannelMessage(id, msgId) {
+        setDb(d => { if (d.channelMessages?.[id]) d.channelMessages[id] = d.channelMessages[id].filter(m => m.id !== msgId); return d })
+      },
+      toggleChannelReaction(id, msgId, emoji) {
+        const who = session?.subEnvId || account?.id || 'me'
+        setDb(d => {
+          const m = (d.channelMessages?.[id] || []).find(x => x.id === msgId); if (!m) return d
+          m.reactions = m.reactions || {}
+          const set = new Set(m.reactions[emoji] || [])
+          set.has(who) ? set.delete(who) : set.add(who)
+          if (set.size) m.reactions[emoji] = [...set]; else delete m.reactions[emoji]
+          return d
+        })
+      },
+      // ===================================================== Services (organigramme)
+      envServices(envId) { return (db.environments.find(e => e.id === (envId || session?.envId))?.services) || [] },
+      staffServices() { return db.staffServices || [] },
+      addService(name, scope) {
+        if (roBlocked()) return
+        const nm = (name || '').trim(); if (!nm) return
+        setDb(d => {
+          if (scope === 'staff') { d.staffServices = d.staffServices || []; d.staffServices.push({ id: uid(), name: nm }) }
+          else { const e = d.environments.find(x => x.id === session?.envId); if (e) { e.services = e.services || []; e.services.push({ id: uid(), name: nm }) } }
+          return d
+        })
+      },
+      renameService(sid, name, scope) {
+        if (roBlocked()) return
+        setDb(d => {
+          const list = scope === 'staff' ? (d.staffServices || []) : (d.environments.find(x => x.id === session?.envId)?.services || [])
+          const s = list.find(v => v.id === sid); if (s) s.name = (name || s.name).trim()
+          // resynchronise le libellé hérité (s.service) des personnes
+          if (scope !== 'staff') d.subenvs.forEach(sub => { if (sub.serviceId === sid) sub.service = s?.name || sub.service })
+          return d
+        })
+      },
+      removeService(sid, scope) {
+        if (roBlocked()) return
+        setDb(d => {
+          if (scope === 'staff') { d.staffServices = (d.staffServices || []).filter(s => s.id !== sid); d.accounts.forEach(a => { if (a.staffServiceId === sid) a.staffServiceId = null }) }
+          else { const e = d.environments.find(x => x.id === session?.envId); if (e) e.services = (e.services || []).filter(s => s.id !== sid); d.subenvs.forEach(sub => { if (sub.serviceId === sid) { sub.serviceId = null } }) }
+          // retire ce service des canaux qui le sectorisaient
+          ;(d.channels || []).forEach(c => { if (Array.isArray(c.services)) c.services = c.services.filter(x => x !== sid) })
+          return d
+        })
+      },
+      assignSubService(subId, serviceId) {
+        if (roBlocked()) return
+        setDb(d => {
+          const s = d.subenvs.find(x => x.id === subId); if (!s) return d
+          s.serviceId = serviceId || null
+          const svc = (d.environments.find(e => e.id === s.envId)?.services || []).find(v => v.id === serviceId)
+          s.service = svc ? svc.name : ''
+          return d
+        })
+      },
+      assignStaffService(accId, serviceId) {
+        setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.staffServiceId = serviceId || null; return d })
+      },
+      // ===================================================== Mots de passe (visibilité manager/support)
+      canViewPasswords() { return ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role) },
+      // Renvoie le mot de passe en clair si connu (comptes créés/réinitialisés depuis l'app),
+      // sinon null (les anciens mots de passe purgés ne sont pas récupérables).
+      revealPassword(id) {
+        if (!this.canViewPasswords()) return null
+        return db.accounts.find(a => a.id === id)?.passwordClear || null
+      },
       // ----- changement d'Id sûr : met à jour toutes les références + la session courante
       changeAccountId(oldId, newId) {
         if (!newId || newId === oldId) return
@@ -1419,8 +1658,9 @@ export function StoreProvider({ children, demo = false }) {
         // Compte créé par un manager/admin = accès complet de l'offre de l'environnement courant (Beta par défaut).
         const env = db.environments.find(e => e.id === session?.envId)
         const plan = acc.plan || env?.plan || 'beta'
-        const a = { id: uid(), role: 'Membre', developer: false, plan, photo: '', bricks: [...(PLANS[plan]?.bricks || BRICKS)], teamOf: null, ...acc, plan }
-        if (a.password && !String(a.password).startsWith('sha256:')) { a.password = hashPw(a.password) }
+        const a = { id: uid(), role: 'Membre', developer: false, photo: '', bricks: [...(PLANS[plan]?.bricks || BRICKS)], teamOf: null, ...acc, plan }
+        // Conserve le mot de passe en clair (visible manager/support) puis stocke le hash pour l'auth.
+        if (a.password && !String(a.password).startsWith('sha256:')) { a.passwordClear = a.password; a.password = hashPw(a.password) }
         delete a.passwordPlain
         setDb(d => { d.accounts.push(a); return d })
         return a
@@ -1428,7 +1668,7 @@ export function StoreProvider({ children, demo = false }) {
       // Définit un nouveau mot de passe (stocke uniquement le hash — jamais le clair).
       setAccountPassword(id, plain) {
         if (roBlocked()) return
-        setDb(d => { const a = d.accounts.find(x => x.id === id); if (a) { a.password = hashPw(plain); delete a.passwordPlain } return d })
+        setDb(d => { const a = d.accounts.find(x => x.id === id); if (a) { a.password = hashPw(plain); a.passwordClear = plain; delete a.passwordPlain } return d })
       },
       // ----- Identité de l'utilisateur courant pour le support (prénom + photo, sinon logo BD Report)
       currentIdentity() {

@@ -6,6 +6,37 @@ import { Modal, Field, Confirm, toast, CommitInput } from '../ui.jsx'
 import { testConnection } from '../supabaseSync.js'
 import { SUPABASE_URL, isSupabaseConfigured } from '../supabaseConfig.js'
 
+// Gestion des services d'un environnement (organigramme) : création, renommage, suppression.
+// Sert aussi à sectoriser l'accès aux conversations.
+function EnvServicesCard({ store, env, me }) {
+  const [name, setName] = useState('')
+  const services = store.envServices(env.id)
+  const subs = store.db.subenvs.filter(s => s.envId === env.id)
+  const canManage = ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(me.role) || env.createdBy === me.id
+  const add = () => { if (name.trim()) { store.addService(name.trim()); setName('') } }
+  if (!canManage) return null
+  return (
+    <div className="card p-4 space-y-3">
+      <h3 className="font-bold">Services de l'organigramme</h3>
+      <p className="text-xs text-muted">Créez les services de « {env.name} » puis affectez chaque personne ci-dessous. Ils permettent aussi de sectoriser l'accès aux conversations.</p>
+      <div className="flex gap-2 max-w-md">
+        <input className="input flex-1" placeholder="Nom du service (ex : Sales, SDR, CSM…)" value={name}
+          onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} />
+        <button className="btn-primary whitespace-nowrap" onClick={add}><Check size={15} /> Ajouter</button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {services.map(v => (
+          <span key={v.id} className="chip bg-brand/10 text-brand">
+            {v.name} <span className="opacity-60">· {subs.filter(s => s.serviceId === v.id).length}</span>
+            <button className="ml-1 text-red-500" onClick={() => store.removeService(v.id)}>✕</button>
+          </span>
+        ))}
+        {services.length === 0 && <span className="text-xs text-muted italic">Aucun service pour l'instant.</span>}
+      </div>
+    </div>
+  )
+}
+
 // Outil RGPD : droit d'accès (export JSON) et droit à l'effacement des données
 // personnelles d'une personne (recherchée par e-mail) dans l'espace courant.
 function RgpdTool({ store }) {
@@ -239,10 +270,12 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
               ))}
             </div>
           </div>
+          {env && <EnvServicesCard store={store} env={env} me={me} />}
           <div className="card p-4 space-y-3">
             <h3 className="font-bold">Sous-environnements de {env?.name}</h3>
             <p className="text-xs text-muted">Les codes d'accès ne sont visibles que pour le manager principal de l'environnement, les administrateurs/fondateurs/développeurs, et les managers pour les membres de leur équipe.</p>
             {mySubs.map(s => {
+              const envServices = store.envServices(env?.id)
               const owner = store.db.accounts.find(a => a.id === s.ownerId)
               const isPrincipal = env?.createdBy === me.id
               const elevated = ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'].includes(me.role) || isPrincipal
@@ -254,7 +287,14 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
                   <Field label="Prénom"><CommitInput className="input" value={s.prenom} onCommit={v => store.updateSubEnv(s.id, { prenom: v })} /></Field>
                   <Field label="Nom"><CommitInput className="input" value={s.nom} onCommit={v => store.updateSubEnv(s.id, { nom: v })} /></Field>
                   <Field label="Poste"><CommitInput className="input" value={s.poste} onCommit={v => store.updateSubEnv(s.id, { poste: v })} /></Field>
-                  <Field label="Service"><CommitInput className="input" value={s.service} onCommit={v => store.updateSubEnv(s.id, { service: v })} /></Field>
+                  <Field label="Service">
+                    {envServices.length > 0
+                      ? <select className="input" value={s.serviceId || ''} onChange={e => store.assignSubService(s.id, e.target.value || null)}>
+                          <option value="">— Sans service —</option>
+                          {envServices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        </select>
+                      : <CommitInput className="input" value={s.service} onCommit={v => store.updateSubEnv(s.id, { service: v })} />}
+                  </Field>
                   <Field label="Code (4 chiffres)">
                     {canPin
                       ? <CommitInput className="input" maxLength={4} value={s.pin} sanitize={v => v.replace(/\D/g, '')} onCommit={v => store.updateSubEnv(s.id, { pin: v })} />
