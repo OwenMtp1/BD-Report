@@ -1028,6 +1028,8 @@ function migrate(db) {
     if (!a.channelReads || typeof a.channelReads !== 'object') a.channelReads = {}
     if (!Array.isArray(a.hiddenMessages)) a.hiddenMessages = [] // supprimés « pour moi »
     if (!Array.isArray(a.pinnedMessages)) a.pinnedMessages = [] // épinglés « pour moi »
+    if (!a.hiddenChannels || typeof a.hiddenChannels !== 'object' || Array.isArray(a.hiddenChannels)) a.hiddenChannels = {} // { canalId: dateMasquage } — réapparaît si nouveau message
+    if (!Array.isArray(a.leftChannels)) a.leftChannels = [] // groupes quittés (définitif)
   })
   ;(db.environments || []).forEach(e => { if (!e.plan) e.plan = 'beta' })
   // Données globales support (partagées entre tous les comptes support)
@@ -1547,9 +1549,36 @@ export function StoreProvider({ children, demo = false }) {
         if (c.access === 'services') return !!sub && (c.services || []).includes(sub.serviceId)
         return true // 'all'
       },
-      // Liste des canaux d'un périmètre ('team' ou 'support'), filtrés par visibilité.
+      // Liste des canaux d'un périmètre ('team' ou 'support'), filtrés par visibilité + masquage perso.
       listChannels(scope) {
-        return (db.channels || []).filter(c => c.scope === scope && (scope === 'support' || c.envId === session?.envId) && this.canSeeChannel(c))
+        return (db.channels || []).filter(c => c.scope === scope && (scope === 'support' || c.envId === session?.envId) && this.canSeeChannel(c) && !this.isChannelHiddenForMe(c))
+      },
+      // Un canal est-il « supprimé pour moi » (réapparaît si nouveau message) ou « quitté » (définitif) ?
+      isChannelHiddenForMe(c) {
+        if (!c) return false
+        if ((account?.leftChannels || []).includes(c.id)) return true
+        const hAt = account?.hiddenChannels?.[c.id]
+        if (!hAt) return false
+        const msgs = db.channelMessages?.[c.id] || []
+        const reappears = msgs.some(m => m.ts > hAt && m.authorId !== account?.id)
+        return !reappears
+      },
+      // Est-ce un « groupe » (≥ 2 interlocuteurs) : ni message direct, ni bloc-notes personnel.
+      isGroupChannel(c) { return !!c && !c.dm && !c.personal },
+      // « Supprimer pour moi » : masque le canal ; il réapparaît dès qu'un nouveau message arrive.
+      hideChannelForMe(channelId) {
+        setDb(d => { const a = d.accounts.find(x => x.id === account?.id); if (a) { a.hiddenChannels = a.hiddenChannels || {}; a.hiddenChannels[channelId] = new Date().toISOString() } return d })
+      },
+      // « Quitter le groupe » : masquage définitif + retrait de la liste des membres le cas échéant.
+      leaveChannel(channelId) {
+        setDb(d => {
+          const a = d.accounts.find(x => x.id === account?.id); if (!a) return d
+          a.leftChannels = a.leftChannels || []
+          if (!a.leftChannels.includes(channelId)) a.leftChannels.push(channelId)
+          const c = (d.channels || []).find(x => x.id === channelId)
+          if (c && Array.isArray(c.members) && session?.subEnvId) c.members = c.members.filter(m => m !== session.subEnvId)
+          return d
+        })
       },
       createChannel({ scope = 'team', name, kind = 'chat', access = 'all', members = [], services = [], reporting = null }) {
         if (roBlocked()) return null

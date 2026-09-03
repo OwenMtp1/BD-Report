@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MessagesSquare, Plus, Hash, Radio, Send, ImagePlus, Smile, Trash2, Settings2, Users2,
   Lock, Globe, X, ChevronLeft, Bell, BellOff, Paperclip, MoreVertical, Reply, Forward,
-  Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft, User,
+  Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft, User, LogOut,
 } from 'lucide-react'
 import { useStore, reportEventsFor, PRESENCE_META } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
@@ -156,6 +156,8 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
   const [menuFor, setMenuFor] = useState(null)
   const [forwardMsg, setForwardMsg] = useState(null)
   const [confirm, setConfirm] = useState(null) // { kind: 'delete' | 'pin', msg }
+  const [headMenu, setHeadMenu] = useState(false)
+  const [convPending, setConvPending] = useState(null) // 'leave' | 'deleteAll' | 'deletePersonal'
   const imgRef = useRef(null), fileRef = useRef(null), endRef = useRef(null)
   const muted = store.isChannelMuted(channel.id)
   const personal = channel.personal
@@ -196,10 +198,26 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
           {!personal && <button className={`btn-ghost !p-1.5 ${muted ? 'text-red-500' : ''}`} title={muted ? 'Réactiver les notifications' : 'Couper les notifications de ce canal'} onClick={() => store.toggleMuteChannel(channel.id)}>
             {muted ? <BellOff size={16} /> : <Bell size={16} />}
           </button>}
-          {canManage && !personal && !channel._general && !channel.dm && <>
+          {canManage && !personal && !channel._general && !channel.dm && (
             <button className="btn-ghost !p-1.5" title="Réglages du canal" onClick={onEdit}><Settings2 size={16} /></button>
-            <button className="btn-ghost !p-1.5 text-red-500" title="Supprimer" onClick={onDelete}><Trash2 size={16} /></button>
-          </>}
+          )}
+          <div className="relative">
+            <button className="btn-ghost !p-1.5" title="Options de la conversation" onClick={() => setHeadMenu(v => !v)}><MoreVertical size={16} /></button>
+            {headMenu && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setHeadMenu(false)} />
+                <div className="absolute z-30 top-9 right-0 card shadow-lg w-56 p-1 text-sm">
+                  {channel.dm && <MenuItem icon={Trash2} label="Supprimer la conversation" danger onClick={() => { store.hideChannelForMe(channel.id); setHeadMenu(false); toast('Conversation supprimée') }} />}
+                  {personal && <MenuItem icon={Trash2} label="Supprimer le bloc-notes" danger onClick={() => { setConvPending('deletePersonal'); setHeadMenu(false) }} />}
+                  {store.isGroupChannel(channel) && <>
+                    <MenuItem icon={Trash2} label="Supprimer pour moi" onClick={() => { store.hideChannelForMe(channel.id); setHeadMenu(false); toast('Masquée — elle réapparaîtra au prochain message') }} />
+                    <MenuItem icon={LogOut} label="Quitter le groupe" danger onClick={() => { setConvPending('leave'); setHeadMenu(false) }} />
+                    {canManage && !channel._general && <MenuItem icon={Trash2} label="Supprimer pour tout le monde" danger onClick={() => { setConvPending('deleteAll'); setHeadMenu(false) }} />}
+                  </>}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -261,6 +279,9 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
       {forwardMsg && <ForwardModal store={store} scope={channel.scope} fromId={channel.id} msg={forwardMsg} onClose={() => setForwardMsg(null)} />}
       {confirm?.kind === 'delete' && <DoubleChoice title="Supprimer le message" desc="Choisissez la portée de la suppression :" a="Seulement pour moi" b="Pour tout le monde" onA={() => doDelete(confirm.msg, false)} onB={() => doDelete(confirm.msg, true)} onClose={() => setConfirm(null)} />}
       {confirm?.kind === 'pin' && <DoubleChoice title="Épingler le message" desc="Épingler ce message :" a="Pour moi" b="Pour tout le monde" onA={() => doPin(confirm.msg, false)} onB={() => doPin(confirm.msg, true)} onClose={() => setConfirm(null)} />}
+      {convPending === 'leave' && <Confirm yesLabel="Quitter" message={`Quitter le groupe « ${title || channel.name} » ? Vous ne le verrez plus (un manager peut vous y rajouter).`} onYes={() => { store.leaveChannel(channel.id); setConvPending(null); toast('Vous avez quitté le groupe') }} onNo={() => setConvPending(null)} />}
+      {convPending === 'deleteAll' && <Confirm message={`Supprimer la conversation « ${title || channel.name} » pour tout le monde ? Cette action est définitive.`} onYes={() => { store.deleteChannel(channel.id); setConvPending(null); toast('Conversation supprimée') }} onNo={() => setConvPending(null)} />}
+      {convPending === 'deletePersonal' && <Confirm message="Supprimer définitivement votre bloc-notes et toutes ses notes ?" onYes={() => { store.deleteChannel(channel.id); setConvPending(null); toast('Bloc-notes supprimé') }} onNo={() => setConvPending(null)} />}
     </div>
   )
 }

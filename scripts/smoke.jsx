@@ -110,6 +110,10 @@ async function main() {
   await type(composer, 'Bonjour equipe smoke')
   await act(async () => { Simulate.keyDown(composer, { key: 'Enter' }) })
   if (!text().includes('Bonjour equipe smoke')) throw new Error('Channel message not posted')
+  // Options de conversation : « Supprimer pour moi » masque le canal (réapparaît au prochain message).
+  await click(container.querySelector('button[title="Options de la conversation"]'))
+  await click(find('button', 'Supprimer pour moi'))
+  if ([...container.querySelectorAll('button')].some(b => b.textContent.trim() === 'Canal Smoke')) throw new Error('Channel not hidden after delete-for-me')
 
   // 6b. Support : créer un ticket, vérifier la conversation, le côté support et l'enrichissement client
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Support'))

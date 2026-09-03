@@ -36,6 +36,9 @@ npm run dev        # serveur de dev
   fiche profil (clic avatar). **Non-lus** : pastille onglet + par canal, notifs centre de notifs ; **mute** par canal
   (`account.mutedChannels`). Canaux **auto-créés** (une fois, `db._autoSeed.generalChannels/blocNotes`) : « Général »
   (tous les profils) par env + « Bloc notes » personnel par personne (`channel.personal`, visible du seul propriétaire).
+  **Suppression** : DM & bloc-notes entièrement supprimables ; les groupes (≥ 2 interlocuteurs) offrent « supprimer pour moi »
+  (`account.hiddenChannels` = { canalId: date } — réapparaît au prochain message) ou « quitter le groupe » (`account.leftChannels`,
+  définitif) ; le manager garde « supprimer pour tout le monde ». `store.isGroupChannel/hideChannelForMe/leaveChannel/isChannelHiddenForMe`.
   Store : `db.channels` + `db.channelMessages`, `reconcileReporting(db)` + `seedAutoChannels(db)` (idempotents),
   méthodes `createChannel/updateChannel/postChannelMessage/forwardChannelMessage/deleteMessageFor{All,Me}/pinMessageFor{All,Me}/
   markChannelUnreadFrom/toggleChannelReaction/channelMembers/setPresence/markChannelRead/channelUnread/…`.
