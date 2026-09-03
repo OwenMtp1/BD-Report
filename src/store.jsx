@@ -1266,7 +1266,7 @@ export function StoreProvider({ children, demo = false }) {
     }
     return {
       db, setDb, session, setSession,
-      account, currentEnv, readOnly,
+      account, currentEnv, readOnly, demo,
       // ----- langue de l'interface (compte connecté sinon préférence locale)
       uiLang: account?.lang || uiLang,
       setUiLang(lang) {

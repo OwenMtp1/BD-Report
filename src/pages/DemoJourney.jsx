@@ -44,11 +44,12 @@ function DemoController({ role, navSeq }) {
       store.setSession(demoSession(role))
     }
   }, [role, store])
-  // navSeq change à chaque étape de visite → navigue vers la page ciblée.
+  // navSeq change à chaque étape de visite → navigue vers la page ciblée, via le canal
+  // privé de la démo (l'app réelle derrière l'overlay ne doit pas bouger).
   useEffect(() => {
     if (navSeq && navSeq.page) {
       // laisse le temps à un éventuel changement de casquette de s’appliquer
-      const t = setTimeout(() => window.dispatchEvent(new CustomEvent('app-navigate', { detail: navSeq.page })), navSeq.role !== curRole.current ? 260 : 40)
+      const t = setTimeout(() => window.dispatchEvent(new CustomEvent('demo-navigate', { detail: navSeq.page })), navSeq.role !== curRole.current ? 300 : 60)
       return () => clearTimeout(t)
     }
   }, [navSeq])

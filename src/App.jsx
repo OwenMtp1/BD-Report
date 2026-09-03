@@ -359,6 +359,7 @@ function MainApp() {
   const env = store.db.environments.find(e => e.id === session.envId)
   const { t: tr } = useT()
   const [page, setPage] = useState(() => {
+    if (store.demo) return 'dashboard' // démo isolée : n'hérite pas de l'URL de l'app réelle
     const seg = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, '')).split('/')
     return (seg[0] && seg[0] !== 'company') ? seg[0] : 'dashboard'
   })
@@ -408,12 +409,14 @@ function MainApp() {
   // Deep-links : l'onglet courant se reflète dans l'URL (#/page) → bookmarkable + back/forward.
   // On n'écrase jamais un lien de fiche entreprise (#/company/<nom>), géré par CompanyModal.
   useEffect(() => {
+    if (store.demo) return // démo isolée : ne touche jamais à l'URL (sinon l'app réelle bouge)
     const raw = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, ''))
     if (raw.startsWith('company/')) return
     if (raw.split('/')[0] !== page) window.location.hash = '/' + page
   }, [page])
 
   useEffect(() => {
+    if (store.demo) return // démo isolée : n'écoute pas les changements d'URL
     const seg = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, '')).split('/')
     if (seg[0] === 'company' && seg[1]) setTimeout(() => window.dispatchEvent(new CustomEvent('open-company', { detail: seg[1] })), 300)
     const onHash = () => {
@@ -426,11 +429,20 @@ function MainApp() {
   }, [])
 
   // Navigation déclenchée par d'autres composants (ex : l'assistant IA renvoie vers le Support).
+  // En démo, l'app réelle NE réagit PAS à app-navigate (sinon la visite guidée démonterait
+  // l'overlay de démo) ; seul l'instance de démo écoute son canal privé 'demo-navigate'.
   useEffect(() => {
+    if (store.demo) return
     const h = (e) => { if (e.detail) goto(e.detail) }
     window.addEventListener('app-navigate', h)
     return () => window.removeEventListener('app-navigate', h)
-  }, [])
+  }, [store.demo])
+  useEffect(() => {
+    if (!store.demo) return
+    const h = (e) => { if (e.detail) goto(e.detail) }
+    window.addEventListener('demo-navigate', h)
+    return () => window.removeEventListener('demo-navigate', h)
+  }, [store.demo])
 
   const goCreateRdvFromNote = (content) => { setPendingNote(content); setPage('rdv') }
 
