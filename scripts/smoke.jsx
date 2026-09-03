@@ -96,8 +96,9 @@ async function main() {
     if (!text().includes(label)) throw new Error(`Page ${label} did not render`)
   }
 
-  // 6a. Conversations : création d'un canal par le manager/fondateur.
+  // 6a. Conversations : canaux auto (Général + Bloc notes), création d'un canal, envoi d'un message.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Conversations'))
+  if (!text().includes('Général') || !text().includes('Bloc notes')) throw new Error('Auto channels (Général / Bloc notes) missing')
   await click(find('button', 'Nouveau canal'))
   const chanName = container.querySelector('input[placeholder^="ex :"]')
   if (!chanName) throw new Error('Channel editor did not open')
@@ -105,6 +106,10 @@ async function main() {
   await click(find('button', 'Créer le canal'))
   if (!text().includes('Canal Smoke')) throw new Error('Channel not created')
   if (!text().includes('Membres')) throw new Error('Channel member list not rendered')
+  const composer = container.querySelector('textarea')
+  await type(composer, 'Bonjour equipe smoke')
+  await act(async () => { Simulate.keyDown(composer, { key: 'Enter' }) })
+  if (!text().includes('Bonjour equipe smoke')) throw new Error('Channel message not posted')
 
   // 6b. Support : créer un ticket, vérifier la conversation, le côté support et l'enrichissement client
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Support'))

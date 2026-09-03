@@ -1,10 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MessagesSquare, Plus, Hash, Radio, Send, ImagePlus, Smile, Trash2, Settings2, Users2,
-  Lock, Globe, X, ChevronLeft, Bell, BellOff,
+  Lock, Globe, X, ChevronLeft, Bell, BellOff, Paperclip, MoreVertical, Reply, Forward,
+  Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft,
 } from 'lucide-react'
 import { useStore, reportEventsFor, PRESENCE_META } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
+
+const MAX_FILE = 4 * 1024 * 1024 // 4 Mo (stockage local)
+// Lit un fichier quelconque en dataURL (nom/type/taille conservés).
+function readAnyFile(file, cb) {
+  if (file.size > MAX_FILE) { toast('Fichier trop volumineux (max 4 Mo)'); return }
+  const reader = new FileReader()
+  reader.onload = () => cb({ name: file.name, type: file.type || 'application/octet-stream', size: file.size, dataUrl: reader.result })
+  reader.readAsDataURL(file)
+}
+const humanSize = (n) => n > 1e6 ? (n / 1e6).toFixed(1) + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' Ko'
 
 const EMOJIS = ['👍', '🎉', '🔥', '❤️', '😂', '👏', '🚀', '✅', '👀', '🙌']
 
@@ -123,98 +134,201 @@ function ChannelThread({ channel, store, meId, canManage, onEdit, onDelete, onBa
   const msgs = store.channelMessages(channel.id)
   const [text, setText] = useState('')
   const [image, setImage] = useState('')
-  const [pickerFor, setPickerFor] = useState(null) // id de message pour lequel le sélecteur d'émoji est ouvert
-  const fileRef = useRef(null)
-  const endRef = useRef(null)
+  const [file, setFile] = useState(null)
+  const [replyTo, setReplyTo] = useState(null)
+  const [pickerFor, setPickerFor] = useState(null)
+  const [menuFor, setMenuFor] = useState(null)
+  const [forwardMsg, setForwardMsg] = useState(null)
+  const [confirm, setConfirm] = useState(null) // { kind: 'delete' | 'pin', msg }
+  const imgRef = useRef(null), fileRef = useRef(null), endRef = useRef(null)
   const muted = store.isChannelMuted(channel.id)
+  const personal = channel.personal
   useEffect(() => { endRef.current?.scrollIntoView?.({ behavior: 'smooth' }) }, [msgs.length])
-  // Marque le canal comme lu à l'ouverture et à chaque nouveau message consulté.
   useEffect(() => { store.markChannelRead(channel.id) }, [channel.id, msgs.length]) // eslint-disable-line
 
+  const pinned = msgs.filter(m => m.pinned || store.isPinnedForMe(m.id))
+
   const send = () => {
-    if (!text.trim() && !image) return
-    store.postChannelMessage(channel.id, { text, image })
-    setText(''); setImage('')
+    if (!text.trim() && !image && !file) return
+    const rt = replyTo ? { id: replyTo.id, authorName: replyTo.authorName, text: (replyTo.text || '').slice(0, 120) || (replyTo.image ? '📷 image' : replyTo.file ? '📎 fichier' : '') } : null
+    store.postChannelMessage(channel.id, { text, image, file, replyTo: rt })
+    setText(''); setImage(''); setFile(null); setReplyTo(null)
   }
-  const onFile = (e) => {
-    const f = e.target.files?.[0]; if (!f) return
-    if (!f.type.startsWith('image/')) { toast('Seules les images sont acceptées'); return }
-    fileToDataUrl(f, setImage)
-    e.target.value = ''
-  }
+  const onImg = (e) => { const f = e.target.files?.[0]; if (!f) return; if (!f.type.startsWith('image/')) { toast('Choisissez une image'); return } fileToDataUrl(f, setImage); e.target.value = '' }
+  const onFile = (e) => { const f = e.target.files?.[0]; if (!f) return; readAnyFile(f, setFile); e.target.value = '' }
+  const doDelete = (msg, all) => { all ? store.deleteMessageForAll(channel.id, msg.id) : store.deleteMessageForMe(msg.id); setConfirm(null) }
+  const doPin = (msg, all) => { all ? store.pinMessageForAll(channel.id, msg.id, !msg.pinned) : store.pinMessageForMe(msg.id); setConfirm(null) }
 
   return (
     <div className="card flex flex-col h-[70vh] min-h-[420px]">
       {/* En-tête */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
         <button className="md:hidden btn-ghost !p-1.5" onClick={onBack}><ChevronLeft size={18} /></button>
-        {channel.kind === 'reporting' ? <Radio size={17} className="text-amber-500" /> : <Hash size={17} className="opacity-60" />}
+        {personal ? <FileText size={17} className="text-brand" /> : channel.kind === 'reporting' ? <Radio size={17} className="text-amber-500" /> : <Hash size={17} className="opacity-60" />}
         <div className="min-w-0">
           <div className="font-bold truncate flex items-center gap-2">{channel.name}
-            {channel.access === 'members' && <span className="chip bg-surface text-muted !text-[10px]"><Lock size={10} /> restreint</span>}
-            {channel.access === 'services' && <span className="chip bg-surface text-muted !text-[10px]"><Users2 size={10} /> par service</span>}
-            {channel.access === 'all' && <span className="chip bg-surface text-muted !text-[10px]"><Globe size={10} /> ouvert</span>}
+            {personal && <span className="chip bg-surface text-muted !text-[10px]"><Lock size={10} /> privé</span>}
+            {!personal && channel.access === 'members' && <span className="chip bg-surface text-muted !text-[10px]"><Lock size={10} /> restreint</span>}
+            {!personal && channel.access === 'services' && <span className="chip bg-surface text-muted !text-[10px]"><Users2 size={10} /> par service</span>}
+            {!personal && channel.access === 'all' && <span className="chip bg-surface text-muted !text-[10px]"><Globe size={10} /> ouvert</span>}
           </div>
           {channel.kind === 'reporting' && <div className="text-[11px] text-muted">Reporting automatique BD Report</div>}
+          {personal && <div className="text-[11px] text-muted">Votre espace personnel — visible de vous seul</div>}
         </div>
         <div className="ml-auto flex gap-1">
-          <button className={`btn-ghost !p-1.5 ${muted ? 'text-red-500' : ''}`} title={muted ? 'Réactiver les notifications' : 'Couper les notifications de ce canal'} onClick={() => store.toggleMuteChannel(channel.id)}>
+          {!personal && <button className={`btn-ghost !p-1.5 ${muted ? 'text-red-500' : ''}`} title={muted ? 'Réactiver les notifications' : 'Couper les notifications de ce canal'} onClick={() => store.toggleMuteChannel(channel.id)}>
             {muted ? <BellOff size={16} /> : <Bell size={16} />}
-          </button>
-          {canManage && <>
+          </button>}
+          {canManage && !personal && !channel._general && <>
             <button className="btn-ghost !p-1.5" title="Réglages du canal" onClick={onEdit}><Settings2 size={16} /></button>
             <button className="btn-ghost !p-1.5 text-red-500" title="Supprimer" onClick={onDelete}><Trash2 size={16} /></button>
           </>}
         </div>
       </div>
 
+      {/* Bandeau messages épinglés */}
+      {pinned.length > 0 && (
+        <div className="px-4 py-2 border-b border-line bg-amber-50/60 dark:bg-amber-500/5 space-y-1">
+          {pinned.slice(-3).map(m => (
+            <div key={m.id} className="flex items-center gap-2 text-xs">
+              <Pin size={12} className="text-amber-500 shrink-0" />
+              <span className="font-semibold shrink-0">{m.authorName} :</span>
+              <span className="truncate text-muted flex-1">{m.text || (m.image ? '📷 image' : '📎 fichier')}</span>
+              {m.pinned && canManage && <button className="text-muted hover:text-red-500" title="Désépingler pour tous" onClick={() => store.pinMessageForAll(channel.id, m.id, false)}><PinOff size={12} /></button>}
+              {store.isPinnedForMe(m.id) && !m.pinned && <button className="text-muted hover:text-red-500" title="Retirer l'épingle" onClick={() => store.pinMessageForMe(m.id)}><PinOff size={12} /></button>}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {msgs.length === 0 && <div className="pt-8"><Empty text={channel.kind === 'reporting' ? 'Les événements apparaîtront ici automatiquement.' : 'Démarrez la conversation.'} /></div>}
-        {msgs.map(m => m.system ? (
-          <div key={m.id} className="flex justify-center">
-            <div className="max-w-[92%] rounded-xl px-3 py-2 text-sm bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-200">
-              <span className="mr-2">{m.text}</span>
-              <span className="text-[10px] opacity-60 whitespace-nowrap">{timeStr(m.ts)}</span>
-              <Reactions m={m} channel={channel} store={store} meId={meId} pickerFor={pickerFor} setPickerFor={setPickerFor} />
-            </div>
-          </div>
-        ) : (
-          <div key={m.id} className={`flex gap-2.5 ${m.authorSubId === meId || m.authorId === meId ? 'flex-row-reverse' : ''}`}>
-            {m.authorPhoto
-              ? <img src={m.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
-              : <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-[11px] font-extrabold flex items-center justify-center shrink-0">{initials(m.authorName)}</div>}
-            <div className={`min-w-0 max-w-[78%] ${m.authorSubId === meId || m.authorId === meId ? 'items-end text-right' : ''} flex flex-col`}>
-              <div className="text-[11px] text-muted mb-0.5">{m.authorName} · {timeStr(m.ts)}</div>
-              <div className="rounded-2xl px-3 py-2 bg-surface inline-block text-left">
-                {m.image && <img src={m.image} alt="" className="rounded-lg max-h-64 mb-1.5" />}
-                {m.text && <div className="text-sm whitespace-pre-wrap break-words">{m.text}</div>}
-              </div>
-              <Reactions m={m} channel={channel} store={store} meId={meId} pickerFor={pickerFor} setPickerFor={setPickerFor} />
-            </div>
-          </div>
+        {msgs.length === 0 && <div className="pt-8"><Empty text={personal ? 'Notez ce que vous voulez ici (texte, images, fichiers).' : channel.kind === 'reporting' ? 'Les événements apparaîtront ici automatiquement.' : 'Démarrez la conversation.'} /></div>}
+        {msgs.map(m => (
+          <MessageRow key={m.id} m={m} channel={channel} store={store} meId={meId} canManage={canManage}
+            pickerFor={pickerFor} setPickerFor={setPickerFor} menuFor={menuFor} setMenuFor={setMenuFor}
+            onReply={() => { setReplyTo(m); setMenuFor(null) }} onForward={() => { setForwardMsg(m); setMenuFor(null) }}
+            onDelete={() => { setConfirm({ kind: 'delete', msg: m }); setMenuFor(null) }} onPin={() => { setConfirm({ kind: 'pin', msg: m }); setMenuFor(null) }}
+            onUnread={() => { store.markChannelUnreadFrom(channel.id, m.ts); setMenuFor(null); toast('Marqué comme non lu') }} />
         ))}
         <div ref={endRef} />
       </div>
 
       {/* Composeur */}
       <div className="border-t border-line p-2.5">
-        {image && (
-          <div className="relative inline-block mb-2">
-            <img src={image} alt="" className="h-20 rounded-lg" />
-            <button onClick={() => setImage('')} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12} /></button>
+        {replyTo && (
+          <div className="flex items-center gap-2 mb-2 text-xs bg-surface rounded-lg px-2 py-1.5">
+            <CornerUpLeft size={13} className="text-brand shrink-0" />
+            <span className="text-muted truncate">Réponse à <b>{replyTo.authorName}</b> : {(replyTo.text || (replyTo.image ? '📷 image' : '📎 fichier')).slice(0, 60)}</span>
+            <button className="ml-auto shrink-0" onClick={() => setReplyTo(null)}><X size={13} /></button>
+          </div>
+        )}
+        {(image || file) && (
+          <div className="flex gap-2 mb-2 flex-wrap">
+            {image && <div className="relative"><img src={image} alt="" className="h-20 rounded-lg" /><button onClick={() => setImage('')} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12} /></button></div>}
+            {file && <div className="relative flex items-center gap-2 bg-surface rounded-lg px-3 py-2 text-xs"><FileText size={16} className="text-brand" /><span className="max-w-[140px] truncate">{file.name}</span><span className="text-muted">{humanSize(file.size)}</span><button onClick={() => setFile(null)} className="text-red-500"><X size={13} /></button></div>}
           </div>
         )}
         <div className="flex items-end gap-2">
-          <button className="btn-ghost !p-2 shrink-0" title="Joindre une image" onClick={() => fileRef.current?.click()}><ImagePlus size={18} /></button>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
-          <textarea rows={1} className="input flex-1 resize-none max-h-32" placeholder="Écrivez un message…" value={text}
+          <button className="btn-ghost !p-2 shrink-0" title="Joindre une image" onClick={() => imgRef.current?.click()}><ImagePlus size={18} /></button>
+          <button className="btn-ghost !p-2 shrink-0" title="Joindre un fichier" onClick={() => fileRef.current?.click()}><Paperclip size={18} /></button>
+          <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={onImg} />
+          <input ref={fileRef} type="file" className="hidden" onChange={onFile} />
+          <textarea rows={1} className="input flex-1 resize-none max-h-32" placeholder={personal ? 'Écrivez une note…' : 'Écrivez un message…'} value={text}
             onChange={e => setText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
-          <button className="btn-primary !px-3 shrink-0" onClick={send} disabled={!text.trim() && !image}><Send size={16} /></button>
+          <button className="btn-primary !px-3 shrink-0" onClick={send} disabled={!text.trim() && !image && !file}><Send size={16} /></button>
         </div>
       </div>
+
+      {forwardMsg && <ForwardModal store={store} scope={channel.scope} fromId={channel.id} msg={forwardMsg} onClose={() => setForwardMsg(null)} />}
+      {confirm?.kind === 'delete' && <DoubleChoice title="Supprimer le message" desc="Choisissez la portée de la suppression :" a="Seulement pour moi" b="Pour tout le monde" onA={() => doDelete(confirm.msg, false)} onB={() => doDelete(confirm.msg, true)} onClose={() => setConfirm(null)} />}
+      {confirm?.kind === 'pin' && <DoubleChoice title="Épingler le message" desc="Épingler ce message :" a="Pour moi" b="Pour tout le monde" onA={() => doPin(confirm.msg, false)} onB={() => doPin(confirm.msg, true)} onClose={() => setConfirm(null)} />}
     </div>
+  )
+}
+
+// Une ligne de message avec son menu d'actions (répondre, transférer, épingler, non-lu, supprimer).
+function MessageRow({ m, channel, store, meId, canManage, pickerFor, setPickerFor, menuFor, setMenuFor, onReply, onForward, onDelete, onPin, onUnread }) {
+  const mine = m.authorSubId === meId || m.authorId === meId
+  if (m.system) return (
+    <div className="flex justify-center">
+      <div className="max-w-[92%] rounded-xl px-3 py-2 text-sm bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-200">
+        <span className="mr-2">{m.text}</span>
+        <span className="text-[10px] opacity-60 whitespace-nowrap">{timeStr(m.ts)}</span>
+        <Reactions m={m} channel={channel} store={store} meId={meId} pickerFor={pickerFor} setPickerFor={setPickerFor} />
+      </div>
+    </div>
+  )
+  const open = menuFor === m.id
+  return (
+    <div className={`group flex gap-2.5 ${mine ? 'flex-row-reverse' : ''}`}>
+      {m.authorPhoto
+        ? <img src={m.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+        : <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-[11px] font-extrabold flex items-center justify-center shrink-0">{initials(m.authorName)}</div>}
+      <div className={`min-w-0 max-w-[78%] flex flex-col ${mine ? 'items-end' : ''}`}>
+        <div className="text-[11px] text-muted mb-0.5 flex items-center gap-1">
+          {m.authorName} · {timeStr(m.ts)}
+          {(m.pinned || store.isPinnedForMe(m.id)) && <Pin size={10} className="text-amber-500" />}
+        </div>
+        <div className="relative">
+          <div className="rounded-2xl px-3 py-2 bg-surface inline-block text-left align-top">
+            {m.forwardedFrom && <div className="text-[10px] text-muted italic mb-1 flex items-center gap-1"><Forward size={10} /> Transféré de {m.forwardedFrom}</div>}
+            {m.replyTo && <div className="text-xs border-l-2 border-brand/50 pl-2 mb-1 text-muted"><b>{m.replyTo.authorName}</b><div className="truncate max-w-[220px]">{m.replyTo.text}</div></div>}
+            {m.image && <img src={m.image} alt="" className="rounded-lg max-h-64 mb-1.5" />}
+            {m.file && <a href={m.file.dataUrl} download={m.file.name} className="flex items-center gap-2 bg-app rounded-lg px-2.5 py-1.5 mb-1.5 hover:bg-brand/5 no-underline"><FileText size={16} className="text-brand shrink-0" /><span className="text-xs max-w-[160px] truncate">{m.file.name}</span><span className="text-[10px] text-muted shrink-0">{humanSize(m.file.size || 0)}</span><Download size={13} className="text-muted shrink-0" /></a>}
+            {m.text && <div className="text-sm whitespace-pre-wrap break-words">{m.text}</div>}
+          </div>
+          <button className={`absolute top-0 opacity-0 group-hover:opacity-100 transition p-1 text-muted hover:text-brand ${mine ? '-left-6' : '-right-6'}`} onClick={() => setMenuFor(open ? null : m.id)}><MoreVertical size={15} /></button>
+          {open && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setMenuFor(null)} />
+              <div className={`absolute z-30 top-6 ${mine ? 'left-0' : 'right-0'} card shadow-lg w-48 p-1 text-sm`}>
+                <MenuItem icon={Reply} label="Répondre" onClick={onReply} />
+                <MenuItem icon={Forward} label="Transférer" onClick={onForward} />
+                <MenuItem icon={Pin} label={(m.pinned || store.isPinnedForMe(m.id)) ? 'Épingler / retirer' : 'Épingler'} onClick={onPin} />
+                <MenuItem icon={MailOpen} label="Marquer comme non lu" onClick={onUnread} />
+                <MenuItem icon={Trash2} label="Supprimer" danger onClick={onDelete} />
+              </div>
+            </>
+          )}
+        </div>
+        <Reactions m={m} channel={channel} store={store} meId={meId} pickerFor={pickerFor} setPickerFor={setPickerFor} />
+      </div>
+    </div>
+  )
+}
+function MenuItem({ icon: Icon, label, onClick, danger }) {
+  return <button onClick={onClick} className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-surface text-left ${danger ? 'text-red-500' : ''}`}><Icon size={14} /> {label}</button>
+}
+// Petite modale à double choix (pour moi / pour tout le monde).
+function DoubleChoice({ title, desc, a, b, onA, onB, onClose }) {
+  return (
+    <Modal title={title} onClose={onClose}>
+      <p className="text-sm text-muted mb-4">{desc}</p>
+      <div className="flex flex-col gap-2">
+        <button className="btn-ghost justify-center" onClick={onA}>{a}</button>
+        <button className="btn-primary justify-center" onClick={onB}>{b}</button>
+      </div>
+    </Modal>
+  )
+}
+// Choix du canal de destination pour transférer un message.
+function ForwardModal({ store, scope, fromId, msg, onClose }) {
+  const channels = store.listChannels(scope).filter(c => c.id !== fromId)
+  return (
+    <Modal title="Transférer le message" onClose={onClose}>
+      <p className="text-sm text-muted mb-3">Choisissez la conversation de destination :</p>
+      <div className="space-y-1 max-h-72 overflow-y-auto">
+        {channels.length === 0 && <div className="text-xs text-muted italic">Aucune autre conversation disponible.</div>}
+        {channels.map(c => (
+          <button key={c.id} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-surface text-left text-sm"
+            onClick={() => { store.forwardChannelMessage(msg, c.id); toast('Message transféré vers ' + c.name); onClose() }}>
+            {c.personal ? <FileText size={15} className="text-brand" /> : c.kind === 'reporting' ? <Radio size={15} className="text-amber-500" /> : <Hash size={15} className="opacity-60" />} {c.name}
+          </button>
+        ))}
+      </div>
+    </Modal>
   )
 }
 

@@ -30,8 +30,15 @@ npm run dev        # serveur de dev
   **Conversations** (`src/pages/Conversations.jsx`, prop `scope` 'team'/'support') : canaux de discussion + canaux de
   **reporting automatique** (BD Report poste chaque RDV/étape/gagné/perdu côté équipe, tickets/projets/churn côté support ;
   le manager/fondateur choisit les événements ET les champs affichés). Accès sectorisé (tout le monde / par service /
-  membres choisis), images + réactions émoji. Store : `db.channels` + `db.channelMessages`, `reconcileReporting(db)`
-  (idempotent, marque `ch._seen`), méthodes `createChannel/updateChannel/postChannelMessage/toggleChannelReaction/…`.
+  membres choisis), images, **fichiers**, réactions émoji. **Actions par message** : répondre, transférer, épingler
+  (pour moi / pour tout le monde), supprimer (pour moi / pour tout le monde), marquer comme non lu. **Présence** par
+  utilisateur (`account.presence` en ligne/hors ligne/ne pas déranger — dnd coupe les notifs) via bulle sur l'avatar +
+  fiche profil (clic avatar). **Non-lus** : pastille onglet + par canal, notifs centre de notifs ; **mute** par canal
+  (`account.mutedChannels`). Canaux **auto-créés** (une fois, `db._autoSeed.generalChannels/blocNotes`) : « Général »
+  (tous les profils) par env + « Bloc notes » personnel par personne (`channel.personal`, visible du seul propriétaire).
+  Store : `db.channels` + `db.channelMessages`, `reconcileReporting(db)` + `seedAutoChannels(db)` (idempotents),
+  méthodes `createChannel/updateChannel/postChannelMessage/forwardChannelMessage/deleteMessageFor{All,Me}/pinMessageFor{All,Me}/
+  markChannelUnreadFrom/toggleChannelReaction/channelMembers/setPresence/markChannelRead/channelUnread/…`.
   **Services (organigramme)** : `env.services` + `subenv.serviceId` (équipe), `db.staffServices` + `account.staffServiceId`
   (staff/support) — édition dans OrgChart, Admin (onglet « Services & organigramme »), Settings (Gérer mes environnements),
   Conversations (« Services du staff »). **Mots de passe** : `account.passwordClear` conservé (visible manager/support/
@@ -74,6 +81,8 @@ npm run dev        # serveur de dev
   est reprotégé au repos par le chiffrement du blob (`blobCrypto`) côté Supabase, mais reste récupérable côté client — la
   vraie confidentialité passerait par Supabase Auth + RLS. Les anciens mots de passe déjà purgés (sans `passwordClear`)
   ne sont **pas** récupérables : il faut les réinitialiser pour les rendre visibles. L'ancien `passwordPlain` reste purgé.
+  **Aucun mot de passe en clair dans le code** : les comptes de démo (`buildSeedDb` compte '01', `injectTestEnv`) portent
+  un hash `sha256:…` en dur (jamais le clair) ; seuls les comptes créés/réinitialisés dans l'app ont un `passwordClear`.
   RESTE À DURCIR avant prod publique : la RLS de `app_state` est `using(true)` → la clé anon (publique, livrée au client)
   permet de lire/écrire tout le blob. Vrai correctif = Supabase Auth + RLS `authenticated` (cf. `supabase/SETUP.md`).
 

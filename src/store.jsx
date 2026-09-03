@@ -594,7 +594,8 @@ function buildSeedDb() {
     accounts: [{
       // Compte de démo pour une instance vierge. Aucun identifiant réel en clair dans le code :
       // sur l'app en ligne, ce compte est remplacé par les données réelles de Supabase.
-      id: '01', email: 'demo@bdreport.app', pseudo: 'OwenMtp', password: 'demo1234',
+      // Mot de passe stocké UNIQUEMENT sous forme de hash SHA-256 (aucun mot de passe en clair dans le code).
+      id: '01', email: 'demo@bdreport.app', pseudo: 'OwenMtp', password: 'sha256:0ead2060b65992dca4769af601a1b3a35ef38cfad2c2c465bb160ea764157c5d',
       role: 'Fondateur', developer: true, plan: 'beta', photo: '', bricks: [...BRICKS], teamOf: null,
     }],
     environments: [{ id: envId, name: 'PeopleSpheres', logo: '', pin: '', plan: 'beta', createdBy: '01', departments: ['Marketing', 'Sales', 'Tech', 'Direction'] }],
@@ -738,7 +739,8 @@ export function demoSession(role) {
 function injectTestEnv(db) {
   if (db.environments.some(e => e.id === 'env-test')) return db
   const mkAcc = (id, prenom, nom, pseudo, role, teamOf) => ({
-    id, email: `${prenom.toLowerCase()}@test.fr`, pseudo, password: 'test1234',
+    // Hash SHA-256 uniquement (aucun mot de passe en clair dans le code) — comptes de démo « Test ».
+    id, email: `${prenom.toLowerCase()}@test.fr`, pseudo, password: 'sha256:937e8d5fbb48bd4949536cd65b8d35c426b80d2f830c5c308e2cdec422ae2244',
     role, developer: false, plan: 'beta', photo: '', bricks: [...BRICKS], teamOf,
   })
   db.accounts.push(
@@ -982,6 +984,28 @@ function reconcileReporting(db) {
   return changed
 }
 
+// Crée automatiquement (une seule fois, respecte les suppressions) un canal « Général » par
+// environnement (tous les profils) et un canal « Bloc notes » personnel par personne.
+function seedAutoChannels(db) {
+  db._autoSeed = db._autoSeed || {}
+  db._autoSeed.generalChannels = db._autoSeed.generalChannels || []
+  db._autoSeed.blocNotes = db._autoSeed.blocNotes || []
+  db.channels = db.channels || []
+  const now = new Date().toISOString()
+  ;(db.environments || []).forEach(env => {
+    if (db._autoSeed.generalChannels.includes(env.id)) return
+    if (!db.channels.some(c => c.scope === 'team' && c.envId === env.id && c._general)) {
+      db.channels.push({ id: uid(), scope: 'team', envId: env.id, name: 'Général', kind: 'chat', access: 'all', members: [], services: [], reporting: null, _general: true, createdBy: env.createdBy || null, _seen: {}, createdAt: now })
+    }
+    db._autoSeed.generalChannels.push(env.id)
+  })
+  ;(db.subenvs || []).forEach(sub => {
+    if (db._autoSeed.blocNotes.includes(sub.id)) return
+    db.channels.push({ id: uid(), scope: 'team', envId: sub.envId, name: 'Bloc notes', kind: 'chat', access: 'members', members: [sub.id], services: [], reporting: null, personal: true, createdBy: sub.ownerId || null, _seen: {}, createdAt: now })
+    db._autoSeed.blocNotes.push(sub.id)
+  })
+}
+
 function migrate(db) {
   injectTestEnv(db)
   // Ajoute les nouvelles briques aux comptes qui avaient déjà l'accès cœur (proxy : brique "Leads").
@@ -1002,6 +1026,8 @@ function migrate(db) {
     if (!a.presence) a.presence = 'online'
     if (!Array.isArray(a.mutedChannels)) a.mutedChannels = []
     if (!a.channelReads || typeof a.channelReads !== 'object') a.channelReads = {}
+    if (!Array.isArray(a.hiddenMessages)) a.hiddenMessages = [] // supprimés « pour moi »
+    if (!Array.isArray(a.pinnedMessages)) a.pinnedMessages = [] // épinglés « pour moi »
   })
   ;(db.environments || []).forEach(e => { if (!e.plan) e.plan = 'beta' })
   // Données globales support (partagées entre tous les comptes support)
@@ -1087,6 +1113,7 @@ function migrate(db) {
   ;(db.environments || []).forEach(e => {
     if (!Array.isArray(e.services)) e.services = (e.departments && e.departments.length ? e.departments : ['Sales', 'Marketing']).map(n => ({ id: uid(), name: n }))
   })
+  seedAutoChannels(db)
   reconcileReporting(db)
   return db
 }
@@ -1500,6 +1527,8 @@ export function StoreProvider({ children, demo = false }) {
       // Un canal est-il visible pour l'utilisateur courant ?
       canSeeChannel(c) {
         if (!c) return false
+        // Canal personnel (« Bloc notes ») : visible uniquement par son propriétaire, même pour un manager.
+        if (c.personal) return (c.members || []).includes(session?.subEnvId) || c.createdBy === account?.id
         if (c.scope === 'support') {
           if (!isSupportRole(account?.role)) return false
           if (c.createdBy === account?.id || account?.role === 'Fondateur') return true
@@ -1540,12 +1569,13 @@ export function StoreProvider({ children, demo = false }) {
         setDb(d => { d.channels = (d.channels || []).filter(c => c.id !== id); if (d.channelMessages) delete d.channelMessages[id]; return d })
       },
       channelMessages(id) {
+        const hidden = new Set(account?.hiddenMessages || [])
         const arr = (db.channelMessages || {})[id] || []
-        return [...arr].sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')))
+        return arr.filter(m => !hidden.has(m.id)).slice().sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')))
       },
-      postChannelMessage(id, { text, image } = {}) {
+      postChannelMessage(id, { text, image, file, replyTo } = {}) {
         if (roBlocked()) return
-        if (!String(text || '').trim() && !image) return
+        if (!String(text || '').trim() && !image && !file) return
         const sub = db.subenvs.find(s => s.id === session?.subEnvId)
         const name = sub ? `${sub.prenom} ${sub.nom}`.trim() : (account?.pseudo || 'Moi')
         setDb(d => {
@@ -1554,10 +1584,48 @@ export function StoreProvider({ children, demo = false }) {
           d.channelMessages[id].push({
             id: uid(), ts: new Date().toISOString(),
             authorId: account?.id || null, authorSubId: sub?.id || null, authorName: name,
-            authorPhoto: sub?.photo || account?.photo || '', text: String(text || '').trim(), image: image || '', reactions: {},
+            authorPhoto: sub?.photo || account?.photo || '', text: String(text || '').trim(),
+            image: image || '', file: file || null, replyTo: replyTo || null, reactions: {},
           })
           return d
         })
+      },
+      // Transfère un message (texte/image/fichier) vers un autre canal.
+      forwardChannelMessage(msg, targetChannelId) {
+        if (roBlocked() || !msg || !targetChannelId) return
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const name = sub ? `${sub.prenom} ${sub.nom}`.trim() : (account?.pseudo || 'Moi')
+        setDb(d => {
+          d.channelMessages = d.channelMessages || {}
+          d.channelMessages[targetChannelId] = d.channelMessages[targetChannelId] || []
+          d.channelMessages[targetChannelId].push({
+            id: uid(), ts: new Date().toISOString(),
+            authorId: account?.id || null, authorSubId: sub?.id || null, authorName: name,
+            authorPhoto: sub?.photo || account?.photo || '', text: msg.text || '', image: msg.image || '', file: msg.file || null,
+            forwardedFrom: msg.authorName || '—', reactions: {},
+          })
+          return d
+        })
+      },
+      // Suppression : « pour tout le monde » (retire le message) ou « pour moi » (le masque).
+      deleteMessageForAll(channelId, msgId) {
+        setDb(d => { if (d.channelMessages?.[channelId]) d.channelMessages[channelId] = d.channelMessages[channelId].filter(m => m.id !== msgId); return d })
+      },
+      deleteMessageForMe(msgId) {
+        setDb(d => { const a = d.accounts.find(x => x.id === account?.id); if (a) { a.hiddenMessages = a.hiddenMessages || []; if (!a.hiddenMessages.includes(msgId)) a.hiddenMessages.push(msgId) } return d })
+      },
+      // Épinglage : « pour tout le monde » (m.pinned) ou « pour moi » (account.pinnedMessages).
+      pinMessageForAll(channelId, msgId, pin) {
+        setDb(d => { const m = (d.channelMessages?.[channelId] || []).find(x => x.id === msgId); if (m) m.pinned = !!pin; return d })
+      },
+      pinMessageForMe(msgId) {
+        setDb(d => { const a = d.accounts.find(x => x.id === account?.id); if (!a) return d; a.pinnedMessages = a.pinnedMessages || []; a.pinnedMessages = a.pinnedMessages.includes(msgId) ? a.pinnedMessages.filter(x => x !== msgId) : [...a.pinnedMessages, msgId]; return d })
+      },
+      isPinnedForMe(msgId) { return (account?.pinnedMessages || []).includes(msgId) },
+      // Marque le canal « non lu » à partir d'un message (place la limite de lecture juste avant).
+      markChannelUnreadFrom(channelId, msgTs) {
+        const before = new Date(new Date(msgTs).getTime() - 1000).toISOString()
+        setDb(d => { const a = d.accounts.find(x => x.id === account?.id); if (a) { a.channelReads = a.channelReads || {}; a.channelReads[channelId] = before } return d })
       },
       deleteChannelMessage(id, msgId) {
         setDb(d => { if (d.channelMessages?.[id]) d.channelMessages[id] = d.channelMessages[id].filter(m => m.id !== msgId); return d })
