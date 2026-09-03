@@ -104,6 +104,7 @@ async function main() {
   await type(chanName, 'Canal Smoke')
   await click(find('button', 'Créer le canal'))
   if (!text().includes('Canal Smoke')) throw new Error('Channel not created')
+  if (!text().includes('Membres')) throw new Error('Channel member list not rendered')
 
   // 6b. Support : créer un ticket, vérifier la conversation, le côté support et l'enrichissement client
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Support'))
@@ -215,6 +216,13 @@ async function main() {
   if (!text().includes('Organigramme')) throw new Error('OrgChart did not render')
   await click(container.querySelector('button[title="Paramètres"]'))
   if (!text().includes('Thèmes de design')) throw new Error('Settings did not render')
+
+  // 9a. Profil + statut de présence : la fiche récap s'ouvre et le statut est modifiable.
+  await click(container.querySelector('button[title="Mon profil et statut"]'))
+  if (!text().includes('Mon statut') || !text().includes('Manager direct')) throw new Error('Profile modal missing')
+  await click(find('button', 'Hors ligne'))
+  if (JSON.parse(win.localStorage.getItem('bdrflow_db_v1')).accounts.find(a => a.id === '01').presence !== 'offline') throw new Error('Presence not updated')
+  await click(find('button', 'En ligne')) // remet en ligne pour la suite
 
   // 9b. Résiliation d'abonnement : ouvre un ticket support + bascule l'environnement en lecture seule.
   await click(find('button', 'Gérer mes environnements'))

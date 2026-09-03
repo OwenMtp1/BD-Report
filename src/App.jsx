@@ -5,7 +5,7 @@ import {
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
   AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -365,6 +365,7 @@ function MainApp() {
   })
   const [pendingNote, setPendingNote] = useState('')
   const [theme, setTheme] = useState(() => store.sub?.theme || 'ocean-pro')
+  const [profileOpen, setProfileOpen] = useState(false)
 
   useEffect(() => { applyTheme(store.sub?.theme || 'ocean-pro') }, [session.subEnvId])
   // Mode « Auto (système)» : réagit en direct au basculement clair/sombre de l'appareil.
@@ -387,7 +388,8 @@ function MainApp() {
   const badges = {
     support: myTickets.filter(t => ticketHasUnread(t, 'user')).length,
     // La console Support unifie tickets + demandes : pastille cumulée sur « Équipe support ».
-    supporthub: supportUnread + newRequests,
+    supporthub: supportUnread + newRequests + (isSupportUser ? store.totalChannelUnread('support') : 0),
+    conversations: store.totalChannelUnread('team'),
   }
 
   const myBricks = allowedBricks(me) // briques permises par l'offre (Starter limité / Beta complet)
@@ -589,11 +591,15 @@ function MainApp() {
             <button title="Paramètres" className={`p-2 rounded-xl hover:bg-surface ${page === 'settings' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('settings')}>
               <SettingsIcon size={19} />
             </button>
-            {me.photo
-              ? <img src={me.photo} alt="" className="w-8 h-8 rounded-full object-cover ml-1" />
-              : <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-xs font-extrabold flex items-center justify-center ml-1">{me.pseudo?.slice(0, 2).toUpperCase()}</div>}
+            <button title="Mon profil et statut" onClick={() => setProfileOpen(true)} className="relative ml-1 rounded-full hover:ring-2 hover:ring-brand/30 transition">
+              {me.photo
+                ? <img src={me.photo} alt="" className="w-8 h-8 rounded-full object-cover" />
+                : <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-xs font-extrabold flex items-center justify-center">{me.pseudo?.slice(0, 2).toUpperCase()}</div>}
+              <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-card ${PRESENCE_META[store.myPresence()]?.dot || 'bg-slate-400'}`} />
+            </button>
           </div>
         </header>
+        {profileOpen && <ProfileModal store={store} onClose={() => setProfileOpen(false)} />}
         <main className="p-3 sm:p-5 pb-24 max-w-[1400px] mx-auto">
           {store.readOnly && page !== 'support' && (
             <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3 flex items-center gap-2 fade-in">
@@ -669,6 +675,69 @@ function LangPicker() {
 // SLA tickets qui approchent/dépassent, et événements stockés (ex. prime invalidée).
 // Fil trié par récence. L'état « lu » des mentions/notifs est persisté dans la donnée ;
 // celui des éléments dérivés (RDV/SLA…) dans localStorage (par appareil).
+// Fiche profil + sélecteur de statut de présence (en ligne / hors ligne / ne pas déranger).
+function ProfileModal({ store, onClose }) {
+  const me = store.account
+  const session = store.session
+  const sub = store.db.subenvs.find(s => s.id === session.subEnvId)
+  const env = store.db.environments.find(e => e.id === session.envId)
+  const managerAcc = me.teamOf ? store.db.accounts.find(a => a.id === me.teamOf) : null
+  const managerSub = managerAcc ? store.db.subenvs.find(s => s.ownerId === managerAcc.id && s.envId === session.envId) : null
+  const managerName = managerSub ? `${managerSub.prenom} ${managerSub.nom}`.trim() : (managerAcc?.pseudo || null)
+  const name = sub ? `${sub.prenom} ${sub.nom}`.trim() : me.pseudo
+  const svc = (store.envServices(session.envId) || []).find(v => v.id === sub?.serviceId)
+  const presence = store.myPresence()
+  const rows = [
+    ['Entreprise', env?.name || '—'],
+    ['Poste', sub?.poste || '—'],
+    ['Service', svc?.name || sub?.service || '—'],
+    ['Manager direct', managerName || 'Aucun (responsable)'],
+    ['Rôle', me.role],
+  ]
+  return (
+    <Modal title="Mon profil" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            {sub?.photo || me.photo
+              ? <img src={sub?.photo || me.photo} alt="" className="w-16 h-16 rounded-full object-cover" />
+              : <div className="w-16 h-16 rounded-full bg-brand/15 text-brand text-xl font-extrabold flex items-center justify-center">{(name || '?').slice(0, 2).toUpperCase()}</div>}
+            <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ring-2 ring-card ${PRESENCE_META[presence]?.dot}`} />
+          </div>
+          <div className="min-w-0">
+            <div className="font-extrabold text-lg truncate">{name}</div>
+            <div className={`text-xs font-semibold ${PRESENCE_META[presence]?.text}`}>{PRESENCE_META[presence]?.label}</div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line divide-y divide-line">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex items-center justify-between px-3 py-2 text-sm">
+              <span className="text-muted">{k}</span>
+              <span className="font-semibold text-right truncate ml-3">{v}</span>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <div className="text-xs font-bold uppercase text-muted mb-1.5">Mon statut</div>
+          <div className="space-y-1.5">
+            {PRESENCE_ORDER.map(p => (
+              <button key={p} onClick={() => store.setPresence(p)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-sm text-left ${presence === p ? 'border-brand bg-brand/5 font-semibold' : 'border-line hover:bg-surface'}`}>
+                <span className={`w-2.5 h-2.5 rounded-full ${PRESENCE_META[p].dot}`} />
+                <span className="flex-1">{PRESENCE_META[p].label}</span>
+                {p === 'dnd' && <span className="text-[11px] text-muted">coupe les notifications</span>}
+                {presence === p && <Check size={15} className="text-brand" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function NotificationsBell() {
   const store = useStore()
   const [open, setOpen] = useState(false)
@@ -704,6 +773,22 @@ function NotificationsBell() {
     title: n.title || 'Notification', text: n.text || '',
     onClick: () => { store.setSub(d => ({ ...d, notifs: (d.notifs || []).map(x => x.id === n.id ? { ...x, read: true } : x) })); nav(n.page) },
   }))
+  // Nouveaux messages de conversation (canaux non coupés) — silencieux en « Ne pas déranger ».
+  if (store.myPresence() !== 'dnd') {
+    const scopes = isSupport ? ['team', 'support'] : ['team']
+    scopes.forEach(scope => (store.listChannels(scope) || []).forEach(ch => {
+      if (store.isChannelMuted(ch.id)) return
+      const last = me?.channelReads?.[ch.id]
+      store.channelMessages(ch.id)
+        .filter(m => !m.system && m.authorId !== me?.id && (!last || m.ts > last))
+        .forEach(m => items.push({
+          id: 'chan-' + m.id, read: false, ts: m.ts,
+          icon: <MessagesSquare size={14} className="text-brand" />,
+          title: `Nouveau message · ${ch.name}`, text: `${m.authorName} : ${m.text || '📷 image'}`,
+          onClick: () => { store.markChannelRead(ch.id); nav(scope === 'support' ? 'supporthub' : 'conversations') },
+        }))
+    }))
+  }
   ;(sub?.rdvs || []).filter(r => r.dateRdv === today).forEach(r => {
     const id = 'rdv-' + r.id + '-' + today
     items.push({ id, read: seen.has(id), ts: today + 'T07:00',

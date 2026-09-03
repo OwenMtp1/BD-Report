@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MessagesSquare, Plus, Hash, Radio, Send, ImagePlus, Smile, Trash2, Settings2, Users2,
-  Lock, Globe, X, ChevronLeft,
+  Lock, Globe, X, ChevronLeft, Bell, BellOff,
 } from 'lucide-react'
-import { useStore, reportEventsFor } from '../store.jsx'
+import { useStore, reportEventsFor, PRESENCE_META } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 
 const EMOJIS = ['👍', '🎉', '🔥', '❤️', '😂', '👏', '🚀', '✅', '👀', '🙌']
@@ -69,19 +69,24 @@ export default function Conversations({ scope = 'team' }) {
         </div>
       )}
 
-      <div className="grid md:grid-cols-[260px_1fr] gap-4 items-start">
+      <div className="grid md:grid-cols-[240px_minmax(0,1fr)_210px] gap-4 items-start">
         {/* Liste des canaux */}
         <div className={`card p-2 ${sel ? 'hidden md:block' : ''}`}>
           {channels.length === 0 && <div className="p-3"><Empty text="Aucun canal accessible." /></div>}
           <div className="space-y-1">
-            {channels.map(c => (
-              <button key={c.id} onClick={() => setSelId(c.id)}
-                className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-sm ${sel?.id === c.id ? 'bg-brand/10 text-brand font-bold' : 'hover:bg-surface'}`}>
-                {c.kind === 'reporting' ? <Radio size={15} className="shrink-0 text-amber-500" /> : <Hash size={15} className="shrink-0 opacity-60" />}
-                <span className="truncate flex-1">{c.name}</span>
-                {c.access !== 'all' && <Lock size={12} className="opacity-40 shrink-0" />}
-              </button>
-            ))}
+            {channels.map(c => {
+              const unread = store.isChannelMuted(c.id) ? 0 : store.channelUnread(c.id)
+              return (
+                <button key={c.id} onClick={() => setSelId(c.id)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-sm ${sel?.id === c.id ? 'bg-brand/10 text-brand font-bold' : 'hover:bg-surface'}`}>
+                  {c.kind === 'reporting' ? <Radio size={15} className="shrink-0 text-amber-500" /> : <Hash size={15} className="shrink-0 opacity-60" />}
+                  <span className="truncate flex-1">{c.name}</span>
+                  {store.isChannelMuted(c.id) && <BellOff size={12} className="opacity-40 shrink-0" />}
+                  {c.access !== 'all' && <Lock size={12} className="opacity-40 shrink-0" />}
+                  {unread > 0 && <span className="shrink-0 text-[10px] font-extrabold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white">{unread > 9 ? '9+' : unread}</span>}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -92,6 +97,9 @@ export default function Conversations({ scope = 'team' }) {
         ) : (
           <div className="card p-8"><Empty text={canManage ? 'Créez un premier canal pour démarrer.' : 'Aucune conversation pour le moment.'} /></div>
         )}
+
+        {/* Membres du canal + présence */}
+        {sel && <MemberList channel={sel} store={store} meId={meId} />}
       </div>
 
       {editing && (
@@ -118,7 +126,10 @@ function ChannelThread({ channel, store, meId, canManage, onEdit, onDelete, onBa
   const [pickerFor, setPickerFor] = useState(null) // id de message pour lequel le sélecteur d'émoji est ouvert
   const fileRef = useRef(null)
   const endRef = useRef(null)
+  const muted = store.isChannelMuted(channel.id)
   useEffect(() => { endRef.current?.scrollIntoView?.({ behavior: 'smooth' }) }, [msgs.length])
+  // Marque le canal comme lu à l'ouverture et à chaque nouveau message consulté.
+  useEffect(() => { store.markChannelRead(channel.id) }, [channel.id, msgs.length]) // eslint-disable-line
 
   const send = () => {
     if (!text.trim() && !image) return
@@ -146,12 +157,15 @@ function ChannelThread({ channel, store, meId, canManage, onEdit, onDelete, onBa
           </div>
           {channel.kind === 'reporting' && <div className="text-[11px] text-muted">Reporting automatique BD Report</div>}
         </div>
-        {canManage && (
-          <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex gap-1">
+          <button className={`btn-ghost !p-1.5 ${muted ? 'text-red-500' : ''}`} title={muted ? 'Réactiver les notifications' : 'Couper les notifications de ce canal'} onClick={() => store.toggleMuteChannel(channel.id)}>
+            {muted ? <BellOff size={16} /> : <Bell size={16} />}
+          </button>
+          {canManage && <>
             <button className="btn-ghost !p-1.5" title="Réglages du canal" onClick={onEdit}><Settings2 size={16} /></button>
             <button className="btn-ghost !p-1.5 text-red-500" title="Supprimer" onClick={onDelete}><Trash2 size={16} /></button>
-          </div>
-        )}
+          </>}
+        </div>
       </div>
 
       {/* Messages */}
@@ -225,6 +239,36 @@ function Reactions({ m, channel, store, meId, pickerFor, setPickerFor }) {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// -------------------------------------------------- Liste des membres + présence
+function MemberList({ channel, store, meId }) {
+  const members = store.channelMembers(channel)
+  const rank = { online: 0, dnd: 1, offline: 2 }
+  const sorted = [...members].sort((a, b) => (rank[a.presence] - rank[b.presence]) || a.name.localeCompare(b.name))
+  const online = members.filter(m => m.presence === 'online').length
+  return (
+    <div className="card p-3 hidden md:block">
+      <div className="text-xs font-bold uppercase text-muted mb-2 flex items-center gap-1.5"><Users2 size={13} /> Membres · {online}/{members.length} en ligne</div>
+      <div className="space-y-1.5">
+        {members.length === 0 && <div className="text-xs text-muted italic">Aucun membre.</div>}
+        {sorted.map(m => (
+          <div key={m.key} className="flex items-center gap-2">
+            <div className="relative shrink-0">
+              {m.photo
+                ? <img src={m.photo} alt="" className="w-7 h-7 rounded-full object-cover" />
+                : <div className="w-7 h-7 rounded-full bg-brand/15 text-brand text-[10px] font-extrabold flex items-center justify-center">{initials(m.name)}</div>}
+              <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-card ${PRESENCE_META[m.presence]?.dot}`} title={PRESENCE_META[m.presence]?.label} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm truncate">{m.name}{(m.subId === meId || m.accountId === meId) ? ' (moi)' : ''}</div>
+              {m.poste && <div className="text-[10px] text-muted truncate">{m.poste}</div>}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

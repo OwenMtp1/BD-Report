@@ -298,6 +298,14 @@ export const ROLES = ['Fondateur', 'Support BD Report', 'Administrateur', 'Manag
 export const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
 export const isSupportRole = (role) => SUPPORT_ROLES.includes(role)
 
+// Statuts de présence (choisis manuellement par l'utilisateur).
+export const PRESENCE_META = {
+  online: { label: 'En ligne', dot: 'bg-emerald-500', text: 'text-emerald-600' },
+  offline: { label: 'Hors ligne', dot: 'bg-slate-400', text: 'text-slate-500' },
+  dnd: { label: 'Ne pas déranger', dot: 'bg-red-500', text: 'text-red-600' },
+}
+export const PRESENCE_ORDER = ['online', 'offline', 'dnd']
+
 // Colonnes du kanban Clients (back-office support).
 export const CLIENT_STATUSES = [
   { id: 'demandes', label: 'Demandes en cours', color: 'bg-amber-100 text-amber-700' },
@@ -990,6 +998,10 @@ function migrate(db) {
     // manager/support avant de ne stocker QUE le hash pour l'authentification.
     if (a.password && !String(a.password).startsWith('sha256:')) { if (!a.passwordClear) a.passwordClear = a.password; a.password = hashPw(a.password) }
     delete a.passwordPlain
+    // Présence (en ligne / hors ligne / ne pas déranger) + préférences conversations
+    if (!a.presence) a.presence = 'online'
+    if (!Array.isArray(a.mutedChannels)) a.mutedChannels = []
+    if (!a.channelReads || typeof a.channelReads !== 'object') a.channelReads = {}
   })
   ;(db.environments || []).forEach(e => { if (!e.plan) e.plan = 'beta' })
   // Données globales support (partagées entre tous les comptes support)
@@ -1560,6 +1572,53 @@ export function StoreProvider({ children, demo = false }) {
           if (set.size) m.reactions[emoji] = [...set]; else delete m.reactions[emoji]
           return d
         })
+      },
+      // Membres d'un canal (avec présence) pour la liste latérale.
+      channelMembers(channel) {
+        if (!channel) return []
+        if (channel.scope === 'support') {
+          let accs = db.accounts.filter(a => isSupportRole(a.role))
+          if (channel.access === 'members') accs = db.accounts.filter(a => (channel.members || []).includes(a.id))
+          else if (channel.access === 'services') accs = db.accounts.filter(a => (channel.services || []).includes(a.staffServiceId))
+          return accs.map(a => ({ key: a.id, accountId: a.id, subId: null, name: a.pseudo || a.email || '—', photo: a.photo || '', presence: a.presence || 'online', poste: a.role }))
+        }
+        const subs = db.subenvs.filter(s => s.envId === channel.envId)
+        let list = subs
+        if (channel.access === 'members') list = subs.filter(s => (channel.members || []).includes(s.id))
+        else if (channel.access === 'services') list = subs.filter(s => (channel.services || []).includes(s.serviceId))
+        return list.map(s => {
+          const acc = db.accounts.find(a => a.id === s.ownerId)
+          return { key: s.id, accountId: acc?.id || null, subId: s.id, name: `${s.prenom || ''} ${s.nom || ''}`.trim() || (acc?.pseudo || '—'), photo: s.photo || acc?.photo || '', presence: acc?.presence || 'online', poste: s.poste || '' }
+        })
+      },
+      // ===================================================== Présence & préférences conversations
+      myPresence() { return account?.presence || 'online' },
+      presenceOf(accId) { return db.accounts.find(a => a.id === accId)?.presence || 'online' },
+      setPresence(status) {
+        if (!['online', 'offline', 'dnd'].includes(status)) return
+        setDb(d => { const a = d.accounts.find(x => x.id === account?.id); if (a) a.presence = status; return d })
+      },
+      isChannelMuted(channelId) { return (account?.mutedChannels || []).includes(channelId) },
+      toggleMuteChannel(channelId) {
+        setDb(d => {
+          const a = d.accounts.find(x => x.id === account?.id); if (!a) return d
+          a.mutedChannels = a.mutedChannels || []
+          a.mutedChannels = a.mutedChannels.includes(channelId) ? a.mutedChannels.filter(x => x !== channelId) : [...a.mutedChannels, channelId]
+          return d
+        })
+      },
+      markChannelRead(channelId) {
+        setDb(d => { const a = d.accounts.find(x => x.id === account?.id); if (a) { a.channelReads = a.channelReads || {}; a.channelReads[channelId] = new Date().toISOString() } return d })
+      },
+      // Nombre de messages humains non lus (écrits par d'autres) d'un canal.
+      channelUnread(channelId) {
+        const last = account?.channelReads?.[channelId]
+        return (db.channelMessages?.[channelId] || []).filter(m => !m.system && m.authorId !== account?.id && (!last || m.ts > last)).length
+      },
+      // Total des non-lus visibles (0 en mode « Ne pas déranger », canaux coupés ignorés).
+      totalChannelUnread(scope) {
+        if (account?.presence === 'dnd') return 0
+        return this.listChannels(scope).reduce((n, c) => n + (this.isChannelMuted(c.id) ? 0 : this.channelUnread(c.id)), 0)
       },
       // ===================================================== Services (organigramme)
       envServices(envId) { return (db.environments.find(e => e.id === (envId || session?.envId))?.services) || [] },
