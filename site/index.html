@@ -501,11 +501,15 @@ const FEATURES = {
         ['🔮','Prévisionnel pondéré','Vos primes à venir estimées selon la probabilité de chaque phase.'],
         ['📈','Suivi graphique','Évolution de vos primes par mois de paiement, avec reporting détaillé contestable.'],
         ['🧾','Répartition analytique','Sources × tranches d\'effectif : où se gagnent vos primes.'] ],
-      [ ['👥','Pipeline entreprise partagé','La vue organisation : qui travaille quoi, en lecture pour tous.'],
+      [ ['💬','Messagerie d\'équipe','Canaux de discussion, messages directs 1:1, réactions émoji, réponses, transferts, épingles, images et fichiers.'],
+        ['📡','Reporting automatique','BD Report poste chaque RDV, avancement de deal, client gagné/perdu — le manager choisit les événements ET les champs affichés.'],
+        ['🟢','Présence & statuts','En ligne, hors ligne ou « ne pas déranger » (coupe les notifications) — visible sur chaque conversation.'],
+        ['🗂️','Services & accès','Créez vos services dans l\'organigramme, affectez vos collaborateurs et sectorisez l\'accès aux conversations.'],
+        ['👥','Pipeline entreprise partagé','La vue organisation : qui travaille quoi, en lecture pour tous.'],
         ['💬','Commentaires & @mentions','Discutez sur les fiches entreprises ; mentionnez un collègue, il est notifié.'],
         ['🧑‍✈️','Pilotage équipe','Forecast du mois avec projection, daily standup et alertes de dérive automatiques.'],
         ['🔀','Réassignation de leads','Transférez des comptes entre BDR en 3 clics, avec traçabilité.'],
-        ['🌳','Organigramme','Managers et équipes affichés hiérarchiquement, avec photos.'],
+        ['🌳','Organigramme','Managers et équipes affichés hiérarchiquement, avec photos et services.'],
         ['🛡️','Rôles & permissions','Fondateur, Administrateur, Manager, Membre — briques activables par utilisateur.'] ],
       [ ['🗄️','Multi-environnements','Des espaces étanches par société et par collaborateur, protégés par code PIN.'],
         ['📜','Logs d\'audit','Chaque action tracée et horodatée, filtrable par tâche et par date.'],
@@ -542,11 +546,15 @@ const FEATURES = {
         ['🔮','Weighted forecast','Upcoming bonuses estimated by stage probability.'],
         ['📈','Visual tracking','Bonus evolution by payout month, with an auditable detailed report.'],
         ['🧾','Analytics breakdown','Sources × headcount brackets: where your bonuses come from.'] ],
-      [ ['👥','Shared company pipeline','The organization view: who works what, visible to everyone.'],
+      [ ['💬','Team messaging','Discussion channels, 1:1 direct messages, emoji reactions, replies, forwards, pins, images and files.'],
+        ['📡','Automatic reporting','BD Report posts every meeting, deal progression, won/lost client — the manager picks the events AND the fields shown.'],
+        ['🟢','Presence & statuses','Online, offline or “do not disturb” (mutes notifications) — shown on every conversation.'],
+        ['🗂️','Services & access','Create services in the org chart, assign teammates and gate conversation access by service.'],
+        ['👥','Shared company pipeline','The organization view: who works what, visible to everyone.'],
         ['💬','Comments & @mentions','Discuss on account pages; mention a teammate, they get notified.'],
         ['🧑‍✈️','Team steering','Monthly forecast with projection, daily standup and automatic drift alerts.'],
         ['🔀','Lead reassignment','Move accounts between reps in 3 clicks, fully logged.'],
-        ['🌳','Org chart','Managers and teams displayed hierarchically, with photos.'],
+        ['🌳','Org chart','Managers and teams displayed hierarchically, with photos and services.'],
         ['🛡️','Roles & permissions','Founder, Admin, Manager, Member — feature bricks per user.'] ],
       [ ['🗄️','Multi-environment','Sealed workspaces per company and per teammate, PIN protected.'],
         ['📜','Audit logs','Every action traced and timestamped, filterable by task and date.'],
@@ -583,11 +591,15 @@ const FEATURES = {
         ['🔮','Previsión ponderada','Tus primas futuras estimadas según la probabilidad de cada fase.'],
         ['📈','Seguimiento gráfico','Evolución de tus primas por mes de pago, con informe detallado auditable.'],
         ['🧾','Reparto analítico','Fuentes × tramos de plantilla: de dónde vienen tus primas.'] ],
-      [ ['👥','Pipeline de empresa compartido','La vista de organización: quién trabaja qué, visible para todos.'],
+      [ ['💬','Mensajería de equipo','Canales de discusión, mensajes directos 1:1, reacciones emoji, respuestas, reenvíos, fijados, imágenes y archivos.'],
+        ['📡','Reporting automático','BD Report publica cada cita, avance de deal, cliente ganado/perdido — el manager elige los eventos Y los campos mostrados.'],
+        ['🟢','Presencia y estados','En línea, ausente o «no molestar» (silencia las notificaciones) — visible en cada conversación.'],
+        ['🗂️','Servicios y acceso','Crea servicios en el organigrama, asigna colaboradores y sectoriza el acceso a las conversaciones.'],
+        ['👥','Pipeline de empresa compartido','La vista de organización: quién trabaja qué, visible para todos.'],
         ['💬','Comentarios y @menciones','Comenta en las fichas de cuenta; menciona a un compañero y recibe aviso.'],
         ['🧑‍✈️','Dirección de equipo','Previsión mensual con proyección, daily standup y alertas de desvío automáticas.'],
         ['🔀','Reasignación de leads','Mueve cuentas entre comerciales en 3 clics, con trazabilidad.'],
-        ['🌳','Organigrama','Managers y equipos mostrados jerárquicamente, con fotos.'],
+        ['🌳','Organigrama','Managers y equipos mostrados jerárquicamente, con fotos y servicios.'],
         ['🛡️','Roles y permisos','Fundador, Administrador, Manager, Miembro — módulos activables por usuario.'] ],
       [ ['🗄️','Multientorno','Espacios estancos por empresa y por colaborador, protegidos con código PIN.'],
         ['📜','Registros de auditoría','Cada acción registrada y fechada, filtrable por tarea y por fecha.'],
@@ -730,7 +742,7 @@ if (oHost) ORBIT.forEach((ic, i) => {
 })
 
 // Marquee de fonctionnalités (contenu dupliqué pour une boucle sans couture).
-const FEATURES_MQ = ['📊 Dashboards', '📅 Rendez-vous', '🧲 Pipeline kanban', '💶 Primes & commissions', '🎯 ICP', '🤝 Pilotage équipe', '📇 Contacts', '🗒️ Notes', '🏢 Fiche entreprise 360°', '🔔 Recommandations', '🌍 FR · EN · ES', '🌙 Mode sombre']
+const FEATURES_MQ = ['📊 Dashboards', '📅 Rendez-vous', '🧲 Pipeline kanban', '💶 Primes & commissions', '🎯 ICP', '🤝 Pilotage équipe', '💬 Messagerie d\'équipe', '📡 Reporting auto', '🟢 Présence & statuts', '🗂️ Services & organigramme', '📇 Contacts', '🗒️ Notes', '🏢 Fiche entreprise 360°', '🔔 Recommandations', '🌍 FR · EN · ES', '🌙 Mode sombre']
 const mq = document.getElementById('marqueeTrack')
 if (mq) mq.innerHTML = [...FEATURES_MQ, ...FEATURES_MQ].map(f => `<span class="chip">${f}</span>`).join('')
 
