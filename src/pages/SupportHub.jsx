@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2 } from 'lucide-react'
+import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay } from 'lucide-react'
 import { useStore, slaInfo } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
@@ -8,6 +8,7 @@ import Projects from './Projects.jsx'
 import KnowledgeBase from './KnowledgeBase.jsx'
 import SupportLogs from './SupportLogs.jsx'
 import SupportTrash from './SupportTrash.jsx'
+import DemoSales from './DemoSales.jsx'
 
 // Console Support unifiée : un tableau de bord unique (KPI + onglets) qui regroupe
 // tout le back-office support — remplace les 7 entrées de menu précédentes.
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'kb', label: 'Base de connaissances', icon: BookOpen, El: KnowledgeBase },
   { id: 'logs', label: 'Logs', icon: ScrollText, El: SupportLogs },
   { id: 'trash', label: 'Corbeille', icon: Trash2, El: SupportTrash },
+  { id: 'demo', label: 'Démo commerciale', icon: MonitorPlay, El: DemoSales },
 ]
 
 export default function SupportHub() {
