@@ -47,6 +47,7 @@ jobs:
           cp site/index.html out/index.html
           cp site/securite.html out/securite.html
           cp -r site/produit out/produit
+          cp -r site/blog out/blog
           cp -r site/assets out/assets
           touch out/.nojekyll
           cp public/sw.js out/sw.js

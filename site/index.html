@@ -111,6 +111,8 @@ section{padding:84px 0}
 .post .tag{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--brand)}
 .post h3{font-size:16px;font-weight:800;margin:7px 0}
 .post p{font-size:13.5px;color:var(--muted)}
+.post .readmore{display:inline-block;margin-top:12px;font-size:13px;font-weight:800;color:var(--brand)}
+.post:hover .readmore{text-decoration:underline}
 @media(max-width:860px){.posts{grid-template-columns:1fr}}
 
 /* CONTACT */
@@ -324,33 +326,36 @@ nav.scrolled{box-shadow:0 8px 30px rgba(23,32,51,.09)}
     <div class="sec-head fade">
       <span class="chip">Blog</span>
       <h2 data-i18n="blog.title">Le blog des équipes outbound</h2>
-      <p data-i18n="blog.sub">Conseils de prospection, retours d'expérience et nouveautés produit — premiers articles à venir.</p>
+      <p data-i18n="blog.sub">Conseils de prospection, retours d'expérience et nouveautés produit — nos premiers articles sont en ligne.</p>
     </div>
     <div class="posts" data-stagger>
-      <article class="post">
+      <a class="post" href="blog/cold-call-ouvertures.html">
         <div class="cover" style="background:linear-gradient(135deg,#3B5BDB,#0EA5E9)">📞</div>
         <div class="body">
           <span class="tag" data-i18n="blog.t1">Prospection</span>
           <h3 data-i18n="blog.a1">Cold call : 7 ouvertures qui obtiennent 30 secondes d'attention</h3>
-          <p data-i18n="blog.soon">À venir</p>
+          <p data-i18n="blog.e1">Les 10 premières secondes décident de l'appel. Deux familles d'ouvertures surperforment : 7 exemples prêts à l'emploi et 5 phrases à bannir.</p>
+          <span class="readmore" data-i18n="blog.read">Lire l'article →</span>
         </div>
-      </article>
-      <article class="post">
+      </a>
+      <a class="post" href="blog/bareme-commissions.html">
         <div class="cover" style="background:linear-gradient(135deg,#10B981,#5EDCFF)">💶</div>
         <div class="body">
           <span class="tag" data-i18n="blog.t2">Rémunération</span>
           <h3 data-i18n="blog.a2">Construire un barème de commissions que les BDR comprennent</h3>
-          <p data-i18n="blog.soon2">À venir</p>
+          <p data-i18n="blog.e2">Structure, équilibre 70/30, prime en trois briques, accélérateurs : le guide d'un plan de commissions clair, juste et motivant.</p>
+          <span class="readmore" data-i18n="blog.read">Lire l'article →</span>
         </div>
-      </article>
-      <article class="post">
+      </a>
+      <a class="post" href="blog/daily-standup.html">
         <div class="cover" style="background:linear-gradient(135deg,#F59E0B,#EC4899)">📊</div>
         <div class="body">
           <span class="tag" data-i18n="blog.t3">Management</span>
           <h3 data-i18n="blog.a3">Le daily standup parfait dure 9 minutes : voici le format</h3>
-          <p data-i18n="blog.soon3">À venir</p>
+          <p data-i18n="blog.e3">Même heure, round-robin, trois questions, et les sujets longs renvoyés en aparté : le format d'un rituel court et utile.</p>
+          <span class="readmore" data-i18n="blog.read">Lire l'article →</span>
         </div>
-      </article>
+      </a>
     </div>
   </div>
 </section>
@@ -631,10 +636,10 @@ const I18N = {
     'pricing.bdesc':'Get all of BD Report, in exchange for your feedback.',
     'pricing.b1':'Organization environments','pricing.b2':'Teammate accounts managed by a manager','pricing.b4':'Every single feature included','pricing.b5':'Direct line to the product team','pricing.b6':'Team steering, bonuses, leads, notes…',
     'pricing.apply':'Request my seat','pricing.note':'Accounts created by a manager of a Beta workspace automatically inherit full access.',
-    'blog.title':'The outbound teams blog','blog.sub':'Prospecting tips, war stories and product news — first articles coming soon.',
-    'blog.t1':'Prospecting','blog.a1':'Cold calling: 7 openers that earn you 30 seconds of attention','blog.soon':'Coming soon',
-    'blog.t2':'Compensation','blog.a2':'Building a commission grid your BDRs actually understand','blog.soon2':'Coming soon',
-    'blog.t3':'Management','blog.a3':'The perfect daily standup lasts 9 minutes: here\'s the format','blog.soon3':'Coming soon',
+    'blog.title':'The outbound teams blog','blog.sub':'Prospecting tips, war stories and product news — our first articles are live.','blog.read':'Read the article →',
+    'blog.t1':'Prospecting','blog.a1':'Cold calling: 7 openers that earn you 30 seconds of attention','blog.e1':'The first 10 seconds decide the call. Two families of openers outperform: 7 ready-to-use examples and 5 lines to cut.',
+    'blog.t2':'Compensation','blog.a2':'Building a commission grid your BDRs actually understand','blog.e2':'Structure, the 70/30 balance, a three-brick bonus, accelerators: the guide to a clear, fair and motivating commission plan.',
+    'blog.t3':'Management','blog.a3':'The perfect daily standup lasts 9 minutes: here\'s the format','blog.e3':'Same time, round-robin, three questions, long topics taken offline: the format of a short, useful ritual.',
     'contact.title':'Let\'s talk about your team','contact.sub':'A question, a demo, a partnership? Drop us a line.',
     'contact.name':'Your name & company','contact.email':'Your email','contact.msg':'Your message...','contact.send':'Send message',
     'apps.chip':'Apps','apps.title':'BD Report on your desktop','apps.sub':'Install the native app on Windows and macOS — same experience, synced to the cloud.','apps.win':'Download for Windows','apps.mac':'Download for macOS','apps.web':'Or use it in the browser','apps.note':'Also available on Linux. Free app, regular updates.',
@@ -658,10 +663,10 @@ const I18N = {
     'pricing.bdesc':'Accede a todo BD Report, a cambio de tus comentarios.',
     'pricing.b1':'Entornos de organización','pricing.b2':'Cuentas de colaboradores gestionadas por un manager','pricing.b4':'Todas las funciones, sin excepción','pricing.b5':'Línea directa con el equipo de producto','pricing.b6':'Dirección de equipo, primas, leads, notas…',
     'pricing.apply':'Solicitar mi plaza','pricing.note':'Las cuentas creadas por un manager de un espacio Beta heredan automáticamente el acceso completo.',
-    'blog.title':'El blog de los equipos outbound','blog.sub':'Consejos de prospección, experiencias y novedades de producto — primeros artículos muy pronto.',
-    'blog.t1':'Prospección','blog.a1':'Cold call: 7 aperturas que ganan 30 segundos de atención','blog.soon':'Próximamente',
-    'blog.t2':'Remuneración','blog.a2':'Crear un baremo de comisiones que tus BDR entiendan','blog.soon2':'Próximamente',
-    'blog.t3':'Management','blog.a3':'El daily standup perfecto dura 9 minutos: este es el formato','blog.soon3':'Próximamente',
+    'blog.title':'El blog de los equipos outbound','blog.sub':'Consejos de prospección, experiencias y novedades de producto — nuestros primeros artículos ya están en línea.','blog.read':'Leer el artículo →',
+    'blog.t1':'Prospección','blog.a1':'Cold call: 7 aperturas que ganan 30 segundos de atención','blog.e1':'Los 10 primeros segundos deciden la llamada. Dos familias de aperturas destacan: 7 ejemplos listos y 5 frases a eliminar.',
+    'blog.t2':'Remuneración','blog.a2':'Crear un baremo de comisiones que tus BDR entiendan','blog.e2':'Estructura, equilibrio 70/30, prima en tres bloques, aceleradores: la guía de un plan de comisiones claro, justo y motivador.',
+    'blog.t3':'Management','blog.a3':'El daily standup perfecto dura 9 minutos: este es el formato','blog.e3':'Misma hora, round-robin, tres preguntas y los temas largos aparte: el formato de un ritual corto y útil.',
     'contact.title':'Hablemos de tu equipo','contact.sub':'¿Una pregunta, una demo, una colaboración? Escríbenos.',
     'contact.name':'Tu nombre y empresa','contact.email':'Tu correo','contact.msg':'Tu mensaje...','contact.send':'Enviar mensaje',
     'apps.chip':'Apps','apps.title':'BD Report en tu escritorio','apps.sub':'Instala la app nativa en Windows y macOS — la misma experiencia, sincronizada en la nube.','apps.win':'Descargar para Windows','apps.mac':'Descargar para macOS','apps.web':'O usarlo en el navegador','apps.note':'También disponible en Linux. App gratuita, actualizaciones frecuentes.',
