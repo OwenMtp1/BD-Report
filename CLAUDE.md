@@ -41,7 +41,10 @@ npm run dev        # serveur de dev
   markChannelUnreadFrom/toggleChannelReaction/channelMembers/setPresence/markChannelRead/channelUnread/…`.
   **Services (organigramme)** : `env.services` + `subenv.serviceId` (équipe), `db.staffServices` + `account.staffServiceId`
   (staff/support) — édition dans OrgChart, Admin (onglet « Services & organigramme »), Settings (Gérer mes environnements),
-  Conversations (« Services du staff »). **Mots de passe** : `account.passwordClear` conservé (visible manager/support/
+  Conversations (« Services du staff »). **OrgChart** (`src/pages/OrgChart.jsx`) : arbre récursif basé sur `account.teamOf` ;
+  mode « Modifier l'organigramme » (manager+) = glisser-déposer / menu « Rattaché à » (`store.setManagerOf(subId, managerSubId)`,
+  anti-cycle), manager principal (`env.createdBy`) en tête. Staff/fondateur/admin peuvent nommer/retirer un manager
+  (`store.setEmployeeRole(subId, makeManager)`). Membres de conversation cliquables → fiche `CollaboratorCard` (via `open-collaborator`). **Mots de passe** : `account.passwordClear` conservé (visible manager/support/
   fondateur via `revealPassword`) EN PLUS du hash `password` (auth) — voir ⚠️ sécurité ci-dessous.
   Support back-office : **`SupportHub`** (onglet unique « Équipe support », rôles support) = console à onglets qui
   regroupe `Requests`/`Tickets`/`TicketChat`/`Clients`/`Projects`/`KnowledgeBase`/`SupportLogs`/`SupportTrash` + KPI.

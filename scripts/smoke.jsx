@@ -219,6 +219,9 @@ async function main() {
   // 9. Organigramme + paramètres
   await click(container.querySelector('button[title="Organigramme"]'))
   if (!text().includes('Organigramme')) throw new Error('OrgChart did not render')
+  await click(find('button', "Modifier l'organigramme"))
+  if (!text().includes('Réorganisation libre')) throw new Error('OrgChart edit mode did not open')
+  await click(find('button', 'Terminer'))
   await click(container.querySelector('button[title="Paramètres"]'))
   if (!text().includes('Thèmes de design')) throw new Error('Settings did not render')
 

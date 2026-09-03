@@ -1748,6 +1748,34 @@ export function StoreProvider({ children, demo = false }) {
       assignStaffService(accId, serviceId) {
         setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.staffServiceId = serviceId || null; return d })
       },
+      // Rattache une personne (via son compte) à un manager choisi (par sous-espace), ou à la racine
+      // (managerSubId null). Permet au manager de placer librement chacun dans l'organigramme.
+      setManagerOf(subId, managerSubId) {
+        if (roBlocked()) return
+        if (subId === managerSubId) return
+        setDb(d => {
+          const sub = d.subenvs.find(s => s.id === subId); if (!sub) return d
+          const acc = d.accounts.find(a => a.id === sub.ownerId); if (!acc) return d
+          const mgrSub = managerSubId ? d.subenvs.find(s => s.id === managerSubId) : null
+          const newParent = mgrSub ? mgrSub.ownerId : null
+          if (newParent === acc.id) return d // pas d'auto-rattachement
+          // Anti-cycle : si le nouveau manager remonte déjà (via teamOf) jusqu'à cette personne, on refuse.
+          let cur = newParent, guard = 0
+          while (cur && guard++ < 100) { if (cur === acc.id) return d; cur = d.accounts.find(a => a.id === cur)?.teamOf }
+          acc.teamOf = newParent
+          return d
+        })
+      },
+      // Staff/fondateur/admin : attribue ou retire le rôle Manager à une personne.
+      setEmployeeRole(subId, makeManager) {
+        if (!['Fondateur', 'Support BD Report', 'Administrateur'].includes(account?.role)) return
+        if (roBlocked()) return
+        setDb(d => {
+          const sub = d.subenvs.find(s => s.id === subId); if (!sub) return d
+          const acc = d.accounts.find(a => a.id === sub.ownerId); if (acc) acc.role = makeManager ? 'Manager' : 'Membre'
+          return d
+        })
+      },
       // ===================================================== Mots de passe (visibilité manager/support)
       canViewPasswords() { return ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role) },
       // Renvoie le mot de passe en clair si connu (comptes créés/réinitialisés depuis l'app),

@@ -386,20 +386,25 @@ function MemberList({ channel, store, meId }) {
       <div className="text-xs font-bold uppercase text-muted mb-2 flex items-center gap-1.5"><Users2 size={13} /> Membres · {online}/{members.length} en ligne</div>
       <div className="space-y-1.5">
         {members.length === 0 && <div className="text-xs text-muted italic">Aucun membre.</div>}
-        {sorted.map(m => (
-          <div key={m.key} className="flex items-center gap-2">
-            <div className="relative shrink-0">
-              {m.photo
-                ? <img src={m.photo} alt="" className="w-7 h-7 rounded-full object-cover" />
-                : <div className="w-7 h-7 rounded-full bg-brand/15 text-brand text-[10px] font-extrabold flex items-center justify-center">{initials(m.name)}</div>}
-              <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-card ${PRESENCE_META[m.presence]?.dot}`} title={PRESENCE_META[m.presence]?.label} />
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm truncate">{m.name}{(m.subId === meId || m.accountId === meId) ? ' (moi)' : ''}</div>
-              {m.poste && <div className="text-[10px] text-muted truncate">{m.poste}</div>}
-            </div>
-          </div>
-        ))}
+        {sorted.map(m => {
+          const clickable = !!m.subId
+          const open = () => { if (m.subId) window.dispatchEvent(new CustomEvent('open-collaborator', { detail: m.subId })) }
+          return (
+            <button key={m.key} type="button" onClick={open} disabled={!clickable}
+              className={`w-full flex items-center gap-2 text-left rounded-lg px-1 py-0.5 ${clickable ? 'hover:bg-surface cursor-pointer' : 'cursor-default'}`}>
+              <div className="relative shrink-0">
+                {m.photo
+                  ? <img src={m.photo} alt="" className="w-7 h-7 rounded-full object-cover" />
+                  : <div className="w-7 h-7 rounded-full bg-brand/15 text-brand text-[10px] font-extrabold flex items-center justify-center">{initials(m.name)}</div>}
+                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-card ${PRESENCE_META[m.presence]?.dot}`} title={PRESENCE_META[m.presence]?.label} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm truncate">{m.name}{(m.subId === meId || m.accountId === meId) ? ' (moi)' : ''}</div>
+                {m.poste && <div className="text-[10px] text-muted truncate">{m.poste}</div>}
+              </div>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
