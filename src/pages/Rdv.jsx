@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus } from 'lucide-react'
+import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList } from 'lucide-react'
 import { googleCalUrl, downloadIcs } from '../calendar.js'
 import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
@@ -324,7 +324,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   const [fProv, setFProv] = useState('')
   const [sort, setSort] = useState('date-desc')
   const [dateCustom, setDateCustom] = useState({ start: '', end: '' })
-  const [view, setView] = useState('table') // 'table' | 'calendar'
+  const [view, setView] = useState('cards') // 'cards' | 'table' | 'calendar'
 
   React.useEffect(() => {
     if (pendingNote) {
@@ -526,18 +526,67 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
     </tr>
   )
 
+  // Vue « Cartes » : lecture aérée, sans tableau serré ni scroll horizontal.
+  const Card = ({ r, isChild, childCount }) => (
+    <div className={`card p-3.5 ${isChild ? 'ml-4 sm:ml-8 border-l-4 !border-l-brand/40' : ''}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <button className="font-bold text-[15px] hover:text-brand hover:underline text-left flex items-center gap-1.5 max-w-full"
+            title="Ouvrir la fiche entreprise" onClick={() => openCompany(r.entreprise)}>
+            {isChild && <CornerDownRight size={14} className="text-muted shrink-0" />}
+            <span className="truncate">{r.entreprise || '— sans entreprise —'}</span>
+          </button>
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <select className={`chip border-0 cursor-pointer ${phaseColor(r.phase)}`} value={r.phase} onChange={e => patchRdv(r, { phase: e.target.value })}>
+              {sub.phases.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <select className={`chip border-0 cursor-pointer ${oppColor(r.opportunite)}`} value={r.opportunite} onChange={e => patchRdv(r, { opportunite: e.target.value })}>
+              {sub.opportunites.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            {r.source && <span className="chip bg-surface text-muted">{r.source}</span>}
+          </div>
+        </div>
+        <div className="relative shrink-0">
+          <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setMenuFor(menuFor === r.id ? null : r.id)}><MoreVertical size={16} /></button>
+          {menuFor === r.id && (
+            <div className="absolute right-0 top-9 z-30 card shadow-lg p-1 w-52 text-sm">
+              <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface" onClick={() => { setMenuFor(null); setForm({ mode: 'edit', id: r.id, data: { ...r } }) }}>Modifier</button>
+              {!isChild && <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface"
+                onClick={() => { setMenuFor(null); setForm({ mode: 'sub', id: r.id, data: { ...r, id: undefined, phase: '', datePassageSQL: '', opportunite: 'En cours', datePriseRdv: todayISO(), dateRdv: '', contacts: r.contacts.map(c => ({ ...c, id: uid() })) } }) }}>Créer le rendez-vous suivant</button>}
+              <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface text-red-500" onClick={() => { setMenuFor(null); setConfirmDel(r.id) }}>Supprimer</button>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 mt-3 text-xs">
+        <div className="min-w-0"><div className="text-muted">Contact</div><div className="font-semibold truncate">{(r.contacts || []).map(c => c.nom).filter(Boolean).join(', ') || '—'}</div></div>
+        <div className="min-w-0"><div className="text-muted">Poste</div><div className="truncate">{(r.contacts || []).map(c => c.poste).filter(Boolean).join(', ') || '—'}</div></div>
+        <div><div className="text-muted">Date du RDV</div><div className="font-semibold">{fmtDate(r.dateRdv) || '—'}</div></div>
+        <div><div className="text-muted">Effectif</div><div>{r.effectif || '—'}</div></div>
+      </div>
+      {r.notes && <p className="text-xs text-muted mt-2.5 line-clamp-2" title={r.notes}>📝 {r.notes}</p>}
+      {!isChild && childCount > 0 && (
+        <button className="flex items-center gap-1 text-xs font-bold text-brand mt-2.5" onClick={() => setOpenGroups(g => ({ ...g, [r.id]: !g[r.id] }))}>
+          {openGroups[r.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {childCount} rendez-vous suivant{childCount > 1 ? 's' : ''}
+        </button>
+      )}
+    </div>
+  )
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold">Mes Rendez-vous</h2>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-line overflow-hidden">
+            <button className={`px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 ${view === 'cards' ? 'bg-brand text-white' : 'bg-card text-muted'}`}
+              onClick={() => setView('cards')} title="Vue cartes"><LayoutList size={13} /> Cartes</button>
             <button className={`px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 ${view === 'table' ? 'bg-brand text-white' : 'bg-card text-muted'}`}
               onClick={() => setView('table')} title="Vue tableau"><TableIcon size={13} /> Tableau</button>
             <button className={`px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 ${view === 'calendar' ? 'bg-brand text-white' : 'bg-card text-muted'}`}
               onClick={() => setView('calendar')} title="Vue calendrier"><CalendarDays size={13} /> Calendrier</button>
           </div>
-          <button className="btn-ghost text-xs" title="Modifier les champs" onClick={() => setFieldsModal(true)}><Settings2 size={15} /> Modifier les champs</button>
+          {view === 'table' && <button className="btn-ghost text-xs" title="Modifier les champs" onClick={() => setFieldsModal(true)}><Settings2 size={15} /> Modifier les champs</button>}
           <button className="btn-primary" onClick={() => setForm({ mode: 'create', data: emptyForm() })}><Plus size={16} /> Créer un RDV</button>
         </div>
       </div>
@@ -547,7 +596,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           onReschedule={(id, date) => { store.setSub(d => { const r = d.rdvs.find(x => x.id === id); if (r) r.dateRdv = date; return d }); toast('Rendez-vous replanifié') }} />
       )}
 
-      {view === 'table' && <>
+      {view !== 'calendar' && (
       <div className="card p-3 flex items-center gap-2 flex-wrap text-xs">
         <Select value={fSource} onChange={setFSource} options={SOURCES} placeholder="Source : toutes" className="!w-auto !py-1.5" />
         <Select value={fPhase} onChange={setFPhase} options={sub.phases} placeholder="Phase : toutes" className="!w-auto !py-1.5" />
@@ -569,7 +618,24 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           <input type="date" className="input !w-auto !py-1" value={dateCustom.end} onChange={e => setDateCustom(c => ({ ...c, end: e.target.value }))} />
         </>}
       </div>
+      )}
 
+      {view === 'cards' && (
+        <div className="space-y-2.5">
+          {roots.length === 0 && <Empty text="Aucun rendez-vous. Cliquez sur « Créer un RDV »." />}
+          {roots.map(r => {
+            const children = childrenOf(r)
+            return (
+              <React.Fragment key={r.id}>
+                <Card r={r} childCount={children.length} />
+                {openGroups[r.id] && children.map(c => <Card key={c.id} r={c} isChild />)}
+              </React.Fragment>
+            )
+          })}
+        </div>
+      )}
+
+      {view === 'table' && (
       <div className="card overflow-x-auto">
         <table className="w-full text-sm min-w-[1100px]">
           <thead>
@@ -605,7 +671,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           </tbody>
         </table>
       </div>
-      </>}
+      )}
 
       {form && (
         <RdvForm
