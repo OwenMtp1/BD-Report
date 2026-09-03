@@ -940,6 +940,14 @@ function pushChannelSystemMsg(db, ch, text, ts) {
 // Reconciliation idempotente : génère les messages de reporting manquants à partir de l'état
 // courant (RDV, tickets, projets, clients). Chaque événement est marqué (ch._seen) pour n'être
 // posté qu'une fois — respecte les suppressions et ne double jamais. Renvoie true si modifié.
+// Sous-espaces (personnes) membres d'un canal d'équipe, selon son mode d'accès.
+function channelMemberSubs(db, c) {
+  const subs = (db.subenvs || []).filter(s => s.envId === c.envId)
+  if (c.dm || c.access === 'members') return subs.filter(s => (c.members || []).includes(s.id))
+  if (c.access === 'services') return subs.filter(s => (c.services || []).includes(s.serviceId))
+  return subs // 'all'
+}
+
 function reconcileReporting(db) {
   let changed = false
   const channels = (db.channels || []).filter(c => c.kind === 'reporting')
@@ -1030,6 +1038,7 @@ function migrate(db) {
     if (!Array.isArray(a.pinnedMessages)) a.pinnedMessages = [] // épinglés « pour moi »
     if (!a.hiddenChannels || typeof a.hiddenChannels !== 'object' || Array.isArray(a.hiddenChannels)) a.hiddenChannels = {} // { canalId: dateMasquage } — réapparaît si nouveau message
     if (!Array.isArray(a.leftChannels)) a.leftChannels = [] // groupes quittés (définitif)
+    if (!Array.isArray(a.pinnedChannels)) a.pinnedChannels = [] // canaux épinglés en haut de la liste
   })
   ;(db.environments || []).forEach(e => { if (!e.plan) e.plan = 'beta' })
   // Données globales support (partagées entre tous les comptes support)
@@ -1622,17 +1631,62 @@ export function StoreProvider({ children, demo = false }) {
         if (!String(text || '').trim() && !image && !file) return
         const sub = db.subenvs.find(s => s.id === session?.subEnvId)
         const name = sub ? `${sub.prenom} ${sub.nom}`.trim() : (account?.pseudo || 'Moi')
+        const body = String(text || '').trim()
         setDb(d => {
           d.channelMessages = d.channelMessages || {}
           d.channelMessages[id] = d.channelMessages[id] || []
           d.channelMessages[id].push({
             id: uid(), ts: new Date().toISOString(),
             authorId: account?.id || null, authorSubId: sub?.id || null, authorName: name,
-            authorPhoto: sub?.photo || account?.photo || '', text: String(text || '').trim(),
+            authorPhoto: sub?.photo || account?.photo || '', text: body,
             image: image || '', file: file || null, replyTo: replyTo || null, reactions: {},
           })
+          const c = (d.channels || []).find(x => x.id === id)
+          if (c) {
+            // Fin de l'indicateur « en train d'écrire » de l'auteur.
+            if (c.typing && sub?.id) delete c.typing[sub.id]
+            // @mentions : notifie chaque membre cité par son prénom (dans son espace).
+            if (body.includes('@') && c.scope !== 'support') {
+              channelMemberSubs(d, c).forEach(ms => {
+                if (ms.id === sub?.id) return
+                const re = new RegExp('@' + (ms.prenom || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iu')
+                if ((ms.prenom || '').length && re.test(body)) {
+                  const data = d.data[ms.id]
+                  if (data) {
+                    data.notifs = [{ id: uid(), ts: new Date().toISOString(), read: false, type: 'mention', page: 'conversations',
+                      title: `${name} vous a mentionné`, text: `${c.dm ? 'Message direct' : c.name} — ${body.slice(0, 80)}` }, ...(data.notifs || [])].slice(0, 100)
+                  }
+                }
+              })
+            }
+          }
           return d
         })
+      },
+      // Indicateur « en train d'écrire… » : posé (débounce côté UI) puis auto-expiré à la lecture.
+      setChannelTyping(channelId) {
+        if (!session?.subEnvId) return
+        setDb(d => { const c = (d.channels || []).find(x => x.id === channelId); if (c) { c.typing = c.typing || {}; c.typing[session.subEnvId] = Date.now() } return d })
+      },
+      // Prénoms des personnes en train d'écrire dans le canal (activité < 5 s, hors moi).
+      channelTypers(channelId) {
+        const c = (db.channels || []).find(x => x.id === channelId); if (!c?.typing) return []
+        const now = Date.now()
+        return Object.entries(c.typing)
+          .filter(([sid, ts]) => sid !== session?.subEnvId && now - ts < 5000)
+          .map(([sid]) => db.subenvs.find(s => s.id === sid)?.prenom).filter(Boolean)
+      },
+      // Accusés de lecture : prénoms des membres ayant lu jusqu'à cet horodatage (hors moi et hors auteur).
+      channelReadersAfter(channel, ts, exceptSubId) {
+        return this.channelMembers(channel)
+          .filter(m => m.subId && m.subId !== session?.subEnvId && m.subId !== exceptSubId)
+          .filter(m => { const acc = db.accounts.find(a => a.id === m.accountId); const r = acc?.channelReads?.[channel.id]; return r && r >= ts })
+          .map(m => m.name)
+      },
+      // Épinglage d'un canal en haut de sa liste (préférence perso).
+      isChannelPinned(channelId) { return (account?.pinnedChannels || []).includes(channelId) },
+      togglePinChannel(channelId) {
+        setDb(d => { const a = d.accounts.find(x => x.id === account?.id); if (!a) return d; a.pinnedChannels = a.pinnedChannels || []; a.pinnedChannels = a.pinnedChannels.includes(channelId) ? a.pinnedChannels.filter(x => x !== channelId) : [...a.pinnedChannels, channelId]; return d })
       },
       // Transfère un message (texte/image/fichier) vers un autre canal.
       forwardChannelMessage(msg, targetChannelId) {

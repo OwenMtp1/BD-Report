@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   MessagesSquare, Plus, Hash, Radio, Send, ImagePlus, Smile, Trash2, Settings2, Users2,
   Lock, Globe, X, ChevronLeft, Bell, BellOff, Paperclip, MoreVertical, Reply, Forward,
-  Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft, User, LogOut,
+  Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft, User, LogOut, Search, CheckCheck,
 } from 'lucide-react'
 import { useStore, reportEventsFor, PRESENCE_META } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
@@ -76,6 +76,8 @@ export default function Conversations({ scope = 'team' }) {
     return c.name
   }
   const chIcon = (c) => c.dm ? User : c.personal ? FileText : c.kind === 'reporting' ? Radio : Hash
+  // Épinglés d'abord, puis ordre d'origine.
+  const orderedChannels = [...channels].sort((a, b) => (store.isChannelPinned(b.id) ? 1 : 0) - (store.isChannelPinned(a.id) ? 1 : 0))
 
   return (
     <div className="space-y-4">
@@ -100,7 +102,7 @@ export default function Conversations({ scope = 'team' }) {
         <div className={`card p-2 ${sel ? 'hidden md:block' : ''}`}>
           {channels.length === 0 && <div className="p-3"><Empty text="Aucun canal accessible." /></div>}
           <div className="space-y-1">
-            {channels.map(c => {
+            {orderedChannels.map(c => {
               const unread = store.isChannelMuted(c.id) ? 0 : store.channelUnread(c.id)
               const Ic = chIcon(c)
               return (
@@ -108,6 +110,7 @@ export default function Conversations({ scope = 'team' }) {
                   className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-sm ${sel?.id === c.id ? 'bg-brand/10 text-brand font-bold' : 'hover:bg-surface'}`}>
                   <Ic size={15} className={`shrink-0 ${c.kind === 'reporting' ? 'text-amber-500' : c.dm ? 'text-brand' : 'opacity-60'}`} />
                   <span className="truncate flex-1">{chName(c)}</span>
+                  {store.isChannelPinned(c.id) && <Pin size={11} className="text-brand shrink-0" />}
                   {store.isChannelMuted(c.id) && <BellOff size={12} className="opacity-40 shrink-0" />}
                   {!c.dm && !c.personal && c.access !== 'all' && <Lock size={12} className="opacity-40 shrink-0" />}
                   {unread > 0 && <span className="shrink-0 text-[10px] font-extrabold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white">{unread > 9 ? '9+' : unread}</span>}
@@ -147,8 +150,9 @@ export default function Conversations({ scope = 'team' }) {
 
 // -------------------------------------------------- Fil de discussion d'un canal
 function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelete, onBack }) {
-  const msgs = store.channelMessages(channel.id)
-  const [text, setText] = useState('')
+  const allMsgs = store.channelMessages(channel.id)
+  const draftKey = 'bdr_draft_' + channel.id
+  const [text, setText] = useState(() => { try { return localStorage.getItem(draftKey) || '' } catch (e) { return '' } })
   const [image, setImage] = useState('')
   const [file, setFile] = useState(null)
   const [replyTo, setReplyTo] = useState(null)
@@ -158,19 +162,38 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
   const [confirm, setConfirm] = useState(null) // { kind: 'delete' | 'pin', msg }
   const [headMenu, setHeadMenu] = useState(false)
   const [convPending, setConvPending] = useState(null) // 'leave' | 'deleteAll' | 'deletePersonal'
-  const imgRef = useRef(null), fileRef = useRef(null), endRef = useRef(null)
+  const [query, setQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [, setTick] = useState(0) // rafraîchit « en train d'écrire » / accusés de lecture
+  const imgRef = useRef(null), fileRef = useRef(null), endRef = useRef(null), typingRef = useRef(0)
   const muted = store.isChannelMuted(channel.id)
   const personal = channel.personal
-  useEffect(() => { endRef.current?.scrollIntoView?.({ behavior: 'smooth' }) }, [msgs.length])
-  useEffect(() => { store.markChannelRead(channel.id) }, [channel.id, msgs.length]) // eslint-disable-line
+  const pinnedChan = store.isChannelPinned(channel.id)
+  const q = query.trim().toLowerCase()
+  const msgs = q ? allMsgs.filter(m => (m.text || '').toLowerCase().includes(q)) : allMsgs
+  const typers = store.channelTypers(channel.id)
+  const lastMine = [...allMsgs].reverse().find(m => !m.system && (m.authorSubId === meId || m.authorId === meId))
+  const readers = lastMine ? store.channelReadersAfter(channel, lastMine.ts, lastMine.authorSubId) : []
 
-  const pinned = msgs.filter(m => m.pinned || store.isPinnedForMe(m.id))
+  useEffect(() => { const i = setInterval(() => setTick(t => t + 1), 3000); return () => clearInterval(i) }, [])
+  useEffect(() => { if (!q) endRef.current?.scrollIntoView?.({ behavior: 'smooth' }) }, [allMsgs.length, q])
+  useEffect(() => { store.markChannelRead(channel.id) }, [channel.id, allMsgs.length]) // eslint-disable-line
+  // Sauvegarde du brouillon par canal (localStorage, personnel à l'appareil).
+  useEffect(() => { try { text ? localStorage.setItem(draftKey, text) : localStorage.removeItem(draftKey) } catch (e) { /* ignore */ } }, [text, draftKey])
+
+  const pinned = allMsgs.filter(m => m.pinned || store.isPinnedForMe(m.id))
+
+  const onType = (v) => {
+    setText(v)
+    const now = Date.now()
+    if (v && now - typingRef.current > 2500) { typingRef.current = now; store.setChannelTyping(channel.id) }
+  }
 
   const send = () => {
     if (!text.trim() && !image && !file) return
     const rt = replyTo ? { id: replyTo.id, authorName: replyTo.authorName, text: (replyTo.text || '').slice(0, 120) || (replyTo.image ? '📷 image' : replyTo.file ? '📎 fichier' : '') } : null
     store.postChannelMessage(channel.id, { text, image, file, replyTo: rt })
-    setText(''); setImage(''); setFile(null); setReplyTo(null)
+    setText(''); setImage(''); setFile(null); setReplyTo(null); typingRef.current = 0
   }
   const onImg = (e) => { const f = e.target.files?.[0]; if (!f) return; if (!f.type.startsWith('image/')) { toast('Choisissez une image'); return } fileToDataUrl(f, setImage); e.target.value = '' }
   const onFile = (e) => { const f = e.target.files?.[0]; if (!f) return; readAnyFile(f, setFile); e.target.value = '' }
@@ -195,6 +218,7 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
           {personal && <div className="text-[11px] text-muted">Votre espace personnel — visible de vous seul</div>}
         </div>
         <div className="ml-auto flex gap-1">
+          <button className={`btn-ghost !p-1.5 ${searchOpen ? 'text-brand' : ''}`} title="Rechercher dans les messages" onClick={() => { setSearchOpen(v => !v); if (searchOpen) setQuery('') }}><Search size={16} /></button>
           {!personal && <button className={`btn-ghost !p-1.5 ${muted ? 'text-red-500' : ''}`} title={muted ? 'Réactiver les notifications' : 'Couper les notifications de ce canal'} onClick={() => store.toggleMuteChannel(channel.id)}>
             {muted ? <BellOff size={16} /> : <Bell size={16} />}
           </button>}
@@ -207,6 +231,7 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setHeadMenu(false)} />
                 <div className="absolute z-30 top-9 right-0 card shadow-lg w-56 p-1 text-sm">
+                  <MenuItem icon={pinnedChan ? PinOff : Pin} label={pinnedChan ? 'Désépingler de la liste' : 'Épingler en haut'} onClick={() => { store.togglePinChannel(channel.id); setHeadMenu(false) }} />
                   {channel.dm && <MenuItem icon={Trash2} label="Supprimer la conversation" danger onClick={() => { store.hideChannelForMe(channel.id); setHeadMenu(false); toast('Conversation supprimée') }} />}
                   {personal && <MenuItem icon={Trash2} label="Supprimer le bloc-notes" danger onClick={() => { setConvPending('deletePersonal'); setHeadMenu(false) }} />}
                   {store.isGroupChannel(channel) && <>
@@ -220,6 +245,16 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
           </div>
         </div>
       </div>
+
+      {/* Recherche dans les messages */}
+      {searchOpen && (
+        <div className="px-3 py-2 border-b border-line flex items-center gap-2">
+          <Search size={15} className="text-muted shrink-0" />
+          <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Rechercher dans cette conversation…" value={query} onChange={e => setQuery(e.target.value)} />
+          {q && <span className="text-xs text-muted shrink-0">{msgs.length} résultat{msgs.length > 1 ? 's' : ''}</span>}
+          <button className="btn-ghost !p-1" onClick={() => { setSearchOpen(false); setQuery('') }}><X size={14} /></button>
+        </div>
+      )}
 
       {/* Bandeau messages épinglés */}
       {pinned.length > 0 && (
@@ -246,8 +281,25 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
             onDelete={() => { setConfirm({ kind: 'delete', msg: m }); setMenuFor(null) }} onPin={() => { setConfirm({ kind: 'pin', msg: m }); setMenuFor(null) }}
             onUnread={() => { store.markChannelUnreadFrom(channel.id, m.ts); setMenuFor(null); toast('Marqué comme non lu') }} />
         ))}
+        {!q && readers.length > 0 && (
+          <div className="flex items-center justify-end gap-1 text-[11px] text-muted pr-1">
+            <CheckCheck size={13} className="text-brand" /> Lu par {readers.slice(0, 3).join(', ')}{readers.length > 3 ? ` +${readers.length - 3}` : ''}
+          </div>
+        )}
         <div ref={endRef} />
       </div>
+
+      {/* Indicateur « en train d'écrire… » */}
+      {typers.length > 0 && (
+        <div className="px-4 py-1 text-[11px] text-muted italic flex items-center gap-1.5">
+          <span className="flex gap-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand/60 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-brand/60 animate-bounce" style={{ animationDelay: '120ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-brand/60 animate-bounce" style={{ animationDelay: '240ms' }} />
+          </span>
+          {typers.length === 1 ? `${typers[0]} écrit…` : `${typers.slice(0, 2).join(', ')} écrivent…`}
+        </div>
+      )}
 
       {/* Composeur */}
       <div className="border-t border-line p-2.5">
@@ -270,7 +322,7 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
           <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={onImg} />
           <input ref={fileRef} type="file" className="hidden" onChange={onFile} />
           <textarea rows={1} className="input flex-1 resize-none max-h-32" placeholder={personal ? 'Écrivez une note…' : 'Écrivez un message…'} value={text}
-            onChange={e => setText(e.target.value)}
+            onChange={e => onType(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
           <button className="btn-primary !px-3 shrink-0" onClick={send} disabled={!text.trim() && !image && !file}><Send size={16} /></button>
         </div>
@@ -315,7 +367,7 @@ function MessageRow({ m, channel, store, meId, canManage, pickerFor, setPickerFo
             {m.replyTo && <div className="text-xs border-l-2 border-brand/50 pl-2 mb-1 text-muted"><b>{m.replyTo.authorName}</b><div className="truncate max-w-[220px]">{m.replyTo.text}</div></div>}
             {m.image && <img src={m.image} alt="" className="rounded-lg max-h-64 mb-1.5" />}
             {m.file && <a href={m.file.dataUrl} download={m.file.name} className="flex items-center gap-2 bg-app rounded-lg px-2.5 py-1.5 mb-1.5 hover:bg-brand/5 no-underline"><FileText size={16} className="text-brand shrink-0" /><span className="text-xs max-w-[160px] truncate">{m.file.name}</span><span className="text-[10px] text-muted shrink-0">{humanSize(m.file.size || 0)}</span><Download size={13} className="text-muted shrink-0" /></a>}
-            {m.text && <div className="text-sm whitespace-pre-wrap break-words">{m.text}</div>}
+            {m.text && <div className="text-sm whitespace-pre-wrap break-words"><MsgText text={m.text} /></div>}
           </div>
           <button className={`absolute top-0 opacity-0 group-hover:opacity-100 transition p-1 text-muted hover:text-brand ${mine ? '-left-6' : '-right-6'}`} onClick={() => setMenuFor(open ? null : m.id)}><MoreVertical size={15} /></button>
           {open && (
@@ -335,6 +387,13 @@ function MessageRow({ m, channel, store, meId, canManage, pickerFor, setPickerFo
       </div>
     </div>
   )
+}
+// Rend le texte d'un message en surlignant les @mentions.
+function MsgText({ text }) {
+  const parts = String(text).split(/(@[\p{L}][\p{L}\p{N}'-]*)/u)
+  return parts.map((p, i) => p.startsWith('@')
+    ? <span key={i} className="text-brand font-semibold">{p}</span>
+    : <React.Fragment key={i}>{p}</React.Fragment>)
 }
 function MenuItem({ icon: Icon, label, onClick, danger }) {
   return <button onClick={onClick} className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-surface text-left ${danger ? 'text-red-500' : ''}`}><Icon size={14} /> {label}</button>

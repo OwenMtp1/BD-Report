@@ -110,6 +110,15 @@ async function main() {
   await type(composer, 'Bonjour equipe smoke')
   await act(async () => { Simulate.keyDown(composer, { key: 'Enter' }) })
   if (!text().includes('Bonjour equipe smoke')) throw new Error('Channel message not posted')
+  // Recherche dans les messages : filtre le fil.
+  await click(container.querySelector('button[title="Rechercher dans les messages"]'))
+  const msgSearch = container.querySelector('input[placeholder^="Rechercher dans cette"]')
+  if (!msgSearch) throw new Error('Message search did not open')
+  await type(msgSearch, 'zzznomatch')
+  if (text().includes('Bonjour equipe smoke')) throw new Error('Message search did not filter out non-matches')
+  await type(msgSearch, 'Bonjour')
+  if (!text().includes('Bonjour equipe smoke')) throw new Error('Message search did not surface the match')
+  await click(container.querySelector('button[title="Rechercher dans les messages"]')) // referme
   // Options de conversation : « Supprimer pour moi » masque le canal (réapparaît au prochain message).
   await click(container.querySelector('button[title="Options de la conversation"]'))
   await click(find('button', 'Supprimer pour moi'))
