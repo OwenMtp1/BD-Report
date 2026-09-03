@@ -706,6 +706,27 @@ const DEMO_OPTS = [
 ]
 export function makeDemoRdvs() { return makeTestRdvs(DEMO_NAMES, DEMO_OPTS) }
 
+// ---------------------------------------------------------------- Démo commerciale (app réelle isolée)
+// Base de données montée dans un StoreProvider isolé (prop `demo`) : aucune persistance
+// localStorage, aucune synchro cloud, aucune écriture de session. On s'appuie sur l'env
+// d'équipe complet 'env-test' déjà injecté par migrate() — Julie = manager (Team Lead BDR)
+// et Sarah/Thomas/Karim = BDR — pour dérouler la VRAIE app avec toutes ses options et
+// beaucoup de données, sans jamais toucher aux comptes réels.
+export function buildDemoDb() {
+  return migrate(buildSeedDb())
+}
+// Session de démo pour un rôle donné, au sein de l'équipe de démonstration (env-test).
+// 'manager' → Julie (Team Lead, vue équipe) · sinon → Sarah (BDR, vue employé).
+export function demoSession(role) {
+  const manager = role === 'manager'
+  return {
+    accountId: manager ? 'test-julie' : 'test-sarah',
+    envId: 'env-test',
+    subEnvId: manager ? 'tsub-julie' : 'tsub-sarah',
+    welcomed: true,
+  }
+}
+
 function injectTestEnv(db) {
   if (db.environments.some(e => e.id === 'env-test')) return db
   const mkAcc = (id, prenom, nom, pseudo, role, teamOf) => ({
@@ -974,9 +995,11 @@ function load() {
   return migrate(buildSeedDb())
 }
 
-export function StoreProvider({ children }) {
-  const [db, setDbState] = useState(load)
+export function StoreProvider({ children, demo = false }) {
+  const [db, setDbState] = useState(() => demo ? buildDemoDb() : load())
   const [session, setSession] = useState(() => {
+    // Mode démo : session isolée en mémoire, jamais lue ni écrite dans sessionStorage.
+    if (demo) return demoSession('employe')
     try { const s = JSON.parse(sessionStorage.getItem(SESSION_KEY)); if (s) return s } catch (e) { /* ignore */ }
     // « Rester connecté 30 jours » : restaure une session si le jeton est encore valide.
     try {
@@ -1006,6 +1029,7 @@ export function StoreProvider({ children }) {
     return next
   })
   useEffect(() => {
+    if (demo) return // démo isolée : aucune persistance ni synchro
     // Sauvegarde sûre : capture l'erreur de quota au lieu d'échouer silencieusement (bug 5).
     try {
       if (applyingRemote.current) {
@@ -1029,6 +1053,7 @@ export function StoreProvider({ children }) {
 
   // Synchronisation Supabase temps réel (toute l'app + demandes de contact). Inerte si non configuré.
   useEffect(() => {
+    if (demo) return // démo isolée : pas de cloud
     if (!isSupabaseConfigured()) { remoteReady.current = true; setTimeout(maybeInjectPipeline, 0); return }
     let unsubState = () => {}, unsubContact = () => {}, cancelled = false
     ;(async () => {
@@ -1071,7 +1096,7 @@ export function StoreProvider({ children }) {
   // Flush immédiat vers Supabase quand l'onglet se ferme / passe en arrière-plan : garantit que
   // les derniers changements (sinon en attente via le debounce) sont bien enregistrés côté cloud.
   useEffect(() => {
-    if (!isSupabaseConfigured()) return
+    if (demo || !isSupabaseConfigured()) return
     const flush = () => { if (remoteReady.current) try { pushRemoteState({ ...dbRef.current, _savedAt: lastSavedAt.current || Date.now(), _client: clientId.current }) } catch (e) { /* best-effort */ } }
     const onVis = () => { if (document.visibilityState === 'hidden') flush() }
     window.addEventListener('pagehide', flush)
@@ -1079,11 +1104,12 @@ export function StoreProvider({ children }) {
     return () => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', onVis) }
   }, [])
 
-  useEffect(() => { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)) }, [session])
+  useEffect(() => { if (!demo) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)) }, [session])
 
   // Synchronisation multi-onglets : on n'adopte un état distant que s'il est plus récent
   // que notre dernière écriture locale (évite qu'un onglet inactif écrase une modif récente — bug 9).
   useEffect(() => {
+    if (demo) return // démo isolée : ignore les autres onglets
     const h = (e) => {
       if (e.key === LS_KEY && e.newValue) {
         try {
