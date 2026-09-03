@@ -45,17 +45,29 @@ l'app continue de tourner dessus (drapeau OFF).
 Supabase → Authentication → Providers → **Email** activé. (Option : désactiver les
 inscriptions publiques ; on créera les comptes nous-mêmes à l'étape 3.)
 
-### 3. Migrer les comptes & découper le blob (script one-shot)
-Un script de migration (`supabase/migrate_blob_to_orgs.mjs`, fourni à l'étape suivante du
-chantier) va, à partir du blob sauvegardé :
-1. créer un `auth.users` + `profiles` pour chaque `account` (mot de passe : on déclenche
-   un **e-mail de réinitialisation**, puisqu'on ne stocke plus aucun mot de passe en clair) ;
-2. créer une `org` par `environment`, remplir `org_members` selon `members[]` + rôles ;
-3. écrire, pour chaque org, son `org_state.data` = uniquement ses `subenvs` + `data[subId]` ;
-4. placer les comptes de l'équipe BD Report en `is_platform_admin = true`.
+### 3. Migrer les comptes & découper le blob (script one-shot ✅ livré)
+Le script **`supabase/migrate_blob_to_orgs.mjs`** est fourni. À partir du blob sauvegardé,
+il :
+1. crée un `auth.users` + `profiles` pour chaque `account` (mot de passe : il déclenche un
+   **e-mail de réinitialisation**, puisqu'on ne stocke plus aucun mot de passe en clair) ;
+2. crée une `org` par `environment`, remplit `org_members` selon `members[]` + rôles ;
+3. écrit, pour chaque org, son `org_state.data` = uniquement ses `subenvs` + `data[subId]`
+   (chiffré au repos, même découpage que le sync runtime — `splitDb`) ;
+4. place les comptes de l'équipe BD Report en `is_platform_admin = true` + crée une org
+   « plateforme » pour le support et les données non rattachées.
 
-Ce script tourne **hors prod** (lecture du backup), il est ré-exécutable (idempotent) et
-n'altère pas `app_state`.
+Il tourne **hors prod** (lecture d'un export local du backup), est ré-exécutable (idempotent,
+recherche par email / `meta.appEnvId`) et **n'altère jamais `app_state`**. Il est en **DRY-RUN
+par défaut** — il n'écrit rien tant que `--commit` n'est pas passé :
+```bash
+# 1) exporter le blob depuis Supabase (select data from app_state where id='main') → backup.json
+# 2) prévisualiser (aucune écriture) :
+node supabase/migrate_blob_to_orgs.mjs --blob=./backup.json
+# 3) appliquer (nécessite la clé service_role, jamais commitée) :
+export SUPABASE_URL="https://xxxx.supabase.co"
+export SUPABASE_SERVICE_ROLE="eyJ...service_role..."
+node supabase/migrate_blob_to_orgs.mjs --blob=./backup.json --commit
+```
 
 ### 4. Adapter l'app (derrière le drapeau `multiTenant`, OFF par défaut)
 Côté code (livré par étapes, sans rien activer en prod) :
