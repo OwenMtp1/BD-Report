@@ -67,7 +67,15 @@ npm run dev        # serveur de dev
 
 ## Rôles, offres, support
 - Rôles : `Fondateur`, `Support BD Report` (= mêmes droits que Fondateur), Administrateur, Manager, Développeur, Membre.
-- Offres : `starter` (limité) / `beta` (complet). `allowedBricks(account)` = intersection bricks ∩ plan.
+- **Offres = données** (`db.offers`, staff-managées) : `defaultOffers()` seed starter/beta. Chaque offre a
+  `{bricks, team, maxSeats, price, priceLabel, desc}`. `allowedBricks(account, offers)` = bricks du compte ∩ offre
+  (aucune si pas d'offre → support seul). `hasTeamAccess(account, offers)` = offre `team` ou rôle support ; les onglets
+  pilotage/manager/admin sont `team:true` (cachés en Starter). Nav gate par offre : items `always:true` (Support,
+  Souscrire) visibles sans offre. Starter = solo (`addAccount` bloqué). Console Support → onglet **Offres**
+  (`OffersAdmin`, CRUD) alimente en direct la page **Souscrire** (`src/pages/Souscrire.jsx` → ouvre un ticket).
+  Staff : Projets → bouton **Utilisateurs** (env) = offre de l'env, rôle manager, désactiver l'accès
+  (`account.disabled`, login refusé), voir/changer mot de passe, effacer les données, retirer un membre.
+  Manager (Gestion Administration mode `teams`) : périmètre strict (son équipe, jamais le staff).
 - Catégorie menu **« Support Client BD Report »** réservée à `SUPPORT_ROLES`. Onglet **Support** ouvert à tous.
 - Tickets : priorité, assignation, SLA (1re réponse cible par priorité), CSAT à la clôture. Réponses types + base de connaissances.
 - **Résiliation** (Paramètres → Gérer mes environnements → Résilier) : ouvre un ticket + passe l'env en `subState='cancelling'`

@@ -487,7 +487,8 @@ footer a{color:var(--violet2);font-weight:700}
           <li data-i18n="pricing.s2">Gestion de vos rendez-vous</li>
           <li data-i18n="pricing.s3">Répertoire de contacts</li>
           <li data-i18n="pricing.s4">Gestion de vos tâches</li>
-          <li data-i18n="pricing.s5">1 espace personnel</li>
+          <li data-i18n="pricing.s5">1 espace personnel (usage solo, 1 compte)</li>
+          <li data-i18n="pricing.s6">Prise de notes</li>
         </ul>
         <a class="btn btn-primary" href="app/" data-i18n="pricing.createAccount">Créer un compte gratuit</a>
         <div class="soon" data-i18n="pricing.supgrade">Passez en Beta Testing pour débloquer toutes les fonctionnalités.</div>
@@ -689,7 +690,9 @@ const FEATURES = {
         ['🧮','Rapports périodiques','Hebdo, mensuel, trimestriel ou annuel, avec variations vs période précédente et export PDF.'],
         ['🚀','Vélocité du pipeline','Temps moyen passé dans chaque phase, goulot d\'étranglement identifié automatiquement.'],
         ['💡','Dashboards par prompt','Décrivez le tableau de bord voulu, l\'IA le compose à partir de vos données.'],
-        ['📺','Mode présentation','Affichage plein écran du dashboard pour les TV de bureau.'] ],
+        ['📺','Mode présentation','Affichage plein écran du dashboard pour les TV de bureau.'],
+        ['🏆','Classement d\'équipe','Gamification : 6 classements (SQL, RDV, conversion, primes, progression, % objectif), podium et badges.'],
+        ['🛡️','Qualité des données','Score /100 + détection des doublons, coordonnées manquantes et leads sans prochaine action.'] ],
       [ ['📅','Gestion des rendez-vous','Tous vos RDV avec contacts multiples, sous-RDV pré-remplis, champs configurables et filtres complets.'],
         ['🗓️','Calendrier multi-vues','Jour, semaine, mois, année — vos RDV colorés par phase, cliquables.'],
         ['✅','Tâches prioritaires','No-shows à replanifier, opportunités à traiter, leads perdus à relancer (filtres 6 mois / 1 an).'],
@@ -707,7 +710,9 @@ const FEATURES = {
         ['🗓️','Règle du 15','Passage en SQL avant le 15 : payé le mois courant ; après : le mois suivant. Automatique.'],
         ['🔮','Prévisionnel pondéré','Vos primes à venir estimées selon la probabilité de chaque phase.'],
         ['📈','Suivi graphique','Évolution de vos primes par mois de paiement, avec reporting détaillé contestable.'],
-        ['🧾','Répartition analytique','Sources × tranches d\'effectif : où se gagnent vos primes.'] ],
+        ['🧾','Répartition analytique','Sources × tranches d\'effectif : où se gagnent vos primes.'],
+        ['🎚️','Prime par activité','Un second barème « façon Excel » : paliers de RDV par semaine/mois/trimestre croisés avec les phases.'],
+        ['🧭','Simulateur de primes','« Combien vais-je toucher ? » — jauge en temps réel, curseur de cadence, prime acquise / probable / potentielle.'] ],
       [ ['💬','Messagerie d\'équipe','Canaux de discussion, messages directs 1:1, réactions émoji, réponses, transferts, épingles, images et fichiers.'],
         ['📡','Reporting automatique','BD Report poste chaque RDV, avancement de deal, client gagné/perdu — le manager choisit les événements ET les champs affichés.'],
         ['🟢','Présence & statuts','En ligne, hors ligne ou « ne pas déranger » (coupe les notifications) — visible sur chaque conversation.'],
@@ -734,7 +739,9 @@ const FEATURES = {
         ['🧮','Periodic reports','Weekly, monthly, quarterly or yearly, with deltas vs previous period and PDF export.'],
         ['🚀','Pipeline velocity','Average time spent in each stage, bottleneck spotted automatically.'],
         ['💡','Prompt-built dashboards','Describe the dashboard you want, AI assembles it from your data.'],
-        ['📺','Presentation mode','Full-screen dashboard for office TVs.'] ],
+        ['📺','Presentation mode','Full-screen dashboard for office TVs.'],
+        ['🏆','Team leaderboard','Gamification: 6 rankings (SQL, meetings, conversion, bonuses, progress, % target), podium and badges.'],
+        ['🛡️','Data quality','A /100 score + detection of duplicates, missing details and leads with no next action.'] ],
       [ ['📅','Meeting management','All your meetings with multiple contacts, pre-filled follow-ups, configurable fields and full filters.'],
         ['🗓️','Multi-view calendar','Day, week, month, year — meetings colored by stage, clickable.'],
         ['✅','Priority tasks','No-shows to rebook, open opportunities to work, lost leads to revive (6-month / 1-year filters).'],
@@ -752,7 +759,9 @@ const FEATURES = {
         ['🗓️','The 15th rule','SQL before the 15th: paid this month; after: next month. Automatic.'],
         ['🔮','Weighted forecast','Upcoming bonuses estimated by stage probability.'],
         ['📈','Visual tracking','Bonus evolution by payout month, with an auditable detailed report.'],
-        ['🧾','Analytics breakdown','Sources × headcount brackets: where your bonuses come from.'] ],
+        ['🧾','Analytics breakdown','Sources × headcount brackets: where your bonuses come from.'],
+        ['🎚️','Activity-based bonus','A second Excel-style grid: meeting tiers per week/month/quarter crossed with deal stages.'],
+        ['🧭','Bonus simulator','How much will I earn? A live gauge, a pace cursor, earned / likely / potential bonus.'] ],
       [ ['💬','Team messaging','Discussion channels, 1:1 direct messages, emoji reactions, replies, forwards, pins, images and files.'],
         ['📡','Automatic reporting','BD Report posts every meeting, deal progression, won/lost client — the manager picks the events AND the fields shown.'],
         ['🟢','Presence & statuses','Online, offline or “do not disturb” (mutes notifications) — shown on every conversation.'],
@@ -779,7 +788,9 @@ const FEATURES = {
         ['🧮','Informes periódicos','Semanal, mensual, trimestral o anual, con variación vs el periodo anterior y exportación a PDF.'],
         ['🚀','Velocidad del pipeline','Tiempo medio en cada fase, cuello de botella detectado automáticamente.'],
         ['💡','Paneles por prompt','Describe el panel que quieres y la IA lo arma con tus datos.'],
-        ['📺','Modo presentación','Panel a pantalla completa para las TV de la oficina.'] ],
+        ['📺','Modo presentación','Panel a pantalla completa para las TV de la oficina.'],
+        ['🏆','Clasificación de equipo','Gamificación: 6 rankings (SQL, citas, conversión, primas, progresión, % objetivo), podio e insignias.'],
+        ['🛡️','Calidad de los datos','Una puntuación /100 + detección de duplicados, datos faltantes y leads sin próxima acción.'] ],
       [ ['📅','Gestión de citas','Todas tus citas con varios contactos, seguimientos prerellenados, campos configurables y filtros completos.'],
         ['🗓️','Calendario multivista','Día, semana, mes, año — citas coloreadas por fase, clicables.'],
         ['✅','Tareas prioritarias','No-shows a reprogramar, oportunidades abiertas a trabajar, leads perdidos a recuperar (filtros 6 meses / 1 año).'],
@@ -797,7 +808,9 @@ const FEATURES = {
         ['🗓️','La regla del 15','SQL antes del 15: se paga este mes; después: el mes siguiente. Automático.'],
         ['🔮','Previsión ponderada','Tus primas futuras estimadas según la probabilidad de cada fase.'],
         ['📈','Seguimiento gráfico','Evolución de tus primas por mes de pago, con informe detallado auditable.'],
-        ['🧾','Reparto analítico','Fuentes × tramos de plantilla: de dónde vienen tus primas.'] ],
+        ['🧾','Reparto analítico','Fuentes × tramos de plantilla: de dónde vienen tus primas.'],
+        ['🎚️','Prima por actividad','Un segundo baremo estilo Excel: tramos de citas por semana/mes/trimestre cruzados con las fases.'],
+        ['🧭','Simulador de primas','¿Cuánto voy a cobrar? Un medidor en vivo, un cursor de ritmo, prima ganada / probable / potencial.'] ],
       [ ['💬','Mensajería de equipo','Canales de discusión, mensajes directos 1:1, reacciones emoji, respuestas, reenvíos, fijados, imágenes y archivos.'],
         ['📡','Reporting automático','BD Report publica cada cita, avance de deal, cliente ganado/perdido — el manager elige los eventos Y los campos mostrados.'],
         ['🟢','Presencia y estados','En línea, ausente o «no molestar» (silencia las notificaciones) — visible en cada conversación.'],
@@ -832,7 +845,7 @@ const I18N = {
     'nav.product':'Product ▾','cat.pilotage':'Steering','cat.activite':'Activity','cat.pipeline':'Pipeline','cat.remuneration':'Compensation','cat.collaboration':'Collaboration','cat.donnees':'Data',
     'pricing.chip':'Pricing','pricing.title':'Start free, unlock everything in beta','pricing.sub':'The Starter plan is free and instantly available. The full, exclusive Beta Testing plan is invitation-only.',
     'pricing.starter':'Starter','pricing.free':'free, forever','pricing.sdesc':'To start solo and try the essentials.',
-    'pricing.s1':'Tracking dashboard','pricing.s2':'Meeting management','pricing.s3':'Contact directory','pricing.s4':'Task management','pricing.s5':'1 personal workspace',
+    'pricing.s1':'Tracking dashboard','pricing.s2':'Meeting management','pricing.s3':'Contact directory','pricing.s4':'Task management','pricing.s5':'1 personal workspace (solo, single account)','pricing.s6':'Note-taking',
     'pricing.createAccount':'Create a free account','pricing.supgrade':'Upgrade to Beta Testing to unlock every feature.',
     'pricing.badge':'⭐ Exclusive offer — invitation only','pricing.beta':'Beta Testing','pricing.duration':'for the whole beta',
     'pricing.bdesc':'Get all of BD Report, in exchange for your feedback.',
@@ -869,7 +882,7 @@ const I18N = {
     'nav.product':'Producto ▾','cat.pilotage':'Dirección','cat.activite':'Actividad','cat.pipeline':'Pipeline','cat.remuneration':'Remuneración','cat.collaboration':'Colaboración','cat.donnees':'Datos',
     'pricing.chip':'Precios','pricing.title':'Empieza gratis, desbloquea todo en beta','pricing.sub':'El plan Starter es gratuito y accesible al instante. El plan Beta Testing, completo y exclusivo, es por invitación.',
     'pricing.starter':'Starter','pricing.free':'gratis, para siempre','pricing.sdesc':'Para empezar en solitario y probar lo esencial.',
-    'pricing.s1':'Panel de seguimiento','pricing.s2':'Gestión de citas','pricing.s3':'Agenda de contactos','pricing.s4':'Gestión de tareas','pricing.s5':'1 espacio personal',
+    'pricing.s1':'Panel de seguimiento','pricing.s2':'Gestión de citas','pricing.s3':'Agenda de contactos','pricing.s4':'Gestión de tareas','pricing.s5':'1 espacio personal (uso solo, 1 cuenta)','pricing.s6':'Toma de notas',
     'pricing.createAccount':'Crear una cuenta gratis','pricing.supgrade':'Pasa a Beta Testing para desbloquear todas las funciones.',
     'pricing.badge':'⭐ Oferta exclusiva — por invitación','pricing.beta':'Beta Testing','pricing.duration':'durante toda la beta',
     'pricing.bdesc':'Accede a todo BD Report, a cambio de tus comentarios.',
