@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Gauge, Coins, TrendingUp, Sparkles, Target, MousePointer2 } from 'lucide-react'
 import { useStore, computePrimes, monthKey, fmtMoney, baremeMatch } from '../store.jsx'
 
@@ -37,6 +37,10 @@ export default function Simulateur() {
   // Échelle énorme (jusqu'à +1000% de l'objectif) qui s'adapte au barème / au potentiel.
   const simMax = Math.max(objectif * 11, Math.ceil(potentielle * 1.2), acquise * 1.2, avgPerSql * 10, 1)
   const [sim, setSim] = useState(() => Math.min(acquise, simMax))
+  const [touched, setTouched] = useState(false)
+  // Par défaut, le curseur suit en continu la performance acquise du mois en cours ;
+  // il ne se fige que lorsque l'utilisateur le déplace lui-même.
+  useEffect(() => { if (!touched) setSim(Math.min(acquise, simMax)) }, [acquise, simMax, touched])
 
   const tOf = (v) => Math.max(0, Math.min(1, v / simMax))
   const angleOf = (v) => START + tOf(v) * SWEEP
@@ -55,7 +59,7 @@ export default function Simulateur() {
     if (rel > SWEEP) rel = rel > (SWEEP + (360 - SWEEP) / 2) ? 0 : SWEEP // clamp dans l'ouverture du bas
     setSim(Math.round((rel / SWEEP) * simMax))
   }
-  const onDown = (e) => { setDrag(true); setFromPointer(e); e.currentTarget.setPointerCapture?.(e.pointerId) }
+  const onDown = (e) => { setDrag(true); setTouched(true); setFromPointer(e); e.currentTarget.setPointerCapture?.(e.pointerId) }
   const onMove = (e) => { if (drag) setFromPointer(e) }
   const onUp = () => setDrag(false)
 
@@ -120,9 +124,9 @@ export default function Simulateur() {
           </div>
 
           <div className="flex gap-2">
-            <button className="btn-ghost text-xs" onClick={() => setSim(Math.min(acquise, simMax))}>↺ Ma progression</button>
-            <button className="btn-ghost text-xs" onClick={() => setSim(Math.min(objectif, simMax))}>🎯 Objectif</button>
-            <button className="btn-ghost text-xs" onClick={() => setSim(Math.min(Math.round(potentielle), simMax))}>✨ Potentiel</button>
+            <button className={`btn-ghost text-xs ${!touched ? '!text-brand font-bold' : ''}`} onClick={() => { setTouched(false); setSim(Math.min(acquise, simMax)) }}>↺ Ma progression (live)</button>
+            <button className="btn-ghost text-xs" onClick={() => { setTouched(true); setSim(Math.min(objectif, simMax)) }}>🎯 Objectif</button>
+            <button className="btn-ghost text-xs" onClick={() => { setTouched(true); setSim(Math.min(Math.round(potentielle), simMax)) }}>✨ Potentiel</button>
           </div>
         </div>
       </div>
