@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Gauge, Coins, TrendingUp, Sparkles, Target, MousePointer2 } from 'lucide-react'
-import { useStore, computePrimes, monthKey, fmtMoney, baremeMatch } from '../store.jsx'
+import { useStore, computePrimes, computeActivityPrimes, activityPeriodKey, monthKey, fmtMoney, baremeMatch, todayISO } from '../store.jsx'
 
 const PROBA = { R1: 0.25, R2: 0.4, MQL: 0.6 }
 // Géométrie de la jauge : arc de 270° (ouverture en bas).
@@ -16,26 +16,44 @@ export default function Simulateur() {
   const svgRef = useRef(null)
   const [drag, setDrag] = useState(false)
 
-  const { acquise, probable, avgPerSql, objectif } = useMemo(() => {
+  // Le simulateur raisonne selon le barème réellement en place :
+  //  • s'il existe une règle de prime par activité (paliers de RDV), le levier est le RDV
+  //    (combien de RDV dans les phases comptées pour débloquer le palier suivant) ;
+  //  • sinon, le levier est le SQL (barème par lead : effectif × source).
+  const { acquise, probable, objectif, avgPerUnit, unit, unitHint } = useMemo(() => {
     const now = new Date()
     const curK = monthKey(new Date(now.getFullYear(), now.getMonth(), 1))
-    const primes = computePrimes(sub.rdvs || [], sub.bareme || []).filter(p => !p.invalidated)
-    const acquise = primes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)
-    const pending = (sub.rdvs || []).filter(r => r.opportunite === 'En cours' && PROBA[r.phase])
-    const probable = pending.reduce((a, r) => {
-      const row = baremeMatch(sub.bareme || [], r.effectif, r.source)
-      return a + (row ? (Number(row.montant) || 0) * PROBA[r.phase] : 0)
-    }, 0)
+    const rdvs = sub.rdvs || []
+    const primes = computePrimes(rdvs, sub.bareme || []).filter(p => !p.invalidated)
+    const acquiseLead = primes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)
+    const actPrimes = computeActivityPrimes(rdvs, sub.activityRules || [])
+    const acquiseAct = actPrimes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)
+    const acquise = acquiseLead + acquiseAct
+    const pending = rdvs.filter(r => r.opportunite === 'En cours' && PROBA[r.phase])
+    const probable = pending.reduce((a, r) => { const row = baremeMatch(sub.bareme || [], r.effectif, r.source); return a + (row ? (Number(row.montant) || 0) * PROBA[r.phase] : 0) }, 0)
+    const objectif = Number((sub.goals || {}).primesMois) || 1000
+
+    const rules = (sub.activityRules || []).filter(r => (r.tiers || []).length)
+    if (rules.length) {
+      const rule = rules[0]
+      const tiers = [...rule.tiers].map(t => ({ min: Number(t.min) || 0, montant: Number(t.montant) || 0 })).sort((a, b) => a.min - b.min)
+      const phases = rule.phases || []
+      const pk = activityPeriodKey(rule.period, todayISO())
+      const count = rdvs.filter(r => (!phases.length || phases.includes(r.phase)) && activityPeriodKey(rule.period, r.dateRdv || r.datePriseRdv || r.createdAt) === pk).length
+      let curM = 0; tiers.forEach(t => { if (count >= t.min) curM = t.montant })
+      const next = tiers.find(t => t.min > count) || tiers[tiers.length - 1]
+      const dR = Math.max(1, next.min - count), dM = Math.max(1, next.montant - curM)
+      return { acquise, probable, objectif, unit: 'RDV', avgPerUnit: Math.max(1, Math.round(dM / dR)), unitHint: phases.length ? ` en ${phases.join('/')}` : '' }
+    }
     const montants = (sub.bareme || []).map(b => Number(b.montant) || 0).filter(Boolean)
     const avgBareme = montants.length ? montants.reduce((a, b) => a + b, 0) / montants.length : 200
-    const avgPerSql = primes.length ? Math.round(primes.reduce((a, p) => a + p.montant, 0) / primes.length) : Math.round(avgBareme)
-    const objectif = Number((sub.goals || {}).primesMois) || 1000
-    return { acquise, probable, avgPerSql, objectif }
-  }, [sub.rdvs, sub.bareme, sub.goals])
+    const avgPerUnit = primes.length ? Math.round(primes.reduce((a, p) => a + p.montant, 0) / primes.length) : Math.round(avgBareme)
+    return { acquise, probable, objectif, unit: 'SQL', avgPerUnit, unitHint: '' }
+  }, [sub.rdvs, sub.bareme, sub.activityRules, sub.goals])
 
   const potentielle = acquise + probable
   // Échelle énorme (jusqu'à +1000% de l'objectif) qui s'adapte au barème / au potentiel.
-  const simMax = Math.max(objectif * 11, Math.ceil(potentielle * 1.2), acquise * 1.2, avgPerSql * 10, 1)
+  const simMax = Math.max(objectif * 11, Math.ceil(potentielle * 1.2), acquise * 1.2, avgPerUnit * 10, 1)
   const [sim, setSim] = useState(() => Math.min(acquise, simMax))
   const [touched, setTouched] = useState(false)
   // Par défaut, le curseur suit en continu la performance acquise du mois en cours ;
@@ -64,8 +82,8 @@ export default function Simulateur() {
   const onUp = () => setDrag(false)
 
   const pct = Math.round((sim / objectif) * 100)
-  const deltaSql = Math.max(0, Math.ceil((sim - acquise) / Math.max(1, avgPerSql)))
-  const manqueSql = acquise >= objectif ? 0 : Math.ceil((objectif - acquise) / Math.max(1, avgPerSql))
+  const deltaUnit = Math.max(0, Math.ceil((sim - acquise) / Math.max(1, avgPerUnit)))
+  const manqueUnit = acquise >= objectif ? 0 : Math.ceil((objectif - acquise) / Math.max(1, avgPerUnit))
   const color = sim >= objectif ? '#10b981' : 'rgb(var(--brand))'
 
   return (
@@ -113,14 +131,14 @@ export default function Simulateur() {
           <div className="rounded-xl bg-surface p-3 space-y-1.5">
             <div className="text-sm font-bold flex items-center gap-1.5"><Target size={15} className="text-brand" /> Scénario du curseur</div>
             <p className="text-sm">Viser <b>{fmtMoney(sim)}</b> ce mois-ci
-              {deltaSql > 0 ? <> demande environ <b className="text-brand">+{deltaSql} SQL</b> au-delà de vos primes acquises</> : <> est déjà couvert par vos primes acquises</>}.</p>
-            <p className="text-xs text-muted">Estimation basée sur une prime moyenne de {fmtMoney(avgPerSql)} par SQL.</p>
+              {deltaUnit > 0 ? <> demande environ <b className="text-brand">+{deltaUnit} {unit}{unitHint}</b> au-delà de vos primes acquises</> : <> est déjà couvert par vos primes acquises</>}.</p>
+            <p className="text-xs text-muted">Estimation basée sur votre barème : ≈ {fmtMoney(avgPerUnit)} par {unit}{unit === 'RDV' ? unitHint : ''}.</p>
           </div>
 
-          <div className={`rounded-xl p-3 text-sm font-semibold ${manqueSql > 0 ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10'}`}>
-            {manqueSql > 0
-              ? <>Il te manque <b>{manqueSql} SQL</b> pour atteindre ton objectif de {fmtMoney(objectif)}.</>
-              : <>🎉 Objectif de {fmtMoney(objectif)} atteint — chaque SQL supplémentaire est du bonus !</>}
+          <div className={`rounded-xl p-3 text-sm font-semibold ${manqueUnit > 0 ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10'}`}>
+            {manqueUnit > 0
+              ? <>Il te manque <b>{manqueUnit} {unit}{unitHint}</b> pour atteindre ton objectif de {fmtMoney(objectif)}.</>
+              : <>🎉 Objectif de {fmtMoney(objectif)} atteint — chaque {unit} supplémentaire est du bonus !</>}
           </div>
 
           <div className="flex gap-2">
@@ -131,7 +149,7 @@ export default function Simulateur() {
         </div>
       </div>
 
-      <p className="text-xs text-muted">L'échelle du cadran monte jusqu'à +1000 % de votre objectif pour anticiper les primes déplafonnées. Les montants « acquis » et « probable » s'appuient sur votre barème et vos opportunités en cours.</p>
+      <p className="text-xs text-muted">Le simulateur s'appuie sur votre barème réel : {unit === 'RDV' ? 'une règle de prime par activité (paliers de RDV × phases)' : 'le barème par lead (effectif × source)'}. L'échelle monte jusqu'à +1000 % de l'objectif pour anticiper les primes déplafonnées.</p>
     </div>
   )
 }

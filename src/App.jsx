@@ -368,6 +368,14 @@ function MainApp() {
     return true
   }
   const groups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(canSee) })).filter(g => g.items.length)
+  // Densité adaptative de la sidebar : les rubriques se resserrent quand il y a beaucoup
+  // d'onglets (et se relâchent quand il y en a moins) pour tenir sur une seule page sans scroll.
+  const navRows = groups.reduce((n, g) => n + g.items.length, 0) + groups.length
+  const dense = navRows > 26 ? 2 : navRows > 20 ? 1 : 0
+  const itemCls = dense === 2 ? 'py-[3px] text-[12px]' : dense === 1 ? 'py-[5px] text-[12.5px]' : 'py-[7px] text-[13px]'
+  const grpHdrCls = dense >= 1 ? 'py-1' : 'py-1.5'
+  const grpWrapCls = dense === 2 ? 'mb-0.5' : 'mb-1'
+  const iconSz = dense === 2 ? 14 : 15
   const [closedGroups, setClosedGroups] = useState({})
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [booting, setBooting] = useState(true)
@@ -481,14 +489,11 @@ function MainApp() {
       <aside className={`w-60 shrink-0 bg-card/95 backdrop-blur border-r border-line flex flex-col
         fixed inset-y-0 left-0 z-40 transition-transform lg:static lg:translate-x-0 lg:z-10
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="px-3.5 py-3 border-b border-line space-y-2">
-          <Logo size={28} textClass="text-[17px]" />
-          <div className="flex items-center gap-2 min-w-0">
-            {env?.logo && <img src={env.logo} alt="" className="w-6 h-6 rounded-md object-cover shrink-0" />}
-            <div className="min-w-0">
-              <div className="font-bold text-[12px] leading-tight truncate" title={`Espace Sales de ${me.pseudo}`}>Espace Sales de {me.pseudo}</div>
-              <div className="text-[11px] text-muted truncate">{env?.name} · {sub?.prenom} {sub?.nom}</div>
-            </div>
+        <div className="px-3.5 py-2.5 border-b border-line">
+          <Logo size={26} textClass="text-[16px]" />
+          <div className="flex items-center gap-1.5 min-w-0 mt-1.5">
+            {env?.logo && <img src={env.logo} alt="" className="w-5 h-5 rounded-md object-cover shrink-0" />}
+            <div className="text-[11px] text-muted truncate">{env?.name}{sub ? ` · ${sub.prenom} ${sub.nom}` : ''}</div>
           </div>
         </div>
         <nav className="flex-1 px-2 py-2 overflow-y-auto">
@@ -496,9 +501,9 @@ function MainApp() {
             const open = !closedGroups[g.id]
             const hasActive = g.items.some(i => i.id === page)
             return (
-              <div key={g.id} className="mb-1">
+              <div key={g.id} className={grpWrapCls}>
                 <button onClick={() => setClosedGroups(c => ({ ...c, [g.id]: !c[g.id] }))}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider ${hasActive ? 'text-brand' : 'text-muted'} hover:bg-surface`}>
+                  className={`w-full flex items-center justify-between px-2 ${grpHdrCls} rounded-lg text-[10px] font-extrabold uppercase tracking-wider ${hasActive ? 'text-brand' : 'text-muted'} hover:bg-surface`}>
                   {tr(`nav.${g.id}`, g.label)}
                   {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </button>
@@ -510,8 +515,8 @@ function MainApp() {
                       const dimmed = store.readOnly && item.brick
                       return (
                         <button key={item.id} onClick={() => goto(item.id)} title={dimmed ? `${label} — lecture seule` : label}
-                          className={`w-full flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-lg text-[13px] font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'} ${dimmed && page !== item.id ? 'opacity-40' : ''}`}>
-                          <item.icon size={15} className={`shrink-0 ${page === item.id ? '' : 'text-muted'}`} />
+                          className={`w-full flex items-center gap-2 pl-3 pr-2 ${itemCls} rounded-lg font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'} ${dimmed && page !== item.id ? 'opacity-40' : ''}`}>
+                          <item.icon size={iconSz} className={`shrink-0 ${page === item.id ? '' : 'text-muted'}`} />
                           <span className="truncate">{label}</span>
                           {badges[item.id] > 0 && (
                             <span className={`ml-auto shrink-0 text-[10px] font-extrabold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center ${page === item.id ? 'bg-white text-brand' : 'bg-red-500 text-white'}`}>
@@ -528,14 +533,6 @@ function MainApp() {
           })}
         </nav>
         <div className="px-2 py-2 border-t border-line space-y-0.5">
-          <button className="w-full flex items-center gap-2 px-3 py-[7px] rounded-lg text-[13px] font-semibold text-muted hover:bg-surface"
-            onClick={() => store.setSession(s => ({ ...s, subEnvId: null }))}>
-            <ArrowLeft size={15} /> {tr('common.changeSpace')}
-          </button>
-          <button className="w-full flex items-center gap-2 px-3 py-[7px] rounded-lg text-[13px] font-semibold text-red-500 hover:bg-red-50"
-            onClick={store.logout}>
-            <LogOut size={15} /> {tr('common.logout')}
-          </button>
           {!myTeam && !isSupportUser && (
             <button className="mt-1 w-full rounded-lg bg-brand/10 p-2 text-center hover:bg-brand/15" onClick={() => goto('souscrire')}>
               <div className="text-[11px] font-bold text-brand">{myOffer ? `Offre ${myOffer.name}` : 'Aucune offre active'}</div>
@@ -569,6 +566,12 @@ function MainApp() {
             </button>
             <button title="Paramètres" className={`p-2 rounded-xl hover:bg-surface ${page === 'settings' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('settings')}>
               <SettingsIcon size={19} />
+            </button>
+            <button title={tr('common.changeSpace')} className="p-2 rounded-xl hover:bg-surface text-muted hidden sm:inline-flex" onClick={() => store.setSession(s => ({ ...s, subEnvId: null }))}>
+              <ArrowLeft size={19} />
+            </button>
+            <button title={tr('common.logout')} className="p-2 rounded-xl hover:bg-red-500/10 text-red-500" onClick={store.logout}>
+              <LogOut size={19} />
             </button>
             <button title="Mon profil et statut" onClick={() => setProfileOpen(true)} className="relative ml-1 rounded-full hover:ring-2 hover:ring-brand/30 transition">
               {me.photo

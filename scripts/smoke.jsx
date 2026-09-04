@@ -84,8 +84,7 @@ async function main() {
   await act(async () => { await new Promise(r => setTimeout(r, 600)) }) // laisse passer le squelette de chargement
 
   // 5. App principale : Dashboard
-  if (!text().includes('Espace Sales de OwenMtp')) throw new Error('Main app missing: ' + text().slice(0, 400))
-  if (!text().includes('RDV réalisés')) throw new Error('Dashboard missing: ' + text().slice(0, 400))
+  if (!text().includes('RDV réalisés')) throw new Error('Main app / Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
   for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Primes & Commissions', 'Simulateur de primes', 'KPI Entreprise', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Administration', 'Équipe support']) {
