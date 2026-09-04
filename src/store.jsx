@@ -418,6 +418,7 @@ function emptySubEnvData() {
       { id: uid(), min: 1, max: 200, montant: 150, leadSource: 'Inbound' },
       { id: uid(), min: 201, max: 99999, montant: 300, leadSource: 'Inbound' },
     ],
+    activityRules: [], // primes d'activité (volume de RDV par période × phases) — voir computeActivityPrimes
     provenances: [...DEFAULT_PROVENANCES],
     phases: [...DEFAULT_PHASES],
     opportunites: [...DEFAULT_OPPS],
@@ -659,6 +660,91 @@ export function computePrimes(rdvs, bareme) {
     })
   })
   return primes
+}
+
+// ============================================================ Primes d'activité (volume de RDV)
+// Deuxième type de barème : au lieu d'une prime par RDV (effectif × source), on récompense
+// le VOLUME de rendez-vous sur une période (semaine/mois/trimestre/année), croisé avec une
+// sélection de phases, via des paliers « à partir de N RDV → montant ». Pensé comme des règles
+// (façon règles de données Excel) : une liste de règles empilables, chacune = période + phases
+// + paliers.
+export const ACTIVITY_PERIODS = [
+  { id: 'semaine', label: 'Semaine' },
+  { id: 'mois', label: 'Mois' },
+  { id: 'trimestre', label: 'Trimestre' },
+  { id: 'annee', label: 'Année' },
+]
+function isoWeekParts(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const day = (d.getUTCDay() + 6) % 7 // lundi = 0
+  d.setUTCDate(d.getUTCDate() - day + 3) // jeudi de la semaine
+  const firstThu = new Date(Date.UTC(d.getUTCFullYear(), 0, 4))
+  const week = 1 + Math.round(((d - firstThu) / 86400000 - 3 + ((firstThu.getUTCDay() + 6) % 7)) / 7)
+  return { year: d.getUTCFullYear(), week }
+}
+export function activityPeriodKey(period, dateStr) {
+  const d = parseISO(dateStr); if (!d || isNaN(d)) return null
+  const y = d.getFullYear()
+  if (period === 'annee') return String(y)
+  if (period === 'trimestre') return `${y}-T${Math.floor(d.getMonth() / 3) + 1}`
+  if (period === 'semaine') { const { year, week } = isoWeekParts(d); return `${year}-S${String(week).padStart(2, '0')}` }
+  return `${y}-${String(d.getMonth() + 1).padStart(2, '0')}` // mois
+}
+// Date représentative (fin de période) → sert au mois de paiement et au tri.
+function activityPeriodEnd(period, key) {
+  if (period === 'annee') return `${key}-12-31`
+  if (period === 'trimestre') { const [y, q] = key.split('-T'); const m = Number(q) * 3; return `${y}-${String(m).padStart(2, '0')}-28` }
+  if (period === 'semaine') {
+    const [y, w] = key.split('-S'); const simple = new Date(Date.UTC(Number(y), 0, 1 + (Number(w) - 1) * 7))
+    const day = (simple.getUTCDay() + 6) % 7; simple.setUTCDate(simple.getUTCDate() - day + 6) // dimanche
+    return simple.toISOString().slice(0, 10)
+  }
+  return `${key}-28` // mois
+}
+export function activityPeriodLabel(period, key) {
+  if (period === 'annee') return key
+  if (period === 'trimestre') { const [y, q] = key.split('-T'); return `T${q} ${y}` }
+  if (period === 'semaine') { const [y, w] = key.split('-S'); return `Semaine ${Number(w)} · ${y}` }
+  const d = parseISO(key + '-01'); return d ? monthLabel(d) : key
+}
+export function activityRuleTitle(rule) {
+  if (rule.label && rule.label.trim()) return rule.label.trim()
+  const per = ACTIVITY_PERIODS.find(p => p.id === rule.period)?.label || rule.period
+  const ph = (rule.phases && rule.phases.length) ? rule.phases.join('/') : 'tous les RDV'
+  return `RDV ${ph} · par ${per.toLowerCase()}`
+}
+// Calcule les primes d'activité : une prime par (règle, période atteignant un palier).
+export function computeActivityPrimes(rdvs, rules) {
+  const out = []
+  ;(rules || []).forEach(rule => {
+    const phases = rule.phases || []
+    const tiers = [...(rule.tiers || [])].map(t => ({ min: Number(t.min) || 0, montant: Number(t.montant) || 0 })).sort((a, b) => a.min - b.min)
+    if (!tiers.length) return
+    const buckets = {}
+    ;(rdvs || []).forEach(r => {
+      if (phases.length && !phases.includes(r.phase)) return
+      const d = r.dateRdv || r.datePriseRdv || r.createdAt
+      const pk = activityPeriodKey(rule.period, d)
+      if (!pk) return
+      buckets[pk] = (buckets[pk] || 0) + 1
+    })
+    Object.entries(buckets).forEach(([pk, count]) => {
+      let tier = null
+      tiers.forEach(t => { if (count >= t.min) tier = t })
+      if (!tier || tier.montant <= 0) return
+      const end = activityPeriodEnd(rule.period, pk)
+      const endD = parseISO(end)
+      out.push({
+        id: rule.id + ':' + pk, kind: 'activity', ruleId: rule.id, ruleLabel: activityRuleTitle(rule),
+        period: rule.period, periodKey: pk, periodLabel: activityPeriodLabel(rule.period, pk),
+        phases, count, tierMin: tier.min, montant: tier.montant,
+        triggerDate: end,
+        payMonthKey: endD ? monthKey(endD) : null, payMonthLabel: endD ? monthLabel(endD) : '—',
+        figee: false, invalidated: false,
+      })
+    })
+  })
+  return out
 }
 
 // ---------------------------------------------------------------- Store React
@@ -1116,6 +1202,7 @@ function migrate(db) {
     data.tasks = data.tasks || []
     data.taskTrash = data.taskTrash || []
     data.icpProfiles = data.icpProfiles || []
+    data.activityRules = data.activityRules || [] // primes d'activité (volume de RDV)
   })
   // ---- Conversations / canaux + services (organigramme) ----
   db.channels = db.channels || []

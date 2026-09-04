@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { Plus, Trash2, AlertTriangle } from 'lucide-react'
-import { useStore, computePrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, uid, SOURCES } from '../store.jsx'
+import { Plus, Trash2, AlertTriangle, CalendarRange, Layers, Activity } from 'lucide-react'
+import { useStore, computePrimes, computeActivityPrimes, ACTIVITY_PERIODS, activityRuleTitle, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, uid, SOURCES, DEFAULT_PHASES } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 const SUIVI_TL = [
@@ -41,9 +41,14 @@ function filterPrimes(primes, tl, custom) {
 export default function Primes() {
   const store = useStore()
   const sub = store.sub
-  const allPrimes = useMemo(() => computePrimes(sub.rdvs, sub.bareme), [sub.rdvs, sub.bareme])
+  // Deux types de barème : par lead (effectif × source) + par activité (volume de RDV × phases).
+  const allPrimes = useMemo(() => [
+    ...computePrimes(sub.rdvs, sub.bareme),
+    ...computeActivityPrimes(sub.rdvs, sub.activityRules),
+  ], [sub.rdvs, sub.bareme, sub.activityRules])
   const primes = allPrimes.filter(p => !p.invalidated)   // stats & sommes : primes valides uniquement
   const invalidated = allPrimes.filter(p => p.invalidated)
+  const phaseOptions = (sub.phases && sub.phases.length ? sub.phases : DEFAULT_PHASES)
 
   const [repTl, setRepTl] = useState('cur')
   const [repCustom, setRepCustom] = useState({})
@@ -140,20 +145,29 @@ export default function Primes() {
           <p className="text-xs text-muted mb-3">Règle : déclenchée à la date de passage en SQL. Payée le mois en cours si le passage a lieu avant le 15, sinon le mois suivant. 🔒 = prime figée au barème en vigueur lors du passage en SQL (un changement de barème ne réécrit pas le passé).</p>
           {repPrimes.length === 0 ? <Empty text="Aucune prime sur cette période." /> : (
             <div className="space-y-1.5">
-              {repPrimes.sort((a, b) => b.montant - a.montant).map((p, i) => (
-                <div key={p.rdvId + i}>
-                  <button className="w-full flex items-center justify-between text-sm p-2 rounded-xl bg-surface hover:bg-line/50"
-                    onClick={() => setOpenPrime(openPrime === p.rdvId ? '' : p.rdvId)}>
-                    <span className="font-semibold">#{i + 1} — {p.entreprise} {p.figee && <span title={`Prime figée le ${p.figeeLe}`}>🔒</span>}</span>
-                    <span className="font-extrabold text-emerald-600">{fmtMoney(p.montant)}</span>
-                  </button>
-                  {openPrime === p.rdvId && (
-                    <div className="text-xs text-muted px-3 py-2">
-                      Passage SQL : {fmtDate(p.triggerDate)} · Paiement : {p.payMonthLabel} · Effectif : {p.effectif} · Source : {p.source}
-                    </div>
-                  )}
-                </div>
-              ))}
+              {repPrimes.sort((a, b) => b.montant - a.montant).map((p, i) => {
+                const key = (p.rdvId || p.id)
+                const act = p.kind === 'activity'
+                return (
+                  <div key={key + i}>
+                    <button className="w-full flex items-center justify-between text-sm p-2 rounded-xl bg-surface hover:bg-line/50"
+                      onClick={() => setOpenPrime(openPrime === key ? '' : key)}>
+                      <span className="font-semibold flex items-center gap-1.5">
+                        {act && <Activity size={13} className="text-brand shrink-0" title="Prime d'activité" />}
+                        #{i + 1} — {act ? `${p.ruleLabel} (${p.periodLabel})` : p.entreprise} {p.figee && <span title={`Prime figée le ${p.figeeLe}`}>🔒</span>}
+                      </span>
+                      <span className="font-extrabold text-emerald-600">{fmtMoney(p.montant)}</span>
+                    </button>
+                    {openPrime === key && (
+                      <div className="text-xs text-muted px-3 py-2">
+                        {act
+                          ? <>Activité : {p.count} RDV {p.phases?.length ? `en ${p.phases.join('/')}` : '(toutes phases)'} · Palier ≥ {p.tierMin} · Période : {p.periodLabel} · Paiement : {p.payMonthLabel}</>
+                          : <>Passage SQL : {fmtDate(p.triggerDate)} · Paiement : {p.payMonthLabel} · Effectif : {p.effectif} · Source : {p.source}</>}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
               <div className="flex justify-between pt-2 border-t border-line font-extrabold text-sm">
                 <span>Total</span><span>{fmtMoney(repPrimes.reduce((a, p) => a + p.montant, 0))}</span>
               </div>
@@ -266,6 +280,95 @@ export default function Primes() {
         </table>
         <p className="text-xs text-muted mt-2">Chaque RDV en phase SQL ou Signée déclenche automatiquement la prime correspondant à sa tranche d'effectif et sa lead source.</p>
       </div>
+
+      <ActivityBaremeCard store={store} sub={sub} phaseOptions={phaseOptions} />
+    </div>
+  )
+}
+
+// -------------------------------------------------- Barème par activité (règles façon Excel)
+function ActivityBaremeCard({ store, sub, phaseOptions }) {
+  const rules = sub.activityRules || []
+  const setRules = (fn) => store.setSub(d => ({ ...d, activityRules: typeof fn === 'function' ? fn(d.activityRules || []) : fn }))
+  const addRule = () => { setRules(rs => [...rs, { id: uid(), label: '', period: 'mois', phases: [], tiers: [{ id: uid(), min: 10, montant: 200 }] }]); store.logAction('Prime', "Règle de prime d'activité ajoutée") }
+  const patchRule = (id, patch) => setRules(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r))
+  const removeRule = (id) => setRules(rs => rs.filter(r => r.id !== id))
+  const togglePhase = (id, ph) => setRules(rs => rs.map(r => r.id === id ? { ...r, phases: (r.phases || []).includes(ph) ? r.phases.filter(x => x !== ph) : [...(r.phases || []), ph] } : r))
+  const setTiers = (id, tiers) => patchRule(id, { tiers })
+
+  return (
+    <div className="card p-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 className="font-bold flex items-center gap-2"><Activity size={17} className="text-brand" /> Barème par activité (volume de RDV)</h3>
+          <p className="text-xs text-muted -mt-0.5">Des règles façon « règles de données Excel » : une condition (période + phases) → un résultat (prime par palier de RDV).</p>
+        </div>
+        <button className="btn-primary !py-1.5 text-xs" onClick={addRule}><Plus size={14} /> Ajouter une règle</button>
+      </div>
+
+      {rules.length === 0 && <Empty text="Aucune règle d'activité. Exemple : « ≥ 10 RDV en R1 dans le mois → 200 € »." />}
+
+      <div className="space-y-3">
+        {rules.map((rule, ri) => {
+          const tiers = rule.tiers || []
+          const results = computeActivityPrimes(sub.rdvs, [rule])
+          const total = results.reduce((a, p) => a + p.montant, 0)
+          return (
+            <div key={rule.id} className="rounded-xl border border-line p-3 space-y-2.5 bg-surface/40">
+              {/* Ligne 1 : SI (période) + nom + suppression */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="chip bg-brand/10 text-brand font-bold shrink-0">Règle {ri + 1}</span>
+                <input className="input !py-1 text-sm flex-1 min-w-[140px]" placeholder={activityRuleTitle(rule)} value={rule.label || ''} onChange={e => patchRule(rule.id, { label: e.target.value })} />
+                <button className="btn-ghost !p-1.5 text-red-500 shrink-0" title="Supprimer la règle" onClick={() => removeRule(rule.id)}><Trash2 size={15} /></button>
+              </div>
+
+              {/* Ligne 2 : période + phases */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-muted">
+                  <CalendarRange size={14} /> Sur la
+                  <select className="input !w-auto !py-1 text-xs" value={rule.period} onChange={e => patchRule(rule.id, { period: e.target.value })}>
+                    {ACTIVITY_PERIODS.map(p => <option key={p.id} value={p.id}>{p.label.toLowerCase()}</option>)}
+                  </select>
+                </label>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-semibold text-muted flex items-center gap-1"><Layers size={14} /> compter les RDV en :</span>
+                  {phaseOptions.map(ph => (
+                    <button key={ph} onClick={() => togglePhase(rule.id, ph)}
+                      className={`chip cursor-pointer ${(rule.phases || []).includes(ph) ? 'bg-brand text-white' : 'bg-card border border-line text-muted'}`}>{ph}</button>
+                  ))}
+                  {(rule.phases || []).length === 0 && <span className="text-[11px] text-muted italic">toutes les phases</span>}
+                </div>
+              </div>
+
+              {/* Ligne 3 : paliers (ALORS) */}
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold text-muted">Paliers de prime :</div>
+                {tiers.map((t, ti) => (
+                  <div key={t.id || ti} className="flex items-center gap-2 text-sm flex-wrap">
+                    <span className="text-muted">À partir de</span>
+                    <input type="number" min="1" className="input !w-20 !py-1 text-center" value={t.min}
+                      onChange={e => setTiers(rule.id, tiers.map(x => x === t ? { ...x, min: e.target.value } : x))} />
+                    <span className="text-muted">RDV →</span>
+                    <input type="number" min="0" className="input !w-24 !py-1 text-center font-bold" value={t.montant}
+                      onChange={e => setTiers(rule.id, tiers.map(x => x === t ? { ...x, montant: e.target.value } : x))} />
+                    <span className="text-muted">€</span>
+                    <button className="text-red-400 shrink-0" title="Retirer le palier" onClick={() => setTiers(rule.id, tiers.filter(x => x !== t))}><Trash2 size={13} /></button>
+                  </div>
+                ))}
+                <button className="btn-ghost !py-1 text-xs" onClick={() => setTiers(rule.id, [...tiers, { id: uid(), min: (Number(tiers[tiers.length - 1]?.min) || 0) + 10, montant: 0 }])}><Plus size={13} /> Ajouter un palier</button>
+              </div>
+
+              {/* Aperçu sur les données réelles */}
+              <div className="text-xs rounded-lg bg-card border border-line px-3 py-2">
+                {results.length === 0
+                  ? <span className="text-muted">Sur vos RDV actuels : aucun palier atteint pour l'instant.</span>
+                  : <span>Sur vos RDV : <b className="text-emerald-600">{fmtMoney(total)}</b> — {results.sort((a, b) => a.periodKey.localeCompare(b.periodKey)).map(r => `${r.periodLabel} (${r.count} RDV → ${fmtMoney(r.montant)})`).join(' · ')}</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-xs text-muted">La prime versée par période est celle du <b>palier le plus élevé atteint</b>. Ces primes s'ajoutent aux primes par lead et apparaissent dans le suivi et le reporting ci-dessus.</p>
     </div>
   )
 }

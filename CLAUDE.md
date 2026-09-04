@@ -22,6 +22,9 @@ npm run dev        # serveur de dev
   - `setSub(fn)` = écrit dans l'espace courant ; `setSubData(subId, fn)` = écrit dans un espace précis (pipeline entreprise).
     Les deux sont **bloqués en lecture seule** (`readOnly`, voir résiliation).
   - `APP_VERSION` (string), `ROLES`, `SUPPORT_ROLES = ['Fondateur','Support BD Report']`, `PLANS` (starter/beta), `BRICKS`.
+  - **Primes — 2 types** : par lead (`data.bareme` effectif × source, `computePrimes`, figée au passage SQL, règle du 15) ET
+    par activité (`data.activityRules` = règles façon Excel : période semaine/mois/trimestre/année × phases × paliers « ≥ N RDV → montant »,
+    `computeActivityPrimes(rdvs, rules)`). La page Primes fusionne les deux flux (suivi, reporting, prévisionnel).
 - **`src/App.jsx`** — routing par `NAV_GROUPS` + `pageEl` (switch d'id). `MainApp` = sidebar + header.
   Login avec « rester connecté 30 j » + « enregistrer mot de passe ». Pastilles non-lus support. Bandeau lecture seule.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.

@@ -96,6 +96,11 @@ async function main() {
     if (!text().includes(label)) throw new Error(`Page ${label} did not render`)
   }
 
+  // 5b. Primes : ajout d'une règle de barème par activité (volume de RDV).
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Primes & Commissions'))
+  await click(find('button', 'Ajouter une règle'))
+  if (!text().includes('Paliers de prime')) throw new Error('Activity bonus rule editor did not render')
+
   // 6a. Conversations : canaux auto (Général + Bloc notes), création d'un canal, envoi d'un message.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Conversations'))
   if (!text().includes('Général') || !text().includes('Bloc notes')) throw new Error('Auto channels (Général / Bloc notes) missing')
