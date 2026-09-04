@@ -268,6 +268,29 @@ footer a{color:var(--violet2);font-weight:700}
   .ba{gap:16px}
   .ba-arrow{transform:rotate(90deg)}
 }
+
+/* Bulles KPI flottantes du hero */
+.float-kpi{animation:floaty 12s ease-in-out infinite}
+.float-kpi.a{animation-duration:13s}
+.float-kpi.b{animation-duration:10s;animation-delay:-4s}
+.float-kpi.c{animation-duration:15s;animation-delay:-8s}
+@keyframes floaty{0%,100%{transform:translate(0,0)}25%{transform:translate(14px,-18px)}50%{transform:translate(-10px,10px)}75%{transform:translate(8px,16px)}}
+/* Orbite "Dix outils, ou un seul" : BD Report au centre, 10 outils qui gravitent */
+.tools-orbit{position:relative;width:min(440px,88vw);aspect-ratio:1;margin:8px auto 0}
+.tools-orbit::before,.tools-orbit::after{content:'';position:absolute;border-radius:50%;border:1px dashed rgba(124,92,255,.16)}
+.tools-orbit::before{inset:5%}.tools-orbit::after{inset:26%}
+.to-center{position:absolute;inset:37%;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;font-size:15px;letter-spacing:-.02em;color:#fff;background:linear-gradient(180deg,var(--violet2),var(--violet));box-shadow:0 16px 52px rgba(124,92,255,.55),inset 0 1px 0 rgba(255,255,255,.25);z-index:3}
+.to-layer{position:absolute;inset:0;animation:orbit 54s linear infinite;animation-delay:calc(var(--i) * -5.4s)}
+.to-node{position:absolute;top:-6px;left:50%;transform:translateX(-50%)}
+.to-node span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:8px 12px;border-radius:12px;font-size:12.5px;font-weight:700;color:var(--text);background:var(--surface2);border:1px solid var(--line2);box-shadow:0 10px 28px rgba(0,0,0,.45);animation:orbit 54s linear infinite reverse;animation-delay:calc(var(--i) * -5.4s)}
+.tools-orbit:hover .to-layer,.tools-orbit:hover .to-node span{animation-play-state:paused}
+@keyframes orbit{to{transform:rotate(360deg)}}
+@media(max-width:640px){.to-node span{font-size:11px;padding:6px 9px}}
+@media(prefers-reduced-motion:reduce){
+  .float-kpi{animation:none!important}
+  .to-layer{animation:none!important;transform:rotate(calc(var(--i)*36deg))}
+  .to-node span{animation:none!important;transform:rotate(calc(var(--i)*-36deg))}
+}
 </style>
 </head>
 <body>
@@ -430,15 +453,20 @@ footer a{color:var(--violet2);font-weight:700}
 <section id="avant-apres">
   <div class="wrap">
     <div class="sec-head reveal"><span class="eyebrow">Avant / Après</span><h2 class="sec-title" data-i18n="ba.title">Dix outils, ou un seul.</h2></div>
-    <div class="ba reveal">
-      <div class="ba-col ba-before"><h3 data-i18n="ba.before">Avant</h3>
-        <span data-i18n="ba.i1">Excel</span><span data-i18n="ba.i2">CRM</span><span data-i18n="ba.i3">Calendrier</span><span data-i18n="ba.i4">Calcul de primes</span><span data-i18n="ba.i5">Tableaux de suivi</span>
-      </div>
-      <div class="ba-arrow">→</div>
-      <div class="ba-col"><h3 data-i18n="ba.after">Après</h3>
-        <div class="ba-after"><div class="big grad">BD Report</div><div style="color:var(--muted);margin-top:6px" data-i18n="ba.after2">Un seul cockpit.</div></div>
-      </div>
+    <div class="tools-orbit reveal">
+      <div class="to-center">BD Report</div>
+        <div class="to-layer" style="--i:0"><div class="to-node"><span>📊 Excel</span></div></div>
+        <div class="to-layer" style="--i:1"><div class="to-node"><span>🗂️ CRM</span></div></div>
+        <div class="to-layer" style="--i:2"><div class="to-node"><span>📅 Agenda</span></div></div>
+        <div class="to-layer" style="--i:3"><div class="to-node"><span>✉️ Emailing</span></div></div>
+        <div class="to-layer" style="--i:4"><div class="to-node"><span>✅ Tâches</span></div></div>
+        <div class="to-layer" style="--i:5"><div class="to-node"><span>💶 Primes</span></div></div>
+        <div class="to-layer" style="--i:6"><div class="to-node"><span>📈 Reporting</span></div></div>
+        <div class="to-layer" style="--i:7"><div class="to-node"><span>🧲 Pipeline</span></div></div>
+        <div class="to-layer" style="--i:8"><div class="to-node"><span>🗒️ Notes</span></div></div>
+        <div class="to-layer" style="--i:9"><div class="to-node"><span>📉 Analytics</span></div></div>
     </div>
+    <p style="text-align:center;color:var(--muted);margin-top:26px" data-i18n="ba.after2">Un seul cockpit à la place de dix outils.</p>
   </div>
 </section>
 
