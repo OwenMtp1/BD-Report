@@ -277,18 +277,39 @@ export const BRICKS = [
 ]
 
 // ---------------------------------------------------------------- Offres (plans)
-// starter : compte gratuit auto-créé, accès très limité.
-// beta : accès complet, attribué quand un manager crée un compte dans un environnement Beta.
-export const STARTER_BRICKS = ['Dashboard', 'Mes Rendez-vous', 'Mes contacts', 'Mes tâches']
-export const PLANS = {
-  starter: { id: 'starter', label: 'Starter', bricks: STARTER_BRICKS },
-  beta: { id: 'beta', label: 'Beta Testing', bricks: [...BRICKS] },
+// Les offres sont désormais des DONNÉES (db.offers) que le staff peut créer/modifier/supprimer.
+// starter : offre gratuite mono-compte (pas d'équipe / pilotage). beta : accès complet.
+// `team` : donne accès aux fonctions manager/pilotage + création de comptes.
+// `maxSeats` : nombre de personnes autorisées (1 = solo ; 0 = illimité).
+export const STARTER_BRICKS = ['Dashboard', 'Mes Rendez-vous', 'Mes contacts', 'Mes tâches', 'Mes notes']
+export function defaultOffers() {
+  return [
+    { id: 'starter', name: 'Starter', builtin: true, price: 0, priceLabel: 'Gratuit, pour toujours',
+      desc: 'Pour un commercial en solo qui veut piloter son activité.', bricks: [...STARTER_BRICKS], team: false, maxSeats: 1 },
+    { id: 'beta', name: 'Beta Testing', builtin: true, price: 0, priceLabel: 'Gratuit pendant la bêta',
+      desc: 'L\'accès complet à BD Report, équipe et pilotage inclus.', bricks: [...BRICKS], team: true, maxSeats: 0 },
+  ]
 }
-// Briques réellement accessibles à un compte selon son offre
-export function allowedBricks(account) {
-  const plan = PLANS[account?.plan] || PLANS.beta
-  const planSet = new Set(plan.bricks)
-  return (account?.bricks || []).filter(b => planSet.has(b))
+// Rétro-compat : PLANS reste consultable (libellés), dérivé des offres par défaut.
+export const PLANS = { starter: { id: 'starter', label: 'Starter', bricks: STARTER_BRICKS }, beta: { id: 'beta', label: 'Beta Testing', bricks: [...BRICKS] } }
+
+export function findOffer(offers, id) { return (offers || []).find(o => o.id === id) || null }
+// Briques accessibles selon l'offre du compte (aucune si le compte n'a pas d'offre → support seul).
+export function allowedBricks(account, offers) {
+  const offer = findOffer(offers, account?.plan)
+  if (!offer) {
+    // Pas d'offre du tout : aucune brique. (Rétro-compat : si `offers` non fourni, on retombe sur PLANS.)
+    if (offers) return []
+    const plan = PLANS[account?.plan] || PLANS.beta
+    return (account?.bricks || []).filter(b => new Set(plan.bricks).has(b))
+  }
+  const set = new Set(offer.bricks || [])
+  return (account?.bricks || []).filter(b => set.has(b))
+}
+// Le compte a-t-il accès aux fonctions équipe / pilotage / manager ? (offre `team` ou rôle support)
+export function hasTeamAccess(account, offers) {
+  if (isSupportRole(account?.role)) return true
+  return !!findOffer(offers, account?.plan)?.team
 }
 
 export const ROLES = ['Fondateur', 'Support BD Report', 'Administrateur', 'Manager', 'Développeur', 'Membre']
@@ -1208,6 +1229,7 @@ function migrate(db) {
   db.channels = db.channels || []
   db.channelMessages = db.channelMessages || {}
   db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
+  db.offers = Array.isArray(db.offers) ? db.offers : defaultOffers() // offres/abonnements gérés par le staff
   ;(db.environments || []).forEach(e => {
     if (!Array.isArray(e.services)) e.services = (e.departments && e.departments.length ? e.departments : ['Sales', 'Marketing']).map(n => ({ id: uid(), name: n }))
   })
@@ -1415,6 +1437,7 @@ export function StoreProvider({ children, demo = false }) {
         const acc = db.accounts.find(a =>
           (a.email.toLowerCase() === identifier.toLowerCase() || a.pseudo.toLowerCase() === identifier.toLowerCase())
           && checkPw(password, a.password))
+        if (acc && acc.disabled) { return { error: 'disabled' } } // accès désactivé par le support
         if (acc) {
           setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
           // « Rester connecté 30 jours »
@@ -1946,6 +1969,98 @@ export function StoreProvider({ children, demo = false }) {
           return d
         })
       },
+      // ===================================================== Offres / abonnements
+      offers() { return db.offers || [] },
+      myOffer() { return findOffer(db.offers, account?.plan) },
+      hasTeam() { return hasTeamAccess(account, db.offers) },
+      // Gestion des offres (staff uniquement) : créer / modifier / supprimer.
+      createOffer(data) {
+        if (!isSupportRole(account?.role)) return null
+        const o = { id: uid(), name: (data?.name || 'Nouvelle offre').trim(), price: Number(data?.price) || 0, priceLabel: data?.priceLabel || '', desc: data?.desc || '', bricks: Array.isArray(data?.bricks) ? data.bricks : [], team: !!data?.team, maxSeats: Number(data?.maxSeats) || 0, builtin: false, createdAt: new Date().toISOString() }
+        setDb(d => { d.offers = d.offers || []; d.offers.push(o); return d })
+        return o
+      },
+      updateOffer(id, patch) {
+        if (!isSupportRole(account?.role)) return
+        setDb(d => { const o = (d.offers || []).find(x => x.id === id); if (o) Object.assign(o, patch); return d })
+      },
+      deleteOffer(id) {
+        if (!isSupportRole(account?.role)) return
+        setDb(d => { d.offers = (d.offers || []).filter(o => o.id !== id); return d })
+      },
+      // Attribue une offre à un compte (met à jour plan + briques accessibles).
+      setAccountOffer(accId, offerId) {
+        if (!isSupportRole(account?.role)) return
+        setDb(d => {
+          const a = d.accounts.find(x => x.id === accId); if (!a) return d
+          a.plan = offerId || null
+          const offer = findOffer(d.offers, offerId)
+          if (offer) a.bricks = [...offer.bricks]
+          return d
+        })
+      },
+      // Attribue une offre à tout un environnement (le créateur + ses membres).
+      setEnvOffer(envId, offerId) {
+        if (!isSupportRole(account?.role)) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === envId); if (!env) return d
+          env.plan = offerId || null
+          const offer = findOffer(d.offers, offerId)
+          const memberIds = new Set([env.createdBy, ...(env.members || [])].filter(Boolean))
+          d.accounts.forEach(a => { if (memberIds.has(a.id)) { a.plan = offerId || null; if (offer) a.bricks = [...offer.bricks] } })
+          return d
+        })
+      },
+      // Souscription client : ouvre un ticket au support pour l'offre choisie.
+      subscribeToOffer(offerId) {
+        const offer = findOffer(db.offers, offerId); if (!offer) return null
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const env = db.environments.find(e => e.id === session?.envId)
+        const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
+        const ticket = makeTicket({
+          accountId: account?.id, prenom, photo: sub?.photo || account?.photo || '', clientName: env?.name || prenom,
+          envId: session?.envId, subEnvId: session?.subEnvId, category: `Souscription — ${offer.name}`, priority: 'haute',
+          message: `Bonjour, je souhaite souscrire à l'offre « ${offer.name} » (${offer.priceLabel || (offer.price + ' €')}).`,
+          botText: `Bonjour ${prenom}, votre demande de souscription à l'offre « ${offer.name} » est bien enregistrée. Un membre de l'équipe BD Report va l'activer et revenir vers vous ici.`,
+        })
+        setDb(d => {
+          d.tickets = d.tickets || []; d.tickets.unshift(ticket)
+          enrichClientFromTicket(d, ticket); syncClientStatusFromTickets(d, ticket)
+          pushSupportLog(d, { type: 'Abonnement', action: 'Demande de souscription', details: `${offer.name} · ${prenom}`, actorId: account?.id || null, actorName: prenom })
+          return d
+        })
+        return ticket
+      },
+      // ===================================================== Staff : gestion des membres d'un projet/env
+      // Désactive temporairement (ou réactive) l'accès d'un compte (bloque la connexion).
+      disableAccount(accId, disabled) {
+        if (!isSupportRole(account?.role)) return
+        setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.disabled = !!disabled; return d })
+      },
+      // Efface toutes les données d'un espace (remise à zéro complète).
+      wipeSpaceData(subId) {
+        if (!isSupportRole(account?.role)) return
+        setDb(d => { if (d.data[subId]) d.data[subId] = emptySubEnvData(); return d })
+      },
+      // Retire un membre d'un environnement (accès + espaces + données de cet env).
+      removeEnvMember(envId, accId) {
+        if (!isSupportRole(account?.role)) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === envId); if (env) env.members = (env.members || []).filter(m => m !== accId)
+          d.subenvs.filter(s => s.envId === envId && s.ownerId === accId).forEach(s => { delete d.data[s.id] })
+          d.subenvs = d.subenvs.filter(s => !(s.envId === envId && s.ownerId === accId))
+          return d
+        })
+      },
+      // Membres (comptes) d'un environnement, pour le menu utilisateurs d'un projet.
+      envMembers(envId) {
+        const env = db.environments.find(e => e.id === envId); if (!env) return []
+        const ids = new Set([env.createdBy, ...(env.members || [])].filter(Boolean))
+        db.subenvs.filter(s => s.envId === envId).forEach(s => ids.add(s.ownerId))
+        return [...ids].map(id => db.accounts.find(a => a.id === id)).filter(Boolean).map(a => ({
+          account: a, sub: db.subenvs.find(s => s.envId === envId && s.ownerId === a.id) || null, isOwner: env.createdBy === a.id,
+        }))
+      },
       // ===================================================== Mots de passe (visibilité manager/support)
       canViewPasswords() { return ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role) },
       // Renvoie le mot de passe en clair si connu (comptes créés/réinitialisés depuis l'app),
@@ -1995,10 +2110,13 @@ export function StoreProvider({ children, demo = false }) {
       },
       addAccount(acc) {
         if (roBlocked()) return null
-        // Compte créé par un manager/admin = accès complet de l'offre de l'environnement courant (Beta par défaut).
+        // Offre solo (Starter) : impossible de créer d'autres comptes / de piloter une équipe.
+        if (!hasTeamAccess(account, db.offers)) { window.dispatchEvent(new CustomEvent('app-toast', { detail: '🔒 Votre offre ne permet pas de créer d\'autres comptes. Passez à une offre équipe.' })); return null }
+        // Compte créé par un manager/admin = briques de l'offre de l'environnement courant (Beta par défaut).
         const env = db.environments.find(e => e.id === session?.envId)
         const plan = acc.plan || env?.plan || 'beta'
-        const a = { id: uid(), role: 'Membre', developer: false, photo: '', bricks: [...(PLANS[plan]?.bricks || BRICKS)], teamOf: null, ...acc, plan }
+        const offerBricks = findOffer(db.offers, plan)?.bricks || PLANS[plan]?.bricks || BRICKS
+        const a = { id: uid(), role: 'Membre', developer: false, photo: '', bricks: [...offerBricks], teamOf: null, ...acc, plan }
         // Conserve le mot de passe en clair (visible manager/support) puis stocke le hash pour l'auth.
         if (a.password && !String(a.password).startsWith('sha256:')) { a.passwordClear = a.password; a.password = hashPw(a.password) }
         delete a.passwordPlain

@@ -5,7 +5,7 @@ import {
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
   AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Trophy, ShieldCheck,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -28,6 +28,7 @@ import Conversations from './pages/Conversations.jsx'
 import DataQuality from './pages/DataQuality.jsx'
 import Classement from './pages/Classement.jsx'
 import Simulateur from './pages/Simulateur.jsx'
+import Souscrire from './pages/Souscrire.jsx'
 import Logs from './pages/Logs.jsx'
 import Trash from './pages/Trash.jsx'
 import TeamLead from './pages/TeamLead.jsx'
@@ -60,7 +61,8 @@ function Login() {
     setErr('')
     if (mode === 'login') {
       const acc = store.login(id.trim(), pw, { remember, savePw })
-      if (!acc) setErr(t('login.errBad'))
+      if (acc && acc.error === 'disabled') setErr('Accès désactivé. Contactez le support BD Report.')
+      else if (!acc || acc.error) setErr(t('login.errBad'))
     } else {
       if (!id.includes('@')) { setErr(t('login.errEmail')); return }
       if (!pw) { setErr(t('login.errPw')); return }
@@ -312,10 +314,10 @@ const NAV_GROUPS = [
   {
     id: 'pilotage', label: 'Pilotage', items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
-      { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
+      { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', team: true, roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
       { id: 'icp', label: 'ICP', icon: Target, brick: 'ICP' },
-      { id: 'classement', label: 'Classement', icon: Trophy },
-      { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
+      { id: 'classement', label: 'Classement', icon: Trophy, team: true },
+      { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, team: true, roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
     ],
   },
   {
@@ -340,13 +342,14 @@ const NAV_GROUPS = [
       { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
       { id: 'logs', label: 'Logs', icon: ScrollText, brick: 'Logs' },
       { id: 'corbeille', label: 'Corbeille', icon: Trash2 },
-      { id: 'support', label: 'Support', icon: LifeBuoy },
+      { id: 'support', label: 'Support', icon: LifeBuoy, always: true },
+      { id: 'souscrire', label: 'Souscrire à une offre', icon: Gift, always: true },
     ],
   },
   {
     id: 'administration', label: 'Administration', items: [
-      { id: 'admin', label: 'Gestion Administration', icon: Shield, roles: ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'] },
-      { id: 'teams', label: 'Gérez mes équipes', icon: Users, roles: ['Manager'] },
+      { id: 'admin', label: 'Gestion Administration', icon: Shield, team: true, roles: ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'] },
+      { id: 'teams', label: 'Gérez mes équipes', icon: Users, team: true, roles: ['Manager'] },
     ],
   },
   {
@@ -399,9 +402,14 @@ function MainApp() {
     conversations: store.totalChannelUnread('team'),
   }
 
-  const myBricks = allowedBricks(me) // briques permises par l'offre (Starter limité / Beta complet)
+  const myBricks = allowedBricks(me, store.db.offers) // briques permises par l'offre
+  const myTeam = hasTeamAccess(me, store.db.offers)   // accès équipe/pilotage (offre `team` ou support)
+  const myOffer = findOffer(store.db.offers, me.plan)
+  const noOffer = !myOffer && !isSupportUser          // compte sans offre : support + souscrire seulement
   const canSee = (item) => {
     if (item.roles && !item.roles.includes(me.role)) return false
+    if (noOffer && !item.always) return false          // sans offre : seuls les onglets « always » (support, souscrire)
+    if (item.team && !myTeam) return false             // pilotage/manager : réservé aux offres équipe
     if (item.brick && !myBricks.includes(item.brick)) return false
     return true
   }
@@ -475,6 +483,7 @@ function MainApp() {
     dataquality: <DataQuality />,
     classement: <Classement />,
     simulateur: <Simulateur />,
+    souscrire: <Souscrire />,
     logs: <Logs />,
     corbeille: <Trash />,
     support: <Support />,
@@ -573,13 +582,13 @@ function MainApp() {
             onClick={store.logout}>
             <LogOut size={15} /> {tr('common.logout')}
           </button>
-          {me.plan === 'starter' && (
-            <div className="mt-1 rounded-lg bg-brand/10 p-2 text-center">
-              <div className="text-[11px] font-bold text-brand">Offre Starter</div>
-              <div className="text-[10px] text-muted">Accès limité — passez en Beta pour tout débloquer</div>
-            </div>
+          {!myTeam && !isSupportUser && (
+            <button className="mt-1 w-full rounded-lg bg-brand/10 p-2 text-center hover:bg-brand/15" onClick={() => goto('souscrire')}>
+              <div className="text-[11px] font-bold text-brand">{myOffer ? `Offre ${myOffer.name}` : 'Aucune offre active'}</div>
+              <div className="text-[10px] text-muted">{myOffer ? 'Passez à une offre équipe pour tout débloquer' : 'Souscrivez à une offre pour accéder à l’app'}</div>
+            </button>
           )}
-          <p className="text-center text-[10px] text-muted pt-1">v{APP_VERSION} · {(PLANS[me.plan] || PLANS.beta).label}</p>
+          <p className="text-center text-[10px] text-muted pt-1">v{APP_VERSION} · {myOffer ? myOffer.name : 'Sans offre'}</p>
         </div>
       </aside>
 
