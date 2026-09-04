@@ -61,6 +61,21 @@ export async function subscribeRemoteState(onChange) {
   return () => { try { c.removeChannel(ch) } catch (e) {} }
 }
 
+// ----- Offres publiques (app → site) --------------------------------------
+// Les offres sont des informations MARKETING (non secrètes) : on les publie EN CLAIR dans
+// une ligne dédiée `app_state.id='offers'` pour que le site vitrine les affiche toujours à
+// jour, quel que soit l'appareil. Le site les lit via la même clé anon.
+const OFFERS_ID = 'offers'
+let offersTimer = null
+export function publishOffersDebounced(offers, delay = 900) {
+  if (!isSupabaseConfigured()) return
+  clearTimeout(offersTimer)
+  offersTimer = setTimeout(async () => {
+    const c = await getClient(); if (!c) return
+    try { await c.from('app_state').upsert({ id: OFFERS_ID, data: { offers }, updated_at: new Date().toISOString() }) } catch (e) { /* offline */ }
+  }, delay)
+}
+
 // ----- Test de connexion (bouton « Tester » dans les Réglages) -------------
 export async function testConnection() {
   if (!isSupabaseConfigured()) return { ok: false, msg: 'Supabase non configuré (clés vides).' }

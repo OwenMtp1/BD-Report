@@ -77,6 +77,10 @@ npm run dev        # serveur de dev
   pilotage/manager/admin sont `team:true` (cachés en Starter). Nav gate par offre : items `always:true` (Support,
   Souscrire) visibles sans offre. Starter = solo (`addAccount` bloqué). Console Support → onglet **Offres**
   (`OffersAdmin`, CRUD) alimente en direct la page **Souscrire** (`src/pages/Souscrire.jsx` → ouvre un ticket).
+  **Sync site↔app** : l'app publie `db.offers` en clair (marketing, non secret) — miroir `localStorage['bdrflow_offers_v1']`
+  + Supabase `app_state.id='offers'` (`publishOffersDebounced`) ; le site (`#plansHost`) régénère ses cartes de prix
+  depuis ces offres (repli : cartes statiques trilingues). La **démo** (`buildDemoDb`) est une société fictive « Atlas
+  Revenue » fabriquée de toutes pièces (aucun lien avec le compte réel).
   Staff : Projets → bouton **Utilisateurs** (env) = offre de l'env, rôle manager, désactiver l'accès
   (`account.disabled`, login refusé), voir/changer mot de passe, effacer les données, retirer un membre.
   Manager (Gestion Administration mode `teams`) : périmètre strict (son équipe, jamais le staff).

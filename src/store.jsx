@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { isSupabaseConfigured } from './supabaseConfig.js'
 import { stripDangerousKeys } from './security.js'
-import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests } from './supabaseSync.js'
+import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests, publishOffersDebounced } from './supabaseSync.js'
 import { ALL_BRICKS, LEGACY_BRICKS } from './nav.jsx'
 
 const LS_KEY = 'bdrflow_db_v1'
@@ -1494,6 +1494,14 @@ export function StoreProvider({ children, demo = false }) {
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
   }, [])
+
+  // Publie les offres (marketing, non secrètes) pour que le SITE vitrine reste toujours
+  // synchronisé : miroir localStorage (même appareil, instantané) + Supabase (cross-device).
+  useEffect(() => {
+    if (demo) return
+    try { localStorage.setItem('bdrflow_offers_v1', JSON.stringify(db.offers || [])) } catch (e) { /* quota */ }
+    publishOffersDebounced(db.offers || [])
+  }, [db.offers]) // eslint-disable-line
 
   // Génère les messages de reporting automatique manquants dès que l'état change (RDV, tickets,
   // projets, clients). Idempotent : ne re-rend que si de nouveaux messages ont été ajoutés.

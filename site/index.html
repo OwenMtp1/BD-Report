@@ -477,7 +477,7 @@ footer a{color:var(--violet2);font-weight:700}
       <h2 data-i18n="pricing.title">Commencez gratuitement, débloquez tout en bêta</h2>
       <p data-i18n="pricing.sub">L'offre Starter est gratuite et accessible immédiatement. L'offre Beta Testing, complète et exclusive, s'obtient sur invitation.</p>
     </div>
-    <div class="plans" data-stagger style="grid-template-columns:1fr 1fr;max-width:840px;margin:0 auto">
+    <div class="plans" id="plansHost" data-stagger style="grid-template-columns:1fr 1fr;max-width:840px;margin:0 auto">
       <div class="plan">
         <h3 data-i18n="pricing.starter">Starter</h3>
         <div class="price">0 € <small data-i18n="pricing.free">gratuit, pour toujours</small></div>
@@ -1004,6 +1004,38 @@ function duoTab(w){
   document.getElementById('duoB').classList.toggle('on', w==='bdr');
   document.getElementById('duoM').classList.toggle('on', w==='mgr');
 }
+</script>
+<script>
+// Offres du site TOUJOURS synchronisées avec l'app : miroir localStorage (même appareil) +
+// Supabase (cross-device, offres publiées en clair par l'app). Repli : cartes statiques.
+(async function(){
+  function esc(x){return String(x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function render(offers){
+    if(!Array.isArray(offers)||!offers.length) return;
+    var host=document.getElementById('plansHost'); if(!host) return;
+    host.innerHTML = offers.map(function(o){
+      var price=o.priceLabel||(Number(o.price)>0?o.price+' € / mois':'Gratuit');
+      var feats=(o.bricks||[]).slice(0,8).map(function(b){return '<li>'+esc(b)+'</li>';}).join('');
+      if(o.team) feats+='<li>Pilotage d\'équipe &amp; comptes multiples</li>';
+      var cta=o.team?'<a class="btn btn-primary" href="#contact">Souscrire</a>':'<a class="btn btn-primary" href="app/">Commencer gratuitement</a>';
+      return '<div class="plan'+(o.team?' pro':'')+'">'+(o.team?'<span class="badge">⭐ Offre équipe</span>':'')+
+        '<h3>'+esc(o.name)+'</h3><div class="price">'+esc(price)+'</div>'+
+        (o.desc?'<p style="color:var(--muted);font-size:14px">'+esc(o.desc)+'</p>':'')+
+        '<ul>'+feats+'</ul>'+cta+'</div>';
+    }).join('');
+    host.style.gridTemplateColumns = offers.length>=3?'repeat(3,1fr)':(offers.length===1?'1fr':'1fr 1fr');
+    host.style.maxWidth = offers.length>=3?'1080px':'840px';
+  }
+  try{ var ls=localStorage.getItem('bdrflow_offers_v1'); if(ls) render(JSON.parse(ls)); }catch(_){ }
+  try{
+    if(window.BDR_SUPABASE_URL && window.BDR_SUPABASE_ANON_KEY){
+      var mod=await import('https://esm.sh/@supabase/supabase-js@2.45.4');
+      var sb=mod.createClient(window.BDR_SUPABASE_URL, window.BDR_SUPABASE_ANON_KEY);
+      var res=await sb.from('app_state').select('data').eq('id','offers').maybeSingle();
+      if(res && res.data && res.data.data && Array.isArray(res.data.data.offers)) render(res.data.data.offers);
+    }
+  }catch(_){ }
+})();
 </script>
 </body>
 </html>
