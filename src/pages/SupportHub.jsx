@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare } from 'lucide-react'
+import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag } from 'lucide-react'
 import { useStore, slaInfo } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
@@ -10,6 +10,7 @@ import SupportLogs from './SupportLogs.jsx'
 import SupportTrash from './SupportTrash.jsx'
 import DemoSales from './DemoSales.jsx'
 import Conversations from './Conversations.jsx'
+import OffersAdmin from './OffersAdmin.jsx'
 
 const SupportConversations = () => <Conversations scope="support" />
 
@@ -21,6 +22,7 @@ const TABS = [
   { id: 'tickets', label: 'Tickets', icon: LifeBuoy, El: Tickets },
   { id: 'clients', label: 'Clients', icon: Users2, El: Clients },
   { id: 'projects', label: 'Projets', icon: FolderKanban, El: Projects },
+  { id: 'offers', label: 'Offres', icon: Tag, El: OffersAdmin },
   { id: 'kb', label: 'Base de connaissances', icon: BookOpen, El: KnowledgeBase },
   { id: 'logs', label: 'Logs', icon: ScrollText, El: SupportLogs },
   { id: 'trash', label: 'Corbeille', icon: Trash2, El: SupportTrash },

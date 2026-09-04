@@ -1,7 +1,86 @@
 import React, { useState } from 'react'
-import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X } from 'lucide-react'
+import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, Eye, EyeOff, KeyRound, Eraser, UserMinus } from 'lucide-react'
 import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, todayISO } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
+
+// Menu utilisateurs d'un projet (staff) : gère les membres de l'environnement rattaché —
+// offre, rôle manager, désactivation d'accès, mot de passe, effacement des données, retrait.
+function ProjectUsers({ project, store, onClose }) {
+  const envId = project.envId
+  const env = store.db.environments.find(e => e.id === envId)
+  const members = store.envMembers(envId)
+  const offers = store.offers()
+  const [pwFor, setPwFor] = useState(null)
+  const [pwVal, setPwVal] = useState('')
+  const [confirm, setConfirm] = useState(null) // { kind, member }
+  const canView = store.canViewPasswords()
+
+  const doConfirm = () => {
+    const { kind, m } = confirm
+    if (kind === 'wipe') { store.wipeSpaceData(m.sub.id); toast('Données de l\'espace effacées') }
+    if (kind === 'remove') { store.removeEnvMember(envId, m.account.id); toast('Membre retiré de l\'environnement') }
+    setConfirm(null)
+  }
+
+  return (
+    <Modal title={`Utilisateurs — ${env?.name || project.clientName || 'Projet'}`} onClose={onClose} wide>
+      <div className="space-y-4">
+        <div className="rounded-xl border border-line p-3 flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-bold">Offre de l'environnement</span>
+          <select className="input !w-auto" value={env?.plan || ''} onChange={e => { store.setEnvOffer(envId, e.target.value || null); toast('Offre appliquée à l\'environnement') }}>
+            <option value="">— Aucune offre —</option>
+            {offers.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          <span className="text-xs text-muted">Applique l'offre au créateur et à tous les membres.</span>
+        </div>
+
+        <div className="space-y-2 max-h-[52vh] overflow-y-auto">
+          {members.length === 0 && <Empty text="Aucun utilisateur rattaché à cet environnement." />}
+          {members.map(m => {
+            const a = m.account
+            const isMgr = a.role === 'Manager'
+            const pwClear = canView ? store.revealPassword(a.id) : null
+            return (
+              <div key={a.id} className="rounded-xl border border-line p-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-[11px] font-extrabold flex items-center justify-center shrink-0">{(a.pseudo || a.email || '?').slice(0, 2).toUpperCase()}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-sm truncate">{m.sub ? `${m.sub.prenom} ${m.sub.nom}`.trim() : a.pseudo} {m.isOwner && <span className="chip bg-surface text-muted !text-[10px]">créateur</span>}</div>
+                    <div className="text-xs text-muted truncate">{a.email} · {a.role}{a.disabled ? ' · désactivé' : ''}</div>
+                  </div>
+                  {a.disabled && <span className="chip bg-red-100 text-red-700 dark:bg-red-500/15">Accès coupé</span>}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {m.sub && <button className="btn-ghost !py-1 text-xs" onClick={() => { store.setEmployeeRole(m.sub.id, !isMgr); toast(isMgr ? 'Rôle manager retiré' : 'Nommé manager') }}>
+                    <ShieldCheck size={13} /> {isMgr ? 'Retirer manager' : 'Nommer manager'}
+                  </button>}
+                  <button className="btn-ghost !py-1 text-xs" onClick={() => { store.disableAccount(a.id, !a.disabled); toast(a.disabled ? 'Accès réactivé' : 'Accès désactivé') }}>
+                    {a.disabled ? <><Play size={13} /> Réactiver</> : <><Ban size={13} /> Désactiver</>}
+                  </button>
+                  <button className="btn-ghost !py-1 text-xs" onClick={() => { setPwFor(pwFor === a.id ? null : a.id); setPwVal('') }}><KeyRound size={13} /> Mot de passe</button>
+                  {m.sub && <button className="btn-ghost !py-1 text-xs" onClick={() => setConfirm({ kind: 'wipe', m })}><Eraser size={13} /> Effacer les données</button>}
+                  {!m.isOwner && <button className="btn-ghost !py-1 text-xs !text-red-600" onClick={() => setConfirm({ kind: 'remove', m })}><UserMinus size={13} /> Retirer</button>}
+                </div>
+                {pwFor === a.id && (
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    {canView && <span className="text-xs font-mono px-2 py-1 rounded bg-surface">{pwClear || 'non disponible'}</span>}
+                    <input className="input !py-1 text-xs !w-48" placeholder="Nouveau mot de passe…" value={pwVal} onChange={e => setPwVal(e.target.value)} />
+                    <button className="btn-primary !py-1 text-xs" disabled={!pwVal.trim()} onClick={() => { store.setAccountPassword(a.id, pwVal.trim()); setPwVal(''); toast('Mot de passe mis à jour') }}>Changer</button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {confirm && (
+        <Confirm
+          message={confirm.kind === 'wipe' ? `Effacer TOUTES les données de l'espace de ${confirm.m.sub?.prenom} ? Action irréversible.` : `Retirer ${confirm.m.account.pseudo} de l'environnement (avec ses espaces et données) ?`}
+          onYes={doConfirm} onNo={() => setConfirm(null)} />
+      )}
+    </Modal>
+  )
+}
 
 const DAY = 86400000
 // Dates manipulées en UTC pour rester stables quel que soit le fuseau du navigateur
@@ -210,6 +289,7 @@ export default function Projects() {
   const [view, setView] = useState('gantt') // 'gantt' | 'calendar'
   const [form, setForm] = useState(null) // {mode, data}
   const [confirmDel, setConfirmDel] = useState(null)
+  const [usersFor, setUsersFor] = useState(null) // projet dont on gère les utilisateurs
 
   const save = (data) => {
     store.saveProject(data)
@@ -251,6 +331,7 @@ export default function Projects() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <span className={`chip ${st.color}`}>{st.label}</span>
+                      {p.envId && <button className="p-1.5 rounded-lg hover:bg-surface" title="Utilisateurs du projet" onClick={() => setUsersFor(p)}><Users2 size={14} /></button>}
                       <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setForm({ mode: 'edit', data: structuredClone(p) })}><Pencil size={14} /></button>
                       <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" onClick={() => setConfirmDel(p.id)}><Trash2 size={14} /></button>
                     </div>
@@ -277,6 +358,7 @@ export default function Projects() {
         </Modal>
       )}
       {confirmDel && <Confirm message="Supprimer ce projet ?" onYes={() => { store.deleteProject(confirmDel); setConfirmDel(null); toast('Projet supprimé') }} onNo={() => setConfirmDel(null)} />}
+      {usersFor && <ProjectUsers project={usersFor} store={store} onClose={() => setUsersFor(null)} />}
     </div>
   )
 }

@@ -306,7 +306,11 @@ export default function Admin({ mode }) {
   const [roleFilter, setRoleFilter] = useState('')
 
   const all = store.db.accounts
-  const scoped = mode === 'teams' ? all.filter(a => a.teamOf === actor.id || a.id === actor.id) : all
+  // Manager (mode 'teams') : périmètre strict — son équipe (+ lui), jamais le staff ni
+  // les membres hors de son équipe. Le staff (mode 'admin') voit tout.
+  const scoped = mode === 'teams'
+    ? all.filter(a => (a.teamOf === actor.id || a.id === actor.id) && !isSupportRole(a.role))
+    : all
 
   const stats = [
     { label: 'Utilisateurs', value: scoped.length },
