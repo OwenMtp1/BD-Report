@@ -29,8 +29,16 @@ async function main() {
   const { act } = await import('react')
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
-  const { StoreProvider } = await import('../src/store.jsx')
+  const { StoreProvider, buildDemoDb, demoSession } = await import('../src/store.jsx')
   const { I18nProvider } = await import('../src/i18n.jsx')
+
+  // Démo commerciale : base fabriquée de toutes pièces (société Atlas Revenue), sans lien
+  // avec un compte réel, et remplie de données.
+  const demoDb = buildDemoDb()
+  if (!demoDb.environments.some(e => e.id === 'env-demo')) throw new Error('Demo db missing env-demo')
+  if (demoDb.environments.some(e => e.id === 'env-peoplespheres' || e.id === 'env-test')) throw new Error('Demo db must not include real/seed envs')
+  if (!demoDb.accounts.some(a => a.id === 'demo-mgr') || (demoDb.data['dsub-b1']?.rdvs || []).length < 5) throw new Error('Demo db not richly populated')
+  if (demoSession('manager').subEnvId !== 'dsub-mgr') throw new Error('demoSession(manager) wrong')
   const { default: App } = await import('../src/App.jsx')
   const Root = (children) => React.createElement(StoreProvider, null, React.createElement(I18nProvider, null, children))
 

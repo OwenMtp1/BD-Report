@@ -824,24 +824,111 @@ const DEMO_OPTS = [
 export function makeDemoRdvs() { return makeTestRdvs(DEMO_NAMES, DEMO_OPTS) }
 
 // ---------------------------------------------------------------- Démo commerciale (app réelle isolée)
-// Base de données montée dans un StoreProvider isolé (prop `demo`) : aucune persistance
-// localStorage, aucune synchro cloud, aucune écriture de session. On s'appuie sur l'env
-// d'équipe complet 'env-test' déjà injecté par migrate() — Julie = manager (Team Lead BDR)
-// et Sarah/Thomas/Karim = BDR — pour dérouler la VRAIE app avec toutes ses options et
-// beaucoup de données, sans jamais toucher aux comptes réels.
+// Base de données FABRIQUÉE de toutes pièces (société fictive « Atlas Revenue »), montée dans un
+// StoreProvider isolé (prop `demo`) : aucune persistance, aucun cloud, aucune session écrite, et
+// AUCUN lien avec le compte de la personne qui lance la démo. Beaucoup de données (manager + 4 BDR,
+// dizaines de RDV, primes, règle d'activité, conversations) pour dérouler toutes les fonctionnalités.
+const DEMO_PW = 'sha256:937e8d5fbb48bd4949536cd65b8d35c426b80d2f830c5c308e2cdec422ae2244' // hash factice (login inutile en démo)
 export function buildDemoDb() {
-  return migrate(buildSeedDb())
+  const db = {
+    accounts: [], environments: [], subenvs: [], data: {},
+    supportRequests: [], tickets: [], clients: [], projects: [],
+    supportTrash: [], cannedReplies: [], kbArticles: [],
+  }
+  const mkAcc = (id, pseudo, role, teamOf) => ({ id, email: `${pseudo.toLowerCase()}@atlas.demo`, pseudo, password: DEMO_PW, role, developer: false, plan: 'beta', photo: '', bricks: [...BRICKS], teamOf, presence: id === 'demo-b1' ? 'online' : (id === 'demo-b3' ? 'dnd' : 'online') })
+  db.accounts.push(
+    mkAcc('demo-mgr', 'ChloeManager', 'Manager', null),
+    mkAcc('demo-b1', 'LucasBDR', 'Membre', 'demo-mgr'),
+    mkAcc('demo-b2', 'SaraBDR', 'Membre', 'demo-mgr'),
+    mkAcc('demo-b3', 'MehdiBDR', 'Membre', 'demo-mgr'),
+    mkAcc('demo-b4', 'JadeBDR', 'Membre', 'demo-mgr'),
+  )
+  const svcSales = uid(), svcSdr = uid()
+  db.environments.push({
+    id: 'env-demo', name: 'Atlas Revenue', logo: '', pin: '', plan: 'beta', createdBy: 'demo-mgr', subState: 'active',
+    departments: ['Sales', 'SDR'], services: [{ id: svcSales, name: 'Sales' }, { id: svcSdr, name: 'SDR' }],
+    members: ['demo-mgr', 'demo-b1', 'demo-b2', 'demo-b3', 'demo-b4'],
+    comments: {
+      'novacorp industries': [
+        { id: uid(), ts: new Date(Date.now() - 2 * 86400000).toISOString(), text: 'Compte stratégique — le DAF pousse fort ce trimestre. @Lucas on cale une démo ?', author: 'Chloé Nguyen', authorSubId: 'dsub-mgr' },
+      ],
+    },
+  })
+  const mkSub = (id, prenom, nom, poste, ownerId, serviceId) => ({ id, envId: 'env-demo', prenom, nom, poste, service: serviceId === svcSales ? 'Sales' : 'SDR', serviceId, pin: '0000', photo: '', ownerId })
+  db.subenvs.push(
+    mkSub('dsub-mgr', 'Chloé', 'Nguyen', 'Head of Sales', 'demo-mgr', svcSales),
+    mkSub('dsub-b1', 'Lucas', 'Fabre', 'BDR Senior', 'demo-b1', svcSdr),
+    mkSub('dsub-b2', 'Sara', 'Ben Ali', 'BDR', 'demo-b2', svcSdr),
+    mkSub('dsub-b3', 'Mehdi', 'Cohen', 'BDR', 'demo-b3', svcSdr),
+    mkSub('dsub-b4', 'Jade', 'Moreau', 'SDR', 'demo-b4', svcSales),
+  )
+  const build = (rows, opts, extra) => {
+    const d = emptySubEnvData()
+    d.rdvs = makeTestRdvs(rows, opts)
+    d.contacts = []; d.rdvs.forEach(r => syncContacts(d, r))
+    d.goals = { rdvSemaine: 12, sqlMois: 8, primesMois: 2000 }
+    if (extra) extra(d)
+    return d
+  }
+  db.data['dsub-b1'] = build([
+    ['NovaCorp Industries', 'Industrie', 450, 'Pierre Vasseur', 'DAF'], ['Hexalog', 'Logistique', 120, 'Amélie Roux', 'DRH'],
+    ['Datapulse', 'SaaS', 35, 'Lucas Brun', 'CEO'], ['Verdana Group', 'Retail', 800, 'Chloé Martin', 'VP People'],
+    ['CleanTech SE', 'Énergie', 230, 'Inès Dupré', 'Head of HR'], ['Groupe Méridien', 'Banque', 2500, 'François Bayard', 'DRH'],
+    ['Solstice Énergie', 'Énergie', 380, 'Laura Pinto', 'Head of Talent'], ['Atelier Mobilier', 'Manufacture', 60, 'Hugo Lefort', 'DG'],
+  ], [
+    { phase: 'SQL', opp: 'Gagnée', sql: 6, source: 'Outbound', prov: 'Cold Call' }, { phase: 'MQL', opp: 'En cours', source: 'Inbound', prov: 'Site Web' },
+    { phase: 'R1', opp: 'No Show R1', motifNoShow: 'A annulé', source: 'Outbound', prov: 'LinkedIn' }, { phase: 'Signée', opp: 'Signée', sql: 20, source: 'Event', prov: 'Salon' },
+    { phase: 'KO', opp: 'Perdue', motifKo: 'Pas de budget', source: 'Outbound' }, { phase: 'SQL', opp: 'Gagnée', sql: 3, source: 'Partner', prov: 'Référence client' },
+    { phase: 'R2', opp: 'En cours', source: 'Inbound' }, { phase: 'R1', opp: 'En cours', source: 'Outbound', prise: 3, rdv: -2 },
+  ], (d) => {
+    // Une règle de prime par activité pour illustrer le simulateur RDV-based.
+    d.activityRules = [{ id: uid(), label: 'Cadence R1/R2', period: 'mois', phases: ['R1', 'R2'], tiers: [{ id: uid(), min: 6, montant: 200 }, { id: uid(), min: 12, montant: 500 }, { id: uid(), min: 20, montant: 1000 }] }]
+  })
+  db.data['dsub-b2'] = build([
+    ['BlueWave Conseil', 'Conseil', 25, 'Emma Petit', 'Associée'], ['FerroTrans', 'Transport', 1500, 'Nadia Slimani', 'DRH Groupe'],
+    ['Studio Pixel', 'Création', 15, 'Léo Garnier', 'Fondateur'], ['AgriPlus', 'Agroalimentaire', 320, 'Paul Mercier', 'DAF'],
+    ['Maison Bélier', 'Luxe', 90, 'Sophie Arnaud', 'DRH'], ['TechSecure', 'Cybersécurité', 200, 'Yann Morel', 'COO'],
+  ], [
+    { phase: 'MQL', opp: 'En cours', source: 'Inbound' }, { phase: 'SQL', opp: 'Gagnée', sql: 12, source: 'Outbound' },
+    { phase: 'KO', opp: 'Perdue', motifKo: 'Concurrent retenu', source: 'Event' }, { phase: 'R1', opp: 'En cours', source: 'Partner', prise: 2, rdv: -3 },
+    { phase: 'Signée', opp: 'Signée', sql: 26, source: 'Outbound' }, { phase: 'R2', opp: 'En cours', source: 'Inbound' },
+  ])
+  db.data['dsub-b3'] = build([
+    ['Urbavert', 'Paysagisme', 45, 'Julien Caron', 'Gérant'], ['Grand Large Hotels', 'Hôtellerie', 600, 'Claire Fontaine', 'VP RH'],
+    ['Oreca', 'Sport auto', 400, 'Clémence Boutier', 'DRH'], ['Advans', 'Finance', 1200, 'Rémy Ducret', 'CFO'],
+    ['Clinique du Parc', 'Santé', 800, 'Lisa March', 'DRH'],
+  ], [
+    { phase: 'R1', opp: 'No Show R1', motifNoShow: 'Injoignable', source: 'Outbound' }, { phase: 'MQL', opp: 'En cours', source: 'Emailing' },
+    { phase: 'SQL', opp: 'Gagnée', sql: 20, source: 'Event' }, { phase: 'R2', opp: 'En cours', source: 'Inbound' },
+    { phase: 'SQL', opp: 'En cours', sql: 4, source: 'Outbound' },
+  ])
+  db.data['dsub-b4'] = build([
+    ['Stratus', 'SaaS', 500, 'Nassim Benchikh', 'CTO'], ['Thom Group', 'Retail', 6450, 'Florian Forthomme', 'DRH'],
+    ['Odalia', 'Immobilier', 255, 'Rémi Rommelard', 'DG'], ['Evernex', 'IT', 1400, 'Nicolas Combemorel', 'VP'],
+  ], [
+    { phase: 'R1', opp: 'En cours', source: 'Inbound' }, { phase: 'R1', opp: 'En cours', source: 'Outbound', prise: 40, rdv: 38 },
+    { phase: 'MQL', opp: 'En cours', source: 'Inbound' }, { phase: 'SQL', opp: 'Gagnée', sql: 10, source: 'Outbound' },
+  ])
+  db.data['dsub-mgr'] = build([
+    ['Cooperative U', 'Grande distribution', 80000, 'Audrey Hillaert', 'DRH Groupe'], ['Verisure', 'Sécurité', 17000, 'Charles Devresse', 'VP'],
+  ], [
+    { phase: 'Signée', opp: 'Signée', sql: 28, source: 'Partner', prov: 'Référence client' }, { phase: 'SQL', opp: 'Gagnée', sql: 6, source: 'Inbound' },
+  ])
+
+  const out = migrate(db)
+  // On ne garde que la société de démo dédiée (retire l'env de test générique ajouté par migrate).
+  out.environments = out.environments.filter(e => e.id !== 'env-test')
+  out.accounts = out.accounts.filter(a => !String(a.id).startsWith('test-'))
+  out.subenvs = out.subenvs.filter(s => !String(s.id).startsWith('tsub-'))
+  Object.keys(out.data).forEach(k => { if (k.startsWith('tsub-')) delete out.data[k] })
+  out.channels = (out.channels || []).filter(c => c.envId !== 'env-test')
+  return out
 }
-// Session de démo pour un rôle donné, au sein de l'équipe de démonstration (env-test).
-// 'manager' → Julie (Team Lead, vue équipe) · sinon → Sarah (BDR, vue employé).
+// Session de démo — société fictive « Atlas Revenue » (aucun lien avec le compte réel).
+// 'manager' → Chloé (Head of Sales) · sinon → Lucas (BDR).
 export function demoSession(role) {
   const manager = role === 'manager'
-  return {
-    accountId: manager ? 'test-julie' : 'test-sarah',
-    envId: 'env-test',
-    subEnvId: manager ? 'tsub-julie' : 'tsub-sarah',
-    welcomed: true,
-  }
+  return { accountId: manager ? 'demo-mgr' : 'demo-b1', envId: 'env-demo', subEnvId: manager ? 'dsub-mgr' : 'dsub-b1', welcomed: true }
 }
 
 function injectTestEnv(db) {
