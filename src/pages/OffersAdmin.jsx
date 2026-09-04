@@ -1,7 +1,11 @@
 import React, { useState } from 'react'
 import { Tag, Plus, Trash2, Pencil, Check, X, Users, User } from 'lucide-react'
 import { useStore, BRICKS, uid } from '../store.jsx'
+import { GRANTABLE_TABS } from '../nav.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
+
+// Groupe les onglets accordables par rubrique de navigation (auto : tout nouvel onglet apparaît).
+const TAB_GROUPS = GRANTABLE_TABS.reduce((acc, t) => { (acc[t.group] = acc[t.group] || []).push(t); return acc }, {})
 
 // Console staff : création / modification / suppression des offres proposées aux clients.
 // Ce que le staff coche ici (briques, équipe, prix) définit directement ce que la page
@@ -10,6 +14,8 @@ function OfferForm({ initial, onSave, onClose }) {
   const [o, setO] = useState(initial)
   const set = (k, v) => setO(x => ({ ...x, [k]: v }))
   const toggleBrick = (b) => setO(x => ({ ...x, bricks: x.bricks.includes(b) ? x.bricks.filter(y => y !== b) : [...x.bricks, b] }))
+  const allBricks = GRANTABLE_TABS.map(t => t.brick)
+  const setAll = (on) => setO(x => ({ ...x, bricks: on ? [...new Set([...x.bricks, ...allBricks])] : [] }))
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
@@ -24,12 +30,25 @@ function OfferForm({ initial, onSave, onClose }) {
         <Users size={15} className="text-brand" /> Offre équipe (pilotage, comptes multiples, manager)
       </label>
       <div>
-        <div className="text-sm font-bold mb-2">Briques incluses ({o.bricks.length}/{BRICKS.length})</div>
-        <div className="flex flex-wrap gap-2">
-          {BRICKS.map(b => (
-            <label key={b} className={`chip cursor-pointer ${o.bricks.includes(b) ? 'bg-brand text-white' : 'bg-surface text-muted border border-line'}`}>
-              <input type="checkbox" className="hidden" checked={o.bricks.includes(b)} onChange={() => toggleBrick(b)} /> {b}
-            </label>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-bold">Onglets inclus ({o.bricks.filter(b => allBricks.includes(b)).length}/{allBricks.length})</div>
+          <div className="flex gap-2 text-xs">
+            <button type="button" className="btn-ghost !py-0.5" onClick={() => setAll(true)}>Tout cocher</button>
+            <button type="button" className="btn-ghost !py-0.5" onClick={() => setAll(false)}>Tout décocher</button>
+          </div>
+        </div>
+        <div className="space-y-2.5">
+          {Object.entries(TAB_GROUPS).map(([group, tabs]) => (
+            <div key={group}>
+              <div className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1">{group}</div>
+              <div className="flex flex-wrap gap-2">
+                {tabs.map(t => (
+                  <label key={t.brick} className={`chip cursor-pointer ${o.bricks.includes(t.brick) ? 'bg-brand text-white' : 'bg-surface text-muted border border-line'}`}>
+                    <input type="checkbox" className="hidden" checked={o.bricks.includes(t.brick)} onChange={() => toggleBrick(t.brick)} /> {t.label}
+                  </label>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>

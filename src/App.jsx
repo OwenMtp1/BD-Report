@@ -6,6 +6,7 @@ import {
   AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Trophy, ShieldCheck,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER } from './store.jsx'
+import { NAV_GROUPS, NAV } from './nav.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -310,55 +311,7 @@ function SubEnvPicker() {
 }
 
 // ---------------------------------------------------------------- App principale
-const NAV_GROUPS = [
-  {
-    id: 'pilotage', label: 'Pilotage', items: [
-      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
-      { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', team: true, roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
-      { id: 'icp', label: 'ICP', icon: Target, brick: 'ICP' },
-      { id: 'classement', label: 'Classement', icon: Trophy, team: true },
-      { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, team: true, roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
-    ],
-  },
-  {
-    id: 'activite', label: 'Activité commerciale', items: [
-      { id: 'rdv', label: 'Mes Rendez-vous', icon: CalendarDays, brick: 'Mes Rendez-vous' },
-      { id: 'leads', label: 'Leads', icon: KanbanSquare, brick: 'Leads' },
-      { id: 'tasks', label: 'Recommandations prioritaires', icon: ListChecks, brick: 'Recommandations prioritaires' },
-      { id: 'mytasks', label: 'Mes tâches', icon: CheckSquare, brick: 'Mes tâches' },
-      { id: 'primes', label: 'Primes & Commissions', icon: Coins, brick: 'Primes & Commissions' },
-      { id: 'simulateur', label: 'Simulateur de primes', icon: Gauge, brick: 'Primes & Commissions' },
-    ],
-  },
-  {
-    id: 'echanges', label: 'Échanges', items: [
-      { id: 'conversations', label: 'Conversations', icon: MessagesSquare },
-    ],
-  },
-  {
-    id: 'donnees', label: 'Mes données', items: [
-      { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
-      { id: 'dataquality', label: 'Qualité des données', icon: ShieldCheck },
-      { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
-      { id: 'logs', label: 'Logs', icon: ScrollText, brick: 'Logs' },
-      { id: 'corbeille', label: 'Corbeille', icon: Trash2 },
-      { id: 'support', label: 'Support', icon: LifeBuoy, always: true },
-      { id: 'souscrire', label: 'Souscrire à une offre', icon: Gift, always: true },
-    ],
-  },
-  {
-    id: 'administration', label: 'Administration', items: [
-      { id: 'admin', label: 'Gestion Administration', icon: Shield, team: true, roles: ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'] },
-      { id: 'teams', label: 'Gérez mes équipes', icon: Users, team: true, roles: ['Manager'] },
-    ],
-  },
-  {
-    id: 'supportbdr', label: 'Support Client BD Report', items: [
-      { id: 'supporthub', label: 'Équipe support', icon: LifeBuoy, roles: SUPPORT_ROLES },
-    ],
-  },
-]
-const NAV = NAV_GROUPS.flatMap(g => g.items)
+// NAV_GROUPS / NAV proviennent de src/nav.jsx (source unique des onglets).
 
 function MainApp() {
   const store = useStore()
@@ -408,9 +361,10 @@ function MainApp() {
   const noOffer = !myOffer && !isSupportUser          // compte sans offre : support + souscrire seulement
   const canSee = (item) => {
     if (item.roles && !item.roles.includes(me.role)) return false
-    if (noOffer && !item.always) return false          // sans offre : seuls les onglets « always » (support, souscrire)
-    if (item.team && !myTeam) return false             // pilotage/manager : réservé aux offres équipe
-    if (item.brick && !myBricks.includes(item.brick)) return false
+    if (item.staffOnly) return isSupportUser            // console support : équipe BD Report uniquement
+    if (item.always) return true                         // Support / Souscrire : toujours accessibles
+    if (noOffer) return false                            // sans offre : rien d'autre que les onglets « always »
+    if (item.brick && !myBricks.includes(item.brick)) return false // l'offre décide de chaque onglet
     return true
   }
   const groups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(canSee) })).filter(g => g.items.length)

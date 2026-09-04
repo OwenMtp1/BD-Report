@@ -166,6 +166,10 @@ async function main() {
   // Onglet Offres (staff) : gestion des offres/abonnements.
   await click(hubTab('Offres'))
   if (!text().includes('Offres & abonnements')) throw new Error('Offers admin tab did not render')
+  // L'éditeur d'offres liste automatiquement TOUS les onglets (dont les récents).
+  await click(find('button', 'Nouvelle offre'))
+  if (!text().includes('Onglets inclus') || !text().includes('Simulateur de primes') || !text().includes('Qualité des données')) throw new Error('Offer editor did not list all tabs')
+  await click(find('button', 'Annuler'))
   await click(hubTab('Clients'))
   // Chaque environnement existant est forcément un client (PeopleSpheres + Test).
   if (!text().includes('PeopleSpheres') || !text().includes('Test')) throw new Error('Environments not turned into clients')

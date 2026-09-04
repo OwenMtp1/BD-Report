@@ -25,7 +25,11 @@ npm run dev        # serveur de dev
   - **Primes — 2 types** : par lead (`data.bareme` effectif × source, `computePrimes`, figée au passage SQL, règle du 15) ET
     par activité (`data.activityRules` = règles façon Excel : période semaine/mois/trimestre/année × phases × paliers « ≥ N RDV → montant »,
     `computeActivityPrimes(rdvs, rules)`). La page Primes fusionne les deux flux (suivi, reporting, prévisionnel).
-- **`src/App.jsx`** — routing par `NAV_GROUPS` + `pageEl` (switch d'id). `MainApp` = sidebar + header.
+- **`src/nav.jsx`** — **source unique des onglets** : `NAV_GROUPS` (avec un `brick` sur chaque onglet accordable),
+  `GRANTABLE_TABS` (liste dérivée pour l'éditeur d'offres), `ALL_BRICKS` (= `store.BRICKS`), `LEGACY_BRICKS`.
+  Ajouter un onglet ici l'ajoute automatiquement partout : nav, éditeur d'offres, page Souscrire, éditeur de briques par
+  utilisateur. `migrate` accorde les nouveaux onglets à l'offre Beta + aux comptes en accès complet.
+- **`src/App.jsx`** — routing par `NAV_GROUPS` (importé de nav.jsx) + `pageEl` (switch d'id). `MainApp` = sidebar + header.
   Login avec « rester connecté 30 j » + « enregistrer mot de passe ». Pastilles non-lus support. Bandeau lecture seule.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
 - **`src/pages/*`** — Dashboard, Rdv, Leads (kanban + pipeline entreprise), Tasks, MyTasks, Contacts, Notes, Primes,

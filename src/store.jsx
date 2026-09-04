@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { isSupabaseConfigured } from './supabaseConfig.js'
 import { stripDangerousKeys } from './security.js'
 import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests } from './supabaseSync.js'
+import { ALL_BRICKS, LEGACY_BRICKS } from './nav.jsx'
 
 const LS_KEY = 'bdrflow_db_v1'
 const SESSION_KEY = 'bdrflow_session_v1'
@@ -271,10 +272,10 @@ export const RDV_FIELDS = [
   { key: 'notes', label: 'Notes' },
 ]
 
-export const BRICKS = [
-  'Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes',
-  'Primes & Commissions', 'KPI Entreprise', 'ICP', 'Dashboard personnalisé', 'Logs',
-]
+// BRICKS = ensemble complet des onglets accordables, dérivé de la définition unique de la
+// navigation (src/nav.jsx). Ajouter un onglet là-bas l'ajoute automatiquement ici (et donc
+// dans l'éditeur d'offres + la page Souscrire).
+export const BRICKS = ALL_BRICKS
 
 // ---------------------------------------------------------------- Offres (plans)
 // Les offres sont désormais des DONNÉES (db.offers) que le staff peut créer/modifier/supprimer.
@@ -1230,6 +1231,16 @@ function migrate(db) {
   db.channelMessages = db.channelMessages || {}
   db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
   db.offers = Array.isArray(db.offers) ? db.offers : defaultOffers() // offres/abonnements gérés par le staff
+  // Onglets ajoutés après coup : accordés automatiquement à l'offre Beta et aux comptes en accès
+  // complet (offre `team`), pour qu'un nouvel onglet apparaisse sans réglage manuel.
+  const NEW_BRICKS = ALL_BRICKS.filter(b => !LEGACY_BRICKS.includes(b))
+  if (NEW_BRICKS.length) {
+    ;(db.offers || []).forEach(o => { if (o.id === 'beta') o.bricks = [...new Set([...(o.bricks || []), ...NEW_BRICKS])] })
+    ;(db.accounts || []).forEach(a => {
+      const offer = (db.offers || []).find(o => o.id === a.plan)
+      if (offer?.team) a.bricks = [...new Set([...(a.bricks || []), ...NEW_BRICKS])]
+    })
+  }
   ;(db.environments || []).forEach(e => {
     if (!Array.isArray(e.services)) e.services = (e.departments && e.departments.length ? e.departments : ['Sales', 'Marketing']).map(n => ({ id: uid(), name: n }))
   })
