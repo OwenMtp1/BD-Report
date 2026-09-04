@@ -29,7 +29,10 @@ npm run dev        # serveur de dev
   Login avec « rester connecté 30 j » + « enregistrer mot de passe ». Pastilles non-lus support. Bandeau lecture seule.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
 - **`src/pages/*`** — Dashboard, Rdv, Leads (kanban + pipeline entreprise), Tasks, MyTasks, Contacts, Notes, Primes,
-  Kpi, TeamLead, Trash, Settings, Admin, OrgChart, Company, **Conversations**. (Ancien `AiDashboard` retiré du menu.)
+  Kpi, TeamLead, Trash, Settings, Admin, OrgChart, Company, **Conversations**, **DataQuality** (Qualité des données :
+  score /100 + checks téléphone/email/doublons/prochaine action/inactivité), **Classement** (gamification équipe :
+  6 critères, podium, badges Hot Streak/Objectif/2000€/+30%), **Simulateur** (« Combien vais-je toucher ? » : jauge
+  circulaire à curseur draggable, échelle +1000%, prime acquise/probable/potentielle, SQL manquants). (Ancien `AiDashboard` retiré.)
   **Conversations** (`src/pages/Conversations.jsx`, prop `scope` 'team'/'support') : canaux de discussion + canaux de
   **reporting automatique** (BD Report poste chaque RDV/étape/gagné/perdu côté équipe, tickets/projets/churn côté support ;
   le manager/fondateur choisit les événements ET les champs affichés). Accès sectorisé (tout le monde / par service /

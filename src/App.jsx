@@ -3,7 +3,7 @@ import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
-  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare,
+  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Trophy, ShieldCheck,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
@@ -25,6 +25,9 @@ import Settings from './pages/Settings.jsx'
 import OrgChart from './pages/OrgChart.jsx'
 import SupportHub from './pages/SupportHub.jsx'
 import Conversations from './pages/Conversations.jsx'
+import DataQuality from './pages/DataQuality.jsx'
+import Classement from './pages/Classement.jsx'
+import Simulateur from './pages/Simulateur.jsx'
 import Logs from './pages/Logs.jsx'
 import Trash from './pages/Trash.jsx'
 import TeamLead from './pages/TeamLead.jsx'
@@ -311,6 +314,7 @@ const NAV_GROUPS = [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
       { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
       { id: 'icp', label: 'ICP', icon: Target, brick: 'ICP' },
+      { id: 'classement', label: 'Classement', icon: Trophy },
       { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
     ],
   },
@@ -321,6 +325,7 @@ const NAV_GROUPS = [
       { id: 'tasks', label: 'Recommandations prioritaires', icon: ListChecks, brick: 'Recommandations prioritaires' },
       { id: 'mytasks', label: 'Mes tâches', icon: CheckSquare, brick: 'Mes tâches' },
       { id: 'primes', label: 'Primes & Commissions', icon: Coins, brick: 'Primes & Commissions' },
+      { id: 'simulateur', label: 'Simulateur de primes', icon: Gauge, brick: 'Primes & Commissions' },
     ],
   },
   {
@@ -331,6 +336,7 @@ const NAV_GROUPS = [
   {
     id: 'donnees', label: 'Mes données', items: [
       { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
+      { id: 'dataquality', label: 'Qualité des données', icon: ShieldCheck },
       { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
       { id: 'logs', label: 'Logs', icon: ScrollText, brick: 'Logs' },
       { id: 'corbeille', label: 'Corbeille', icon: Trash2 },
@@ -466,6 +472,9 @@ function MainApp() {
     primes: <Primes />,
     supporthub: <SupportHub />,
     conversations: <Conversations scope="team" />,
+    dataquality: <DataQuality />,
+    classement: <Classement />,
+    simulateur: <Simulateur />,
     logs: <Logs />,
     corbeille: <Trash />,
     support: <Support />,
