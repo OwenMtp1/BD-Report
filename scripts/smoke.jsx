@@ -177,6 +177,21 @@ async function main() {
   await click(find('button', 'Nouvelle offre'))
   if (!text().includes('Onglets inclus') || !text().includes('Simulateur de primes') || !text().includes('Qualité des données')) throw new Error('Offer editor did not list all tabs')
   await click(find('button', 'Annuler'))
+  // Onglet Permissions staff : matrice exhaustive des droits + création d'un rôle + attribution.
+  await click(hubTab('Permissions staff'))
+  if (!text().includes("Permissions de l'équipe staff") || !text().includes('Accéder aux tickets')) throw new Error('Staff permissions matrix did not render')
+  if (!text().includes('Attribution des rôles')) throw new Error('Role assignment section missing')
+  await click(find('button', 'Créer un rôle'))
+  const roleNameInput = container.querySelector('input[placeholder^="ex : Agent support"]')
+  if (!roleNameInput) throw new Error('Role creation modal did not open')
+  await type(roleNameInput, 'Agent Smoke N1')
+  await click(findExact('Créer'))
+  if (!text().includes('Agent Smoke N1')) throw new Error('Custom staff role not created')
+  const staffRoles = dbNow().staffRoles || []
+  if (!staffRoles.some(r => (r.roleKey || r.name) === 'Agent Smoke N1')) throw new Error('Custom role not persisted in staffRoles')
+  if (!['Fondateur', 'Support BD Report', 'Administrateur', 'Manager', 'Développeur', 'Membre'].every(k => staffRoles.some(r => (r.roleKey || r.name) === k))) throw new Error('Built-in staff roles missing from table')
+  const founderRole = staffRoles.find(r => (r.roleKey || r.name) === 'Fondateur')
+  if (!founderRole || (founderRole.permissions || []).length < 30) throw new Error('Founder role should hold every permission')
   await click(hubTab('Clients'))
   // Chaque environnement existant est forcément un client (PeopleSpheres + Test).
   if (!text().includes('PeopleSpheres') || !text().includes('Test')) throw new Error('Environments not turned into clients')

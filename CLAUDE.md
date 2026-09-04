@@ -71,6 +71,20 @@ npm run dev        # serveur de dev
 
 ## Rôles, offres, support
 - Rôles : `Fondateur`, `Support BD Report` (= mêmes droits que Fondateur), Administrateur, Manager, Développeur, Membre.
+- **Permissions staff (`db.staffRoles`)** : chaque rôle (intégré ou personnalisé) = `{id, name, roleKey, rank, builtin, permissions[]}`.
+  Catalogue EXHAUSTIF des droits côté staff dans `STAFF_PERMISSION_GROUPS`/`STAFF_PERMISSIONS`/`STAFF_PERMISSION_IDS` (store.jsx) :
+  tickets (view/reply/assign/priority/status/delete), demandes, KB & réponses types, clients, projets & mise en place,
+  comptes & accès (create/role/offer/disable/wipe/remove), mots de passe (view/reset), offres & abonnements, services &
+  organigramme, outils (logs/trash/stats + **démo/visite guidée**), gouvernance (`permissions.manage`). `seedStaffRoles(db.staffRoles)`
+  (idempotent, dans `migrate`) garantit les 6 rôles intégrés + **Fondateur = tous droits en dur** (anti-lockout). Helpers :
+  `accountHasPerm(account, permId, db)`, `roleRankOf(role, db)`, `ROLE_RANKS`. Store : `hasPerm(permId)`, `roleRank`, `allRoles()`,
+  `canManageRole(target)`, `createStaffRole/updateStaffRole/toggleRolePerm/deleteStaffRole/setAccountRole`.
+  **Gouvernance** : seul le Fondateur gère tout ; un rôle porteur de `permissions.manage` gère les rôles de **rang strictement
+  inférieur** au sien et **n'accorde que des droits qu'il détient** (anti-escalade). Page **`StaffPermissions`** = onglet
+  « Permissions staff » de `SupportHub` (visible si `permissions.manage`) : matrice droits×rôles + création/renommage/rang/suppression
+  de rôles + attribution aux comptes. Les onglets de `SupportHub` portent chacun une `perm` (filtrés par `hasPerm`). Les gardes
+  store staff-only (offres, `accounts.offer/disable/wipe/remove`, `canViewPasswords`) passent par `accountHasPerm`. L'éditeur de
+  rôles d'`Admin` liste `store.allRoles()` (rôles personnalisés inclus).
 - **Offres = données** (`db.offers`, staff-managées) : `defaultOffers()` seed starter/beta. Chaque offre a
   `{bricks, team, maxSeats, price, priceLabel, desc}`. `allowedBricks(account, offers)` = bricks du compte ∩ offre
   (aucune si pas d'offre → support seul). `hasTeamAccess(account, offers)` = offre `team` ou rôle support ; les onglets

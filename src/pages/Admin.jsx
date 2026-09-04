@@ -210,10 +210,11 @@ function canManage(actor, target) {
   return false
 }
 
-function rolesAssignable(actor) {
-  if (isSupportRole(actor.role)) return ROLES
-  if (actor.role === 'Développeur') return ROLES.filter(r => !isSupportRole(r))
-  if (actor.role === 'Administrateur') return ROLES.filter(r => !isSupportRole(r))
+function rolesAssignable(actor, store) {
+  const all = store?.allRoles ? store.allRoles() : ROLES
+  if (isSupportRole(actor.role)) return all
+  if (actor.role === 'Développeur') return all.filter(r => !isSupportRole(r))
+  if (actor.role === 'Administrateur') return all.filter(r => !isSupportRole(r))
   if (actor.role === 'Manager') return ['Membre', 'Développeur']
   return []
 }
@@ -255,7 +256,7 @@ function UserRow({ u, actor, store, onDelete, defaultOpen }) {
             <Field label="Pseudo"><input className="input" disabled={!editable} value={u.pseudo} onChange={e => patch('pseudo', e.target.value)} /></Field>
             <Field label="Permissions">
               <select className="input" disabled={!editable} value={u.role} onChange={e => patch('role', e.target.value)}>
-                {ROLES.map(r => <option key={r} value={r} disabled={!rolesAssignable(actor).includes(r)}>{r}</option>)}
+                {store.allRoles().map(r => <option key={r} value={r} disabled={!rolesAssignable(actor, store).includes(r)}>{r}</option>)}
               </select>
             </Field>
             {u.role === 'Membre' && actor.role !== 'Manager' && (
@@ -375,7 +376,7 @@ export default function Admin({ mode }) {
             </div>
             <select className="input !w-auto" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
               <option value="">Tous les rôles</option>
-              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              {store.allRoles().map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
           {filtered.length === 0 && <Empty text="Aucun utilisateur ne correspond." />}

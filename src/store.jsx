@@ -320,6 +320,150 @@ export const ROLES = ['Fondateur', 'Support BD Report', 'Administrateur', 'Manag
 export const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
 export const isSupportRole = (role) => SUPPORT_ROLES.includes(role)
 
+// ---------------------------------------------------------------------------
+//  Permissions de l'équipe staff (BD Report)
+//  Catalogue EXHAUSTIF des droits « côté staff », regroupés par domaine. Chaque
+//  rôle (intégré ou personnalisé) porte un jeu de permissions + un rang.
+//  Règle de gouvernance : le Fondateur gère tout ; un rôle porteur de
+//  `permissions.manage` peut gérer les rôles de rang STRICTEMENT inférieur au
+//  sien (jamais le sien ni au-dessus), et ne peut accorder que des permissions
+//  qu'il détient lui-même (anti-escalade de privilèges).
+// ---------------------------------------------------------------------------
+export const STAFF_PERMISSION_GROUPS = [
+  {
+    id: 'tickets', label: 'Tickets & support technique', perms: [
+      { id: 'tickets.view', label: 'Accéder aux tickets' },
+      { id: 'tickets.reply', label: 'Répondre / échanger sur un ticket' },
+      { id: 'tickets.assign', label: 'Assigner un ticket à un agent' },
+      { id: 'tickets.priority', label: 'Modifier priorité & SLA' },
+      { id: 'tickets.status', label: 'Clôturer / rouvrir un ticket' },
+      { id: 'tickets.delete', label: 'Supprimer un ticket' },
+    ],
+  },
+  {
+    id: 'requests', label: 'Demandes entrantes', perms: [
+      { id: 'requests.view', label: 'Voir les nouvelles demandes' },
+      { id: 'requests.manage', label: 'Traiter / convertir / archiver une demande' },
+    ],
+  },
+  {
+    id: 'knowledge', label: 'Base de connaissances', perms: [
+      { id: 'kb.manage', label: 'Gérer la base de connaissances' },
+      { id: 'canned.manage', label: 'Gérer les réponses types' },
+    ],
+  },
+  {
+    id: 'clients', label: 'Clients', perms: [
+      { id: 'clients.view', label: 'Voir les fiches clients' },
+      { id: 'clients.manage', label: 'Modifier / bloquer / débloquer un client' },
+      { id: 'clients.delete', label: 'Supprimer un client' },
+    ],
+  },
+  {
+    id: 'projects', label: 'Projets & mise en place', perms: [
+      { id: 'projects.view', label: 'Voir les projets d\'implémentation' },
+      { id: 'projects.manage', label: 'Créer et piloter la mise en place des projets' },
+      { id: 'projects.delete', label: 'Supprimer un projet' },
+    ],
+  },
+  {
+    id: 'accounts', label: 'Comptes & accès', perms: [
+      { id: 'accounts.view', label: 'Voir les comptes utilisateurs' },
+      { id: 'accounts.create', label: 'Créer un utilisateur' },
+      { id: 'accounts.role', label: 'Attribuer / changer les rôles' },
+      { id: 'accounts.offer', label: 'Attribuer / changer les offres' },
+      { id: 'accounts.disable', label: 'Désactiver / réactiver un accès' },
+      { id: 'accounts.wipe', label: 'Effacer les données d\'un espace' },
+      { id: 'accounts.remove', label: 'Retirer un membre d\'un environnement' },
+    ],
+  },
+  {
+    id: 'passwords', label: 'Mots de passe', perms: [
+      { id: 'passwords.view', label: 'Afficher les mots de passe en clair' },
+      { id: 'passwords.reset', label: 'Réinitialiser un mot de passe' },
+    ],
+  },
+  {
+    id: 'offers', label: 'Offres & abonnements', perms: [
+      { id: 'offers.manage', label: 'Créer / modifier / supprimer les offres' },
+      { id: 'subscriptions.manage', label: 'Gérer souscriptions & résiliations' },
+    ],
+  },
+  {
+    id: 'org', label: 'Organisation & services', perms: [
+      { id: 'services.manage', label: 'Gérer les services (organigramme staff)' },
+      { id: 'orgchart.edit', label: 'Modifier l\'organigramme' },
+    ],
+  },
+  {
+    id: 'tools', label: 'Outils, données & visite guidée', perms: [
+      { id: 'logs.view', label: 'Consulter les logs support' },
+      { id: 'trash.manage', label: 'Gérer la corbeille support' },
+      { id: 'stats.view', label: 'Voir les KPI / statistiques support' },
+      { id: 'demo.access', label: 'Lancer la démo commerciale / visite guidée' },
+    ],
+  },
+  {
+    id: 'governance', label: 'Gouvernance', perms: [
+      { id: 'permissions.manage', label: 'Gérer les permissions de l\'équipe staff' },
+    ],
+  },
+]
+export const STAFF_PERMISSIONS = STAFF_PERMISSION_GROUPS.flatMap(g => g.perms.map(p => ({ ...p, group: g.label, groupId: g.id })))
+export const STAFF_PERMISSION_IDS = STAFF_PERMISSIONS.map(p => p.id)
+
+// Rangs par défaut des rôles intégrés (plus élevé = plus de pouvoir).
+export const ROLE_RANKS = { 'Fondateur': 100, 'Support BD Report': 90, 'Administrateur': 70, 'Développeur': 50, 'Manager': 40, 'Membre': 10 }
+
+// Jeux de permissions par défaut des rôles intégrés (le Fondateur a TOUT, en dur).
+function defaultPermsFor(roleKey) {
+  const all = STAFF_PERMISSION_IDS
+  if (roleKey === 'Fondateur') return [...all]
+  if (roleKey === 'Support BD Report') return all.filter(p => p !== 'permissions.manage')
+  if (roleKey === 'Administrateur') return [
+    'tickets.view', 'tickets.reply', 'tickets.assign', 'tickets.priority', 'tickets.status',
+    'requests.view', 'requests.manage', 'kb.manage', 'canned.manage',
+    'clients.view', 'clients.manage', 'projects.view', 'projects.manage',
+    'accounts.view', 'accounts.create', 'accounts.role', 'accounts.offer', 'accounts.disable', 'accounts.remove',
+    'passwords.view', 'passwords.reset', 'services.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'demo.access',
+  ]
+  if (roleKey === 'Développeur') return ['tickets.view', 'tickets.reply', 'tickets.priority', 'tickets.status', 'projects.view', 'logs.view', 'stats.view', 'demo.access']
+  if (roleKey === 'Manager') return ['passwords.view', 'passwords.reset', 'accounts.create', 'stats.view', 'orgchart.edit', 'demo.access']
+  return [] // Membre + rôles personnalisés : aucune permission staff par défaut
+}
+
+// Construit / répare la table des rôles staff (idempotent, appelé par migrate).
+export function seedStaffRoles(existing) {
+  const list = Array.isArray(existing) ? existing.slice() : []
+  const byKey = new Map(list.map(r => [r.roleKey || r.name, r]))
+  for (const roleKey of ROLES) {
+    let r = byKey.get(roleKey)
+    if (!r) { r = { id: uid(), name: roleKey, roleKey, rank: ROLE_RANKS[roleKey], builtin: true, permissions: defaultPermsFor(roleKey) }; list.push(r); byKey.set(roleKey, r) }
+    else { r.builtin = true; r.roleKey = roleKey; if (typeof r.rank !== 'number') r.rank = ROLE_RANKS[roleKey]; if (!Array.isArray(r.permissions)) r.permissions = defaultPermsFor(roleKey) }
+  }
+  // Nettoyage des ids de permission obsolètes, puis Fondateur TOUJOURS complet (anti-lockout).
+  list.forEach(r => { r.permissions = (r.permissions || []).filter(p => STAFF_PERMISSION_IDS.includes(p)) })
+  const founder = byKey.get('Fondateur'); if (founder) founder.permissions = [...STAFF_PERMISSION_IDS]
+  return list
+}
+
+// Rang d'un rôle (intégré ou personnalisé) d'après db.staffRoles.
+export function roleRankOf(role, db) {
+  const r = (db?.staffRoles || []).find(x => (x.roleKey || x.name) === role)
+  if (r && typeof r.rank === 'number') return r.rank
+  return ROLE_RANKS[role] ?? 0
+}
+// Le compte détient-il la permission staff ? (Fondateur = toujours vrai)
+export function accountHasPerm(account, permId, db) {
+  const role = account?.role
+  if (role === 'Fondateur') return true
+  const r = (db?.staffRoles || []).find(x => (x.roleKey || x.name) === role)
+  if (r) return (r.permissions || []).includes(permId)
+  // Repli si la table n'est pas encore initialisée : parité avec l'ancien comportement.
+  if (isSupportRole(role)) return permId !== 'permissions.manage'
+  return false
+}
+
 // Statuts de présence (choisis manuellement par l'utilisateur).
 export const PRESENCE_META = {
   online: { label: 'En ligne', dot: 'bg-emerald-500', text: 'text-emerald-600' },
@@ -1317,6 +1461,7 @@ function migrate(db) {
   db.channels = db.channels || []
   db.channelMessages = db.channelMessages || {}
   db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
+  db.staffRoles = seedStaffRoles(db.staffRoles) // rôles + permissions de l'équipe staff (idempotent)
   db.offers = Array.isArray(db.offers) ? db.offers : defaultOffers() // offres/abonnements gérés par le staff
   // Onglets ajoutés après coup : accordés automatiquement à l'offre Beta et aux comptes en accès
   // complet (offre `team`), pour qu'un nouvel onglet apparaisse sans réglage manuel.
@@ -2075,28 +2220,110 @@ export function StoreProvider({ children, demo = false }) {
           return d
         })
       },
+      // ===================================================== Permissions de l'équipe staff
+      staffRoles() { return db.staffRoles || [] },
+      // Tous les noms de rôles (intégrés + personnalisés) — pour les listes déroulantes.
+      allRoles() { const extra = (db.staffRoles || []).filter(r => !r.builtin).map(r => r.roleKey || r.name); return [...ROLES, ...extra] },
+      roleRank(role) { return roleRankOf(role, db) },
+      // Le compte courant (ou un compte donné) détient-il la permission ?
+      hasPerm(permId, acc) { return accountHasPerm(acc || account, permId, db) },
+      // L'acteur courant peut-il gérer (créer/éditer/attribuer) ce rôle ?
+      canManageRole(targetRole) {
+        if (account?.role === 'Fondateur') return true
+        if (!accountHasPerm(account, 'permissions.manage', db)) return false
+        if (targetRole === 'Fondateur') return false
+        return roleRankOf(account?.role, db) > roleRankOf(targetRole, db)
+      },
+      createStaffRole(data) {
+        if (!accountHasPerm(account, 'permissions.manage', db)) return null
+        const name = (data?.name || '').trim(); if (!name) return null
+        if (this.allRoles().includes(name)) { window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Ce nom de rôle existe déjà.' })); return null }
+        const myRank = roleRankOf(account?.role, db)
+        let rank = Number(data?.rank)
+        if (!Number.isFinite(rank)) rank = Math.max(10, myRank - 10)
+        if (account?.role !== 'Fondateur') rank = Math.min(rank, myRank - 1) // jamais ≥ à soi
+        // Anti-escalade : on ne peut créer un rôle qu'avec des permissions qu'on détient soi-même.
+        const perms = (data?.permissions || []).filter(p => STAFF_PERMISSION_IDS.includes(p) && (account?.role === 'Fondateur' || accountHasPerm(account, p, db)))
+        const role = { id: uid(), name, roleKey: name, rank, builtin: false, permissions: perms }
+        setDb(d => { d.staffRoles = d.staffRoles || []; d.staffRoles.push(role); return d })
+        return role
+      },
+      updateStaffRole(roleKey, patch) {
+        if (!this.canManageRole(roleKey)) return
+        const isFounderActor = account?.role === 'Fondateur'
+        setDb(d => {
+          const r = (d.staffRoles || []).find(x => (x.roleKey || x.name) === roleKey); if (!r) return d
+          const p = { ...patch }
+          if (typeof p.rank === 'number' && !isFounderActor) p.rank = Math.min(p.rank, roleRankOf(account?.role, d) - 1)
+          if (p.name != null) { // renommage : rôles personnalisés uniquement
+            const nn = String(p.name).trim()
+            const old = r.roleKey || r.name
+            if (!r.builtin && nn && nn !== old && ![...ROLES, ...(d.staffRoles || []).filter(x => !x.builtin).map(x => x.roleKey || x.name)].includes(nn)) {
+              d.accounts.forEach(a => { if (a.role === old) a.role = nn })
+              r.name = nn; r.roleKey = nn
+            }
+            delete p.name
+          }
+          if (Array.isArray(p.permissions)) {
+            const allowed = isFounderActor ? STAFF_PERMISSION_IDS : STAFF_PERMISSION_IDS.filter(x => accountHasPerm(account, x, d))
+            p.permissions = p.permissions.filter(x => STAFF_PERMISSION_IDS.includes(x) && allowed.includes(x))
+          }
+          Object.assign(r, p)
+          if ((r.roleKey || r.name) === 'Fondateur') r.permissions = [...STAFF_PERMISSION_IDS] // Fondateur toujours complet
+          return d
+        })
+      },
+      toggleRolePerm(roleKey, permId, on) {
+        if (!this.canManageRole(roleKey)) return
+        if (account?.role !== 'Fondateur' && !accountHasPerm(account, permId, db)) return // pas d'octroi d'un droit non détenu
+        const r = (db.staffRoles || []).find(x => (x.roleKey || x.name) === roleKey); if (!r || (r.roleKey || r.name) === 'Fondateur') return
+        const cur = new Set(r.permissions || [])
+        on ? cur.add(permId) : cur.delete(permId)
+        this.updateStaffRole(roleKey, { permissions: [...cur] })
+      },
+      deleteStaffRole(roleKey) {
+        if (!this.canManageRole(roleKey)) return
+        const r = (db.staffRoles || []).find(x => (x.roleKey || x.name) === roleKey); if (!r || r.builtin) return
+        setDb(d => {
+          d.staffRoles = (d.staffRoles || []).filter(x => (x.roleKey || x.name) !== roleKey)
+          d.accounts.forEach(a => { if (a.role === roleKey) a.role = 'Membre' })
+          return d
+        })
+      },
+      // Attribue un rôle à un compte (respect strict de la hiérarchie).
+      setAccountRole(accId, role) {
+        const target = db.accounts.find(a => a.id === accId)
+        if (account?.role !== 'Fondateur') {
+          if (!accountHasPerm(account, 'accounts.role', db) && !accountHasPerm(account, 'permissions.manage', db)) return
+          if (!this.canManageRole(role)) return // rôle cible gérable ?
+          // ne pas toucher quelqu'un de rang ≥ au sien (sauf soi-même)
+          if (target && target.id !== account?.id && roleRankOf(target.role, db) >= roleRankOf(account?.role, db)) return
+        }
+        setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.role = role; return d })
+      },
+
       // ===================================================== Offres / abonnements
       offers() { return db.offers || [] },
       myOffer() { return findOffer(db.offers, account?.plan) },
       hasTeam() { return hasTeamAccess(account, db.offers) },
       // Gestion des offres (staff uniquement) : créer / modifier / supprimer.
       createOffer(data) {
-        if (!isSupportRole(account?.role)) return null
+        if (!accountHasPerm(account, 'offers.manage', db)) return null
         const o = { id: uid(), name: (data?.name || 'Nouvelle offre').trim(), price: Number(data?.price) || 0, priceLabel: data?.priceLabel || '', desc: data?.desc || '', bricks: Array.isArray(data?.bricks) ? data.bricks : [], team: !!data?.team, maxSeats: Number(data?.maxSeats) || 0, builtin: false, createdAt: new Date().toISOString() }
         setDb(d => { d.offers = d.offers || []; d.offers.push(o); return d })
         return o
       },
       updateOffer(id, patch) {
-        if (!isSupportRole(account?.role)) return
+        if (!accountHasPerm(account, 'offers.manage', db)) return
         setDb(d => { const o = (d.offers || []).find(x => x.id === id); if (o) Object.assign(o, patch); return d })
       },
       deleteOffer(id) {
-        if (!isSupportRole(account?.role)) return
+        if (!accountHasPerm(account, 'offers.manage', db)) return
         setDb(d => { d.offers = (d.offers || []).filter(o => o.id !== id); return d })
       },
       // Attribue une offre à un compte (met à jour plan + briques accessibles).
       setAccountOffer(accId, offerId) {
-        if (!isSupportRole(account?.role)) return
+        if (!accountHasPerm(account, 'accounts.offer', db)) return
         setDb(d => {
           const a = d.accounts.find(x => x.id === accId); if (!a) return d
           a.plan = offerId || null
@@ -2107,7 +2334,7 @@ export function StoreProvider({ children, demo = false }) {
       },
       // Attribue une offre à tout un environnement (le créateur + ses membres).
       setEnvOffer(envId, offerId) {
-        if (!isSupportRole(account?.role)) return
+        if (!accountHasPerm(account, 'accounts.offer', db)) return
         setDb(d => {
           const env = d.environments.find(e => e.id === envId); if (!env) return d
           env.plan = offerId || null
@@ -2140,17 +2367,17 @@ export function StoreProvider({ children, demo = false }) {
       // ===================================================== Staff : gestion des membres d'un projet/env
       // Désactive temporairement (ou réactive) l'accès d'un compte (bloque la connexion).
       disableAccount(accId, disabled) {
-        if (!isSupportRole(account?.role)) return
+        if (!accountHasPerm(account, 'accounts.disable', db)) return
         setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.disabled = !!disabled; return d })
       },
       // Efface toutes les données d'un espace (remise à zéro complète).
       wipeSpaceData(subId) {
-        if (!isSupportRole(account?.role)) return
+        if (!accountHasPerm(account, 'accounts.wipe', db)) return
         setDb(d => { if (d.data[subId]) d.data[subId] = emptySubEnvData(); return d })
       },
       // Retire un membre d'un environnement (accès + espaces + données de cet env).
       removeEnvMember(envId, accId) {
-        if (!isSupportRole(account?.role)) return
+        if (!accountHasPerm(account, 'accounts.remove', db)) return
         setDb(d => {
           const env = d.environments.find(e => e.id === envId); if (env) env.members = (env.members || []).filter(m => m !== accId)
           d.subenvs.filter(s => s.envId === envId && s.ownerId === accId).forEach(s => { delete d.data[s.id] })
@@ -2168,7 +2395,7 @@ export function StoreProvider({ children, demo = false }) {
         }))
       },
       // ===================================================== Mots de passe (visibilité manager/support)
-      canViewPasswords() { return ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role) },
+      canViewPasswords() { return accountHasPerm(account, 'passwords.view', db) },
       // Renvoie le mot de passe en clair si connu (comptes créés/réinitialisés depuis l'app),
       // sinon null (les anciens mots de passe purgés ne sont pas récupérables).
       revealPassword(id) {
