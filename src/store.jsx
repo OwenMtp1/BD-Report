@@ -415,17 +415,35 @@ export const STAFF_PERMISSIONS = STAFF_PERMISSION_GROUPS.flatMap(g => g.perms.ma
 export const STAFF_PERMISSION_IDS = STAFF_PERMISSIONS.map(p => p.id)
 
 // ---------------------------------------------------------------------------
-//  Intégration HubSpot — réglages NON secrets stockés dans le `db` (donc
-//  synchronisés). Le token, lui, reste en localStorage PAR APPAREIL et ne part
-//  jamais dans le blob : voir `store.setHubspotToken`.
+//  Intégration HubSpot — UNE CONNEXION PAR ENTREPRISE CLIENTE.
+//
+//  • Réglages de l'éditeur (« plateforme ») : `db.integrations.hubspot`. Ne sert
+//    qu'à publier l'URL du CONNECTEUR (le relais déployé une fois pour toutes) et
+//    les réglages par défaut proposés aux clients.
+//  • Réglages du client : `env.hubspot` sur CHAQUE environnement (= une entreprise).
+//    Contient le portail relié, la correspondance des phases, les options — mais
+//    JAMAIS de jeton HubSpot.
+//  • Jetons : détenus par le relais, indexés par entreprise (`tenantId` = id de
+//    l'environnement, authentifié par `tenantKey`). Seul le mode « direct »
+//    (avancé, mono-poste) garde un jeton en localStorage sur l'appareil.
 // ---------------------------------------------------------------------------
 export const HUBSPOT_TOKEN_KEY = 'bdrflow_hubspot_token_v1'
+export const HUBSPOT_MODES = [
+  { id: 'oauth', label: 'Connexion HubSpot du client (recommandé)' },
+  { id: 'proxy', label: 'Relais avec jeton unique (éditeur)' },
+  { id: 'direct', label: 'API directe + jeton local (avancé)' },
+]
 export function defaultHubspotConfig() {
   return {
     enabled: false,
-    mode: 'proxy',        // 'proxy' = relais CORS que vous hébergez (recommandé) | 'direct' = api.hubapi.com
-    proxyUrl: '',
-    portalId: '',
+    mode: 'oauth',        // 'oauth' = chaque entreprise relie SON portail | 'proxy' = jeton unique côté relais | 'direct' = api.hubapi.com
+    proxyUrl: '',         // URL du connecteur (relais) — publiée par l'éditeur
+    portalId: '',         // Hub ID du portail relié
+    hubDomain: '',        // ex. « macompagnie-4711.hubspot.com »
+    tenantKey: '',        // secret partagé app ↔ relais pour CETTE entreprise
+    connectedAt: '',
+    connectedBy: '',      // qui a autorisé la connexion, côté client
+    scopes: '',
     pipelineId: '',
     ownerId: '',
     stageMap: { ...DEFAULT_STAGE_MAP },
@@ -436,12 +454,30 @@ export function defaultHubspotConfig() {
     lastReport: null,
   }
 }
-// Applique la configuration au client HubSpot (base d'appel + token de l'appareil).
+// Config effective d'une entreprise = réglages de l'éditeur (défauts) écrasés par
+// ceux de l'environnement. L'URL du connecteur vient de l'éditeur sauf si le client
+// en a renseigné une (auto-hébergement).
+export function effectiveHubspotConfig(platform, envCfg, envId) {
+  const base = { ...defaultHubspotConfig(), ...(platform || {}) }
+  const cfg = { ...base, ...(envCfg || {}) }
+  cfg.stageMap = { ...DEFAULT_STAGE_MAP, ...(base.stageMap || {}), ...((envCfg || {}).stageMap || {}) }
+  cfg.proxyUrl = (envCfg?.proxyUrl || platform?.proxyUrl || '')
+  cfg.tenantId = envId || ''
+  return cfg
+}
+// Applique la configuration au client HubSpot (base d'appel, entreprise, jeton local).
 export function applyHubspotConfig(cfg) {
   let token = ''
   try { token = localStorage.getItem(HUBSPOT_TOKEN_KEY) || '' } catch (e) { /* ssr / jsdom */ }
+  const oauthMode = cfg?.mode === 'oauth'
   const base = cfg?.mode === 'direct' ? HS_API_BASE : (cfg?.proxyUrl || HS_API_BASE)
-  configureHubspot({ base, token, portalId: cfg?.portalId || '' })
+  configureHubspot({
+    base,
+    token: oauthMode ? '' : token,   // en mode client, seul le relais détient le jeton
+    portalId: cfg?.portalId || '',
+    tenantId: oauthMode ? (cfg?.tenantId || '') : '',
+    tenantKey: oauthMode ? (cfg?.tenantKey || '') : '',
+  })
 }
 
 // Rangs par défaut des rôles intégrés (plus élevé = plus de pouvoir).
@@ -586,10 +622,99 @@ function defaultCannedReplies() {
     { id: uid(), title: 'Avant clôture', text: 'Sans retour de votre part sous 48 h, nous clôturerons ce ticket. Vous pourrez le rouvrir à tout moment si besoin.' },
   ]
 }
+// Mode d'emploi client de la connexion HubSpot — publié dans la base de connaissances
+// (visible depuis l'onglet Support de chaque client). Identifiant fixe : l'article est
+// ajouté une seule fois, puis reste modifiable par le support.
+export const KB_HUBSPOT_ID = 'kb-hubspot-connect'
+export const KB_HUBSPOT_ARTICLE = {
+  id: KB_HUBSPOT_ID,
+  title: 'Connecter votre HubSpot à BD Report',
+  category: 'Intégrations',
+  content: `BD Report peut répertorier dans VOTRE HubSpot tout ce qui se passe dans votre environnement :
+entreprises, contacts, rendez-vous (transactions), créneaux, notes et tâches. Chaque société
+relie son propre portail : vos données ne sont jamais mélangées avec celles d'un autre client.
+
+────────────────────────────────────────
+1. CE QU'IL VOUS FAUT
+────────────────────────────────────────
+• Un compte HubSpot avec le droit « Super administrateur » (ou au minimum le droit
+  d'installer une application et de modifier les propriétés du CRM).
+• 2 minutes. Aucune clé, aucun jeton, aucun fichier à copier.
+
+────────────────────────────────────────
+2. RELIER VOTRE PORTAIL (2 MIN)
+────────────────────────────────────────
+1. Dans BD Report : menu « Administration » → « Intégration HubSpot ».
+2. Cliquez sur « Connecter mon HubSpot ». Une fenêtre HubSpot s'ouvre.
+   (Si rien ne s'ouvre : autorisez les fenêtres surgissantes pour BD Report, puis réessayez.)
+3. Choisissez le compte HubSpot à relier, vérifiez la liste des autorisations demandées,
+   puis cliquez sur « Connecter l'application ».
+4. La fenêtre se ferme : BD Report affiche le nom de votre portail et « Connecté ✓ ».
+
+À aucun moment BD Report ne voit votre mot de passe HubSpot. L'autorisation est révocable
+à tout moment depuis HubSpot (Paramètres → Intégrations → Applications connectées) ou depuis
+le bouton « Déconnecter » de BD Report.
+
+────────────────────────────────────────
+3. PRÉPARER VOTRE PORTAIL (1 MIN, UNE SEULE FOIS)
+────────────────────────────────────────
+Toujours sur la page « Intégration HubSpot » :
+1. « Créer les propriétés BD Report » : ajoute dans HubSpot les champs de suivi
+   (phase BD Report, provenance, source, date de passage SQL, effectif, secteur…).
+   L'opération est sans risque et peut être relancée : rien n'est écrasé.
+2. « Charger pipelines & propriétaires » puis choisissez :
+   • le pipeline de transactions à alimenter ;
+   • le propriétaire (commercial HubSpot) attribué par défaut.
+3. Faites correspondre chaque phase BD Report à une étape de votre pipeline
+   (R1, R2, MQL, SQL, Signée, KO). Une correspondance par défaut est déjà proposée.
+4. Cochez « Activer l'intégration ».
+
+────────────────────────────────────────
+4. ENVOYER VOS DONNÉES
+────────────────────────────────────────
+• « Tout envoyer vers HubSpot » : reprend l'historique complet de l'espace courant.
+• « Envoyer mes RDV » / « Envoyer mes contacts » : envoi partiel.
+• « Envoyer automatiquement à chaque enregistrement » : chaque RDV créé ou modifié
+  part vers HubSpot dans la foulée (recommandé une fois le premier envoi vérifié).
+• Bouton « HubSpot » sur une fiche RDV : envoi à l'unité.
+• « Importer les contacts » / « Importer les transactions » : dans l'autre sens,
+  pour récupérer dans BD Report ce qui existe déjà dans votre CRM.
+
+Les envois sont IDEMPOTENTS : un même rendez-vous renvoyé deux fois met à jour la
+transaction existante, il n'en crée pas une seconde.
+
+────────────────────────────────────────
+5. CE QUI EST CRÉÉ DANS HUBSPOT
+────────────────────────────────────────
+Entreprise du RDV  → fiche « Entreprise »        (clé : nom)
+Contacts du RDV    → fiches « Contact »          (clé : e-mail)
+Rendez-vous        → « Transaction » (deal)      (clé : propriété bdr_rdv_id)
+Créneau du RDV     → « Rendez-vous » (meeting)
+Notes du RDV       → « Note »
+Tâches             → « Tâche »
+Toutes les associations (transaction ↔ entreprise ↔ contacts ↔ rendez-vous) sont posées
+automatiquement.
+
+────────────────────────────────────────
+6. EN CAS DE PROBLÈME
+────────────────────────────────────────
+• « Aucun portail HubSpot relié » → la connexion n'a pas abouti : recliquez sur
+  « Connecter mon HubSpot ».
+• « Accès refusé (403) » → une autorisation manque côté HubSpot : déconnectez puis
+  reconnectez pour réaccorder les autorisations demandées.
+• « Fenêtre bloquée » → autorisez les fenêtres surgissantes pour BD Report.
+• Le « Journal des appels », en bas de la page, montre le détail des derniers échanges
+  avec HubSpot : joignez-en une capture à votre ticket, cela accélère le diagnostic.
+
+Une question ? Ouvrez un ticket depuis l'onglet « Support » : l'équipe BD Report a accès
+au même journal et peut vérifier l'état de votre connexion.`,
+}
+
 function defaultKbArticles() {
   const now = new Date().toISOString()
   const a = (title, category, content) => ({ id: uid(), title, category, content, createdAt: now, updatedAt: now })
   return [
+    { ...KB_HUBSPOT_ARTICLE, createdAt: now, updatedAt: now },
     a('Réinitialiser mon mot de passe', 'Compte', "Depuis l'écran de connexion, contactez le support via un ticket : un membre de l'équipe vous aidera à réinitialiser votre accès en toute sécurité."),
     a('Créer et gérer un rendez-vous', 'Prise en main', "Allez dans « Mes Rendez-vous » → « Créer un RDV ». Renseignez l'entreprise, la phase et la provenance. Vous pouvez ajouter plusieurs contacts et créer des sous-RDV de suivi."),
     a('Comprendre le calcul des primes', 'Primes', "Une prime est figée au passage d'un RDV en SQL, selon le barème (effectif × source). Retrouvez le détail mois par mois dans « Primes & Commissions »."),
@@ -1438,6 +1563,15 @@ function migrate(db) {
     if (!db.kbArticles.length) db.kbArticles = defaultKbArticles()
     db._autoSeed.supportContent = true
   }
+  // Mode d'emploi « Connecter votre HubSpot » : publié une seule fois dans la base de
+  // connaissances (les espaces créés avant l'intégration en bénéficient aussi).
+  if (!db._autoSeed.kbHubspot) {
+    if (!db.kbArticles.some(a => a.id === KB_HUBSPOT_ID)) {
+      const now = new Date().toISOString()
+      db.kbArticles.unshift({ ...KB_HUBSPOT_ARTICLE, createdAt: now, updatedAt: now })
+    }
+    db._autoSeed.kbHubspot = true
+  }
   // Initialise l'historique des demandes déjà ingérées (demandes actuelles + supprimées) pour
   // ne jamais les ré-ingérer depuis la boîte partagée du site.
   const ingested = new Set(db._ingestedRequestIds || [])
@@ -1497,10 +1631,26 @@ function migrate(db) {
   db.channelMessages = db.channelMessages || {}
   db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
   db.staffRoles = seedStaffRoles(db.staffRoles) // rôles + permissions de l'équipe staff (idempotent)
-  // Intégrations externes (HubSpot…) — réglages non secrets, le token reste local.
+  // Intégrations externes (HubSpot…) — réglages de l'ÉDITEUR : URL du connecteur
+  // publiée à tous les clients + valeurs par défaut. Aucun jeton ici.
   db.integrations = db.integrations || {}
   db.integrations.hubspot = { ...defaultHubspotConfig(), ...(db.integrations.hubspot || {}) }
   db.integrations.hubspot.stageMap = { ...DEFAULT_STAGE_MAP, ...(db.integrations.hubspot.stageMap || {}) }
+  delete db.integrations.hubspot.tenantKey // la clé d'entreprise n'existe qu'au niveau environnement
+  // Chaque environnement = une entreprise cliente = SA propre connexion HubSpot.
+  // Les portails déjà reliés via l'ancienne config unique sont repris tels quels.
+  ;(db.environments || []).forEach(e => {
+    if (!e.hubspot) {
+      const legacy = db.integrations.hubspot
+      e.hubspot = legacy?.enabled
+        ? { ...structuredClone(legacy), tenantKey: '', connectedAt: '', connectedBy: '' }
+        : { ...defaultHubspotConfig(), proxyUrl: '' }
+    } else {
+      e.hubspot = { ...defaultHubspotConfig(), ...e.hubspot }
+      e.hubspot.stageMap = { ...DEFAULT_STAGE_MAP, ...(e.hubspot.stageMap || {}) }
+    }
+    if (e.hubspot.token) delete e.hubspot.token // sécurité : aucun jeton dans l'état synchronisé
+  })
   db.offers = Array.isArray(db.offers) ? db.offers : defaultOffers() // offres/abonnements gérés par le staff
   // Onglets ajoutés après coup : accordés automatiquement à l'offre Beta et aux comptes en accès
   // complet (offre `team`), pour qu'un nouvel onglet apparaisse sans réglage manuel.
@@ -1687,10 +1837,12 @@ export function StoreProvider({ children, demo = false }) {
     publishOffersDebounced(db.offers || [])
   }, [db.offers]) // eslint-disable-line
 
-  // Configure le client HubSpot dès qu'un réglage d'intégration change (base d'appel
-  // = relais ou API directe, + token propre à cet appareil).
-  const hsCfg = db.integrations?.hubspot
-  useEffect(() => { applyHubspotConfig(hsCfg) }, [hsCfg?.mode, hsCfg?.proxyUrl, hsCfg?.portalId]) // eslint-disable-line
+  // Configure le client HubSpot dès qu'un réglage change. La config effective est celle
+  // de l'ENTREPRISE courante (environnement) : connecteur publié par l'éditeur + portail
+  // relié par le client + clé d'entreprise qui dit au relais quel portail viser.
+  const hsEnvCfg = session?.envId ? (db.environments || []).find(e => e.id === session.envId)?.hubspot : null
+  const hsCfg = effectiveHubspotConfig(db.integrations?.hubspot, hsEnvCfg, session?.envId)
+  useEffect(() => { applyHubspotConfig(hsCfg) }, [hsCfg.mode, hsCfg.proxyUrl, hsCfg.portalId, hsCfg.tenantId, hsCfg.tenantKey]) // eslint-disable-line
 
   // Envoi automatique vers HubSpot des RDV créés/modifiés (option « autoPush »).
   // La signature ignore le champ `hubspot` : l'écriture des identifiants renvoyés
@@ -1699,7 +1851,7 @@ export function StoreProvider({ children, demo = false }) {
   const hsSeen = useRef(null)
   useEffect(() => {
     const subId = session?.subEnvId
-    if (demo || !hsCfg?.enabled || !hsCfg?.autoPush || !subId) { hsSeen.current = null; return }
+    if (demo || !hsCfg.enabled || !hsCfg.autoPush || !subId) { hsSeen.current = null; return }
     const rdvs = db.data[subId]?.rdvs || []
     const sig = (r) => JSON.stringify({ ...r, hubspot: undefined })
     const prev = hsSeen.current
@@ -1719,7 +1871,7 @@ export function StoreProvider({ children, demo = false }) {
       }
     }, 1500)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [db.data, hsCfg?.enabled, hsCfg?.autoPush, session?.subEnvId]) // eslint-disable-line
+  }, [db.data, hsCfg.enabled, hsCfg.autoPush, session?.subEnvId]) // eslint-disable-line
 
   // Génère les messages de reporting automatique manquants dès que l'état change (RDV, tickets,
   // projets, clients). Idempotent : ne re-rend que si de nouveaux messages ont été ajoutés.
@@ -2294,17 +2446,52 @@ export function StoreProvider({ children, demo = false }) {
         })
       },
       // ===================================================== Intégration HubSpot
-      hubspot() { return db.integrations?.hubspot || defaultHubspotConfig() },
-      setHubspotConfig(patch) {
-        if (roBlocked()) return
+      // Config effective de l'ENTREPRISE courante (connecteur de l'éditeur + portail relié).
+      hubspot() { return hsCfg },
+      // Réglages « éditeur » : l'URL du connecteur publiée à tous les clients.
+      hubspotPlatform() { return { ...defaultHubspotConfig(), ...(db.integrations?.hubspot || {}) } },
+      setHubspotPlatformConfig(patch) {
+        if (!isSupportRole(account?.role)) return
         setDb(d => {
           d.integrations = d.integrations || {}
           d.integrations.hubspot = { ...defaultHubspotConfig(), ...(d.integrations.hubspot || {}), ...patch }
+          delete d.integrations.hubspot.tenantKey
           return d
         })
       },
+      // Réglages de l'entreprise courante (portail relié, correspondances, options).
+      setHubspotConfig(patch) {
+        if (roBlocked()) return
+        const envId = session?.envId
+        setDb(d => {
+          if (envId) {
+            const e = d.environments.find(x => x.id === envId)
+            if (e) e.hubspot = { ...defaultHubspotConfig(), ...(e.hubspot || {}), ...patch }
+          } else {
+            d.integrations = d.integrations || {}
+            d.integrations.hubspot = { ...defaultHubspotConfig(), ...(d.integrations.hubspot || {}), ...patch }
+          }
+          return d
+        })
+      },
+      // Enregistre le portail relié après l'autorisation HubSpot du client.
+      connectHubspotPortal({ tenantKey, portalId, hubDomain, user, scopes }) {
+        this.setHubspotConfig({
+          mode: 'oauth', enabled: true, tenantKey: tenantKey || '',
+          portalId: String(portalId || ''), hubDomain: hubDomain || '',
+          scopes: Array.isArray(scopes) ? scopes.join(' ') : (scopes || ''),
+          connectedAt: new Date().toISOString(),
+          connectedBy: user || actorName || '',
+        })
+      },
+      // Oublie le portail côté app (le relais a déjà supprimé les jetons).
+      disconnectHubspotPortal() {
+        this.setHubspotConfig({ enabled: false, portalId: '', hubDomain: '', scopes: '', tenantKey: '', connectedAt: '', connectedBy: '' })
+      },
       // Le token HubSpot ne quitte JAMAIS l'appareil : localStorage uniquement,
       // jamais dans le blob synchronisé (et donc jamais chez un autre utilisateur).
+      // Il ne sert qu'au mode « direct » (avancé) : en mode client, c'est le relais
+      // qui détient les jetons, par entreprise.
       hubspotToken() { try { return localStorage.getItem(HUBSPOT_TOKEN_KEY) || '' } catch (e) { return '' } },
       setHubspotToken(token) {
         try { token ? localStorage.setItem(HUBSPOT_TOKEN_KEY, token) : localStorage.removeItem(HUBSPOT_TOKEN_KEY) } catch (e) { /* stockage indisponible */ }

@@ -111,14 +111,27 @@ async function main() {
   // 5c. Intégration HubSpot : console de connexion, correspondances, synchro et catalogue d'appels.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Intégration HubSpot'))
   if (!text().includes('Connexion à HubSpot') || !text().includes('Tester la connexion')) throw new Error('HubSpot connection card missing')
+  // Connexion PAR ENTREPRISE : le client relie son propre portail en un clic.
+  if (!text().includes('Connecter mon HubSpot')) throw new Error('HubSpot per-company connect button missing')
   if (!text().includes('Explorateur d\'appels API') || !text().includes('/crm/v3/objects/contacts')) throw new Error('HubSpot API explorer missing')
   if (!text().includes('Tout envoyer vers HubSpot')) throw new Error('HubSpot sync buttons missing')
   // La correspondance des phases couvre bien toutes les phases BD Report.
   for (const ph of ['R1', 'R2', 'MQL', 'SQL', 'KO']) { if (!text().includes(ph)) throw new Error('HubSpot stage mapping missing phase ' + ph) }
-  // Le jeton HubSpot ne doit JAMAIS être stocké dans l'état synchronisé.
-  const hsCfg = JSON.parse(win.localStorage.getItem('bdrflow_db_v1')).integrations?.hubspot
-  if (!hsCfg) throw new Error('HubSpot config not seeded in db')
+  // Les réglages avancés exposent bien les trois modes de connexion.
+  await click(find('button', 'Afficher les réglages avancés'))
+  if (!text().includes('Mode de connexion')) throw new Error('HubSpot advanced settings missing')
+  const savedDb = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+  // Aucun jeton HubSpot ne doit vivre dans l'état synchronisé — ni côté éditeur, ni côté entreprise.
+  const hsCfg = savedDb.integrations?.hubspot
+  if (!hsCfg) throw new Error('HubSpot platform config not seeded in db')
   if ('token' in hsCfg) throw new Error('HubSpot token must never live in the synced state')
+  // Chaque environnement (= une entreprise) porte sa propre config HubSpot.
+  const hsEnv = (savedDb.environments || []).find(e => e.hubspot)
+  if (!hsEnv) throw new Error('Per-company HubSpot config missing on environments')
+  if ('token' in hsEnv.hubspot) throw new Error('HubSpot token must never live in the environment config')
+  if (!hsEnv.hubspot.stageMap?.R1) throw new Error('Per-company HubSpot stage map not seeded')
+  // Le mode d'emploi client est publié dans la base de connaissances du support.
+  if (!(savedDb.kbArticles || []).some(a => a.id === 'kb-hubspot-connect')) throw new Error('HubSpot how-to article missing from knowledge base')
 
   // 6a. Conversations : canaux auto (Général + Bloc notes), création d'un canal, envoi d'un message.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Conversations'))

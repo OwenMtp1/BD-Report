@@ -40,7 +40,11 @@ export const HS_OBJECTS = [
 ]
 
 // --------------------------------------------------------------- Configuration
-let CFG = { base: HS_API_BASE, token: '', portalId: '', headers: {} }
+// `tenantId` / `tenantKey` : identifiant + clé de l'ENTREPRISE CLIENTE. En mode
+// « une connexion HubSpot par entreprise », le relais ne détient pas un jeton
+// unique mais un jeton PAR client ; ces deux en-têtes lui disent quel portail
+// utiliser. Le jeton lui-même ne descend jamais dans le navigateur.
+let CFG = { base: HS_API_BASE, token: '', portalId: '', tenantId: '', tenantKey: '', headers: {} }
 
 export function configureHubspot(patch) { CFG = { ...CFG, ...(patch || {}) }; return { ...CFG } }
 export function currentHubspotConfig() { return { ...CFG } }
@@ -90,6 +94,9 @@ export async function hsRequest(method, path, { body, query, retries = 2, base, 
   const url = absolute ? path : root + path + qstr(query)
   const headers = { 'Content-Type': 'application/json', ...(CFG.headers || {}) }
   if (CFG.token) headers.Authorization = `Bearer ${CFG.token}`
+  // Multi-client : le relais résout le portail HubSpot de CETTE entreprise.
+  if (CFG.tenantId) headers['X-BDR-Tenant'] = CFG.tenantId
+  if (CFG.tenantKey) headers['X-BDR-Key'] = CFG.tenantKey
   const started = Date.now()
 
   for (let attempt = 0; ; attempt++) {
@@ -158,6 +165,80 @@ export const oauth = {
   refresh: (payload) => POST('/oauth/refresh', payload),
 }
 
+// ==========================================================================
+//  1 bis. Connexion HubSpot PAR ENTREPRISE CLIENTE (OAuth via le relais)
+//
+//  Le client clique sur « Connecter mon HubSpot », autorise BD Report dans son
+//  propre portail, et c'est tout : le relais échange le code, garde les jetons
+//  (accès + rafraîchissement) côté serveur, indexés par entreprise. L'app ne
+//  manipule qu'un couple {tenantId, tenantKey} — jamais de jeton HubSpot.
+// ==========================================================================
+
+// Clé d'entreprise : secret partagé avec le relais, généré une seule fois à la
+// première connexion et conservé dans la fiche de l'environnement.
+export function newTenantKey() {
+  try {
+    const a = new Uint8Array(24)
+    ;(globalThis.crypto || window.crypto).getRandomValues(a)
+    return [...a].map(b => b.toString(16).padStart(2, '0')).join('')
+  } catch (e) {
+    return Array.from({ length: 6 }, () => Math.random().toString(36).slice(2, 10)).join('')
+  }
+}
+
+export const connect = {
+  // URL d'entrée du parcours d'autorisation (le relais fabrique l'URL HubSpot
+  // signée : ni le client_id ni le client_secret ne vivent dans l'app).
+  startUrl({ base, tenantId, tenantKey, label = '', origin }) {
+    const root = (base || '').replace(/\/$/, '')
+    const p = new URLSearchParams({
+      tenant: tenantId || '', key: tenantKey || '', label,
+      origin: origin || (typeof window !== 'undefined' ? window.location.origin : ''),
+    })
+    return `${root}/oauth/start?${p.toString()}`
+  },
+  // État de la connexion de CETTE entreprise, tel que vu par le relais.
+  status: () => GET('/tenant/status'),
+  // Repli « application privée » : le client colle son jeton, le relais le garde
+  // côté serveur pour cette entreprise (il ne reste jamais dans le navigateur).
+  saveToken: (token) => POST('/tenant/token', { token }),
+  disconnect: () => POST('/tenant/disconnect', {}),
+}
+
+// Ouvre la fenêtre d'autorisation HubSpot et attend le retour du relais.
+// Résout avec { portalId, hubDomain, user, scopes } quand le client a autorisé.
+export function openHubspotConnect({ base, tenantId, tenantKey, label = '', timeoutMs = 5 * 60 * 1000 }) {
+  return new Promise((resolve, reject) => {
+    if (!base) return reject(new HubspotError("Aucun connecteur HubSpot n'est publié : contactez le support BD Report."))
+    let relayOrigin = ''
+    try { relayOrigin = new URL(base).origin } catch (e) { return reject(new HubspotError('URL de connecteur HubSpot invalide.')) }
+    const url = connect.startUrl({ base, tenantId, tenantKey, label })
+    const win = window.open(url, 'bdr-hubspot-connect', 'width=760,height=820,menubar=no,toolbar=no')
+    if (!win) return reject(new HubspotError('Le navigateur a bloqué la fenêtre de connexion. Autorisez les fenêtres surgissantes puis réessayez.'))
+
+    let settled = false
+    const cleanup = () => {
+      settled = true
+      window.removeEventListener('message', onMessage)
+      clearInterval(watcher); clearTimeout(timer)
+      try { win.close() } catch (e) { /* déjà fermée */ }
+    }
+    const onMessage = (ev) => {
+      if (ev.origin !== relayOrigin) return
+      const d = ev.data
+      if (!d || d.source !== 'bdr-hubspot') return
+      cleanup()
+      if (d.ok) resolve(d)
+      else reject(new HubspotError(d.message || 'Connexion HubSpot refusée.'))
+    }
+    const watcher = setInterval(() => {
+      if (!settled && win.closed) { cleanup(); reject(new HubspotError('Fenêtre fermée avant la fin de l\'autorisation HubSpot.')) }
+    }, 700)
+    const timer = setTimeout(() => { if (!settled) { cleanup(); reject(new HubspotError('Délai dépassé : l\'autorisation HubSpot n\'a pas abouti.')) } }, timeoutMs)
+    window.addEventListener('message', onMessage)
+  })
+}
+
 // Test de connexion « en un clic » utilisé par le bouton de la console.
 export async function testHubspotConnection() {
   if (!isHubspotConfigured()) return { ok: false, msg: 'HubSpot non configuré : renseignez l\'URL de relais (ou un token privé).' }
@@ -169,8 +250,9 @@ export async function testHubspotConnection() {
       details: d,
     }
   } catch (e) {
-    if (e.status === 401) return { ok: false, msg: 'Jeton refusé (401) : vérifiez le token de votre application privée et ses scopes.' }
-    if (e.status === 403) return { ok: false, msg: 'Accès refusé (403) : il manque un scope à votre application privée HubSpot.' }
+    if (e.status === 428) return { ok: false, msg: 'Aucun portail HubSpot relié à cette entreprise : cliquez sur « Connecter mon HubSpot ».' }
+    if (e.status === 401) return { ok: false, msg: 'Autorisation refusée (401) : reconnectez votre portail HubSpot depuis cette page.' }
+    if (e.status === 403) return { ok: false, msg: 'Accès refusé (403) : il manque une autorisation (scope) côté HubSpot.' }
     return { ok: false, msg: e.message }
   }
 }
@@ -407,7 +489,8 @@ export const HS_ENDPOINTS = [
 
 export default {
   configureHubspot, currentHubspotConfig, isHubspotConfigured, testHubspotConnection,
-  hsRequest, account, oauth, crm, associations, properties, pipelines, owners,
+  hsRequest, account, oauth, connect, openHubspotConnect, newTenantKey,
+  crm, associations, properties, pipelines, owners,
   meetings, calls, notes, tasks, emails, lists, forms, timeline, webhooks, imports,
   hubspotCallLog, clearHubspotCallLog, HS_ENDPOINTS, HS_OBJECTS,
 }

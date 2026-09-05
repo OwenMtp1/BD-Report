@@ -1,89 +1,149 @@
-# Intégration HubSpot — guide de mise en place
+# Intégration HubSpot — guide de déploiement (côté éditeur)
 
-Tout ce qui est **côté BD Report** est déjà fait (client API complet, écran de connexion,
-correspondances, synchronisation, explorateur d'appels). Il vous reste **la partie HubSpot** :
-créer l'application privée et déployer le relais. Comptez ~10 minutes.
+BD Report permet à **chaque entreprise cliente de relier son propre portail HubSpot**
+en un clic, sans jamais copier de jeton. Tout le code applicatif est déjà en place.
+Il vous reste **trois choses à faire, une seule fois** :
+
+1. créer l'application HubSpot (celle de BD Report, pas celle du client) ;
+2. déployer le connecteur (Cloudflare Worker) ;
+3. coller son URL dans BD Report.
+
+Comptez ~20 minutes. Le mode d'emploi destiné aux clients est publié automatiquement
+dans la base de connaissances du support (« Connecter votre HubSpot à BD Report »).
 
 ---
 
-## 1. Créer l'application privée HubSpot
+## Comment ça marche
 
-1. Dans HubSpot : **Paramètres → Intégrations → Applications privées → Créer une application privée**.
-2. Onglet **Périmètres (scopes)**, cochez au minimum :
+```
+Client                    BD Report (front)          Connecteur (Worker)        HubSpot
+  │  « Connecter »              │                            │                     │
+  ├────────────────────────────>│  /oauth/start ────────────>│  redirection ──────>│
+  │                             │                            │   autorisation      │
+  │<────────────────────────────┴────────────────────────────┤<─── code ───────────┤
+  │                                            échange code ─┼────────────────────>│
+  │                                    jetons stockés en KV  │<── access+refresh ──┤
+  │                             │<── postMessage {portalId} ─┤                     │
+  │   appels API : X-BDR-Tenant + X-BDR-Key ────────────────>│ ── Bearer <jeton> ─>│
+```
+
+- **Un seul connecteur** pour tous les clients, mais **un jeu de jetons par entreprise**,
+  rangé dans un espace KV Cloudflare sous la clé `tenant:<id de l'environnement>`.
+- L'app ne détient **jamais** de jeton HubSpot : seulement un couple
+  `{tenantId, tenantKey}` qui dit au connecteur quel portail viser.
+- Le jeton d'accès est **rafraîchi automatiquement** par le connecteur (refresh token).
+
+---
+
+## 1. Créer l'application HubSpot (côté éditeur)
+
+Dans un **compte développeur HubSpot** (gratuit : <https://developers.hubspot.com/>) :
+**Applications → Créer une application**.
+
+- Onglet **Auth** :
+  - **URL de redirection** : `https://<votre-worker>.workers.dev/oauth/callback`
+    (exactement la même valeur que `HUBSPOT_REDIRECT_URI` plus bas) ;
+  - notez le **Client ID** et le **Client secret**.
+- Onglet **Auth → Scopes**, cochez au minimum :
 
 | Besoin | Scopes |
 |---|---|
 | Contacts | `crm.objects.contacts.read`, `crm.objects.contacts.write` |
 | Entreprises | `crm.objects.companies.read`, `crm.objects.companies.write` |
 | Transactions | `crm.objects.deals.read`, `crm.objects.deals.write` |
-| RDV / notes / tâches | `crm.objects.meetings.read/write`, `crm.objects.notes.read/write`, `crm.objects.tasks.read/write` |
 | Champs personnalisés | `crm.schemas.contacts.read/write`, `crm.schemas.companies.read/write`, `crm.schemas.deals.read/write` |
-| Pipelines & propriétaires | `crm.pipelines.orders.read` (ou lecture pipelines), `crm.objects.owners.read` |
-| Listes (optionnel) | `crm.lists.read`, `crm.lists.write` |
-| Tickets (optionnel) | `tickets` |
+| Propriétaires | `crm.objects.owners.read` |
+| OAuth | `oauth` |
 
-3. Créez l'application et **copiez le jeton** (`pat-eu1-…`). Il ne s'affiche qu'une fois.
-4. Notez votre **Hub ID** (identifiant de portail), visible en haut à droite dans HubSpot.
+Et en **scopes facultatifs** (`optional_scope` — la connexion aboutit même si le
+portail du client ne les propose pas) :
+`crm.objects.meetings.read/write`, `crm.objects.notes.read/write`,
+`crm.objects.tasks.read/write`, `tickets`.
 
-> ⚠️ Ce jeton donne un accès complet aux données cochées. Ne le collez jamais dans un dépôt public.
+> La liste des scopes du connecteur (`DEFAULT_SCOPES` / `DEFAULT_OPTIONAL_SCOPES` dans
+> `proxy-worker.js`) doit correspondre à celle de l'application, sinon HubSpot refuse
+> l'URL d'autorisation. Vous pouvez aussi la piloter par variables
+> (`HUBSPOT_SCOPES`, `HUBSPOT_OPTIONAL_SCOPES`) sans toucher au code.
 
 ---
 
-## 2. Déployer le relais (obligatoire pour une app web)
-
-L'API HubSpot **n'envoie pas d'en-têtes CORS** : un navigateur ne peut pas l'appeler directement.
-Le relais fourni règle ce point et garde le jeton côté serveur.
-
-### Option A — Cloudflare Workers (gratuit, ~3 min)
+## 2. Déployer le connecteur (Cloudflare Workers, gratuit)
 
 ```bash
-npm install -g wrangler
-wrangler login
 cd hubspot
-wrangler init bdr-hubspot-proxy --no-git        # puis remplacez src/index.js par proxy-worker.js
-wrangler secret put HUBSPOT_TOKEN               # collez le jeton pat-…
-wrangler secret put ALLOWED_ORIGINS             # ex : https://bdreport.js.org,http://localhost:5173
-wrangler secret put SHARED_SECRET               # optionnel, recommandé
-wrangler deploy
+npx wrangler login
+
+# Espace de stockage des connexions clients (un enregistrement par entreprise)
+npx wrangler kv namespace create TENANTS      # → recopiez l'id dans wrangler.toml
+
+# Secrets
+npx wrangler secret put HUBSPOT_CLIENT_ID       # Client ID de l'application
+npx wrangler secret put HUBSPOT_CLIENT_SECRET   # Client secret
+npx wrangler secret put STATE_SECRET            # chaîne aléatoire longue (openssl rand -hex 32)
+npx wrangler secret put SHARED_SECRET           # optionnel
+
+npx wrangler deploy
 ```
 
-Wrangler vous renvoie une URL du type `https://bdr-hubspot-proxy.<compte>.workers.dev` :
-c'est **l'URL de relais** à coller dans BD Report.
+Éditez `wrangler.toml` avant le `deploy` :
+- `id` du binding KV `TENANTS` (renvoyé par la commande ci-dessus) ;
+- `ALLOWED_ORIGINS` : `https://bdreport.js.org,http://localhost:5173` ;
+- `HUBSPOT_REDIRECT_URI` : `https://<votre-worker>.workers.dev/oauth/callback`.
 
-### Option B — Vercel / Netlify / Supabase Edge Function
-
-Le fichier `proxy-worker.js` est une fonction `fetch(request, env)` standard : adaptez la
-signature à votre plateforme (`export default async function handler(req, res)` sur Vercel,
-`Deno.serve` sur Supabase) en conservant la même logique — les trois blocs sont indépendants :
-préflight CORS, contrôle d'origine/secret, relais vers `https://api.hubapi.com`.
+Wrangler renvoie l'URL du Worker : c'est **l'URL du connecteur**.
 
 ### Variables d'environnement
 
 | Variable | Rôle |
 |---|---|
-| `HUBSPOT_TOKEN` | **requis** — jeton de l'application privée |
-| `ALLOWED_ORIGINS` | origines autorisées, séparées par des virgules (vide = tout autoriser) |
+| `HUBSPOT_CLIENT_ID` | **requis** — application HubSpot de BD Report |
+| `HUBSPOT_CLIENT_SECRET` | **requis** — idem |
+| `HUBSPOT_REDIRECT_URI` | **requis** — `https://<worker>/oauth/callback`, identique côté HubSpot |
+| `STATE_SECRET` | **requis** — signe l'état OAuth et hache les clés d'entreprise |
+| `ALLOWED_ORIGINS` | origines autorisées, séparées par des virgules |
+| `TENANTS` (KV) | **requis** — stockage des connexions par entreprise |
+| `HUBSPOT_SCOPES` / `HUBSPOT_OPTIONAL_SCOPES` | optionnels — surchargent les scopes demandés |
+| `HUBSPOT_TOKEN` | optionnel — jeton unique de repli (appels sans entreprise) |
 | `SHARED_SECRET` | optionnel — valeur attendue dans l'en-tête `X-BDR-Secret` |
-| `HUBSPOT_CLIENT_ID` / `HUBSPOT_CLIENT_SECRET` | optionnels — uniquement pour l'OAuth |
+
+### Autre plateforme
+
+`proxy-worker.js` est une fonction `fetch(request, env)` standard : adaptez la signature
+(Vercel `handler(req, res)`, Supabase `Deno.serve`) en remplaçant l'accès KV
+(`env.TENANTS.get/put/delete`) par votre stockage (Postgres, Redis, KV maison).
+Les blocs sont indépendants : CORS, `/oauth/*`, `/tenant/*`, relais générique.
 
 ---
 
-## 3. Relier BD Report
+## 3. Publier l'URL du connecteur dans BD Report
 
-Dans l'app : **Administration → Intégration HubSpot**.
+Connecté avec un compte **Fondateur / Support BD Report** :
+**Administration → Intégration HubSpot → « Afficher les réglages avancés »**
+→ champ **URL du connecteur**. La valeur est enregistrée au niveau **éditeur** :
+tous les clients en héritent, ils n'ont donc rien à saisir.
 
-1. **Mode** : « Relais CORS » ; collez l'**URL du relais** et votre **Hub ID**.
-   Laissez le champ jeton vide (le relais le détient déjà).
-2. Cliquez **Tester la connexion** → vous devez voir « Connexion HubSpot OK ✓ ».
-3. Cliquez **Créer les propriétés BD Report** : crée dans HubSpot les champs
-   `bdr_rdv_id`, `bdr_phase`, `bdr_provenance`, `bdr_source`, `bdr_date_sql`, `bdr_effectif`… (idempotent).
-4. Cliquez **Charger pipelines & propriétaires**, choisissez votre pipeline, puis faites
-   correspondre chaque phase BD Report à une étape HubSpot.
-5. Cochez **Activer l'intégration**, puis synchronisez.
+C'est tout. Chaque entreprise voit alors le bouton « Connecter mon HubSpot ».
 
 ---
 
-## 4. Ce qui part vers HubSpot
+## 4. Routes du connecteur
+
+| Route | Rôle |
+|---|---|
+| `GET /oauth/start?tenant&key&origin&label` | démarre l'autorisation (état signé, redirection HubSpot) |
+| `GET /oauth/callback?code&state` | échange le code, range les jetons, renvoie le résultat à l'app |
+| `GET /tenant/status` | état de la connexion de l'entreprise appelante |
+| `POST /tenant/token` | repli : range un jeton d'application privée pour cette entreprise |
+| `POST /tenant/disconnect` | révoque le refresh token et efface l'enregistrement |
+| `/crm/v3/*`, `/crm/v4/*`, `/account-info/v3/*`, … | relais API avec le jeton du bon portail |
+
+Authentification des appels : en-têtes `X-BDR-Tenant` (id de l'environnement) et
+`X-BDR-Key` (clé d'entreprise, hachée côté connecteur avec `STATE_SECRET`).
+Un portail déjà relié ne peut être réécrit qu'avec sa propre clé.
+
+---
+
+## 5. Ce qui part vers HubSpot (chez le client)
 
 | BD Report | HubSpot | Clé d'unicité |
 |---|---|---|
@@ -94,8 +154,7 @@ Dans l'app : **Administration → Intégration HubSpot**.
 | Notes du RDV | `note` | — |
 | Tâches | `task` | — |
 
-Toutes les associations (transaction ↔ entreprise ↔ contacts ↔ rendez-vous) sont posées
-automatiquement. Les envois sont **idempotents** : un second envoi met à jour au lieu de dupliquer.
+Associations posées automatiquement, envois **idempotents** (un second envoi met à jour).
 
 Correspondance des phases par défaut :
 
@@ -112,13 +171,20 @@ L'issue commerciale (Gagnée / Perdue) prime sur la phase.
 
 ---
 
-## 5. Bon à savoir
+## 6. Bon à savoir
 
-- **Quotas** : ~100 requêtes / 10 s et 250 000 / jour selon votre offre. Le client réessaie
-  automatiquement sur `429` en respectant `Retry-After`.
-- **Envoi automatique** : l'option « Envoyer automatiquement à chaque enregistrement » pousse
-  chaque RDV créé ou modifié (avec 1,5 s de délai). Elle n'envoie rien au chargement de l'app.
-- **Jeton en mode direct** : stocké en `localStorage` sur l'appareil uniquement — jamais
-  synchronisé ni visible par les autres utilisateurs.
-- **Explorateur d'API** : la console liste tous les appels disponibles et les exécute en un clic —
-  c'est le moyen le plus rapide de vérifier qu'un scope manque.
+- **Quotas** : ~100 requêtes / 10 s et 250 000 / jour **par portail client** (donc pas de
+  file d'attente partagée entre vos clients). Le client réessaie sur `429` en respectant
+  `Retry-After`.
+- **Révocation** : le client peut retirer l'autorisation depuis HubSpot
+  (Paramètres → Intégrations → Applications connectées) ou via « Déconnecter ».
+  Les appels renvoient alors `401` et l'app invite à reconnecter.
+- **Limite du modèle** : la clé d'entreprise vit dans l'état synchronisé de
+  l'environnement (visible de ses seuls membres). Elle autorise l'accès au portail relié,
+  pas les jetons eux-mêmes, qui ne quittent jamais le connecteur. Un durcissement complet
+  (clé liée à une session authentifiée) suppose Supabase Auth + RLS — voir
+  `supabase/SETUP.md`.
+- **Modes secondaires** (réglages avancés) : « relais avec jeton unique » (un seul portail,
+  celui de l'éditeur) et « API directe + jeton local » (poste isolé, hors navigateur).
+- **Explorateur d'API** : la console liste tous les appels et les exécute en un clic —
+  le moyen le plus rapide de repérer un scope manquant.

@@ -105,12 +105,12 @@ function SupabaseCard() {
   )
 }
 
-// Carte HubSpot : résumé + accès à la console d'intégration complète.
-// (La configuration réelle vit dans « Administration → Intégration HubSpot » ; le jeton
-// n'est jamais stocké dans l'état synchronisé, uniquement en local sur l'appareil.)
+// Carte HubSpot : résumé de la connexion de CETTE entreprise + accès à la console.
+// (La configuration réelle vit dans « Administration → Intégration HubSpot » ; aucun
+// jeton HubSpot n'est stocké dans l'état synchronisé — le connecteur les garde.)
 function HubspotSummaryCard({ store }) {
   const cfg = store.hubspot()
-  const ready = cfg.mode === 'direct' ? !!store.hubspotToken() : !!cfg.proxyUrl
+  const connected = cfg.mode === 'oauth' ? !!(cfg.portalId && cfg.tenantKey) : !!cfg.portalId
   return (
     <div className="card p-4 space-y-3 max-w-2xl">
       <div className="flex items-center justify-between">
@@ -120,23 +120,25 @@ function HubspotSummaryCard({ store }) {
         </span>
       </div>
       <p className="text-sm text-muted">
-        Envoyez vos RDV, contacts, entreprises et notes vers HubSpot (transactions, rendez-vous et
-        associations comprises) et réimportez vos données du portail.
+        Reliez <b>votre propre portail HubSpot</b> pour y répertorier automatiquement RDV, contacts,
+        entreprises, notes et tâches (transactions, rendez-vous et associations comprises), et réimportez
+        vos données du CRM.
       </p>
       <div className="rounded-xl bg-surface p-3 text-xs space-y-0.5">
-        <div>Mode : <b>{cfg.mode === 'direct' ? 'API directe' : 'Relais CORS'}</b></div>
-        {cfg.mode === 'proxy' && <div className="truncate">Relais : {cfg.proxyUrl || <span className="text-muted italic">non renseigné</span>}</div>}
-        <div>Portail : {cfg.portalId || <span className="text-muted italic">non renseigné</span>}</div>
-        <div>Connexion : {ready ? 'prête ✓' : <span className="text-amber-600">à configurer</span>}</div>
+        <div>Entreprise : <b>{store.currentEnv?.name || '—'}</b></div>
+        <div>Portail relié : {connected
+          ? <b>{cfg.portalId}{cfg.hubDomain ? ` — ${cfg.hubDomain}` : ''}</b>
+          : <span className="text-amber-600">aucun — à connecter</span>}</div>
+        {cfg.connectedAt && <div>Depuis le {new Date(cfg.connectedAt).toLocaleString('fr-FR')}{cfg.connectedBy ? ` (${cfg.connectedBy})` : ''}</div>}
         {cfg.lastSyncAt && <div>Dernière synchro : {new Date(cfg.lastSyncAt).toLocaleString('fr-FR')}</div>}
       </div>
       <button className="btn-primary !py-1.5 text-sm w-fit"
         onClick={() => window.dispatchEvent(new CustomEvent('app-navigate', { detail: 'hubspot' }))}>
-        <Plug size={15} /> Ouvrir la console HubSpot
+        <Plug size={15} /> {connected ? 'Ouvrir la console HubSpot' : 'Connecter mon HubSpot'}
       </button>
       <p className="text-xs text-muted">
-        L'API HubSpot bloquant les appels directs depuis un navigateur, la connexion passe par un relais
-        que vous hébergez (modèle fourni : <code>hubspot/proxy-worker.js</code>). Le jeton reste sur cet appareil.
+        La connexion se fait en un clic depuis la console : vous autorisez BD Report dans HubSpot, sans
+        jamais copier de jeton. Le mode d'emploi complet est dans l'onglet <b>Support</b> → « Connecter votre HubSpot à BD Report ».
       </p>
     </div>
   )

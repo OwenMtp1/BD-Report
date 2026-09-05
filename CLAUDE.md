@@ -118,18 +118,32 @@ npm run dev        # serveur de dev
   pushAll` (progression + tolérance aux erreurs), `pullContacts/pullDeals`, `loadPipelines`. Envois **idempotents**
   (upsert par clé) + associations posées automatiquement.
 - **`src/pages/Hubspot.jsx`** — console « Intégration HubSpot » (nav Administration, brick homonyme) : connexion
-  (mode relais/direct, URL, Hub ID, jeton, **Tester la connexion**), préparation du portail (créer les propriétés,
-  charger pipelines/propriétaires, mapper les phases), synchronisation (tout envoyer / RDV / contacts / importer),
-  explorateur d'API, journal des appels. Exporte **`HubspotPushButton`** (bouton par enregistrement, utilisé dans
-  la fiche RDV).
-- **Store** : `db.integrations.hubspot` (non secret, synchronisé) + `store.hubspot()/setHubspotConfig/
-  hubspotToken/setHubspotToken/setRdvHubspotIds/setContactHubspotId`. 🔒 Le **jeton vit en localStorage**
-  (`bdrflow_hubspot_token_v1`), jamais dans le blob synchronisé (`migrate` purge l'ancien `data.integrations.
-  hubspot.token`). Effet `applyHubspotConfig` + envoi automatique optionnel (`autoPush`, signature ignorant
+  **par entreprise** (« Connecter mon HubSpot » → fenêtre OAuth, portail relié affiché, Tester/Déconnecter,
+  + « réglages avancés » repliés : mode, URL du connecteur, jetons de repli), préparation du portail (créer les
+  propriétés, charger pipelines/propriétaires, mapper les phases), synchronisation (tout envoyer / RDV / contacts /
+  importer), explorateur d'API, journal des appels. Exporte **`HubspotPushButton`** (bouton par enregistrement,
+  utilisé dans la fiche RDV).
+- 🔑 **Une connexion HubSpot PAR ENTREPRISE CLIENTE** (= par environnement). Trois modes (`HUBSPOT_MODES`) :
+  `oauth` (défaut : le client relie SON portail en un clic), `proxy` (jeton unique de l'éditeur), `direct`
+  (api.hubapi.com + jeton local, avancé). Config **éditeur** = `db.integrations.hubspot` (surtout `proxyUrl` =
+  URL du connecteur, publiée à tous) ; config **client** = `env.hubspot` (portail relié, `tenantKey`, stageMap,
+  options) ; `effectiveHubspotConfig(platform, envCfg, envId)` fusionne les deux. **Aucun jeton HubSpot dans
+  l'état synchronisé** : ils vivent chez le connecteur, indexés par entreprise ; l'app n'envoie que les en-têtes
+  `X-BDR-Tenant` (id d'env) + `X-BDR-Key` (`env.hubspot.tenantKey`). Seul le mode `direct` garde un jeton en
+  localStorage (`bdrflow_hubspot_token_v1`).
+- **Store** : `store.hubspot()` (config effective de l'entreprise courante), `hubspotPlatform()/
+  setHubspotPlatformConfig` (éditeur, support uniquement), `setHubspotConfig` (écrit dans `env.hubspot`),
+  `connectHubspotPortal/disconnectHubspotPortal`, `hubspotToken/setHubspotToken`, `setRdvHubspotIds/
+  setContactHubspotId`. Effet `applyHubspotConfig` + envoi automatique optionnel (`autoPush`, signature ignorant
   le champ `hubspot` → pas de boucle, rien n'est envoyé à la 1re passe).
-- **Côté HubSpot (à faire par l'utilisateur)** : `hubspot/SETUP.md` (scopes, application privée) +
-  `hubspot/proxy-worker.js` (relais Cloudflare Worker prêt à déployer : CORS, jeton côté serveur, allowlist
-  d'origines/chemins, échange OAuth).
+- **`src/hubspot.js`** côté connexion : `connect` (`startUrl/status/saveToken/disconnect`), `openHubspotConnect()`
+  (fenêtre OAuth + `postMessage` du connecteur, vérifie l'origine), `newTenantKey()`.
+- **Côté éditeur (à faire une fois)** : `hubspot/SETUP.md` (application HubSpot + scopes, déploiement du
+  connecteur, publication de son URL dans l'app) + `hubspot/proxy-worker.js` (**connecteur multi-clients**
+  Cloudflare Worker : CORS, `/oauth/start`, `/oauth/callback`, `/tenant/status|token|disconnect`, relais API,
+  jetons par entreprise en KV `TENANTS`, refresh auto, état OAuth signé HMAC) + `hubspot/wrangler.toml`.
+- **Côté client** : mode d'emploi publié dans la base de connaissances (`KB_HUBSPOT_ARTICLE`, id
+  `kb-hubspot-connect`, semé une fois via `db._autoSeed.kbHubspot`) → visible dans l'onglet Support.
 
 ## Supabase (synchro temps réel cross-device, optionnelle)
 - Config : **`src/supabaseConfig.js`** (URL + clé anon) ; côté site : bloc `window.BDR_SUPABASE_*` dans `site/index.html`.

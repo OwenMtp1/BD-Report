@@ -1,0 +1,27 @@
+# Connecteur HubSpot multi-clients de BD Report — configuration Cloudflare Workers.
+# Déploiement complet : voir hubspot/SETUP.md
+#
+#   npx wrangler kv namespace create TENANTS      # → recopiez l'id ci-dessous
+#   npx wrangler secret put HUBSPOT_CLIENT_ID
+#   npx wrangler secret put HUBSPOT_CLIENT_SECRET
+#   npx wrangler secret put STATE_SECRET
+#   npx wrangler deploy
+
+name = "bdr-hubspot-connector"
+main = "proxy-worker.js"
+compatibility_date = "2024-11-01"
+
+# Espace KV : un enregistrement par entreprise cliente (jetons + portail relié).
+[[kv_namespaces]]
+binding = "TENANTS"
+id = "REMPLACEZ_PAR_L_ID_RENVOYE_PAR_WRANGLER"
+
+[vars]
+# Origines autorisées à appeler le connecteur (l'app BD Report).
+ALLOWED_ORIGINS = "https://bdreport.js.org,http://localhost:5173"
+# URL de retour d'autorisation — doit être IDENTIQUE dans la config de l'app HubSpot.
+HUBSPOT_REDIRECT_URI = "https://bdr-hubspot-connector.VOTRE-COMPTE.workers.dev/oauth/callback"
+
+# Secrets (jamais dans ce fichier — `wrangler secret put`) :
+#   HUBSPOT_CLIENT_ID, HUBSPOT_CLIENT_SECRET, STATE_SECRET
+#   HUBSPOT_TOKEN (optionnel, repli mono-portail), SHARED_SECRET (optionnel)
