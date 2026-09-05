@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+<title>BD Report — Construire un barème de commissions que les BDR comprennent</title>
+<meta name="description" content="Structure fixe ou variable, équilibre 70/30, prime en trois briques, accélérateurs : le guide pour bâtir un plan de commissions SDR/BDR clair, juste et motivant.">
+<link rel="icon" type="image/svg+xml" href="../app/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--brand:#3B5BDB;--cyan:#0EA5E9;--ink:#172033;--night:#10162E;--muted:#647085;--line:#E2E6EE;--surface:#F4F6FA;--mint:#10B981}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:#fff;line-height:1.7}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:800px;margin:0 auto;padding:0 24px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;border:none;transition:.2s}
+.btn-primary{background:linear-gradient(135deg,var(--brand),var(--cyan));color:#fff;box-shadow:0 6px 20px rgba(59,91,219,.35)}
+.btn-primary:hover{transform:translateY(-2px)}
+nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;gap:24px;height:64px;max-width:1080px;margin:0 auto;padding:0 24px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.5px}
+.logo b{color:var(--brand)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.lang-btn{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:6px 11px;font-weight:700;font-size:13px;cursor:pointer}
+.hero{background:linear-gradient(135deg,var(--night),#1E2A52 60%,#14346B);color:#fff;padding:56px 0}
+.hero .chip{display:inline-block;padding:5px 14px;border-radius:999px;font-size:13px;font-weight:700;background:rgba(94,220,255,.15);color:#5EDCFF}
+.hero h1{font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1.18;margin:14px 0 10px}
+.hero .meta{color:rgba(255,255,255,.6);font-size:14px;font-weight:600}
+article{padding:48px 0}
+article h2{font-size:23px;font-weight:800;letter-spacing:-.5px;margin:34px 0 12px}
+article p{margin:0 0 16px;font-size:16.5px}
+article ul,article ol{margin:0 0 18px;padding-left:22px}
+article li{margin:0 0 9px;font-size:16px}
+.lead{font-size:19px;color:var(--ink);font-weight:600}
+.callout{background:var(--surface);border-left:4px solid var(--brand);border-radius:12px;padding:18px 20px;margin:22px 0}
+.callout b{color:var(--brand)}
+.tk{background:linear-gradient(135deg,rgba(59,91,219,.06),rgba(14,165,233,.06));border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin:28px 0}
+.tk h3{font-size:16px;font-weight:800;margin-bottom:10px}
+.tk li{margin-bottom:7px}
+.sources{font-size:13.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:18px;margin-top:30px}
+.sources a{color:var(--brand);text-decoration:underline;word-break:break-word}
+.cta{background:var(--night);color:#fff;text-align:center;border-radius:24px;padding:44px 24px;margin:34px 0 56px}
+.cta h2{font-size:26px;font-weight:800;letter-spacing:-.6px;margin:0}
+.cta p{color:rgba(255,255,255,.65);margin:10px 0 22px}
+footer{border-top:1px solid var(--line);padding:22px 0;font-size:13.5px;color:var(--muted)}
+.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;max-width:800px;margin:0 auto;padding:0 24px}
+@media(max-width:640px){.hero h1{font-size:27px}article h2{font-size:20px}}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="../index.html">
+      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B5BDB"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"/><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"/><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"/><circle cx="45.5" cy="11" r="4" fill="#A7F3D0"/></svg>
+      <span><b>BD</b> Report</span>
+    </a>
+    <div class="nav-right">
+      <a href="../index.html#blog" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.blog">Blog</a>
+      <a href="../index.html#tarifs" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.pricing">Tarifs</a>
+      <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧 EN</button>
+      <a class="btn btn-primary" href="../app/" data-i18n="nav.login">Se connecter</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="chip" data-i18n="hero.tag">💶 Rémunération</span>
+    <h1 data-i18n="hero.title">Construire un barème de commissions que les BDR comprennent</h1>
+    <div class="meta" data-i18n="hero.meta">≈ 6 min de lecture · Équipe BD Report</div>
+  </div>
+</header>
+
+<article>
+  <div class="wrap">
+    <p class="lead" data-i18n="lead">Un bon plan de commissions n'est pas celui qui paie le plus, c'est celui qu'un commercial peut calculer de tête. S'il ne comprend pas comment il gagne, il ne pilote pas son activité vers ce qui compte. Voici les principes qui reviennent chez les équipes qui réussissent leur comp plan SDR/BDR.</p>
+
+    <h2 data-i18n="s1.t">1. Deux structures, à choisir clairement</h2>
+    <p data-i18n="s1.p">Il existe deux grands modèles pour un SDR/BDR. Le premier, le plus courant, verse un montant fixe par jalon — SQL, rendez-vous tenu, opportunité acceptée — plus quelques primes d'activité. Le second, moins fréquent, verse un pourcentage du pipeline généré ou du revenu signé. Le fixe par jalon est plus lisible et se prête mieux au rôle d'un SDR ; le pourcentage aligne davantage sur le business mais rend la prime moins prévisible.</p>
+
+    <h2 data-i18n="s2.t">2. Le bon équilibre fixe / variable</h2>
+    <p data-i18n="s2.p">Le marché B2B SaaS a convergé vers un mix 70/30 : 70 % de base, 30 % de variable. C'est l'équilibre entre sécurité et motivation le plus courant pour un SDR. Côté objectif, visez un ratio quota / OTE de 5:1 à 8:1 — c'est-à-dire un pipeline généré 5 à 8 fois supérieur au coût total du poste.</p>
+    <div class="callout" data-i18n="s2.cal"><b>Repère 2026 (US B2B SaaS) :</b> OTE médian autour de 85 k$, mix 70/30. Adaptez les montants à votre marché, mais gardez les ratios.</div>
+
+    <h2 data-i18n="s3.t">3. La prime en trois briques</h2>
+    <p data-i18n="s3.p">Un standard qui monte : une part variable à trois composantes, qui suit le lead tout au long de sa vie et récompense la qualité, pas seulement le volume :</p>
+    <ul>
+      <li data-i18n="s3.li1"><b>Par rendez-vous tenu</b> — récompense l'activité et la prise de RDV.</li>
+      <li data-i18n="s3.li2"><b>Par opportunité acceptée</b> (SQL/SAL) — récompense la qualification réelle.</li>
+      <li data-i18n="s3.li3"><b>Par affaire signée</b> (closed-won) — aligne le SDR sur le revenu final.</li>
+    </ul>
+    <p data-i18n="s3.p2">Répartir la moitié de la cible sur les opportunités qualifiées et l'autre sur le revenu évite le piège du « SQL de complaisance » qui ne se transforme jamais.</p>
+
+    <h2 data-i18n="s4.t">4. Accélérateurs et garde-fous</h2>
+    <p data-i18n="s4.p">Si la prime est correctement adossée au pipeline, offrez des accélérateurs au-delà de 100 % d'atteinte pour récompenser la surperformance — un plafond d'accélération autour de 150 % est un repère sain. Prévoyez une montée en charge (ramp) pour les nouveaux, et évitez les plafonds qui tuent la motivation dès que le quota est atteint.</p>
+
+    <h2 data-i18n="s5.t">5. La règle d'or : compréhensible</h2>
+    <p data-i18n="s5.p">Le meilleur barème est celui qui pousse les bons comportements et décourage les mauvais — tout en restant assez simple pour être calculé sur un coin de table. Versionnez-le : une modification de barème ne doit jamais réécrire les primes déjà acquises, sinon vous cassez la confiance.</p>
+    <div class="callout" data-i18n="s5.cal"><b>Dans BD Report :</b> le barème se règle par tranches d'effectif × source de lead, chaque prime est figée au passage en SQL (règle du 15 pour le mois de paiement), et un prévisionnel pondéré estime vos primes à venir.</div>
+
+    <div class="tk">
+      <h3 data-i18n="tk.t">À retenir</h3>
+      <ul>
+        <li data-i18n="tk.1">Choisissez une structure claire (fixe par jalon le plus souvent) et un mix ~70/30.</li>
+        <li data-i18n="tk.2">Payez la qualité : RDV tenu, opportunité acceptée, affaire signée.</li>
+        <li data-i18n="tk.3">Accélérez la surperformance, versionnez les primes, gardez le tout calculable de tête.</li>
+      </ul>
+    </div>
+
+    <div class="sources">
+      <span data-i18n="sources.t">Sources :</span>
+      <a href="https://www.salesforce.com/blog/sales/sdr-commission-plan/" target="_blank" rel="noopener">Salesforce — SDR Commission Plan</a> ·
+      <a href="https://www.quotapath.com/blog/create-a-sales-compensation-plan/" target="_blank" rel="noopener">QuotaPath — Create a Sales Compensation Plan</a> ·
+      <a href="https://www.prowi.io/en/post/sdr-bdr-compensation-guide" target="_blank" rel="noopener">Prowi — SDR &amp; BDR Compensation Guide</a>
+    </div>
+
+    <div class="cta">
+      <h2 data-i18n="cta.t">Un barème clair, des primes qui ne bougent plus</h2>
+      <p data-i18n="cta.sub">BD Report calcule, fige et prévoit vos primes automatiquement.</p>
+      <a class="btn btn-primary" href="../app/" data-i18n="cta.btn">Se connecter à mon espace</a>
+    </div>
+  </div>
+</article>
+
+<footer><div class="foot">
+  <span>© 2026 <b style="color:var(--brand)">BD</b> Report</span>
+  <span><a href="../index.html#blog" style="color:var(--brand);font-weight:700" data-i18n="foot.back">← Retour au blog</a></span>
+</div></footer>
+
+<script>
+const DICTS = {
+  en: {"nav.blog":"Blog","nav.pricing":"Pricing","nav.login":"Log in","hero.tag":"💶 Compensation","hero.title":"Building a commission grid your BDRs actually understand","hero.meta":"≈ 6 min read · BD Report team","lead":"A good commission plan isn't the one that pays the most — it's the one a rep can compute in their head. If they don't understand how they earn, they won't steer their activity toward what matters. Here are the principles that keep coming up in teams that nail their SDR/BDR comp plan.","s1.t":"1. Two structures, chosen clearly","s1.p":"There are two main models for an SDR/BDR. The first — the most common — pays a fixed amount per milestone (SQL, held meeting, accepted opportunity) plus a few activity bonuses. The second, less frequent, pays a percentage of pipeline generated or revenue closed. Fixed-per-milestone is more legible and fits the SDR role better; percentage aligns more with the business but makes pay less predictable.","s2.t":"2. The right base / variable balance","s2.p":"The B2B SaaS market has converged on a 70/30 mix: 70% base, 30% variable — the most common balance between security and motivation for an SDR. On the target side, aim for a quota-to-OTE ratio of 5:1 to 8:1 — pipeline generated worth 5 to 8× the fully-loaded cost of the role.","s2.cal":"<b>2026 benchmark (US B2B SaaS):</b> median OTE around $85K, 70/30 mix. Adapt the amounts to your market, but keep the ratios.","s3.t":"3. The three-brick bonus","s3.p":"A rising standard: a three-component variable that follows the lead across its life and rewards quality, not just volume:","s3.li1":"<b>Per held meeting</b> — rewards activity and booking.","s3.li2":"<b>Per accepted opportunity</b> (SQL/SAL) — rewards real qualification.","s3.li3":"<b>Per closed-won deal</b> — aligns the SDR with final revenue.","s3.p2":"Splitting half the target on qualified opportunities and half on revenue avoids the \"vanity SQL\" that never converts.","s4.t":"4. Accelerators and guardrails","s4.p":"If the bonus is properly tied to pipeline, offer accelerators beyond 100% attainment to reward overperformance — an accelerator cap around 150% is a healthy marker. Build a ramp for new hires, and avoid caps that kill motivation the moment quota is hit.","s5.t":"5. The golden rule: understandable","s5.p":"The best grid drives the right behaviors and discourages the wrong ones — while staying simple enough to compute on the back of a napkin. Version it: a grid change must never rewrite bonuses already earned, or you break trust.","s5.cal":"<b>In BD Report:</b> the grid is set by headcount bracket × lead source, each bonus is frozen when the lead turns SQL (the 15th rule sets the payout month), and a weighted forecast estimates upcoming bonuses.","tk.t":"Key takeaways","tk.1":"Pick a clear structure (usually fixed-per-milestone) and a ~70/30 mix.","tk.2":"Pay for quality: held meeting, accepted opportunity, closed-won deal.","tk.3":"Accelerate overperformance, version the bonuses, keep it all head-computable.","sources.t":"Sources:","cta.t":"A clear grid, bonuses that never shift","cta.sub":"BD Report computes, freezes and forecasts your bonuses automatically.","cta.btn":"Log in to my workspace","foot.back":"← Back to the blog"},
+  es: {"nav.blog":"Blog","nav.pricing":"Precios","nav.login":"Iniciar sesión","hero.tag":"💶 Remuneración","hero.title":"Crear un baremo de comisiones que tus BDR entiendan","hero.meta":"≈ 6 min de lectura · Equipo BD Report","lead":"Un buen plan de comisiones no es el que más paga, es el que un comercial puede calcular de memoria. Si no entiende cómo gana, no dirige su actividad hacia lo que importa. Estos son los principios que se repiten en los equipos que aciertan con su plan SDR/BDR.","s1.t":"1. Dos estructuras, elegidas con claridad","s1.p":"Hay dos grandes modelos para un SDR/BDR. El primero —el más común— paga un importe fijo por hito (SQL, reunión realizada, oportunidad aceptada) más algunas primas de actividad. El segundo, menos frecuente, paga un porcentaje del pipeline generado o del ingreso cerrado. El fijo por hito es más legible y encaja mejor con el rol; el porcentaje alinea más con el negocio pero hace la prima menos previsible.","s2.t":"2. El equilibrio fijo / variable","s2.p":"El mercado B2B SaaS ha convergido en un mix 70/30: 70 % de base, 30 % de variable — el equilibrio más común entre seguridad y motivación para un SDR. En el objetivo, apunta a un ratio cuota/OTE de 5:1 a 8:1 — pipeline generado 5 a 8 veces el coste total del puesto.","s2.cal":"<b>Referencia 2026 (US B2B SaaS):</b> OTE mediano en torno a 85 k$, mix 70/30. Adapta los importes a tu mercado, pero conserva los ratios.","s3.t":"3. La prima en tres bloques","s3.p":"Un estándar en auge: una parte variable de tres componentes, que sigue al lead a lo largo de su vida y premia la calidad, no solo el volumen:","s3.li1":"<b>Por reunión realizada</b> — premia la actividad y la concertación.","s3.li2":"<b>Por oportunidad aceptada</b> (SQL/SAL) — premia la cualificación real.","s3.li3":"<b>Por operación cerrada</b> (closed-won) — alinea al SDR con el ingreso final.","s3.p2":"Repartir la mitad del objetivo en oportunidades cualificadas y la otra en ingreso evita el «SQL de vanidad» que nunca convierte.","s4.t":"4. Aceleradores y salvaguardas","s4.p":"Si la prima está bien anclada al pipeline, ofrece aceleradores por encima del 100 % de cumplimiento para premiar el sobrerendimiento — un tope de aceleración en torno al 150 % es una buena referencia. Prevé una rampa para los nuevos y evita topes que maten la motivación en cuanto se alcanza la cuota.","s5.t":"5. La regla de oro: comprensible","s5.p":"El mejor baremo impulsa los buenos comportamientos y desalienta los malos — sin dejar de ser lo bastante simple como para calcularlo en una servilleta. Versiónalo: un cambio de baremo nunca debe reescribir las primas ya ganadas, o rompes la confianza.","s5.cal":"<b>En BD Report:</b> el baremo se configura por tramo de plantilla × fuente del lead, cada prima se congela al pasar a SQL (la regla del 15 fija el mes de pago) y una previsión ponderada estima las primas futuras.","tk.t":"Para recordar","tk.1":"Elige una estructura clara (normalmente fija por hito) y un mix ~70/30.","tk.2":"Paga la calidad: reunión realizada, oportunidad aceptada, operación cerrada.","tk.3":"Acelera el sobrerendimiento, versiona las primas y que todo sea calculable de memoria.","sources.t":"Fuentes:","cta.t":"Un baremo claro, primas que no se mueven","cta.sub":"BD Report calcula, congela y prevé tus primas automáticamente.","cta.btn":"Entrar a mi espacio","foot.back":"← Volver al blog"},
+}
+const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
+let lang = localStorage.getItem('bdr_site_lang') || 'fr'
+const FR = {}
+document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
+function applyLang(){
+  document.documentElement.lang = lang
+  const d = DICTS[lang]
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = lang === 'fr' ? FR[el.dataset.i18n] : ((d && d[el.dataset.i18n]) ?? FR[el.dataset.i18n]) })
+  document.getElementById('langBtn').textContent = BTN[lang]
+}
+function toggleLang(){ lang = SEQ[(SEQ.indexOf(lang) + 1) % SEQ.length]; localStorage.setItem('bdr_site_lang', lang); applyLang() }
+applyLang()
+</script>
+</body>
+</html>
