@@ -4,6 +4,7 @@ import { googleCalUrl, downloadIcs } from '../calendar.js'
 import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
+import { HubspotPushButton } from './Hubspot.jsx'
 
 // Déclenche les confettis + un toast quand un RDV devient « Signée » (feature 24)
 const isSigned = (phase, opp) => phase === 'Signée' || opp === 'Signée'
@@ -162,7 +163,9 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
         </div>
       )}
       {err && <p className="text-red-500 text-sm mt-3">{err}</p>}
-      <div className="flex justify-end gap-2 mt-5">
+      <div className="flex justify-end items-center gap-2 mt-5">
+        {/* Envoi manuel vers HubSpot (n'apparaît que si l'intégration est activée). */}
+        {!isCreate && <HubspotPushButton entity={f} type="rdv" className="mr-auto" />}
         <button className="btn-ghost" onClick={onClose}>Annuler</button>
         <button className="btn-primary" onClick={submit}>Enregistrer le rendez-vous</button>
       </div>

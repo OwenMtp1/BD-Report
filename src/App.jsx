@@ -30,6 +30,7 @@ import DataQuality from './pages/DataQuality.jsx'
 import Classement from './pages/Classement.jsx'
 import Simulateur from './pages/Simulateur.jsx'
 import Souscrire from './pages/Souscrire.jsx'
+import Hubspot from './pages/Hubspot.jsx'
 import Logs from './pages/Logs.jsx'
 import Trash from './pages/Trash.jsx'
 import TeamLead from './pages/TeamLead.jsx'
@@ -461,6 +462,7 @@ function MainApp() {
     teamlead: <TeamLead />,
     admin: <Admin mode="admin" />,
     teams: <Admin mode="teams" />,
+    hubspot: <Hubspot />,
     settings: <Settings onEditWidgets={() => setPage('dashboard')} currentTheme={store.sub?.theme || 'ocean-pro'}
       onThemeSaved={(t) => { store.setSub(d => ({ ...d, theme: t })); setTheme(t) }} />,
     org: <OrgChart onOpenProfile={(s) => {

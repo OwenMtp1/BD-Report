@@ -95,7 +95,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Main app / Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Primes & Commissions', 'Simulateur de primes', 'KPI Entreprise', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Administration', 'Équipe support']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Primes & Commissions', 'Simulateur de primes', 'KPI Entreprise', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Administration', 'Intégration HubSpot', 'Équipe support']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
@@ -107,6 +107,18 @@ async function main() {
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Primes & Commissions'))
   await click(find('button', 'Ajouter une règle'))
   if (!text().includes('Paliers de prime')) throw new Error('Activity bonus rule editor did not render')
+
+  // 5c. Intégration HubSpot : console de connexion, correspondances, synchro et catalogue d'appels.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Intégration HubSpot'))
+  if (!text().includes('Connexion à HubSpot') || !text().includes('Tester la connexion')) throw new Error('HubSpot connection card missing')
+  if (!text().includes('Explorateur d\'appels API') || !text().includes('/crm/v3/objects/contacts')) throw new Error('HubSpot API explorer missing')
+  if (!text().includes('Tout envoyer vers HubSpot')) throw new Error('HubSpot sync buttons missing')
+  // La correspondance des phases couvre bien toutes les phases BD Report.
+  for (const ph of ['R1', 'R2', 'MQL', 'SQL', 'KO']) { if (!text().includes(ph)) throw new Error('HubSpot stage mapping missing phase ' + ph) }
+  // Le jeton HubSpot ne doit JAMAIS être stocké dans l'état synchronisé.
+  const hsCfg = JSON.parse(win.localStorage.getItem('bdrflow_db_v1')).integrations?.hubspot
+  if (!hsCfg) throw new Error('HubSpot config not seeded in db')
+  if ('token' in hsCfg) throw new Error('HubSpot token must never live in the synced state')
 
   // 6a. Conversations : canaux auto (Général + Bloc notes), création d'un canal, envoi d'un message.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Conversations'))

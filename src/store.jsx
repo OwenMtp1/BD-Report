@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { isSupabaseConfigured } from './supabaseConfig.js'
 import { stripDangerousKeys } from './security.js'
 import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests, publishOffersDebounced } from './supabaseSync.js'
 import { ALL_BRICKS, LEGACY_BRICKS } from './nav.jsx'
+import { configureHubspot, HS_API_BASE } from './hubspot.js'
+import { DEFAULT_STAGE_MAP, pushRdv } from './hubspotSync.js'
 
 const LS_KEY = 'bdrflow_db_v1'
 const SESSION_KEY = 'bdrflow_session_v1'
@@ -411,6 +413,36 @@ export const STAFF_PERMISSION_GROUPS = [
 ]
 export const STAFF_PERMISSIONS = STAFF_PERMISSION_GROUPS.flatMap(g => g.perms.map(p => ({ ...p, group: g.label, groupId: g.id })))
 export const STAFF_PERMISSION_IDS = STAFF_PERMISSIONS.map(p => p.id)
+
+// ---------------------------------------------------------------------------
+//  Intégration HubSpot — réglages NON secrets stockés dans le `db` (donc
+//  synchronisés). Le token, lui, reste en localStorage PAR APPAREIL et ne part
+//  jamais dans le blob : voir `store.setHubspotToken`.
+// ---------------------------------------------------------------------------
+export const HUBSPOT_TOKEN_KEY = 'bdrflow_hubspot_token_v1'
+export function defaultHubspotConfig() {
+  return {
+    enabled: false,
+    mode: 'proxy',        // 'proxy' = relais CORS que vous hébergez (recommandé) | 'direct' = api.hubapi.com
+    proxyUrl: '',
+    portalId: '',
+    pipelineId: '',
+    ownerId: '',
+    stageMap: { ...DEFAULT_STAGE_MAP },
+    syncMeetings: true,
+    syncNotes: true,
+    autoPush: false,      // pousser automatiquement chaque RDV enregistré
+    lastSyncAt: '',
+    lastReport: null,
+  }
+}
+// Applique la configuration au client HubSpot (base d'appel + token de l'appareil).
+export function applyHubspotConfig(cfg) {
+  let token = ''
+  try { token = localStorage.getItem(HUBSPOT_TOKEN_KEY) || '' } catch (e) { /* ssr / jsdom */ }
+  const base = cfg?.mode === 'direct' ? HS_API_BASE : (cfg?.proxyUrl || HS_API_BASE)
+  configureHubspot({ base, token, portalId: cfg?.portalId || '' })
+}
 
 // Rangs par défaut des rôles intégrés (plus élevé = plus de pouvoir).
 export const ROLE_RANKS = { 'Fondateur': 100, 'Support BD Report': 90, 'Administrateur': 70, 'Développeur': 50, 'Manager': 40, 'Membre': 10 }
@@ -1456,12 +1488,19 @@ function migrate(db) {
     data.taskTrash = data.taskTrash || []
     data.icpProfiles = data.icpProfiles || []
     data.activityRules = data.activityRules || [] // primes d'activité (volume de RDV)
+    // Sécurité : l'ancien écran d'intégration stockait le jeton HubSpot dans l'état
+    // SYNCHRONISÉ. On le purge — il vit désormais en localStorage, par appareil.
+    if (data.integrations?.hubspot?.token) delete data.integrations.hubspot.token
   })
   // ---- Conversations / canaux + services (organigramme) ----
   db.channels = db.channels || []
   db.channelMessages = db.channelMessages || {}
   db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
   db.staffRoles = seedStaffRoles(db.staffRoles) // rôles + permissions de l'équipe staff (idempotent)
+  // Intégrations externes (HubSpot…) — réglages non secrets, le token reste local.
+  db.integrations = db.integrations || {}
+  db.integrations.hubspot = { ...defaultHubspotConfig(), ...(db.integrations.hubspot || {}) }
+  db.integrations.hubspot.stageMap = { ...DEFAULT_STAGE_MAP, ...(db.integrations.hubspot.stageMap || {}) }
   db.offers = Array.isArray(db.offers) ? db.offers : defaultOffers() // offres/abonnements gérés par le staff
   // Onglets ajoutés après coup : accordés automatiquement à l'offre Beta et aux comptes en accès
   // complet (offre `team`), pour qu'un nouvel onglet apparaisse sans réglage manuel.
@@ -1647,6 +1686,40 @@ export function StoreProvider({ children, demo = false }) {
     try { localStorage.setItem('bdrflow_offers_v1', JSON.stringify(db.offers || [])) } catch (e) { /* quota */ }
     publishOffersDebounced(db.offers || [])
   }, [db.offers]) // eslint-disable-line
+
+  // Configure le client HubSpot dès qu'un réglage d'intégration change (base d'appel
+  // = relais ou API directe, + token propre à cet appareil).
+  const hsCfg = db.integrations?.hubspot
+  useEffect(() => { applyHubspotConfig(hsCfg) }, [hsCfg?.mode, hsCfg?.proxyUrl, hsCfg?.portalId]) // eslint-disable-line
+
+  // Envoi automatique vers HubSpot des RDV créés/modifiés (option « autoPush »).
+  // La signature ignore le champ `hubspot` : l'écriture des identifiants renvoyés
+  // ne redéclenche donc pas d'envoi. La toute première passe n'envoie rien (sinon
+  // ouvrir l'app pousserait tout le pipeline d'un coup).
+  const hsSeen = useRef(null)
+  useEffect(() => {
+    const subId = session?.subEnvId
+    if (demo || !hsCfg?.enabled || !hsCfg?.autoPush || !subId) { hsSeen.current = null; return }
+    const rdvs = db.data[subId]?.rdvs || []
+    const sig = (r) => JSON.stringify({ ...r, hubspot: undefined })
+    const prev = hsSeen.current
+    const next = new Map(rdvs.map(r => [r.id, sig(r)]))
+    hsSeen.current = next
+    if (!prev) return
+    const changed = rdvs.filter(r => prev.get(r.id) !== next.get(r.id))
+    if (!changed.length) return
+    let cancelled = false
+    const t = setTimeout(async () => {
+      for (const r of changed) {
+        if (cancelled) return
+        try {
+          const ids = await pushRdv(r, hsCfg)
+          setDb(d => { const x = (d.data[subId]?.rdvs || []).find(v => v.id === r.id); if (x) x.hubspot = ids; return d })
+        } catch (e) { /* l'échec est déjà journalisé par le client HubSpot */ }
+      }
+    }, 1500)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [db.data, hsCfg?.enabled, hsCfg?.autoPush, session?.subEnvId]) // eslint-disable-line
 
   // Génère les messages de reporting automatique manquants dès que l'état change (RDV, tickets,
   // projets, clients). Idempotent : ne re-rend que si de nouveaux messages ont été ajoutés.
@@ -2220,6 +2293,31 @@ export function StoreProvider({ children, demo = false }) {
           return d
         })
       },
+      // ===================================================== Intégration HubSpot
+      hubspot() { return db.integrations?.hubspot || defaultHubspotConfig() },
+      setHubspotConfig(patch) {
+        if (roBlocked()) return
+        setDb(d => {
+          d.integrations = d.integrations || {}
+          d.integrations.hubspot = { ...defaultHubspotConfig(), ...(d.integrations.hubspot || {}), ...patch }
+          return d
+        })
+      },
+      // Le token HubSpot ne quitte JAMAIS l'appareil : localStorage uniquement,
+      // jamais dans le blob synchronisé (et donc jamais chez un autre utilisateur).
+      hubspotToken() { try { return localStorage.getItem(HUBSPOT_TOKEN_KEY) || '' } catch (e) { return '' } },
+      setHubspotToken(token) {
+        try { token ? localStorage.setItem(HUBSPOT_TOKEN_KEY, token) : localStorage.removeItem(HUBSPOT_TOKEN_KEY) } catch (e) { /* stockage indisponible */ }
+        applyHubspotConfig(this.hubspot())
+      },
+      // Mémorise les identifiants HubSpot renvoyés pour un RDV (envoi idempotent).
+      setRdvHubspotIds(rdvId, ids) {
+        this.setSub(s => ({ ...s, rdvs: (s.rdvs || []).map(r => r.id === rdvId ? { ...r, hubspot: ids } : r) }))
+      },
+      setContactHubspotId(contactId, hubspotId) {
+        this.setSub(s => ({ ...s, contacts: (s.contacts || []).map(c => c.id === contactId ? { ...c, hubspotId } : c) }))
+      },
+
       // ===================================================== Permissions de l'équipe staff
       staffRoles() { return db.staffRoles || [] },
       // Tous les noms de rôles (intégrés + personnalisés) — pour les listes déroulantes.

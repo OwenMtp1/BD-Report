@@ -104,6 +104,33 @@ npm run dev        # serveur de dev
   → **lecture seule** (`readOnly`), briques transparentes, seul le Support éditable. Le support peut bloquer/débloquer/supprimer
   un env client depuis la fiche Clients (`subState` 'blocked'/'active').
 
+## Intégration HubSpot
+- **`src/hubspot.js`** — client API complet (CRM v3/v4) : `crm` (list/get/create/update/archive/search/
+  batch{Read,Create,Update,Upsert,Archive}/merge/gdprDelete/findByProperty/listAll), `associations` (v4,
+  default + typées + batch + labels), `properties`, `pipelines`, `owners`, `meetings/calls/notes/tasks/emails`,
+  `lists`, `forms` (seule API CORS-friendly), `timeline`, `webhooks`, `imports`, `account`, `oauth`.
+  Cœur `hsRequest` : auth, erreurs normalisées (`HubspotError`), reprise sur 429/5xx (`Retry-After`), journal
+  (`hubspotCallLog` + événement `hubspot-log`). `HS_ENDPOINTS` = catalogue exécutable (explorateur d'API).
+  ⚠️ **CORS** : api.hubapi.com refuse les appels navigateur → passer par un **relais** (`base` = URL du relais).
+- **`src/hubspotSync.js`** — correspondance BD Report ↔ HubSpot : entreprise→company, contacts→contact (clé
+  `email`), RDV→deal (clé `bdr_rdv_id`) + meeting + note, tâches→task ; `DEFAULT_STAGE_MAP` (R1/R2/MQL/SQL/
+  Signée/KO → étapes), `ensureCustomProperties()` (crée les champs `bdr_*`, idempotent), `pushRdv/pushContact/
+  pushAll` (progression + tolérance aux erreurs), `pullContacts/pullDeals`, `loadPipelines`. Envois **idempotents**
+  (upsert par clé) + associations posées automatiquement.
+- **`src/pages/Hubspot.jsx`** — console « Intégration HubSpot » (nav Administration, brick homonyme) : connexion
+  (mode relais/direct, URL, Hub ID, jeton, **Tester la connexion**), préparation du portail (créer les propriétés,
+  charger pipelines/propriétaires, mapper les phases), synchronisation (tout envoyer / RDV / contacts / importer),
+  explorateur d'API, journal des appels. Exporte **`HubspotPushButton`** (bouton par enregistrement, utilisé dans
+  la fiche RDV).
+- **Store** : `db.integrations.hubspot` (non secret, synchronisé) + `store.hubspot()/setHubspotConfig/
+  hubspotToken/setHubspotToken/setRdvHubspotIds/setContactHubspotId`. 🔒 Le **jeton vit en localStorage**
+  (`bdrflow_hubspot_token_v1`), jamais dans le blob synchronisé (`migrate` purge l'ancien `data.integrations.
+  hubspot.token`). Effet `applyHubspotConfig` + envoi automatique optionnel (`autoPush`, signature ignorant
+  le champ `hubspot` → pas de boucle, rien n'est envoyé à la 1re passe).
+- **Côté HubSpot (à faire par l'utilisateur)** : `hubspot/SETUP.md` (scopes, application privée) +
+  `hubspot/proxy-worker.js` (relais Cloudflare Worker prêt à déployer : CORS, jeton côté serveur, allowlist
+  d'origines/chemins, échange OAuth).
+
 ## Supabase (synchro temps réel cross-device, optionnelle)
 - Config : **`src/supabaseConfig.js`** (URL + clé anon) ; côté site : bloc `window.BDR_SUPABASE_*` dans `site/index.html`.
   Vide = 100 % local (inerte). **Clés obscurcies** (XOR+base64 via `src/obf.js` / `bdrDeob` côté site) : plus aucune clé

@@ -105,6 +105,43 @@ function SupabaseCard() {
   )
 }
 
+// Carte HubSpot : résumé + accès à la console d'intégration complète.
+// (La configuration réelle vit dans « Administration → Intégration HubSpot » ; le jeton
+// n'est jamais stocké dans l'état synchronisé, uniquement en local sur l'appareil.)
+function HubspotSummaryCard({ store }) {
+  const cfg = store.hubspot()
+  const ready = cfg.mode === 'direct' ? !!store.hubspotToken() : !!cfg.proxyUrl
+  return (
+    <div className="card p-4 space-y-3 max-w-2xl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold flex items-center gap-2"><Plug size={17} className="text-brand" /> HubSpot CRM</h3>
+        <span className={`chip !text-[10px] ${cfg.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-surface text-muted'}`}>
+          {cfg.enabled ? 'Activée' : 'Désactivée'}
+        </span>
+      </div>
+      <p className="text-sm text-muted">
+        Envoyez vos RDV, contacts, entreprises et notes vers HubSpot (transactions, rendez-vous et
+        associations comprises) et réimportez vos données du portail.
+      </p>
+      <div className="rounded-xl bg-surface p-3 text-xs space-y-0.5">
+        <div>Mode : <b>{cfg.mode === 'direct' ? 'API directe' : 'Relais CORS'}</b></div>
+        {cfg.mode === 'proxy' && <div className="truncate">Relais : {cfg.proxyUrl || <span className="text-muted italic">non renseigné</span>}</div>}
+        <div>Portail : {cfg.portalId || <span className="text-muted italic">non renseigné</span>}</div>
+        <div>Connexion : {ready ? 'prête ✓' : <span className="text-amber-600">à configurer</span>}</div>
+        {cfg.lastSyncAt && <div>Dernière synchro : {new Date(cfg.lastSyncAt).toLocaleString('fr-FR')}</div>}
+      </div>
+      <button className="btn-primary !py-1.5 text-sm w-fit"
+        onClick={() => window.dispatchEvent(new CustomEvent('app-navigate', { detail: 'hubspot' }))}>
+        <Plug size={15} /> Ouvrir la console HubSpot
+      </button>
+      <p className="text-xs text-muted">
+        L'API HubSpot bloquant les appels directs depuis un navigateur, la connexion passe par un relais
+        que vous hébergez (modèle fourni : <code>hubspot/proxy-worker.js</code>). Le jeton reste sur cet appareil.
+      </p>
+    </div>
+  )
+}
+
 const RELEASES_URL = 'https://github.com/OwenMtp1/Claude/releases/latest'
 
 function ImageInput({ value, onChange, label }) {
@@ -160,8 +197,6 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
   const canManageSub = !!env && (env.createdBy === me.id || ['Fondateur', 'Administrateur', 'Support BD Report'].includes(me.role))
   const mySubs = store.db.subenvs.filter(s => s.envId === session.envId)
   const curSub = store.db.subenvs.find(s => s.id === session.subEnvId)
-  const hubspot = store.sub?.integrations?.hubspot || {}
-  const setIntegration = (key, patch) => store.setSub(d => ({ ...d, integrations: { ...(d.integrations || {}), [key]: { ...((d.integrations || {})[key] || {}), ...patch } } }))
 
   const tabs = [
     ['ux', 'UX & Thèmes', Palette],
@@ -310,34 +345,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
       {tab === 'integrations' && (
         <div className="space-y-3">
         <SupabaseCard />
-        <div className="card p-4 space-y-3 max-w-2xl">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold flex items-center gap-2"><Plug size={17} className="text-brand" /> HubSpot CRM</h3>
-            <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-              <input type="checkbox" checked={!!hubspot.enabled} onChange={e => setIntegration('hubspot', { enabled: e.target.checked })} /> Activée
-            </label>
-          </div>
-          <Field label="Clé API privée (Private App Token)">
-            <input className="input" type="password" placeholder="pat-eu1-..." value={hubspot.token || ''} onChange={e => setIntegration('hubspot', { token: e.target.value })} />
-          </Field>
-          <Field label="ID du portail HubSpot (optionnel)">
-            <input className="input" placeholder="ex : 12345678" value={hubspot.portalId || ''} onChange={e => setIntegration('hubspot', { portalId: e.target.value })} />
-          </Field>
-          <Field label="Options de synchronisation">
-            <div className="space-y-1 text-sm">
-              {[['contacts', 'Synchroniser les contacts'], ['deals', 'Synchroniser les transactions (deals)'], ['notes', 'Synchroniser les notes']].map(([k, l]) => (
-                <label key={k} className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={!!hubspot[k]} onChange={e => setIntegration('hubspot', { [k]: e.target.checked })} /> {l}
-                </label>
-              ))}
-            </div>
-          </Field>
-          <div className="rounded-xl bg-surface p-3 text-xs text-muted flex gap-2">
-            <ShieldCheck size={16} className="text-brand shrink-0 mt-0.5" />
-            <span>La configuration est enregistrée ici. La synchronisation réelle vers HubSpot nécessite que l'app soit déployée en ligne avec un proxy serveur (les navigateurs bloquent les appels directs à l'API HubSpot pour des raisons de sécurité). Une fois déployée, la clé ci-dessus active la synchronisation automatique.</span>
-          </div>
-          <p className="text-xs text-muted">L'intégration LinkedIn a été retirée : LinkedIn ne propose pas d'API publique permettant de récupérer ou d'enrichir des contacts, elle n'était donc pas réalisable.</p>
-        </div>
+        <HubspotSummaryCard store={store} />
         </div>
       )}
 
