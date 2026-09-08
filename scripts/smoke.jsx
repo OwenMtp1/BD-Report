@@ -284,9 +284,10 @@ async function main() {
   if (text().includes('4 chiffres')) throw new Error('Training space must not ask for an access code')
   // « Formation staff » figure dans la barre du haut même sur le sélecteur d'espace : on
   // exige donc un repère de l'application elle-même, sans quoi le test resterait aveugle.
-  if (text().includes('choisir un espace') || text().includes('choisissez votre espace')) {
-    throw new Error('Training space stopped on the space picker instead of opening')
-  }
+  // Ces deux écrans n'existent que dans l'overlay de formation : l'app réelle, déjà
+  // entrée dans son espace, ne les affiche pas. Ils font donc des repères fiables.
+  if (text().includes('Choisissez votre espace')) throw new Error('Training stopped on the workspace picker')
+  if (text().includes('Choisissez un environnement')) throw new Error('Training stopped on the environment picker')
   if (!text().includes('RDV réalisés') && !text().includes('Console Support')) {
     throw new Error('Training space did not render the application itself')
   }

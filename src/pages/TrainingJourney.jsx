@@ -76,10 +76,18 @@ function TrainingController({ navSeq }) {
   const store = useStore()
   // On force l'entrée dans l'espace de formation : si la session ne désignait pas un
   // espace existant, l'application réclamerait un code d'accès et bloquerait net.
+  // Entrée forcée : on ne laisse jamais la formation retomber sur un sélecteur. L'espace
+  // visé doit exister ET disposer de ses données, faute de quoi l'application repart au
+  // choix d'un espace — ce qui a déjà bloqué l'accès une fois.
   useEffect(() => {
-    const s = trainingSession()
-    const exists = store.db.subenvs.some(x => x.id === s.subEnvId)
-    store.setSession(exists ? s : { ...s, subEnvId: store.db.subenvs.find(x => x.envId === s.envId)?.id || null })
+    const want = trainingSession()
+    const usable = (id) => store.db.subenvs.some(x => x.id === id) && !!store.db.data?.[id]
+    const envOk = store.db.environments.some(e => e.id === want.envId)
+    const envId = envOk ? want.envId : (store.db.environments[0]?.id || null)
+    const subId = usable(want.subEnvId)
+      ? want.subEnvId
+      : (store.db.subenvs.find(x => x.envId === envId && usable(x.id))?.id || null)
+    store.setSession({ ...want, envId, subEnvId: subId })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!navSeq?.page) return

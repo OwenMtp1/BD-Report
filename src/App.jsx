@@ -334,7 +334,9 @@ function SubEnvPicker() {
   const [form, setForm] = useState({ prenom: '', nom: '', poste: '', service: '', pin: '' })
   const [pinFor, setPinFor] = useState(null)
   // Encadrer, c'est pouvoir entrer chez les autres — avec leur code, qui reste demandé.
-  const canOpenOthers = store.hasClientPerm('team.view') || store.hasClientPerm('team.manage')
+  // Les espaces de démonstration et de formation échappent au verrou : on y incarne des
+  // casquettes qui n'ont pas toujours de droit d'encadrement, et rien n'y est réel.
+  const canOpenOthers = store.demo || store.hasClientPerm('team.view') || store.hasClientPerm('team.manage')
 
   if (pinFor) return <PinGate title={`${pinFor.prenom} ${pinFor.nom}`} expected={pinFor.pin} onOk={() => store.enterSubEnv(pinFor.id)} onBack={() => setPinFor(null)} />
 
