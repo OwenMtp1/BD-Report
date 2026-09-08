@@ -182,6 +182,11 @@ npm run dev        # serveur de dev
   Vide = 100 % local (inerte). **Clés obscurcies** (XOR+base64 via `src/obf.js` / `bdrDeob` côté site) : plus aucune clé
   en clair dans le repo ni le build (anti-scan). Pour changer une clé : régénérer la valeur obfusquée (XOR pad `bdreport-obf-2026-v1`).
   ⚠️ Obscurcissement ≠ secret (app front, clé reconstruite au client) : vraie confidentialité = RLS.
+  Le même `deob()` masque aussi les **informations internes** du bundle livré : nom de l'environnement semé,
+  identité du compte '01', pipeline commercial réel de `seedPipelineRdvs()` (noms d'entreprises et de contacts
+  identifiables) et URLs de release. **Masquage de façade uniquement** : aucun accès n'est modifié et les valeurs
+  sont reconstruites côté client. Vérification : après `npm run build`, aucune de ces chaînes ne doit apparaître
+  dans `dist/assets/*.js`.
 - Schéma SQL + guide : **`supabase/schema.sql`** et **`supabase/SETUP.md`**. Tables : `app_state` (tout l'état en JSONB,
   realtime, dernier-écrit-gagne, anti-écho par `_client`) et `contact_requests`.
 - Logique : `src/supabaseSync.js` + effet dans `StoreProvider`. Au 1er chargement, **le distant fait foi s'il existe**.

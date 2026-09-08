@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { isSupabaseConfigured } from './supabaseConfig.js'
+import { deob } from './obf.js'
 import { stripDangerousKeys } from './security.js'
 // Import statique : le déploiement inline l'app en un seul fichier, un import
 // dynamique local produirait un morceau séparé qui ne serait jamais publié.
@@ -940,11 +941,11 @@ function buildSeedDb() {
       // Compte de démo pour une instance vierge. Aucun identifiant réel en clair dans le code :
       // sur l'app en ligne, ce compte est remplacé par les données réelles de Supabase.
       // Mot de passe stocké UNIQUEMENT sous forme de hash SHA-256 (aucun mot de passe en clair dans le code).
-      id: '01', email: 'demo@bdreport.app', pseudo: 'OwenMtp', password: 'sha256:0ead2060b65992dca4769af601a1b3a35ef38cfad2c2c465bb160ea764157c5d',
+      id: '01', email: deob('BgEfCjANFgZIHw0UWRxRQkY='), pseudo: deob('LRMXCz0bAg=='), password: 'sha256:0ead2060b65992dca4769af601a1b3a35ef38cfad2c2c465bb160ea764157c5d',
       role: 'Fondateur', developer: true, plan: 'beta', photo: '', bricks: [...BRICKS], teamOf: null,
     }],
-    environments: [{ id: envId, name: 'PeopleSpheres', logo: '', pin: '', plan: 'beta', createdBy: '01', departments: ['Marketing', 'Sales', 'Tech', 'Direction'] }],
-    subenvs: [{ id: subId, envId, prenom: 'Owen', nom: 'Mrani Bonnier', poste: 'BDR', service: 'Marketing', pin: '1205', photo: '', ownerId: '01' }],
+    environments: [{ id: envId, name: deob('MgEdFRwKIQRFChADXg=='), logo: '', pin: '', plan: 'beta', createdBy: '01', departments: ['Marketing', 'Sales', 'Tech', 'Direction'] }],
+    subenvs: [{ id: subId, envId, prenom: deob('LRMXCw=='), nom: deob('LxYTCxlPMBtDAQsDXw=='), poste: 'BDR', service: 'Marketing', pin: '1205', photo: '', ownerId: '01' }],
     data: { [subId]: subData },
     supportRequests: [], // « Nouvelles demandes » : formulaires de contact du site
     tickets: [], // « Tickets Techniques » : tickets de support ouverts depuis l'app
@@ -1342,33 +1343,14 @@ function injectTestEnv(db) {
   return db
 }
 
-// ---------------------------------------------------------------- Pipeline réel d'Owen (PeopleSpheres)
+// ---------------------------------------------------------------- Pipeline réel importé
 // Données importées d'un fichier fourni. Injecté UNE fois dans l'espace 'sub-owen' (flag _autoSeed.pipelineOwen).
 function seedPipelineRdvs() {
   // [entreprise, effectif, contact, stage, date, source, commercial, résultat, suite]
-  const RAW = [
-    ['SOVAM', 250, 'Marion Lecointe', 'R1', '10/10', 'Cold call', '', 'Disqualifié', 'Reprise Q2 2026'],
-    ['Derichebourg', 5000, 'Didier Del Vasto', 'MQL', '14/01/2026', 'Cold call', 'Fabien Goutain', 'SQL long shot', 'Suivi'],
-    ['Yubo', 120, 'Gauvain Delauney', 'MQL', '28/10', 'Inbound', 'Jawed Rifai', 'Standby', 'Relance 2026'],
-    ['Eurometropole Metz', 280, 'Charlene Michels', 'MQL', '22/10', 'Inbound', 'Jawed Rifai', 'Closed Won', '-'],
-    ['ENS', 1000, 'Charles Dupre', 'MQL', '20/10', 'Outbound', 'Alexis Pfifferling', 'Disqualifié', '-'],
-    ['Barillet', 950, 'Michel Fraysignes', 'MQL', '31/10', 'Outbound', 'Aurelien Moulin', 'Standby', 'Relance 2026'],
-    ['Evoriel', 3200, 'Charlene Dejardin', 'MQL', '19/01/2026', 'Outbound', 'Jawed Rifai', 'En cours', 'En cours'],
-    ['Brest Metropole', 3500, 'Renaud Guidet', 'MQL', '24/11/2025', 'Outbound', 'Jawed Rifai', 'Projet 2026', 'Attente'],
-    ['Evernex', 1400, 'Nicolas Combemorel', 'MQL', '24/11', 'LinkedIn', 'Fabien Goutain', 'SQL long shot', 'Relancer'],
-    ['Otera', 300, 'Caroline Bel', 'MQL', '23/01', 'Outbound', 'Alexis Pfifferling', 'Lost', '-'],
-    ['Defontaine', 650, 'Christophe Herlin', 'MQL', '12/01', 'Email', 'Aurelien Moulin', 'En cours', 'Suivi'],
-    ['Verisure', 17000, 'Charles Devresse', 'R1', '14/01/2026', 'LinkedIn', '', 'No fit', '-'],
-    ['Odalia', 255, 'Remi Rommelard', 'MQL', '21/01', 'Inbound', 'Aurelien Moulin', 'SQL Engage', 'Suivi'],
-    ['Oreca', 400, 'Clemence Boutier', 'MQL', '19/12', 'Inbound', 'Fabien Goutain', 'SQL Engage', '-'],
-    ['ARJO', 0, 'Deltombe/Carré', 'MQL', '18/02/2026', 'Inbound', 'Jawed Rifai', 'SQL Qualify', '-'],
-    ['Cooperative U', 80000, 'Audrey Hillaert', 'MQL', '21/01', 'Inbound', 'Fabien Goutain', 'SQL Qualify', '-'],
-    ['FDJ', 5000, 'Assa Camara', 'R1', '23/02/2026', 'Outbound', '', 'Workday blocker', '-'],
-    ['Advans', 1200, 'Remy Ducret', 'MQL', '09/03/2026', 'Inbound', 'Fabien Goutain', 'SQL Qualify', '-'],
-    ['Clinique du Parc', 800, 'Lisa March', 'MQL', '03/03/2026', 'Inbound', 'Jawed Rifai', 'En cours', 'Suivi'],
-    ['Stratus', 500, 'Nassim Benchikh', 'R1', '19/03/2026', 'Inbound', 'Fabien Goutain', 'En cours', 'En cours'],
-    ['Thom Group', 6450, 'Florian Forthomme', 'R1', '11/06/2026', 'Outbound', '', 'No budget', '2027'],
-  ]
+  // Données commerciales réelles : elles ne figurent pas en clair dans le fichier livré au
+  // navigateur. C'est un masquage de façade — la valeur est reconstruite côté client et
+  // reste donc lisible pour qui la cherche : ce n'est pas un secret, seulement de la pudeur.
+  const RAW = JSON.parse(deob('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'))
   const parseD = (s) => {
     const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/)
     if (!m) return todayISO()

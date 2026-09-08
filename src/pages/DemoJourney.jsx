@@ -1,3 +1,4 @@
+import { deob } from '../obf.js'
 import React, { useEffect, useRef, useState } from 'react'
 import {
   X, Play, Pause, ChevronLeft, ChevronRight, Sparkles, Lock, Mail, Building2, User,
@@ -83,7 +84,7 @@ function Signup({ onDone }) {
             <input value={email} onChange={e => setEmail(e.target.value)} className="demo-inp" />
           </Labeled>
           <Labeled icon={Building2} label="Entreprise">
-            <input defaultValue="PeopleSpheres" className="demo-inp" />
+            <input defaultValue={deob('MgEdFRwKIQRFChADXg==')} className="demo-inp" />
           </Labeled>
           <Labeled icon={Lock} label="Mot de passe">
             <input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="Choisissez un mot de passe" className="demo-inp" autoFocus />

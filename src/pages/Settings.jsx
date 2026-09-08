@@ -1,3 +1,4 @@
+import { deob } from '../obf.js'
 import React, { useRef, useState, useEffect } from 'react'
 import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock, Cloud, GraduationCap } from 'lucide-react'
 import { useStore, hashPw } from '../store.jsx'
@@ -144,7 +145,7 @@ function HubspotSummaryCard({ store }) {
   )
 }
 
-const RELEASES_URL = 'https://github.com/OwenMtp1/Claude/releases/latest'
+const RELEASES_URL = deob('ChAGFQNVXVtKBhYOWFAeUVlAWX4VARwoBB9DW24DAxNJVx9AU0ETUBEBAUocDgYRXhs=')
 
 function ImageInput({ value, onChange, label }) {
   const ref = useRef(null)
@@ -175,7 +176,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
   const [dlUrls, setDlUrls] = useState(null)
   useEffect(() => {
     let cancelled = false
-    fetch('https://api.github.com/repos/OwenMtp1/Claude/releases/latest')
+    fetch(deob('ChAGFQNVXVtMHwtISltEWkNPWFINCV0XFR8dBwIgFQNDf0RCBwI1XQMRFgBfHRcYSA4RA14dXFNCSAVF'))
       .then(r => (r.ok ? r.json() : null))
       .then(rel => {
         if (cancelled || !rel || !Array.isArray(rel.assets)) return
