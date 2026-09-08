@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { LifeBuoy, Plus, ArrowLeft, MessageSquare, Star, BookOpen, ChevronDown, ChevronRight, Search } from 'lucide-react'
-import { useStore, TICKET_CATEGORIES, TICKET_PRIORITIES, fmtDate, ticketHasUnread } from '../store.jsx'
+import { useStore, TICKET_CATEGORIES, TICKET_PRIORITIES, KB_CATEGORIES, fmtDate, ticketHasUnread } from '../store.jsx'
 import { Modal, Field, Empty, toast } from '../ui.jsx'
 import TicketChat from './TicketChat.jsx'
 
@@ -51,36 +51,97 @@ function CsatPrompt({ ticket }) {
   )
 }
 
-// Base de connaissances côté client (lecture seule, recherche).
+// Base de connaissances côté client : on entre par une catégorie, ou directement par la
+// recherche. Objectif assumé : qu'un client trouve sa réponse seul plutôt que d'ouvrir un
+// ticket — la recherche couvre donc aussi des mots-clés absents du texte de l'article.
 function KbBrowser() {
   const store = useStore()
   const articles = store.db.kbArticles || []
   const [q, setQ] = useState('')
+  const [cat, setCat] = useState('')
   const [openId, setOpenId] = useState('')
   if (!articles.length) return null
+
   const ql = q.trim().toLowerCase()
-  const list = articles.filter(a => !ql || (a.title + ' ' + a.category + ' ' + a.content).toLowerCase().includes(ql))
+  const matches = (a) => (a.title + ' ' + a.category + ' ' + (a.keywords || '') + ' ' + a.content).toLowerCase().includes(ql)
+  const searching = ql.length > 0
+
+  // Catégories réellement peuplées, dans l'ordre du catalogue ; celles ajoutées à la main
+  // par le support viennent ensuite pour ne jamais disparaître de l'écran.
+  const counts = articles.reduce((m, a) => { m[a.category] = (m[a.category] || 0) + 1; return m }, {})
+  const known = KB_CATEGORIES.filter(c => counts[c.id])
+  const extra = Object.keys(counts)
+    .filter(k => !KB_CATEGORIES.some(c => c.id === k))
+    .map(k => ({ id: k, emoji: '📄', desc: '' }))
+  const cats = [...known, ...extra]
+
+  const list = searching ? articles.filter(matches) : articles.filter(a => a.category === cat)
+
+  const Article = ({ a }) => (
+    <div className="rounded-lg border border-line">
+      <button className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-semibold"
+        onClick={() => setOpenId(openId === a.id ? '' : a.id)}>
+        {openId === a.id ? <ChevronDown size={14} className="text-muted" /> : <ChevronRight size={14} className="text-muted" />}
+        <span className="flex-1">{a.title}</span>
+        {searching && <span className="chip bg-surface text-muted">{a.category}</span>}
+      </button>
+      {openId === a.id && <p className="text-sm text-muted whitespace-pre-wrap px-3 pb-3 pl-9 leading-relaxed">{a.content}</p>}
+    </div>
+  )
+
   return (
-    <div className="card p-4 space-y-2">
-      <div className="font-bold flex items-center gap-2"><BookOpen size={16} className="text-brand" /> Base de connaissances</div>
-      <p className="text-xs text-muted">Trouvez peut-être votre réponse avant d'ouvrir un ticket.</p>
+    <div className="card p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        {cat && !searching && (
+          <button className="btn-ghost !p-1" title="Toutes les catégories" onClick={() => { setCat(''); setOpenId('') }}>
+            <ArrowLeft size={15} />
+          </button>
+        )}
+        <div className="font-bold flex items-center gap-2">
+          <BookOpen size={16} className="text-brand" />
+          {cat && !searching ? cat : 'Base de connaissances'}
+        </div>
+        <span className="text-xs text-muted ml-auto">{articles.length} articles</span>
+      </div>
+      {!cat && !searching && <p className="text-xs text-muted -mt-1">Trouvez votre réponse en quelques secondes, avant d'ouvrir un ticket.</p>}
+
       <div className="flex items-center gap-2 rounded-xl bg-surface px-2">
         <Search size={14} className="text-muted" />
-        <input className="input !py-1.5 border-0 !bg-transparent text-sm" placeholder="Rechercher de l'aide…" value={q} onChange={e => setQ(e.target.value)} />
+        <input className="input !py-1.5 border-0 !bg-transparent text-sm" placeholder="Rechercher par mot-clé…"
+          value={q} onChange={e => { setQ(e.target.value); setOpenId('') }} />
+        {searching && <button className="btn-ghost !p-1 shrink-0" title="Effacer" onClick={() => setQ('')}>✕</button>}
       </div>
-      <div className="space-y-1">
-        {list.slice(0, q ? 20 : 6).map(a => (
-          <div key={a.id} className="rounded-lg border border-line">
-            <button className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-semibold" onClick={() => setOpenId(openId === a.id ? '' : a.id)}>
-              {openId === a.id ? <ChevronDown size={14} className="text-muted" /> : <ChevronRight size={14} className="text-muted" />}
-              <span className="flex-1">{a.title}</span>
-              <span className="chip bg-surface text-muted">{a.category}</span>
+
+      {/* Grille des catégories : le point d'entrée par défaut. */}
+      {!searching && !cat && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {cats.map(c => (
+            <button key={c.id} onClick={() => { setCat(c.id); setOpenId('') }}
+              className="text-left p-3 rounded-xl border border-line hover:border-brand hover:bg-surface transition">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{c.emoji}</span>
+                <span className="font-semibold text-sm flex-1">{c.id}</span>
+                <span className="text-xs text-muted">{counts[c.id]}</span>
+              </div>
+              {c.desc && <p className="text-[11px] text-muted mt-0.5">{c.desc}</p>}
             </button>
-            {openId === a.id && <p className="text-sm text-muted whitespace-pre-wrap px-3 pb-3 pl-9">{a.content}</p>}
-          </div>
-        ))}
-        {list.length === 0 && <p className="text-xs text-muted">Aucun article ne correspond.</p>}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {(searching || cat) && (
+        <div className="space-y-1">
+          {searching && (
+            <p className="text-xs text-muted">
+              {list.length === 0 ? 'Aucun article ne correspond.' : `${list.length} article${list.length > 1 ? 's' : ''} trouvé${list.length > 1 ? 's' : ''}.`}
+            </p>
+          )}
+          {list.map(a => <Article key={a.id} a={a} />)}
+          {searching && list.length === 0 && (
+            <p className="text-xs text-muted">Essayez un autre mot, ou ouvrez un ticket : le support vous répondra.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { stripDangerousKeys } from './security.js'
 import { signOut as signOutSupabase } from './supabaseAuth.js'
 import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests, publishOffersDebounced } from './supabaseSync.js'
 import { ALL_BRICKS, LEGACY_BRICKS } from './nav.jsx'
+import { KB_ARTICLES, KB_CATEGORIES } from './kbContent.js'
 import { configureHubspot, HS_API_BASE } from './hubspot.js'
 import { DEFAULT_STAGE_MAP, pushRdv } from './hubspotSync.js'
 
@@ -648,6 +649,7 @@ function defaultCannedReplies() {
 // Mode d'emploi client de la connexion HubSpot — publié dans la base de connaissances
 // (visible depuis l'onglet Support de chaque client). Identifiant fixe : l'article est
 // ajouté une seule fois, puis reste modifiable par le support.
+export { KB_CATEGORIES }
 export const KB_HUBSPOT_ID = 'kb-hubspot-connect'
 export const KB_HUBSPOT_ARTICLE = {
   id: KB_HUBSPOT_ID,
@@ -735,13 +737,9 @@ au même journal et peut vérifier l'état de votre connexion.`,
 
 function defaultKbArticles() {
   const now = new Date().toISOString()
-  const a = (title, category, content) => ({ id: uid(), title, category, content, createdAt: now, updatedAt: now })
   return [
     { ...KB_HUBSPOT_ARTICLE, createdAt: now, updatedAt: now },
-    a('Réinitialiser mon mot de passe', 'Compte', "Depuis l'écran de connexion, contactez le support via un ticket : un membre de l'équipe vous aidera à réinitialiser votre accès en toute sécurité."),
-    a('Créer et gérer un rendez-vous', 'Prise en main', "Allez dans « Mes Rendez-vous » → « Créer un RDV ». Renseignez l'entreprise, la phase et la provenance. Vous pouvez ajouter plusieurs contacts et créer des sous-RDV de suivi."),
-    a('Comprendre le calcul des primes', 'Primes', "Une prime est figée au passage d'un RDV en SQL, selon le barème (effectif × source). Retrouvez le détail mois par mois dans « Primes & Commissions »."),
-    a('Importer mes contacts', 'Données', "Vos contacts se remplissent automatiquement à partir de vos RDV. L'import/export CSV-Excel est disponible depuis « Mes contacts »."),
+    ...KB_ARTICLES.map(a => ({ ...a, createdAt: now, updatedAt: now })),
   ]
 }
 
@@ -1595,6 +1593,17 @@ function migrate(db) {
     }
     db._autoSeed.kbHubspot = true
   }
+  // Base de connaissances : chaque article porte un id stable et n'est publié qu'une fois.
+  // Un article retouché par le support n'est jamais écrasé, un article supprimé ne
+  // ressuscite pas — c'est la liste des ids déjà publiés qui fait foi, pas leur présence.
+  const kbPublished = new Set(db._autoSeed.kbPublished || [])
+  const kbNow = new Date().toISOString()
+  KB_ARTICLES.forEach(a => {
+    if (kbPublished.has(a.id)) return
+    if (!db.kbArticles.some(x => x.id === a.id)) db.kbArticles.push({ ...a, createdAt: kbNow, updatedAt: kbNow })
+    kbPublished.add(a.id)
+  })
+  db._autoSeed.kbPublished = [...kbPublished]
   // Initialise l'historique des demandes déjà ingérées (demandes actuelles + supprimées) pour
   // ne jamais les ré-ingérer depuis la boîte partagée du site.
   const ingested = new Set(db._ingestedRequestIds || [])

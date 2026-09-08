@@ -1,20 +1,25 @@
 import React, { useState } from 'react'
 import { BookOpen, Plus, Pencil, Trash2, Search } from 'lucide-react'
-import { useStore, uid, fmtDate } from '../store.jsx'
+import { useStore, uid, fmtDate, KB_CATEGORIES } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 
-function emptyArticle() { return { id: uid(), title: '', category: 'Général', content: '' } }
+function emptyArticle() { return { id: uid(), title: '', category: KB_CATEGORIES[0].id, content: '', keywords: '' } }
 
 export default function KnowledgeBase() {
   const store = useStore()
   const articles = store.db.kbArticles || []
   const [q, setQ] = useState('')
+  const [cat, setCat] = useState('')
   const [form, setForm] = useState(null) // {mode, data}
   const [confirmDel, setConfirmDel] = useState(null)
 
   const ql = q.trim().toLowerCase()
-  const list = articles.filter(a => !ql || (a.title + ' ' + a.category + ' ' + a.content).toLowerCase().includes(ql))
+  // La recherche couvre aussi les mots-clés, comme côté client.
+  const list = articles
+    .filter(a => !cat || a.category === cat)
+    .filter(a => !ql || (a.title + ' ' + a.category + ' ' + (a.keywords || '') + ' ' + a.content).toLowerCase().includes(ql))
   const cats = [...new Set(articles.map(a => a.category).filter(Boolean))]
+  const countOf = (c) => articles.filter(a => a.category === c).length
 
   const save = (data) => {
     if (!data.title.trim()) { toast('Donnez un titre à l\'article.'); return }
@@ -29,7 +34,20 @@ export default function KnowledgeBase() {
         <h2 className="text-xl font-extrabold flex items-center gap-2"><BookOpen size={20} className="text-brand" /> Base de connaissances</h2>
         <button className="btn-primary" onClick={() => setForm({ mode: 'create', data: emptyArticle() })}><Plus size={16} /> Nouvel article</button>
       </div>
-      <p className="text-xs text-muted -mt-2">Articles d'aide visibles par les clients dans leur onglet Support. {cats.length > 0 && `Catégories : ${cats.join(', ')}.`}</p>
+      <p className="text-xs text-muted -mt-2">Articles d'aide visibles par les clients dans leur onglet Support, rangés par catégorie et interrogeables par mot-clé.</p>
+
+      {cats.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button className={`chip ${cat === '' ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => setCat('')}>
+            Toutes ({articles.length})
+          </button>
+          {cats.map(c => (
+            <button key={c} className={`chip ${cat === c ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => setCat(c)}>
+              {c} ({countOf(c)})
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="card p-2 flex items-center gap-2">
         <Search size={15} className="text-muted ml-1" />
@@ -73,8 +91,17 @@ function ArticleForm({ initial, categories, onSave, onClose }) {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
         <Field label="Titre" required><input className="input" value={a.title} onChange={e => set('title', e.target.value)} autoFocus /></Field>
-        <Field label="Catégorie"><input className="input" list="kb-cats" value={a.category} onChange={e => set('category', e.target.value)} /><datalist id="kb-cats">{categories.map(c => <option key={c} value={c} />)}</datalist></Field>
+        <Field label="Catégorie">
+          <input className="input" list="kb-cats" value={a.category} onChange={e => set('category', e.target.value)} />
+          <datalist id="kb-cats">
+            {[...new Set([...KB_CATEGORIES.map(c => c.id), ...categories])].map(c => <option key={c} value={c} />)}
+          </datalist>
+        </Field>
       </div>
+      <Field label="Mots-clés de recherche">
+        <input className="input" value={a.keywords || ''} onChange={e => set('keywords', e.target.value)}
+          placeholder="Les mots que le client tapera, même absents du texte : facture, bug, lent…" />
+      </Field>
       <Field label="Contenu"><textarea className="input min-h-[180px]" value={a.content} onChange={e => set('content', e.target.value)} placeholder="Rédigez l'article d'aide…" /></Field>
       <div className="flex justify-end gap-2">
         <button className="btn-ghost" onClick={onClose}>Annuler</button>

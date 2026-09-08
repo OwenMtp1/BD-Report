@@ -201,6 +201,20 @@ async function main() {
   const myTicket = () => dbNow().tickets.find(t => t.category === 'Connexion & authentification')
   if (myTicket()?.priority !== 'normale') throw new Error('Default ticket priority should be "normale"')
   await click(navBtn('Support'))
+  // Base de connaissances : on entre par une catégorie, la recherche couvre les mots-clés.
+  if (!text().includes('Base de connaissances')) throw new Error('Knowledge base missing from Support tab')
+  for (const c of ['Prise en main', 'Primes & commissions', 'Dépannage']) {
+    if (!find('button', c)) throw new Error('KB category missing: ' + c)
+  }
+  await click(find('button', 'Prise en main'))
+  if (!find('button', 'Première connexion : par où commencer')) throw new Error('KB category did not open its articles')
+  const kbSearch = [...container.querySelectorAll('input')].find(i => (i.placeholder || '').startsWith('Rechercher par mot'))
+  if (!kbSearch) throw new Error('KB keyword search missing')
+  // « onboarding » n'apparaît que dans les mots-clés, jamais dans le texte de l'article.
+  await type(kbSearch, 'onboarding')
+  if (!text().includes('Première connexion')) throw new Error('KB search should match on keywords')
+  await type(kbSearch, '')
+
   await click(find('button', 'Connexion & authentification'))
   if (!text().includes('comment évaluez-vous')) throw new Error('CSAT prompt not shown on closed ticket')
   await click(container.querySelector('button[title="4/5"]'))

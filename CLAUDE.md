@@ -42,6 +42,13 @@ npm run dev        # serveur de dev
   `logout()` ferme aussi la session Supabase, sans quoi l'écran de connexion la retrouverait aussitôt. Côté Google Cloud :
   l'URI de redirection est celle de **Supabase** (`https://<ref>.supabase.co/auth/v1/callback`), pas celle du site.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
+- **`src/kbContent.js`** — contenu de la base de connaissances : `KB_CATEGORIES` (11 catégories avec emoji et
+  description) et `KB_ARTICLES` (~45 articles, chacun avec un `id` **stable**, une `category` et des `keywords`
+  élargissant la recherche aux mots que les clients emploient). `migrate` publie les articles **une seule fois**
+  (`db._autoSeed.kbPublished` = liste d'ids) : un article retouché par le support n'est jamais écrasé et un article
+  supprimé ne ressuscite pas. Ajouter un article = une entrée ici, rien d'autre. Côté client (`Support.jsx`,
+  `KbBrowser`) : entrée par catégorie cliquable ou par recherche ; côté staff (`KnowledgeBase.jsx`) : filtre par
+  catégorie, recherche et édition des mots-clés.
 - **`src/pages/ManagerHub.jsx`** — console **« Gestion Manager »** (nav Administration, brick homonyme, perm `manager.view`
   accordée à tout le staff) : réunit ce qu'un manager est seul à voir — Utilisateurs (`Admin` en périmètre d'équipe),
   Organigramme, Pilotage équipe, KPI Entreprise, Intégration HubSpot. Les onglets viennent de `MANAGER_TABS`, filtrés par les
