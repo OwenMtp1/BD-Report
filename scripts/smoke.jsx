@@ -278,6 +278,11 @@ async function main() {
   await click(find('button', "Ouvrir l'espace de formation"))
   if (!text().includes('Quelle casquette voulez-vous prendre')) throw new Error('Training role picker missing')
   if (!text().includes('étape')) throw new Error('Role cards should announce how many steps the tour holds')
+  // Entrer dans une casquette doit ouvrir l'espace directement : aucun code d'accès.
+  await click(find('button', 'Support BD Report'))
+  await act(async () => { await new Promise(r => setTimeout(r, 700)) })
+  if (text().includes('4 chiffres')) throw new Error('Training space must not ask for an access code')
+  if (!text().includes('Console Support') && !text().includes('Formation staff')) throw new Error('Training space did not open the app')
   await click(find('button', 'Quitter'))
   await click(find('button', 'Cas de support'))
   if (!text().includes('Insatisfaction')) throw new Error('Training tickets missing')

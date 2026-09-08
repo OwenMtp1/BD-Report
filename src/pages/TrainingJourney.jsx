@@ -74,7 +74,13 @@ const TOUR = [
 // Monté À L'INTÉRIEUR du provider : applique la navigation demandée par le parcours.
 function TrainingController({ navSeq }) {
   const store = useStore()
-  useEffect(() => { store.setSession(trainingSession()) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // On force l'entrée dans l'espace de formation : si la session ne désignait pas un
+  // espace existant, l'application réclamerait un code d'accès et bloquerait net.
+  useEffect(() => {
+    const s = trainingSession()
+    const exists = store.db.subenvs.some(x => x.id === s.subEnvId)
+    store.setSession(exists ? s : { ...s, subEnvId: store.db.subenvs.find(x => x.envId === s.envId)?.id || null })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!navSeq?.page) return
     const t1 = setTimeout(() => window.dispatchEvent(new CustomEvent('demo-navigate', { detail: navSeq.page })), 60)

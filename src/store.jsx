@@ -1473,7 +1473,7 @@ export function buildTrainingDb(roleKey, realRoles) {
     id: 'tenv-interne', name: 'BD Report — interne', logo: '', pin: '', plan: 'beta', createdBy: 'train-sup',
     subState: 'active', departments: ['Support'], services: [], members: ['train-sup', 'train-mgr', 'train-dev'],
   })
-  db.subenvs.push({ id: 'tsubi-sup', envId: 'tenv-interne', prenom: 'Vous', nom: '(formation)', poste: 'Support', service: '', pin: '0000', photo: '', ownerId: 'train-sup' })
+  db.subenvs.push({ id: 'tsubi-sup', envId: 'tenv-interne', prenom: 'Vous', nom: '(formation)', poste: 'Support', service: '', pin: '', photo: '', ownerId: 'train-sup' })
 
   // --- Entreprises clientes, chacune illustrant une situation différente
   const CLIENTS = [
@@ -1496,7 +1496,7 @@ export function buildTrainingDb(roleKey, realRoles) {
       id: c.id, name: c.name, logo: '', pin: '', plan: 'beta', createdBy: accId,
       subState: 'active', departments: ['Sales'], services: [], members: [accId],
     })
-    db.subenvs.push({ id: `tsub-${i}`, envId: c.id, prenom: c.name.split(' ')[0], nom: 'Contact', poste: 'Manager', service: '', pin: '0000', photo: '', ownerId: accId })
+    db.subenvs.push({ id: `tsub-${i}`, envId: c.id, prenom: c.name.split(' ')[0], nom: 'Contact', poste: 'Manager', service: '', pin: '', photo: '', ownerId: accId })
   })
 
   // --- Tickets à tous les stades : non pris en charge, en cours, clôturés, notés bas.
@@ -1602,6 +1602,15 @@ export function buildTrainingDb(roleKey, realRoles) {
   // L'environnement interne n'est pas un client : il ne doit pas polluer le portefeuille.
   out.clients = (out.clients || []).filter(c => c.envId !== 'tenv-interne')
   out.projects = (out.projects || []).filter(p => p.envId !== 'tenv-interne')
+  // migrate injecte un environnement de test générique : ses espaces appartiennent à des
+  // comptes qui n'existent pas ici, et l'application réclamait leur code d'accès.
+  out.environments = out.environments.filter(e => e.id !== 'env-test')
+  out.accounts = out.accounts.filter(a => !String(a.id).startsWith('test-'))
+  out.subenvs = out.subenvs.filter(x => !String(x.id).startsWith('tsub-julie') && !String(x.id).startsWith('tsub-sarah') && !String(x.id).startsWith('tsub-thomas'))
+  out.subenvs = out.subenvs.filter(x => out.environments.some(e => e.id === x.envId))
+  Object.keys(out.data).forEach(k => { if (!out.subenvs.some(x => x.id === k)) delete out.data[k] })
+  out.channels = (out.channels || []).filter(c => c.envId !== 'env-test')
+  ;(out.environments || []).forEach(e => { e.pin = '' }) // aucun verrou dans un espace d'entraînement
   return out
 }
 
