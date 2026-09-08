@@ -182,6 +182,12 @@ function Login() {
             {mode === 'login' ? t('login.toSignup') : t('login.toSignin')}
           </button>
           <p className="text-center text-[10px] text-gray-400">version {APP_VERSION}</p>
+          {/* Documents contractuels : servis par le site, à la racine au-dessus de /app/. */}
+          <p className="text-center text-[10px] text-gray-400">
+            <a className="hover:underline" href="../cgv.html" target="_blank" rel="noreferrer">CGV</a>
+            <span className="mx-1.5">·</span>
+            <a className="hover:underline" href="../confidentialite.html" target="_blank" rel="noreferrer">Confidentialité</a>
+          </p>
         </div>
       </div>
     </div>

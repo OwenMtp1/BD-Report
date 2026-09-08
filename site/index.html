@@ -674,6 +674,8 @@ footer a{color:var(--violet2);font-weight:700}
     <span>© 2026 <b style="color:#7C9BFF">BD</b> Report — <span data-i18n="foot.tag">Pilotez votre prospection. Encaissez vos primes.</span></span>
     <span style="display:flex;gap:18px;flex-wrap:wrap">
       <a href="securite.html" style="color:#7C9BFF;font-weight:700" data-i18n="nav.security">Sécurité</a>
+      <a href="cgv.html" style="color:#7C9BFF;font-weight:700">CGV</a>
+      <a href="confidentialite.html" style="color:#7C9BFF;font-weight:700">Confidentialité</a>
       <a href="app/" style="color:#7C9BFF;font-weight:700" data-i18n="foot.login">Se connecter →</a>
     </span>
   </div>
@@ -982,7 +984,7 @@ if (oHost) ORBIT.forEach((ic, i) => {
 })
 
 // Marquee de fonctionnalités (contenu dupliqué pour une boucle sans couture).
-const FEATURES_MQ = ['📊 Dashboards', '📅 Rendez-vous', '🧲 Pipeline kanban', '💶 Primes & commissions', '🎯 ICP', '🤝 Pilotage équipe', '💬 Messagerie d\'équipe', '📡 Reporting auto', '🟢 Présence & statuts', '🗂️ Services & organigramme', '📇 Contacts', '🗒️ Notes', '🏢 Fiche entreprise 360°', '🔔 Recommandations', '🌍 FR · EN · ES', '🌙 Mode sombre']
+const FEATURES_MQ = ['📊 Dashboards', '📅 Rendez-vous', '🧲 Pipeline kanban', '💶 Primes & commissions', '🎯 ICP', '🤝 Pilotage équipe', '💬 Messagerie d\'équipe', '📡 Reporting auto', '🟢 Présence & statuts', '🗂️ Services & organigramme', '📇 Contacts', '🗒️ Notes', '🏢 Fiche entreprise 360°', '🔔 Recommandations', '🔐 Connexion Google', '🌍 FR · EN · ES', '🌙 Mode sombre']
 const mq = document.getElementById('marqueeTrack')
 if (mq) mq.innerHTML = [...FEATURES_MQ, ...FEATURES_MQ].map(f => `<span class="chip">${f}</span>`).join('')
 

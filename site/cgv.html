@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+<title>BD Report — Conditions générales de vente et d'utilisation</title>
+<meta name="description" content="Conditions générales de vente et d'utilisation de BD Report : offres et sièges, facturation, durée et résiliation, obligations des parties, propriété intellectuelle, réversibilité des données et responsabilité.">
+<link rel="canonical" href="https://bdreport.js.org/cgv.html">
+<link rel="icon" type="image/svg+xml" href="app/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--brand:#3B5BDB;--cyan:#0EA5E9;--ink:#172033;--night:#10162E;--muted:#647085;--line:#E2E6EE;--surface:#F4F6FA;--mint:#10B981}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:#fff;line-height:1.65}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:920px;margin:0 auto;padding:0 24px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;border:none;transition:.2s}
+.btn-primary{background:linear-gradient(135deg,var(--brand),var(--cyan));color:#fff;box-shadow:0 6px 20px rgba(59,91,219,.35)}
+.btn-primary:hover{transform:translateY(-2px)}
+nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;gap:24px;height:64px;max-width:1080px;margin:0 auto;padding:0 24px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.5px}
+.logo b{color:var(--brand)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.hero{background:linear-gradient(135deg,var(--night),#1E2A52 60%,#14346B);color:#fff;padding:60px 0}
+.hero .chip{display:inline-block;padding:5px 14px;border-radius:999px;font-size:13px;font-weight:700;background:rgba(94,220,255,.15);color:#5EDCFF}
+.hero h1{font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1.15;margin:14px 0 10px}
+.hero p{color:rgba(255,255,255,.72);font-size:17px;max-width:680px}
+section.sec{padding:24px 0}
+.intro{color:var(--muted);font-size:16px;margin:34px 0 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:26px;margin:16px 0}
+.card h2{font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px;margin-bottom:10px;scroll-margin-top:80px}
+.card h3{font-size:16px;font-weight:800;margin:16px 0 6px}
+.card .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:#fff;border:1px solid var(--line);flex:none}
+.card p{color:var(--muted);font-size:15.5px;margin-bottom:8px}
+.card ul,.card ol{color:var(--muted);font-size:15.5px;padding-left:20px;margin:6px 0}
+.card li{margin:4px 0}
+.card strong{color:var(--ink)}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14.5px;background:#fff;border-radius:12px;overflow:hidden}
+th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;color:var(--muted)}
+th{background:#fff;color:var(--ink);font-weight:700}
+.toc{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;margin:16px 0}
+.toc h2{font-size:17px;font-weight:800;margin-bottom:10px}
+.toc ol{columns:2;column-gap:26px;padding-left:20px;font-size:14.5px;color:var(--muted)}
+.toc a:hover{color:var(--brand);text-decoration:underline}
+.note{background:#fff;border:1px dashed var(--brand);border-radius:14px;padding:16px 18px;margin:14px 0;font-size:14.5px;color:var(--muted)}
+.muted{color:var(--muted);font-size:13.5px}
+footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid rgba(255,255,255,.1);padding:28px 0;font-size:13.5px;margin-top:30px}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;max-width:1080px;margin:0 auto;padding:0 24px}
+.foot a{color:#7C9BFF;font-weight:700}
+@media(max-width:640px){.hero h1{font-size:28px}.card{padding:20px}.toc ol{columns:1}.nav-right a:not(.btn){display:none}}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="index.html">
+      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B5BDB"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"/><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"/><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"/><circle cx="45.5" cy="11" r="4" fill="#A7F3D0"/></svg>
+      <span><b>BD</b> Report</span>
+    </a>
+    <div class="nav-right">
+      <a href="index.html#tarifs" style="font-weight:600;font-size:14px;color:var(--muted)">Tarifs</a>
+      <a href="confidentialite.html" style="font-weight:600;font-size:14px;color:var(--muted)">Confidentialité</a>
+      <a class="btn btn-primary" href="app/">Se connecter</a>
+    </div>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="chip">📄 Conditions générales</span>
+    <h1>Conditions générales de vente et d'utilisation</h1>
+    <p>Les règles qui encadrent l'accès à BD Report et son utilisation : ce que nous nous engageons à fournir, ce que vous vous engagez à respecter, et ce qu'il advient de vos données.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="intro">Version 1.0 — en vigueur au 8 septembre 2026. Ces conditions remplacent toute version antérieure. Elles sont rédigées en français, seule langue faisant foi.</p>
+
+  <div class="note">
+    <strong>Mentions légales à compléter par l'Éditeur avant mise en ligne définitive :</strong> dénomination sociale, forme juridique, capital social, adresse du siège, numéro RCS/SIREN, numéro de TVA intracommunautaire, nom du directeur de la publication et coordonnées de l'hébergeur. Les emplacements sont signalés par <em>[à compléter]</em> dans le texte ci-dessous.
+  </div>
+
+  <div class="toc">
+    <h2>Sommaire</h2>
+    <ol>
+      <li><a href="#a1">Objet</a></li>
+      <li><a href="#a2">Définitions</a></li>
+      <li><a href="#a3">Documents contractuels et acceptation</a></li>
+      <li><a href="#a4">Description du service</a></li>
+      <li><a href="#a5">Comptes et accès</a></li>
+      <li><a href="#a6">Offres, sièges et périmètre fonctionnel</a></li>
+      <li><a href="#a7">Conditions financières</a></li>
+      <li><a href="#a8">Durée, renouvellement et résiliation</a></li>
+      <li><a href="#a9">Obligations du Client</a></li>
+      <li><a href="#a10">Obligations de l'Éditeur</a></li>
+      <li><a href="#a11">Support et assistance</a></li>
+      <li><a href="#a12">Propriété intellectuelle</a></li>
+      <li><a href="#a13">Données du Client et réversibilité</a></li>
+      <li><a href="#a14">Données à caractère personnel</a></li>
+      <li><a href="#a15">Confidentialité</a></li>
+      <li><a href="#a16">Intégrations tierces</a></li>
+      <li><a href="#a17">Garanties et responsabilité</a></li>
+      <li><a href="#a18">Suspension et blocage</a></li>
+      <li><a href="#a19">Force majeure</a></li>
+      <li><a href="#a20">Sous-traitance et cession</a></li>
+      <li><a href="#a21">Évolution du service et des conditions</a></li>
+      <li><a href="#a22">Dispositions diverses</a></li>
+      <li><a href="#a23">Droit applicable et litiges</a></li>
+    </ol>
+  </div>
+
+  <section class="sec">
+
+    <div class="card">
+      <h2 id="a1"><span class="ic">1</span> Objet</h2>
+      <p>Les présentes conditions générales de vente et d'utilisation (les « <strong>Conditions</strong> ») définissent les modalités selon lesquelles <em>[à compléter : dénomination sociale]</em> (l'« <strong>Éditeur</strong> ») met à disposition de ses clients professionnels la solution logicielle <strong>BD Report</strong> (le « <strong>Service</strong> »), accessible en ligne, ainsi que les prestations qui y sont associées.</p>
+      <p>Le Service s'adresse exclusivement à des <strong>professionnels</strong> agissant dans le cadre de leur activité. Il n'est pas destiné aux consommateurs au sens du code de la consommation.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a2"><span class="ic">2</span> Définitions</h2>
+      <ul>
+        <li><strong>Client</strong> : la personne morale qui souscrit une Offre et pour le compte de laquelle le Service est utilisé.</li>
+        <li><strong>Utilisateur</strong> : toute personne physique disposant d'un accès nominatif au Service, créé par le Client ou par l'Éditeur à sa demande.</li>
+        <li><strong>Environnement</strong> : l'espace de travail isolé attribué au Client, contenant ses données et ses paramètres.</li>
+        <li><strong>Espace</strong> : subdivision d'un Environnement attribuée à un Utilisateur ou à une équipe.</li>
+        <li><strong>Offre</strong> : l'ensemble des fonctionnalités, du nombre de sièges et du niveau de service souscrits.</li>
+        <li><strong>Siège</strong> : un accès nominatif décompté au titre de l'Offre.</li>
+        <li><strong>Données du Client</strong> : l'ensemble des contenus saisis, importés ou générés par le Client et ses Utilisateurs dans le Service.</li>
+        <li><strong>Contrat</strong> : l'ensemble formé par les Conditions, le bon de commande ou la souscription en ligne, et leurs annexes.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2 id="a3"><span class="ic">3</span> Documents contractuels et acceptation</h2>
+      <p>Le Contrat est formé par les documents suivants, par ordre de préséance décroissant en cas de contradiction : (i) le bon de commande ou le récapitulatif de souscription accepté par le Client, (ii) les présentes Conditions, (iii) la politique de confidentialité, (iv) la documentation du Service.</p>
+      <p>La souscription d'une Offre, la création d'un compte ou l'utilisation du Service emporte <strong>acceptation pleine et entière</strong> des Conditions par le Client, qui déclare disposer de la capacité et des pouvoirs nécessaires pour l'engager.</p>
+      <p>Toute condition générale d'achat du Client est expressément écartée, sauf accord écrit de l'Éditeur.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a4"><span class="ic">4</span> Description du service</h2>
+      <p>BD Report est un espace de travail commercial destiné aux équipes de prospection et de vente. Il permet notamment, selon l'Offre souscrite, de suivre des rendez-vous et un pipeline commercial, de gérer contacts, tâches et notes, de calculer des primes et commissions, de piloter une équipe, d'échanger dans des canaux de discussion et d'accéder au support de l'Éditeur.</p>
+      <p>Le Service est fourni en mode <strong>logiciel en tant que service</strong> : il est accessible via un navigateur récent et une connexion internet, dont le Client fait son affaire. Aucune installation n'est requise, sous réserve des applications de bureau éventuellement mises à disposition.</p>
+      <p>Le Service évolue de façon continue. L'Éditeur peut ajouter, modifier ou retirer des fonctionnalités, sous réserve de ne pas dégrader substantiellement les fonctionnalités essentielles de l'Offre souscrite pendant la période en cours.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a5"><span class="ic">5</span> Comptes et accès</h2>
+      <p>L'accès au Service suppose la création d'un compte nominatif. Les accès sont <strong>strictement personnels</strong> : leur partage entre plusieurs personnes physiques est interdit.</p>
+      <p>Le Client est responsable de la confidentialité des identifiants de ses Utilisateurs et de toute action réalisée depuis leurs comptes. Il informe l'Éditeur sans délai de toute utilisation non autorisée dont il aurait connaissance.</p>
+      <p>Le Service propose une authentification par identifiant et mot de passe, ainsi qu'une <strong>connexion via un compte Google</strong>. Cette dernière rattache une identité Google à un compte existant : elle ne crée jamais de compte de sa propre initiative, les accès demeurant délivrés par le Client ou l'Éditeur.</p>
+      <p>Le Client désigne un ou plusieurs administrateurs chargés de créer, modifier et supprimer les accès de ses Utilisateurs, et de définir leurs droits.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a6"><span class="ic">6</span> Offres, sièges et périmètre fonctionnel</h2>
+      <p>Les Offres, leur contenu fonctionnel, leur nombre de sièges et leurs tarifs sont présentés sur le site de l'Éditeur et dans le Service. Chaque Offre ouvre l'accès à un ensemble déterminé de fonctionnalités ; celles qui n'y figurent pas ne sont pas accessibles.</p>
+      <p>Le nombre d'Utilisateurs actifs ne peut excéder le nombre de sièges souscrits. Le Client peut demander à tout moment l'ajout de sièges, facturés au prorata de la période en cours. La réduction du nombre de sièges prend effet à l'échéance suivante.</p>
+      <p>L'Éditeur peut faire évoluer la composition des Offres pour les souscriptions futures. Les évolutions défavorables ne s'appliquent au Client qu'au renouvellement, et après information préalable.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a7"><span class="ic">7</span> Conditions financières</h2>
+      <h3>7.1 Prix</h3>
+      <p>Les prix sont indiqués en euros et hors taxes. Ils s'entendent hors frais bancaires et hors prestations complémentaires éventuelles (paramétrage, reprise de données, formation), qui font l'objet d'un devis distinct.</p>
+      <h3>7.2 Facturation et paiement</h3>
+      <p>Sauf stipulation contraire du bon de commande, l'abonnement est facturé <strong>à l'avance</strong>, par période. Les factures sont payables à <strong>trente (30) jours</strong> date de facture.</p>
+      <h3>7.3 Retard de paiement</h3>
+      <p>Toute somme non réglée à l'échéance porte de plein droit, sans mise en demeure préalable, intérêt au taux d'intérêt appliqué par la Banque centrale européenne à son opération de refinancement la plus récente, majoré de dix (10) points de pourcentage, ainsi qu'une indemnité forfaitaire de recouvrement de <strong>quarante (40) euros</strong>, sans préjudice d'une indemnisation complémentaire sur justificatifs.</p>
+      <h3>7.4 Révision des prix</h3>
+      <p>L'Éditeur peut réviser ses tarifs pour la période suivante, moyennant un préavis écrit de <strong>trois (3) mois</strong> avant l'échéance. À défaut d'acceptation, le Client peut résilier à l'échéance, sans indemnité, en le notifiant avant celle-ci.</p>
+      <h3>7.5 Absence de remboursement</h3>
+      <p>Les périodes entamées sont dues en intégralité. Aucun remboursement n'est effectué au titre d'une résiliation en cours de période, sauf manquement de l'Éditeur dûment constaté.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a8"><span class="ic">8</span> Durée, renouvellement et résiliation</h2>
+      <p>Le Contrat prend effet à la date d'activation des accès, pour la durée indiquée lors de la souscription. Il se <strong>renouvelle tacitement</strong> par périodes de même durée, sauf dénonciation par l'une des parties, notifiée au plus tard <strong>trente (30) jours</strong> avant l'échéance.</p>
+      <p>La résiliation peut être demandée depuis le Service, à la rubrique de gestion des environnements. Elle ouvre une demande auprès du support et place l'environnement concerné en <strong>lecture seule</strong> : les données restent consultables et exportables, mais ne peuvent plus être modifiées.</p>
+      <p>Chaque partie peut résilier le Contrat de plein droit en cas de manquement grave de l'autre partie non réparé dans les <strong>trente (30) jours</strong> suivant une mise en demeure restée infructueuse, sans préjudice de dommages et intérêts.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a9"><span class="ic">9</span> Obligations du Client</h2>
+      <p>Le Client s'engage à :</p>
+      <ul>
+        <li>utiliser le Service conformément au Contrat, à la réglementation applicable et aux droits des tiers ;</li>
+        <li>fournir des informations exactes lors de la souscription et les tenir à jour ;</li>
+        <li>ne pas tenter d'accéder à des environnements ou données qui ne lui sont pas destinés, ni de contourner les mécanismes de contrôle d'accès ;</li>
+        <li>ne pas décompiler, désassembler ou reproduire le Service, hors des cas légalement autorisés ;</li>
+        <li>ne pas utiliser le Service pour diffuser des contenus illicites, diffamatoires, ou constituant un traitement de données non conforme ;</li>
+        <li>ne pas perturber le fonctionnement du Service, notamment par des sollicitations automatisées excessives ;</li>
+        <li>s'assurer de la licéité des données qu'il importe, en particulier des données de prospection commerciale, et de la bonne information des personnes concernées.</li>
+      </ul>
+      <p>Le Client demeure <strong>seul responsable du contenu</strong> des Données du Client, de leur exactitude et de leur licéité.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a10"><span class="ic">10</span> Obligations de l'Éditeur</h2>
+      <p>L'Éditeur s'engage, au titre d'une <strong>obligation de moyens</strong>, à fournir le Service avec le soin et la diligence d'un professionnel, à maintenir les fonctionnalités essentielles de l'Offre souscrite, et à mettre en œuvre des mesures techniques et organisationnelles appropriées pour protéger les Données du Client.</p>
+      <h3>10.1 Disponibilité</h3>
+      <p>L'Éditeur met en œuvre les moyens raisonnables pour assurer la disponibilité du Service. Il ne garantit toutefois pas un fonctionnement ininterrompu ou exempt d'erreurs, le Service reposant sur des réseaux et des infrastructures tierces.</p>
+      <h3>10.2 Maintenance</h3>
+      <p>Les opérations de maintenance planifiée sont réalisées, dans la mesure du possible, en dehors des heures ouvrées et annoncées à l'avance. Les interventions correctives urgentes peuvent intervenir sans préavis.</p>
+      <h3>10.3 Sauvegardes</h3>
+      <p>L'Éditeur procède à des sauvegardes régulières. Ces sauvegardes visent la continuité du Service et ne dispensent pas le Client de réaliser ses propres exports, notamment avant toute opération sensible.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a11"><span class="ic">11</span> Support et assistance</h2>
+      <p>Le support est accessible depuis le Service, par ouverture d'un ticket. Les délais de première réponse visés dépendent de la priorité déclarée et sont indiqués dans le Service. Ces délais constituent des objectifs et non des garanties contractuelles, sauf engagement écrit distinct.</p>
+      <p>Le support couvre l'utilisation du Service et le traitement des anomalies. Il ne couvre pas la formation approfondie, le développement spécifique, ni l'assistance sur des outils tiers.</p>
+      <p>Une base de connaissances est mise à disposition dans le Service et est enrichie régulièrement.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a12"><span class="ic">12</span> Propriété intellectuelle</h2>
+      <p>Le Service, ses composants logiciels, sa documentation, ses marques, logos et éléments graphiques demeurent la <strong>propriété exclusive de l'Éditeur</strong> ou de ses concédants. Le Contrat n'emporte aucune cession de droits de propriété intellectuelle.</p>
+      <p>L'Éditeur concède au Client, pour la durée du Contrat, un droit d'utilisation <strong>personnel, non exclusif et non transférable</strong> du Service, limité aux besoins internes du Client et au nombre de sièges souscrits.</p>
+      <p>Le Client s'interdit toute reproduction, adaptation, traduction ou mise à disposition de tout ou partie du Service à un tiers.</p>
+      <p>Le Client autorise l'Éditeur à mentionner sa dénomination et son logo à titre de référence commerciale ; il peut s'y opposer à tout moment par simple demande écrite.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a13"><span class="ic">13</span> Données du Client et réversibilité</h2>
+      <p>Les Données du Client demeurent la <strong>propriété exclusive du Client</strong>. L'Éditeur ne les exploite que pour fournir le Service, à l'exclusion de toute revente, cession ou exploitation à des fins commerciales ou publicitaires.</p>
+      <p>Le Client peut exporter ses données à tout moment depuis le Service, dans un format structuré et couramment utilisé.</p>
+      <p>À l'expiration du Contrat, quelle qu'en soit la cause, le Client dispose d'un délai de <strong>trente (30) jours</strong> pour procéder à ses exports. Passé ce délai, l'Éditeur procède à la suppression des Données du Client de ses systèmes actifs, puis de ses sauvegardes selon leur cycle de rotation, sauf obligation légale de conservation.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a14"><span class="ic">14</span> Données à caractère personnel</h2>
+      <p>Dans le cadre du Service, le Client agit en qualité de <strong>responsable de traitement</strong> pour les données qu'il y héberge, et l'Éditeur en qualité de <strong>sous-traitant</strong> au sens du règlement (UE) 2016/679.</p>
+      <p>Les catégories de données, finalités, durées de conservation, sous-traitants ultérieurs et mesures de sécurité sont décrits dans la <a href="confidentialite.html" style="color:var(--brand);font-weight:700">politique de confidentialité</a>, qui fait partie intégrante du Contrat et vaut accord de sous-traitance.</p>
+      <p>L'Éditeur ne traite les données que sur instruction documentée du Client, veille à la confidentialité des personnes autorisées à les traiter, et assiste le Client dans la réponse aux demandes d'exercice de droits et en cas de violation de données.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a15"><span class="ic">15</span> Confidentialité</h2>
+      <p>Chaque partie s'engage à garder confidentielles les informations de l'autre partie identifiées comme telles ou dont le caractère confidentiel résulte de leur nature, et à ne les divulguer qu'aux personnes ayant à en connaître.</p>
+      <p>Cet engagement demeure en vigueur pendant toute la durée du Contrat et pendant <strong>trois (3) ans</strong> après son terme. Il ne s'applique pas aux informations publiques, déjà connues sans obligation de confidentialité, ou dont la divulgation est légalement requise.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a16"><span class="ic">16</span> Intégrations tierces</h2>
+      <p>Le Service permet de se connecter à des outils tiers, notamment un CRM externe. Ces connexions sont activées à l'initiative du Client, au moyen d'une autorisation qu'il délivre lui-même et qu'il peut révoquer à tout moment.</p>
+      <p>Les services tiers sont régis par leurs propres conditions, auxquelles l'Éditeur est étranger. L'Éditeur ne garantit ni leur disponibilité, ni la pérennité de leurs interfaces, et ne saurait être tenu responsable d'une interruption, d'une modification ou d'une suppression décidée par leur éditeur.</p>
+      <p>Les données transmises à un service tiers sortent du périmètre du Service et relèvent de la responsabilité du Client.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a17"><span class="ic">17</span> Garanties et responsabilité</h2>
+      <p>L'Éditeur garantit disposer des droits nécessaires pour concéder l'usage du Service. Il garantit le Client contre toute action fondée sur une atteinte aux droits de propriété intellectuelle d'un tiers du fait du Service, sous réserve d'en être informé sans délai et d'être associé à la défense.</p>
+      <p>La responsabilité de l'Éditeur ne peut être engagée qu'en cas de faute prouvée et pour les <strong>dommages directs</strong>. Sont exclus les dommages indirects, notamment la perte de chiffre d'affaires, de clientèle, de bénéfice, d'image ou de données dont le Client n'aurait pas assuré l'export.</p>
+      <p>En tout état de cause, la responsabilité cumulée de l'Éditeur au titre du Contrat est <strong>limitée au montant hors taxes effectivement payé par le Client au cours des douze (12) mois précédant le fait générateur</strong>.</p>
+      <p>Ces limitations ne s'appliquent pas en cas de dol, de faute lourde, ni dans les cas où la loi les écarte.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a18"><span class="ic">18</span> Suspension et blocage</h2>
+      <p>L'Éditeur peut suspendre l'accès au Service, en tout ou partie, après information du Client lorsque les circonstances le permettent, en cas de : défaut de paiement persistant, atteinte à la sécurité ou à l'intégrité du Service, usage non conforme au Contrat, ou injonction d'une autorité compétente.</p>
+      <p>La suspension ne suspend pas les obligations de paiement du Client. L'accès est rétabli dès la cessation de la cause l'ayant justifiée.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a19"><span class="ic">19</span> Force majeure</h2>
+      <p>Aucune partie ne peut être tenue responsable d'un manquement résultant d'un cas de force majeure au sens de l'article 1218 du code civil, notamment : catastrophe naturelle, incendie, épidémie, conflit armé, acte de piratage d'une ampleur exceptionnelle, défaillance généralisée des réseaux de télécommunication ou des fournisseurs d'infrastructure.</p>
+      <p>Si l'empêchement se prolonge au-delà de <strong>soixante (60) jours</strong>, chaque partie peut résilier le Contrat par notification écrite, sans indemnité.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a20"><span class="ic">20</span> Sous-traitance et cession</h2>
+      <p>L'Éditeur peut recourir à des prestataires pour l'hébergement et le fonctionnement du Service. Il demeure responsable de leurs prestations à l'égard du Client. La liste des sous-traitants participant au traitement de données personnelles figure dans la politique de confidentialité.</p>
+      <p>Le Contrat ne peut être cédé par le Client sans accord écrit préalable de l'Éditeur. L'Éditeur peut le céder dans le cadre d'une opération de restructuration, en informant le Client.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a21"><span class="ic">21</span> Évolution du service et des conditions</h2>
+      <p>L'Éditeur peut modifier les présentes Conditions. Toute modification substantielle est portée à la connaissance du Client par tout moyen utile, au moins <strong>trente (30) jours</strong> avant son entrée en vigueur.</p>
+      <p>À défaut d'acceptation, le Client peut résilier le Contrat avant cette date. La poursuite de l'utilisation du Service au-delà vaut acceptation.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="a22"><span class="ic">22</span> Dispositions diverses</h2>
+      <ul>
+        <li><strong>Nullité partielle</strong> : si une stipulation est jugée nulle, les autres demeurent applicables et la stipulation concernée est remplacée par une clause d'effet économique équivalent.</li>
+        <li><strong>Non-renonciation</strong> : le fait de ne pas se prévaloir d'un manquement ne vaut pas renonciation à s'en prévaloir ultérieurement.</li>
+        <li><strong>Indépendance</strong> : les parties sont des contractants indépendants ; le Contrat ne crée ni société, ni mandat, ni relation de travail.</li>
+        <li><strong>Preuve</strong> : les journaux techniques et enregistrements de l'Éditeur sont admis comme moyens de preuve entre les parties.</li>
+        <li><strong>Intégralité</strong> : le Contrat exprime l'intégralité de l'accord des parties sur son objet.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2 id="a23"><span class="ic">23</span> Droit applicable et litiges</h2>
+      <p>Le Contrat est soumis au <strong>droit français</strong>.</p>
+      <p>En cas de différend, les parties s'efforcent de trouver une solution amiable dans un délai de trente (30) jours à compter de la notification écrite du différend.</p>
+      <p>À défaut d'accord, le litige sera porté devant le <strong>tribunal de commerce compétent dans le ressort du siège social de l'Éditeur</strong>, y compris en cas de pluralité de défendeurs, d'appel en garantie ou de procédure d'urgence.</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">✉️</span> Contact</h2>
+      <p>Pour toute question relative aux présentes Conditions : <strong id="cgvEmail">contact@bdreport.app</strong>.</p>
+      <p class="muted">Éditeur : <em>[à compléter : dénomination, forme juridique, capital, siège, RCS, TVA]</em> — Directeur de la publication : <em>[à compléter]</em> — Hébergeur du site : <em>[à compléter : nom et adresse]</em>.</p>
+    </div>
+
+  </section>
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2026 <b style="color:#7C9BFF">BD</b> Report — Pilotez votre prospection. Encaissez vos primes.</span>
+    <span style="display:flex;gap:18px;flex-wrap:wrap">
+      <a href="confidentialite.html">Confidentialité</a>
+      <a href="securite.html">Sécurité</a>
+      <a href="index.html">← Retour au site</a>
+    </span>
+  </div>
+</footer>
+</body>
+</html>
