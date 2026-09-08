@@ -340,7 +340,10 @@ function SubEnvPicker() {
           // Sans droit d'encadrement, on n'ouvre que son propre espace : le code PIN
           // protège d'un regard, il n'a jamais eu vocation à autoriser un collègue à
           // entrer dans les données d'un autre.
-          const mine = s.ownerId === store.account?.id
+          // Un espace sans propriétaire enregistré (créé avant que l'information ne soit
+          // conservée) reste ouvrable : mieux vaut ne rien verrouiller que d'enfermer
+          // quelqu'un hors de son propre espace.
+          const mine = !s.ownerId || s.ownerId === store.account?.id
           const open = mine || canOpenOthers
           return (
             <button key={s.id} disabled={!open}
