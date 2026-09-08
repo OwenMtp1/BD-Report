@@ -1447,7 +1447,10 @@ export function trainingSession() {
   return { accountId: 'train-sup', envId: 'tenv-interne', subEnvId: 'tsubi-sup', welcomed: true }
 }
 
-export function buildTrainingDb() {
+// `roleKey` : la casquette staff que l'on vient incarner. `realRoles` : les rôles tels
+// qu'ils sont configurés en production, pour que la formation reflète les permissions
+// réellement en vigueur et non des valeurs par défaut.
+export function buildTrainingDb(roleKey, realRoles) {
   const db = {
     accounts: [], environments: [], subenvs: [], data: {},
     supportRequests: [], tickets: [], clients: [], projects: [],
@@ -1462,7 +1465,7 @@ export function buildTrainingDb() {
     createdAt: iso(-24 * 400), presence: 'online',
   })
   db.accounts.push(
-    mkStaff('train-sup', 'VousSupport', 'Support BD Report', null),
+    mkStaff('train-sup', 'VousSupport', roleKey || 'Support BD Report', null),
     mkStaff('train-mgr', 'CamilleSupport', 'Support BD Report', null),
     mkStaff('train-dev', 'NoahDev', 'Développeur', 'train-mgr'),
   )
@@ -1575,6 +1578,7 @@ export function buildTrainingDb() {
     { id: 'tpr-6', accountId: 'tacc-4', accountName: 'Aurea', envId: 'tenv-aurea', milestone: 60, score: 5, comment: '', ts: iso(-90) },
   ]
 
+  if (Array.isArray(realRoles) && realRoles.length) db.staffRoles = realRoles.map(r => ({ ...r }))
   const out = migrate(db)
   // migrate crée un client et un projet par environnement : on leur donne des situations
   // contrastées, sans quoi le kanban et le dashboard seraient uniformes et sans intérêt.
@@ -2071,8 +2075,10 @@ function load() {
   return migrate(buildSeedDb())
 }
 
-export function StoreProvider({ children, demo = false, dataset = 'sales' }) {
-  const [db, setDbState] = useState(() => demo ? (dataset === 'training' ? buildTrainingDb() : buildDemoDb()) : load())
+export function StoreProvider({ children, demo = false, dataset = 'sales', datasetRole, datasetRoles }) {
+  const [db, setDbState] = useState(() => demo
+    ? (dataset === 'training' ? buildTrainingDb(datasetRole, datasetRoles) : buildDemoDb())
+    : load())
   const [session, setSession] = useState(() => {
     // Mode démo : session isolée en mémoire, jamais lue ni écrite dans sessionStorage.
     if (demo) return dataset === 'training' ? trainingSession() : demoSession('employe')

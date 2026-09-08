@@ -3,7 +3,7 @@ import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
-  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Trophy, ShieldCheck, Star,
+  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Trophy, ShieldCheck, Star, GraduationCap,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER } from './store.jsx'
 import { NAV_GROUPS, NAV } from './nav.jsx'
@@ -29,6 +29,7 @@ import Settings from './pages/Settings.jsx'
 import OrgChart from './pages/OrgChart.jsx'
 import SupportHub from './pages/SupportHub.jsx'
 import ManagerHub from './pages/ManagerHub.jsx'
+import TrainingJourney from './pages/TrainingJourney.jsx'
 import Conversations from './pages/Conversations.jsx'
 import DataQuality from './pages/DataQuality.jsx'
 import Classement from './pages/Classement.jsx'
@@ -70,6 +71,7 @@ function Login() {
   const [remember, setRemember] = useState(false)
   const [savePw, setSavePw] = useState(!!saved)
   const [gBusy, setGBusy] = useState(false)
+  const [training, setTraining] = useState(false)
 
   // Retour de Google : Supabase a posé la session, on rattache l'identité à un compte
   // BD Report par son e-mail. Une adresse sans compte est refusée et la session
@@ -181,6 +183,10 @@ function Login() {
           <button className="w-full text-xs text-gray-500 hover:underline" onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setErr('') }}>
             {mode === 'login' ? t('login.toSignup') : t('login.toSignin')}
           </button>
+          <button className="w-full text-xs text-gray-500 hover:underline flex items-center justify-center gap-1.5"
+            onClick={() => setTraining(true)}>
+            <GraduationCap size={13} /> Espace de formation — accès libre
+          </button>
           <p className="text-center text-[10px] text-gray-400">version {APP_VERSION}</p>
           {/* Documents contractuels : servis par le site, à la racine au-dessus de /app/. */}
           <p className="text-center text-[10px] text-gray-400">
@@ -190,6 +196,9 @@ function Login() {
           </p>
         </div>
       </div>
+      {/* Environnement isolé : aucune session n'est ouverte, aucune donnée réelle n'est
+          chargée. C'est ce qui permet d'y entrer sans être authentifié. */}
+      {training && <TrainingJourney onClose={() => setTraining(false)} />}
     </div>
   )
 }

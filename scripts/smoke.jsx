@@ -274,6 +274,11 @@ async function main() {
   await click(hubTab('Formation staff'))
   if (!text().includes('Rien n\'est enregistré')) throw new Error('Staff training space did not render')
   if (!find('button', "Ouvrir l'espace de formation")) throw new Error('Isolated training environment launcher missing')
+  // L'entrée passe par le choix d'une casquette staff, qui règle le parcours.
+  await click(find('button', "Ouvrir l'espace de formation"))
+  if (!text().includes('Quelle casquette voulez-vous prendre')) throw new Error('Training role picker missing')
+  if (!text().includes('étape')) throw new Error('Role cards should announce how many steps the tour holds')
+  await click(find('button', 'Quitter'))
   await click(find('button', 'Cas de support'))
   if (!text().includes('Insatisfaction')) throw new Error('Training tickets missing')
   await click(find('button', 'Discussion de projet'))

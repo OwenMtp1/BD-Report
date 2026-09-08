@@ -56,8 +56,13 @@ npm run dev        # serveur de dev
   (isolé, sans persistance) alimenté par **`buildTrainingDb()`** : équipe support, 7 entreprises clientes aux
   situations contrastées, 12 tickets à tous les stades (dont un urgent non pris), 3 demandes entrantes, notes de
   satisfaction produit dont deux basses (client à risque), projets à paramétrer et un projet clôturé avec motif.
-  `trainingSession()` ouvre la session support. **Parcours guidé** de 13 étapes : `demo-navigate` change d'onglet,
-  `hub-tab` cible l'onglet interne de `SupportHub`.
+  `trainingSession()` ouvre la session support. **Entrée par le choix d'une casquette staff** : les rôles réels
+  (`store.staffRoles()` du provider PARENT) sont passés à la db de formation (`datasetRole`/`datasetRoles`), si bien
+  que l'espace reflète les droits en vigueur. **Parcours guidé** dont chaque étape porte la `perm` qu'elle suppose —
+  les étapes hors de portée du rôle sont retirées, guider vers un écran interdit apprendrait l'inverse du bon geste.
+  `demo-navigate` change d'onglet, `hub-tab` cible l'onglet interne de `SupportHub`.
+  **Accès libre** : un lien de l'écran de connexion l'ouvre sans authentification (environnement isolé, données
+  fictives) — au prix de rendre la structure de la console support visible à tout visiteur.
 - **`src/trainingContent.js` + `src/pages/StaffTraining.jsx`** — onglet **« Formation staff »** de `SupportHub`
   (perm `demo.access`) : espace d'entraînement à cas fictifs — 10 projets (dont plusieurs « à paramétrer » avec leur
   liste de tâches), 12 cas de support couvrant tous les sujets avec la leçon à retenir, et une discussion de projet
