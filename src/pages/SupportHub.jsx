@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield } from 'lucide-react'
-import { useStore, slaInfo } from '../store.jsx'
+import { useStore, slaInfo, ticketHasUnread } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
 import Clients from './Clients.jsx'
@@ -56,6 +56,10 @@ export default function SupportHub() {
     { label: 'Projets', value: (db.projects || []).length, tab: 'projects', color: 'text-amber-600' },
   ]
 
+  // Pastilles par onglet : la notification globale ne disait pas d'où elle venait.
+  const unreadTickets = openTickets.filter(t => ticketHasUnread(t, 'support')).length
+  const badgeOf = (id) => (id === 'tickets' ? unreadTickets : id === 'requests' ? newReq : 0)
+
   const Current = tabs.find(t => t.id === tab)?.El || tabs[0]?.El || Requests
 
   return (
@@ -80,6 +84,11 @@ export default function SupportHub() {
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-2.5 py-2 text-[13px] font-semibold rounded-t-lg whitespace-nowrap border-b-2 -mb-px ${tab === t.id ? 'border-brand text-brand' : 'border-transparent text-muted hover:bg-surface'}`}>
             <t.icon size={15} /> {t.label}
+            {badgeOf(t.id) > 0 && (
+              <span className="ml-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold flex items-center justify-center">
+                {badgeOf(t.id)}
+              </span>
+            )}
           </button>
         ))}
       </div>

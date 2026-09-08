@@ -34,6 +34,10 @@ export default function TicketChat({ ticket, role }) {
   const otherSide = role === 'user' ? 'support' : 'user'
 
   useEffect(() => { endRef.current?.scrollIntoView?.({ behavior: 'smooth' }) }, [ticket.messages.length])
+  // L'accusé de réception automatique n'a d'utilité que tant que personne n'a répondu :
+  // dès qu'un agent intervient, il ne fait plus qu'éloigner la vraie réponse.
+  const answered = ticket.messages.some(m => m.from === 'support')
+  const visibleMessages = answered ? ticket.messages.filter(m => m.from !== 'bot') : ticket.messages
 
   // La conversation est ouverte : on marque les nouveaux messages comme lus pour effacer la pastille rouge.
   useEffect(() => {
@@ -78,7 +82,7 @@ export default function TicketChat({ ticket, role }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto space-y-3 p-1">
-        {ticket.messages.map(m => {
+        {visibleMessages.map(m => {
           const mine = m.from === mySide
           const senderLabel = m.from === 'bot' ? 'BD Report'
             : m.from === 'support' ? `${m.authorName} · BD Report`

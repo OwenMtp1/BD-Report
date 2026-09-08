@@ -188,7 +188,8 @@ async function main() {
   if (psClient()?.status !== 'attente') throw new Error('Client not set to "en attente" on ticket open: ' + psClient()?.status)
   // Console Support unifiée : navBtn ouvre le hub, hubTab change d'onglet interne.
   const navBtn = (label) => [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
-  const hubTab = (label) => [...container.querySelectorAll('main button')].find(b => b.textContent.trim() === label)
+  // .replace(/\d+$/,'') : les onglets portent une pastille de non-lus, comme la barre de nav.
+  const hubTab = (label) => [...container.querySelectorAll('main button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
   await click(navBtn('Équipe support'))
   if (!text().includes('Console Support')) throw new Error('Support hub did not render')
   await click(hubTab('Tickets'))

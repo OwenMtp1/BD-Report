@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { ShieldCheck, KeyRound, Plus, Trash2, Crown, Lock, Users, Search, Pencil, Check, X, Info, MoreHorizontal, Ban, Play } from 'lucide-react'
-import { useStore, STAFF_PERMISSION_GROUPS, STAFF_PERMISSION_IDS, ROLES, ROLE_COLORS, roleColor } from '../store.jsx'
+import { useStore, STAFF_PERMISSION_GROUPS, STAFF_PERMISSION_IDS, ROLES, ROLE_COLORS, roleColor, isClientRole } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 
 const ROLE_TINT = {
@@ -177,7 +177,8 @@ export default function StaffPermissions() {
     )
   }
 
-  const roles = store.staffRoles().slice().sort((a, b) => b.rank - a.rank)
+  // Manager et Membre sont des rôles clients : ils n'apparaissent pas ici.
+  const roles = store.staffRoles().filter(r => !isClientRole(r.roleKey || r.name)).slice().sort((a, b) => b.rank - a.rank)
   const memberCount = (key) => store.db.accounts.filter(a => a.role === key).length
 
   const create = () => {

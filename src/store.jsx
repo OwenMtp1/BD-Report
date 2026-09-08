@@ -321,6 +321,10 @@ export function hasTeamAccess(account, offers) {
 }
 
 export const ROLES = ['Fondateur', 'Support BD Report', 'Administrateur', 'Manager', 'Développeur', 'Membre']
+// Rôles portés par les clients : ils existent dans les environnements mais n'appartiennent
+// pas à l'équipe BD Report, et n'ont donc rien à faire dans la matrice des droits staff.
+export const CLIENT_ROLE_KEYS = ['Manager', 'Membre']
+export const isClientRole = (key) => CLIENT_ROLE_KEYS.includes(key)
 
 // Rôles de l'équipe support BD Report : accès au back-office support (Nouvelles demandes,
 // Tickets Techniques). « Support BD Report » a exactement les mêmes permissions que « Fondateur ».
