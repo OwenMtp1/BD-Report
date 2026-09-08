@@ -66,23 +66,34 @@ function Login() {
   // Retour de Google : Supabase a posé la session, on rattache l'identité à un compte
   // BD Report par son e-mail. Une adresse sans compte est refusée et la session
   // refermée — les accès restent délivrés par un manager.
+  // L'effet est rejoué quand les comptes changent : au premier rendu ils viennent du
+  // local (voire d'un état vierge en navigation privée) et n'arrivent de Supabase
+  // qu'ensuite. Refuser tout de suite écarterait un utilisateur légitime au seul
+  // motif que la synchronisation n'a pas fini.
+  const accountEmails = (store.db?.accounts || []).map(a => a.email).join(',')
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false, grace = null
     ;(async () => {
       try {
         const user = await getCurrentUser()
         if (cancelled || !user?.email) return
         const r = store.loginWithGoogle(user.email)
-        if (r?.error) {
+        if (!r?.error) return
+        if (r.error === 'disabled') {
           await signOutSupabase()
-          setErr(r.error === 'disabled'
-            ? 'Accès désactivé. Contactez le support BD Report.'
-            : t('login.googleUnknown'))
+          setErr('Accès désactivé. Contactez le support BD Report.')
+          return
         }
+        // Compte introuvable : on laisse le temps aux comptes distants d'arriver.
+        grace = setTimeout(async () => {
+          if (cancelled) return
+          await signOutSupabase()
+          setErr(t('login.googleUnknown'))
+        }, 6000)
       } catch (e) { /* Supabase absent : seule la connexion classique reste offerte */ }
     })()
-    return () => { cancelled = true }
-  }, [])
+    return () => { cancelled = true; if (grace) clearTimeout(grace) }
+  }, [accountEmails])
 
   const googleSignIn = async () => {
     setErr(''); setGBusy(true)
