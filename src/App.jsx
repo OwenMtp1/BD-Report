@@ -476,7 +476,10 @@ function MainApp() {
     if (item.inManagerHub) return false                  // regroupé dans « Gestion Manager »
     // Une permission staff ouvre l'onglet même quand le rôle n'est pas dans `roles`.
     const byPerm = item.perm && store.hasPerm(item.perm)
-    if (item.roles && !item.roles.includes(me.role) && !byPerm) return false
+    // Un rôle d'environnement décide seul de ce que voit son titulaire. Sans lui, on
+    // conserve l'ancien filtre par rôle de compte — sinon un rôle sur mesure ne pourrait
+    // jamais ouvrir un onglet que celui-ci réserve aux managers.
+    if (!envRole && item.roles && !item.roles.includes(me.role) && !byPerm) return false
     if (item.staffOnly) return isSupportUser            // console support : équipe BD Report uniquement
     if (item.always) return true                         // Support / Souscrire : toujours accessibles
     if (noOffer) return false                            // sans offre : rien d'autre que les onglets « always »
