@@ -93,10 +93,10 @@ npm run dev        # serveur de dev
   **Gouvernance** : seul le Fondateur gère tout ; un rôle porteur de `permissions.manage` gère les rôles de **rang strictement
   inférieur** au sien et **n'accorde que des droits qu'il détient** (anti-escalade). Page **`StaffPermissions`** = onglet
   « Permissions staff » de `SupportHub` (visible si `permissions.manage`) : matrice droits×rôles + création/renommage/rang/suppression
-  de rôles + attribution aux comptes. **Menu par droit** (`db.staffPermissionMeta[permId]` = `{color, disabled, disabledAt, disabledBy}`,
-  `PERM_COLORS`/`permColor`, `store.permMeta/setPermColor/setPermDisabled`) : couleur de repérage et **suspension**. Le catalogue étant
-  en dur (les gardes l'interrogent par id), un droit ne se supprime pas — il se suspend : `accountHasPerm` le refuse à tous **sauf au
-  Fondateur** (sinon suspendre `permissions.manage` verrouillerait la gouvernance), sans toucher à la configuration des rôles.
+  de rôles + attribution aux comptes. **Menu par rôle** (`ROLE_COLORS`/`roleColor`, `store.setRoleColor/setRoleSuspended`) : couleur de
+  repérage (`role.color`, prime sur `ROLE_TINT`), **suspension** (`role.suspended`) et suppression. Un rôle suspendu fait perdre tous
+  ses droits staff à ses titulaires (`accountHasPerm` renvoie false) sans modifier sa configuration ; un rôle intégré ne se supprime
+  pas (ROLES est en dur) mais se suspend, et le **Fondateur** échappe aux deux (anti-lockout).
   Les onglets de `SupportHub` portent chacun une `perm` (filtrés par `hasPerm`). Les gardes
   store staff-only (offres, `accounts.offer/disable/wipe/remove`, `canViewPasswords`) passent par `accountHasPerm`. L'éditeur de
   rôles d'`Admin` liste `store.allRoles()` (rôles personnalisés inclus).

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { ShieldCheck, KeyRound, Plus, Trash2, Crown, Lock, Users, Search, Pencil, Check, X, Info, MoreHorizontal, Ban, Play } from 'lucide-react'
-import { useStore, STAFF_PERMISSION_GROUPS, STAFF_PERMISSION_IDS, ROLES, PERM_COLORS, permColor } from '../store.jsx'
+import { useStore, STAFF_PERMISSION_GROUPS, STAFF_PERMISSION_IDS, ROLES, ROLE_COLORS, roleColor } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 
 const ROLE_TINT = {
@@ -12,42 +12,58 @@ const ROLE_TINT = {
   'Membre': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15',
 }
 const tintOf = (key) => ROLE_TINT[key] || 'bg-brand/10 text-brand'
+// La couleur choisie sur le rôle prime sur la teinte par défaut.
+const tintOfRole = (role) => roleColor(role?.color).tint || tintOf(role?.roleKey || role?.name)
 
-// Menu d'un droit : couleur de repérage et suspension. Le catalogue des droits est en
-// dur (les gardes l'interrogent par identifiant), donc un droit ne se supprime pas :
-// il se suspend — refusé à tous les rôles — et se réactive quand on veut.
-function PermMenu({ store, perm, meta }) {
+// Menu d'un rôle : couleur de repérage, suspension et suppression. Un rôle intégré ne se
+// supprime pas (la liste ROLES est en dur) mais peut être suspendu ; le Fondateur échappe
+// aux deux, sans quoi la gouvernance se verrouillerait sans retour.
+function RoleMenu({ store, role }) {
   const [open, setOpen] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  const key = role.roleKey || role.name
   return (
-    <div className="relative shrink-0">
-      <button type="button" className="btn-ghost !p-1" title="Gérer ce droit" onClick={() => setOpen(o => !o)}>
-        <MoreHorizontal size={14} />
+    <div className="relative">
+      <button type="button" className="btn-ghost !p-1" title="Gérer ce rôle" onClick={() => setOpen(o => !o)}>
+        <MoreHorizontal size={13} />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 mt-1 z-30 w-60 rounded-xl border border-line bg-card shadow-xl p-2.5 space-y-2.5">
+          <div className="absolute right-0 mt-1 z-30 w-60 rounded-xl border border-line bg-card shadow-xl p-2.5 space-y-2.5 text-left font-normal normal-case">
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-muted mb-1.5">Couleur de repérage</p>
+              <p className="text-[10px] uppercase tracking-wide text-muted mb-1.5">Couleur</p>
               <div className="flex flex-wrap gap-1.5">
-                {PERM_COLORS.map(c => (
+                {ROLE_COLORS.map(c => (
                   <button key={c.id || 'none'} type="button" title={c.label}
-                    className={`w-5 h-5 rounded-full ${c.dot} ${(meta.color || '') === c.id ? 'ring-2 ring-offset-1 ring-brand' : ''}`}
-                    onClick={() => { store.setPermColor(perm.id, c.id); setOpen(false) }} />
+                    className={`w-5 h-5 rounded-full ${c.dot} ${(role.color || '') === c.id ? 'ring-2 ring-offset-1 ring-brand' : ''}`}
+                    onClick={() => { store.setRoleColor(key, c.id); setOpen(false) }} />
                 ))}
               </div>
             </div>
             <button type="button" className="w-full btn-ghost !py-1 text-xs justify-start"
-              onClick={() => { store.setPermDisabled(perm.id, !meta.disabled); setOpen(false); toast(meta.disabled ? 'Droit réactivé' : 'Droit suspendu') }}>
-              {meta.disabled ? <><Play size={13} /> Réactiver ce droit</> : <><Ban size={13} /> Suspendre ce droit</>}
+              onClick={() => { store.setRoleSuspended(key, !role.suspended); setOpen(false); toast(role.suspended ? 'Rôle réactivé' : 'Rôle suspendu') }}>
+              {role.suspended ? <><Play size={12} /> Réactiver le rôle</> : <><Ban size={12} /> Suspendre le rôle</>}
             </button>
+            {!role.builtin && (
+              <button type="button" className="w-full btn-ghost !py-1 text-xs justify-start !text-red-500"
+                onClick={() => { setOpen(false); setConfirmDel(true) }}>
+                <Trash2 size={12} /> Supprimer le rôle
+              </button>
+            )}
             <p className="text-[10px] text-muted leading-snug">
-              {meta.disabled
-                ? <>Suspendu{meta.disabledBy ? ` par ${meta.disabledBy}` : ''} : refusé à tous les rôles. Le Fondateur le conserve, sans quoi la gouvernance serait verrouillée.</>
-                : <>Suspendre retire ce droit à tous les rôles, sans toucher à leur configuration : la remise en service le restitue tel quel.</>}
+              {role.suspended
+                ? <>Suspendu{role.suspendedBy ? ` par ${role.suspendedBy}` : ''} : ses titulaires n'ont plus aucun droit staff, sans que sa configuration change.</>
+                : role.builtin
+                  ? <>Un rôle intégré ne se supprime pas, mais se suspend : ses titulaires perdent leurs droits jusqu'à réactivation.</>
+                  : <>Suspendre retire les droits à ses titulaires ; supprimer repasse leurs comptes « Membre ».</>}
             </p>
           </div>
         </>
+      )}
+      {confirmDel && (
+        <Confirm message={`Supprimer le rôle « ${role.name} » ? Les comptes qui le portent repasseront « Membre ».`}
+          onYes={() => { store.deleteStaffRole(key); setConfirmDel(false); toast('Rôle supprimé') }} onNo={() => setConfirmDel(false)} />
       )}
     </div>
   )
@@ -59,7 +75,6 @@ function RoleHead({ role, store, memberCount, canManage }) {
   const isFounder = key === 'Fondateur'
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(role.name)
-  const [confirmDel, setConfirmDel] = useState(false)
   const permCount = isFounder ? STAFF_PERMISSION_IDS.length : (role.permissions || []).length
   return (
     <th className="px-2 py-2 align-bottom text-center min-w-[124px]">
@@ -73,7 +88,7 @@ function RoleHead({ role, store, memberCount, canManage }) {
             <button className="text-muted" onClick={() => { setName(role.name); setEditing(false) }}><X size={13} /></button>
           </span>
         ) : (
-          <span className={`chip ${tintOf(key)} !text-[11px] font-bold gap-1`}>
+          <span className={`chip ${tintOfRole(role)} !text-[11px] font-bold gap-1 ${role.suspended ? 'line-through opacity-70' : ''}`}>
             {isFounder && <Crown size={11} />}{role.name}
             {!role.builtin && canManage && (
               <button className="ml-0.5 opacity-70 hover:opacity-100" title="Renommer" onClick={() => setEditing(true)}><Pencil size={10} /></button>
@@ -88,15 +103,12 @@ function RoleHead({ role, store, memberCount, canManage }) {
           ) : <span className="font-bold">{role.rank}</span>}
         </div>
         <div className="text-[10px] text-muted flex items-center gap-1"><Users size={10} /> {memberCount} · {permCount} droits</div>
-        {!role.builtin && canManage && (
-          <button className="text-red-500 opacity-70 hover:opacity-100" title="Supprimer ce rôle" onClick={() => setConfirmDel(true)}><Trash2 size={12} /></button>
+        {role.suspended && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-500/15">suspendu</span>
         )}
+        {canManage && !isFounder && <RoleMenu store={store} role={role} />}
         {isFounder && <span className="text-[9px] text-muted flex items-center gap-0.5"><Lock size={9} /> tous droits</span>}
       </div>
-      {confirmDel && (
-        <Confirm message={`Supprimer le rôle « ${role.name} » ? Les comptes qui le portent repasseront « Membre ».`}
-          onYes={() => { store.deleteStaffRole(key); setConfirmDel(false); toast('Rôle supprimé') }} onNo={() => setConfirmDel(false)} />
-      )}
     </th>
   )
 }
@@ -133,7 +145,7 @@ function Assignment({ store }) {
             <div key={a.id} className="flex items-center gap-2 text-sm">
               <div className="w-7 h-7 rounded-full bg-brand/15 text-brand text-[10px] font-extrabold flex items-center justify-center shrink-0">{(a.pseudo || a.email || '?').slice(0, 2).toUpperCase()}</div>
               <span className="flex-1 truncate">{a.pseudo || '—'} <span className="text-muted text-xs">· {a.email}</span></span>
-              <span className={`chip ${tintOf(a.role)} !text-[10px]`}>{a.role}</span>
+              <span className={`chip ${tintOfRole(roles.find(r => (r.roleKey || r.name) === a.role) || { name: a.role })} !text-[10px]`}>{a.role}</span>
               <select className="input !w-auto !py-1 text-xs" value={a.role} disabled={!manageable}
                 onChange={e => { store.setAccountRole(a.id, e.target.value); toast('Rôle mis à jour') }}>
                 {options.map(r => (
@@ -207,42 +219,29 @@ export default function StaffPermissions() {
                 <tr className="bg-surface/40">
                   <td className="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-muted sticky left-0 bg-surface/40 z-10" colSpan={1 + roles.length}>{g.label}</td>
                 </tr>
-                {g.perms.map(p => {
-                  const meta = store.permMeta(p.id)
-                  const col = permColor(meta.color)
-                  return (
-                  <tr key={p.id} className={`border-b border-line/60 ${col.row || 'hover:bg-surface/40'} ${meta.disabled ? 'opacity-60' : ''}`}>
-                    <td className={`px-3 py-1.5 sticky left-0 z-10 ${col.row || 'bg-card'}`}>
-                      <div className="flex items-center gap-2">
-                        {meta.color && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${col.dot}`} />}
-                        <div className="min-w-0">
-                          <div className={`font-medium ${meta.disabled ? 'line-through' : ''}`}>{p.label}</div>
-                          <div className="text-[10px] text-muted font-mono">{p.id}</div>
-                        </div>
-                        {meta.disabled && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-500/15 shrink-0">suspendu</span>
-                        )}
-                        <div className="ml-auto"><PermMenu store={store} perm={p} meta={meta} /></div>
-                      </div>
+                {g.perms.map(p => (
+                  <tr key={p.id} className="border-b border-line/60 hover:bg-surface/40">
+                    <td className="px-3 py-1.5 sticky left-0 bg-card z-10">
+                      <div className="font-medium">{p.label}</div>
+                      <div className="text-[10px] text-muted font-mono">{p.id}</div>
                     </td>
                     {roles.map(r => {
                       const key = r.roleKey || r.name
                       const isFounder = key === 'Fondateur'
                       const checked = isFounder || (r.permissions || []).includes(p.id)
                       // Éditable si l'acteur gère ce rôle ET (fondateur OU détient lui-même ce droit).
-                      // Un droit suspendu se fige : on le réactive avant de le redistribuer.
-                      const editable = !isFounder && !meta.disabled && store.canManageRole(key) && (actor?.role === 'Fondateur' || store.hasPerm(p.id))
+                      const editable = !isFounder && !r.suspended && store.canManageRole(key) && (actor?.role === 'Fondateur' || store.hasPerm(p.id))
                       return (
                         <td key={r.id} className="text-center px-2 py-1.5">
                           <input type="checkbox" checked={checked} disabled={!editable}
                             className={editable ? 'cursor-pointer' : 'opacity-50'}
-                            title={isFounder ? 'Fondateur : tous les droits' : meta.disabled ? 'Droit suspendu' : editable ? '' : 'Non modifiable par vous'}
+                            title={isFounder ? 'Fondateur : tous les droits' : r.suspended ? 'Rôle suspendu' : editable ? '' : 'Non modifiable par vous'}
                             onChange={e => store.toggleRolePerm(key, p.id, e.target.checked)} />
                         </td>
                       )
                     })}
                   </tr>
-                )})}
+                ))}
               </React.Fragment>
             ))}
           </tbody>
