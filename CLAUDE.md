@@ -46,7 +46,8 @@ npm run dev        # serveur de dev
   l'URI de redirection est celle de **Supabase** (`https://<ref>.supabase.co/auth/v1/callback`), pas celle du site.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
 - **`src/themes.js`** — **4 thèmes seulement** : `ocean-pro` (design BD Report d'origine, défaut), `sombre`,
-  `nuit`, et **`bdr-studio`**. Les 17 variantes colorées et les fonds animés ont été retirés — ils multipliaient
+  `nuit`, et **`bdr-studio`** (SOMBRE : bleu nuit et cyan de l'en-tête du site, cartes en verre, halos —
+  en version claire il ne se distinguait du thème d'origine que par ses angles). Les 17 variantes colorées et les fonds animés ont été retirés — ils multipliaient
   les rendus à vérifier sans rien apporter. Un thème peut porter un **`skin`** : `applyTheme` pose alors
   `skin-<nom>` sur `<html>`, et le CSS (fin de `src/index.css`) change les **formes** — rayons, dégradés de
   boutons, chiffres colorés, pastilles d'icônes, navigation. Ajouter un skin = une entrée ici + un bloc CSS,
