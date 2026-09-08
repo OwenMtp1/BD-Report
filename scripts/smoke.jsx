@@ -271,6 +271,7 @@ async function main() {
   // Formation staff : cas fictifs, sans effet sur les données réelles.
   await click(hubTab('Formation staff'))
   if (!text().includes('Rien n\'est enregistré')) throw new Error('Staff training space did not render')
+  if (!find('button', "Ouvrir l'espace de formation")) throw new Error('Isolated training environment launcher missing')
   await click(find('button', 'Cas de support'))
   if (!text().includes('Insatisfaction')) throw new Error('Training tickets missing')
   await click(find('button', 'Discussion de projet'))

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network, GraduationCap } from 'lucide-react'
 import { useStore, slaInfo, ticketHasUnread } from '../store.jsx'
 import Requests from './Requests.jsx'
@@ -48,6 +48,13 @@ export default function SupportHub() {
   // Onglets visibles selon les permissions du rôle (le Fondateur voit tout).
   const tabs = TABS.filter(t => !t.perm || store.hasPerm(t.perm))
   const [tab, setTab] = useState(tabs[0]?.id || 'conversations')
+
+  // Pilotage externe des onglets : utilisé par la formation guidée du staff.
+  useEffect(() => {
+    const h = (e) => { if (e.detail && TABS.some(t => t.id === e.detail)) setTab(e.detail) }
+    window.addEventListener('hub-tab', h)
+    return () => window.removeEventListener('hub-tab', h)
+  }, [])
 
   const newReq = (db.supportRequests || []).filter(r => !r.archived && r.status === 'new').length
   const openTickets = (db.tickets || []).filter(t => t.status !== 'closed')

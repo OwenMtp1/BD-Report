@@ -1437,6 +1437,170 @@ export function buildDemoDb() {
 }
 // Session de démo — société fictive « Atlas Revenue » (aucun lien avec le compte réel).
 // 'manager' → Chloé (Head of Sales) · sinon → Lucas (BDR).
+// ---------------------------------------------------------------------------
+//  ESPACE DE FORMATION DU STAFF — un environnement isolé, vu depuis la console
+//  support, rempli de tout ce qu'un membre du staff doit savoir traiter :
+//  demandes entrantes, tickets à tous les stades, clients satisfaits et à risque,
+//  projets à paramétrer, notes de satisfaction. Aucune donnée réelle n'est touchée.
+// ---------------------------------------------------------------------------
+export function trainingSession() {
+  return { accountId: 'train-sup', envId: 'tenv-interne', subEnvId: 'tsubi-sup', welcomed: true }
+}
+
+export function buildTrainingDb() {
+  const db = {
+    accounts: [], environments: [], subenvs: [], data: {},
+    supportRequests: [], tickets: [], clients: [], projects: [],
+    supportTrash: [], cannedReplies: [], kbArticles: [], productRatings: [],
+  }
+  const iso = (h) => new Date(Date.now() + h * 3600000).toISOString()
+
+  // --- Équipe BD Report (celle qu'on incarne pendant la formation)
+  const mkStaff = (id, pseudo, role, teamOf) => ({
+    id, email: `${pseudo.toLowerCase()}@bdreport.training`, pseudo, password: DEMO_PW, role,
+    developer: false, plan: 'beta', photo: '', bricks: [...BRICKS], teamOf,
+    createdAt: iso(-24 * 400), presence: 'online',
+  })
+  db.accounts.push(
+    mkStaff('train-sup', 'VousSupport', 'Support BD Report', null),
+    mkStaff('train-mgr', 'CamilleSupport', 'Support BD Report', null),
+    mkStaff('train-dev', 'NoahDev', 'Développeur', 'train-mgr'),
+  )
+  db.environments.push({
+    id: 'tenv-interne', name: 'BD Report — interne', logo: '', pin: '', plan: 'beta', createdBy: 'train-sup',
+    subState: 'active', departments: ['Support'], services: [], members: ['train-sup', 'train-mgr', 'train-dev'],
+  })
+  db.subenvs.push({ id: 'tsubi-sup', envId: 'tenv-interne', prenom: 'Vous', nom: '(formation)', poste: 'Support', service: '', pin: '0000', photo: '', ownerId: 'train-sup' })
+
+  // --- Entreprises clientes, chacune illustrant une situation différente
+  const CLIENTS = [
+    { id: 'tenv-vallon', name: 'Vallon Industries', seats: 25, status: 'actifs' },
+    { id: 'tenv-hexatel', name: 'Hexatel', seats: 12, status: 'demandes' },
+    { id: 'tenv-lamarche', name: 'Groupe Lamarche', seats: 40, status: 'actifs' },
+    { id: 'tenv-prisma', name: 'Prisma Group', seats: 22, status: 'attente' },
+    { id: 'tenv-aurea', name: 'Aurea Consulting', seats: 8, status: 'actifs' },
+    { id: 'tenv-bardin', name: 'Bardin & Fils', seats: 15, status: 'nonaboutis' },
+    { id: 'tenv-vent', name: 'Vent Debout', seats: 10, status: 'anciens' },
+  ]
+  CLIENTS.forEach((c, i) => {
+    const accId = `tacc-${i}`
+    db.accounts.push({
+      id: accId, email: `contact@${c.name.toLowerCase().replace(/[^a-z]/g, '')}.training`,
+      pseudo: c.name.split(' ')[0], password: DEMO_PW, role: 'Manager', developer: false,
+      plan: 'beta', photo: '', bricks: [...BRICKS], teamOf: null, createdAt: iso(-24 * (30 + i * 25)),
+    })
+    db.environments.push({
+      id: c.id, name: c.name, logo: '', pin: '', plan: 'beta', createdBy: accId,
+      subState: 'active', departments: ['Sales'], services: [], members: [accId],
+    })
+    db.subenvs.push({ id: `tsub-${i}`, envId: c.id, prenom: c.name.split(' ')[0], nom: 'Contact', poste: 'Manager', service: '', pin: '0000', photo: '', ownerId: accId })
+  })
+
+  // --- Tickets à tous les stades : non pris en charge, en cours, clôturés, notés bas.
+  const T = [
+    ['tenv-vallon', 'Connexion & authentification', 'urgente', 'open', null, -3, [
+      ['user', "Impossible de me connecter depuis ce matin, ni par mot de passe ni par Google. Toute l'équipe est bloquée."],
+    ]],
+    ['tenv-hexatel', 'Import / export de données', 'normale', 'in_progress', 'train-mgr', -30, [
+      ['user', "Mon import de 400 contacts n'a repris que 120 lignes."],
+      ['support', 'Bonjour, chaque ligne comporte-t-elle bien une adresse e-mail ?'],
+      ['user', "Non, une partie n'en a pas."],
+    ]],
+    ['tenv-prisma', 'Bug / anomalie', 'haute', 'open', null, -50, [
+      ['user', 'La page Leads reste blanche depuis la mise à jour. Ça marche chez ma collègue.'],
+    ]],
+    ['tenv-prisma', 'Insatisfaction', 'urgente', 'open', null, -8, [
+      ['user', "Troisième ticket en deux semaines. La direction commence à poser des questions sur la fiabilité de l'outil."],
+    ]],
+    ['tenv-prisma', 'Question produit', 'normale', 'closed', 'train-mgr', -260, [
+      ['user', 'Comment corriger un score de qualité des données trop bas ?'],
+      ['support', "La page Qualité des données liste chaque anomalie et permet d'ouvrir la fiche concernée."],
+    ], 2, 'Réponse correcte mais il a fallu quatre jours pour l\'obtenir.'],
+    ['tenv-aurea', 'Primes & commissions', 'haute', 'in_progress', 'train-sup', -20, [
+      ['user', "J'ai corrigé un effectif mais la prime n'a pas bougé. C'est un bug ?"],
+    ]],
+    ['tenv-lamarche', 'Question produit', 'basse', 'open', null, -70, [
+      ['user', 'Peut-on avoir des rôles différents selon nos quatre filiales ?'],
+    ]],
+    ['tenv-vallon', 'Demande d\'évolution', 'basse', 'open', null, -100, [
+      ['user', 'Un export automatique vers notre outil de BI tous les lundis serait précieux.'],
+    ]],
+    ['tenv-bardin', 'Formation & prise en main', 'basse', 'in_progress', 'train-dev', -120, [
+      ['user', "Personne chez nous ne comprend la différence entre MQL et SQL."],
+    ]],
+    ['tenv-aurea', 'Connexion & authentification', 'normale', 'closed', 'train-sup', -300, [
+      ['user', "Un collaborateur ne reçoit pas l'écran Google."],
+      ['support', "Son adresse Google correspond-elle exactement à celle de son compte ?"],
+      ['user', 'Non, il utilise son adresse personnelle. Corrigé, ça marche. Merci !'],
+    ], 5, 'Réponse rapide et claire.'],
+    ['tenv-hexatel', 'Sécurité & données', 'haute', 'open', null, -14, [
+      ['user', 'Un prospect demande la suppression de ses données. Quelle est la procédure ?'],
+    ]],
+    ['tenv-vent', 'Facturation & abonnement', 'normale', 'closed', 'train-mgr', -700, [
+      ['user', 'Nous arrêtons notre activité de prospection, comment résilier ?'],
+      ['support', 'Depuis Paramètres → Gérer mes environnements. Vous gardez 30 jours pour exporter.'],
+    ], 4, ''],
+  ]
+  T.forEach(([envId, category, priority, status, assignedTo, hoursAgo, msgs, csat, csatComment], i) => {
+    const env = db.environments.find(e => e.id === envId)
+    const created = iso(hoursAgo)
+    db.tickets.push({
+      id: `ttk-${i}`, category, status, priority, assignedTo, csat: csat ? { score: csat, comment: csatComment || '', ts: iso(hoursAgo + 2) } : null,
+      userAccountId: env?.createdBy || null, userName: env?.name || 'Client', userPhoto: '',
+      clientName: env?.name || '', envId, subEnvId: null,
+      createdAt: created, closedAt: status === 'closed' ? iso(hoursAgo + 6) : undefined,
+      takenAt: assignedTo ? iso(hoursAgo + 1) : undefined,
+      handledBy: null, typing: {}, readUserAt: created, readSupportAt: assignedTo ? iso(hoursAgo + 1) : '',
+      messages: msgs.map(([from, text], k) => ({
+        id: `ttk-${i}-m${k}`, ts: iso(hoursAgo + k), from,
+        authorName: from === 'support' ? 'Support BD Report' : (env?.name || 'Client'), authorPhoto: '', text, photo: '',
+      })),
+    })
+  })
+
+  // --- Demandes entrantes du site, à qualifier
+  db.supportRequests = [
+    { id: 'trq-1', name: 'Léa Vasseur', email: 'lea@ateliersnord.training', company: 'Ateliers Nord', message: "12 commerciaux, nous cherchons à remplacer nos tableurs. Possible d'avoir une démonstration ?", status: 'new', createdAt: iso(-5) },
+    { id: 'trq-2', name: 'Marc Ivanov', email: 'm.ivanov@quadra.training', company: 'Quadra', message: 'Question tarifaire : combien pour 40 sièges avec l\'intégration CRM ?', status: 'new', createdAt: iso(-28) },
+    { id: 'trq-3', name: 'Sonia Kadri', email: 'sonia@brevet.training', company: 'Brevet & Co', message: 'Vos données sont-elles hébergées en Europe ? Notre DPO le demande.', status: 'new', createdAt: iso(-60) },
+  ]
+
+  // --- Notes de satisfaction produit : de quoi faire vivre le dashboard et le risque client
+  db.productRatings = [
+    { id: 'tpr-1', accountId: 'tacc-3', accountName: 'Prisma', envId: 'tenv-prisma', milestone: 60, score: 2, comment: 'Trop de bugs ces dernières semaines.', ts: iso(-40) },
+    { id: 'tpr-2', accountId: 'tacc-3', accountName: 'Prisma', envId: 'tenv-prisma', milestone: 30, score: 2, comment: '', ts: iso(-800) },
+    { id: 'tpr-3', accountId: 'tacc-0', accountName: 'Vallon', envId: 'tenv-vallon', milestone: 30, score: 5, comment: 'Adopté par toute l\'équipe en deux semaines.', ts: iso(-200) },
+    { id: 'tpr-4', accountId: 'tacc-2', accountName: 'Lamarche', envId: 'tenv-lamarche', milestone: 15, score: 4, comment: '', ts: iso(-300) },
+    { id: 'tpr-5', accountId: 'tacc-5', accountName: 'Bardin', envId: 'tenv-bardin', milestone: 15, score: 2, comment: 'Difficile à prendre en main sans accompagnement.', ts: iso(-120) },
+    { id: 'tpr-6', accountId: 'tacc-4', accountName: 'Aurea', envId: 'tenv-aurea', milestone: 60, score: 5, comment: '', ts: iso(-90) },
+  ]
+
+  const out = migrate(db)
+  // migrate crée un client et un projet par environnement : on leur donne des situations
+  // contrastées, sans quoi le kanban et le dashboard seraient uniformes et sans intérêt.
+  CLIENTS.forEach(c => {
+    const cl = (out.clients || []).find(x => x.envId === c.id)
+    if (cl) cl.status = c.status
+  })
+  const proj = (envId) => (out.projects || []).find(p => p.envId === envId)
+  const setP = (envId, patch) => { const p = proj(envId); if (p) Object.assign(p, patch) }
+  setP('tenv-vallon', { status: 'prevu', owner: '', name: 'Déploiement Vallon Industries' })
+  setP('tenv-hexatel', { status: 'prevu', owner: '', name: 'Reprise de données Hexatel' })
+  setP('tenv-lamarche', { status: 'encours', owner: 'Camille', name: 'Onboarding Groupe Lamarche' })
+  setP('tenv-prisma', { status: 'encours', owner: 'Noah', name: 'Audit qualité Prisma' })
+  setP('tenv-aurea', { status: 'encours', owner: 'Camille', name: 'Formation équipe Aurea' })
+  setP('tenv-bardin', { status: 'pause', owner: 'Noah', name: 'Migration Bardin & Fils' })
+  setP('tenv-vent', {
+    status: 'termine', owner: 'Camille', name: 'Clôture Vent Debout', closedAt: iso(-700),
+    closeReason: "Le client cesse son activité de prospection externalisée. Aucun grief sur le produit, décision stratégique.",
+  })
+
+  // L'environnement interne n'est pas un client : il ne doit pas polluer le portefeuille.
+  out.clients = (out.clients || []).filter(c => c.envId !== 'tenv-interne')
+  out.projects = (out.projects || []).filter(p => p.envId !== 'tenv-interne')
+  return out
+}
+
 export function demoSession(role) {
   const manager = role === 'manager'
   return { accountId: manager ? 'demo-mgr' : 'demo-b1', envId: 'env-demo', subEnvId: manager ? 'dsub-mgr' : 'dsub-b1', welcomed: true }
@@ -1907,11 +2071,11 @@ function load() {
   return migrate(buildSeedDb())
 }
 
-export function StoreProvider({ children, demo = false }) {
-  const [db, setDbState] = useState(() => demo ? buildDemoDb() : load())
+export function StoreProvider({ children, demo = false, dataset = 'sales' }) {
+  const [db, setDbState] = useState(() => demo ? (dataset === 'training' ? buildTrainingDb() : buildDemoDb()) : load())
   const [session, setSession] = useState(() => {
     // Mode démo : session isolée en mémoire, jamais lue ni écrite dans sessionStorage.
-    if (demo) return demoSession('employe')
+    if (demo) return dataset === 'training' ? trainingSession() : demoSession('employe')
     try { const s = JSON.parse(sessionStorage.getItem(SESSION_KEY)); if (s) return s } catch (e) { /* ignore */ }
     // « Rester connecté 30 jours » : restaure une session si le jeton est encore valide.
     try {

@@ -1,9 +1,11 @@
 import React, { useState } from 'react'
 import {
   GraduationCap, FolderKanban, LifeBuoy, MessagesSquare, Lightbulb, ArrowLeft, CheckSquare, Square,
+  Play, MousePointerClick, ShieldCheck, Inbox,
 } from 'lucide-react'
 import { TRAINING_PROJECTS, TRAINING_TICKETS, TRAINING_THREAD, TRAINING_STATUS } from '../trainingContent.js'
 import { TICKET_PRIORITIES } from '../store.jsx'
+import TrainingJourney from './TrainingJourney.jsx'
 
 // Espace de formation du staff : des cas fictifs pour s'entraîner sans toucher aux
 // données réelles. Rien n'est enregistré ni synchronisé — les cases cochées et les
@@ -164,6 +166,7 @@ const TABS = [
 
 export default function StaffTraining() {
   const [tab, setTab] = useState('projects')
+  const [started, setStarted] = useState(false)
   const Current = TABS.find(t => t.id === tab)?.El || Projects
   return (
     <div className="space-y-4">
@@ -177,6 +180,31 @@ export default function StaffTraining() {
         </p>
       </div>
 
+      {/* Environnement de formation : la vraie application, alimentée par un portefeuille
+          complet, montée à part. Rien n'y est enregistré. */}
+      <div className="rounded-2xl p-6 sm:p-7 text-white relative overflow-hidden" style={{ background: 'linear-gradient(135deg,#0f2b23,#14513f 55%,#0e7490)' }}>
+        <span className="chip" style={{ background: 'rgba(52,211,153,.15)', color: '#34d399' }}>▶ Environnement isolé · vue staff</span>
+        <h3 className="text-xl sm:text-2xl font-extrabold mt-3 max-w-2xl">Entraînez-vous sur un portefeuille complet, en conditions réelles</h3>
+        <p className="text-white/70 text-sm mt-2 max-w-2xl">
+          Sept entreprises clientes, des demandes à qualifier, douze tickets à tous les stades — dont un urgent que
+          personne n'a pris —, des clients satisfaits et un client à risque, des projets à paramétrer et des notes de
+          satisfaction. C'est la vraie application, avec de vraies données fictives : vous pouvez tout essayer.
+        </p>
+        <button className="btn-primary mt-5" onClick={() => setStarted(true)}><Play size={16} /> Ouvrir l'espace de formation</button>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 max-w-3xl">
+          {[[Inbox, 'Tout est rempli', 'Demandes, tickets, clients, projets, notes.'],
+            [ShieldCheck, 'Rien n\'est risqué', 'Aucune donnée réelle, aucun enregistrement.'],
+            [MousePointerClick, 'Formation guidée', 'Un pas-à-pas qui parcourt chaque écran du staff.']].map(([Ic, t, x], i) => (
+            <div key={i} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,.06)' }}>
+              <Ic size={18} className="mb-1.5" style={{ color: '#34d399' }} />
+              <div className="font-bold text-sm">{t}</div><div className="text-xs text-white/55">{x}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-xs text-muted">Et pour réviser à froid, les fiches de cas ci-dessous.</p>
+
       <div className="flex flex-wrap gap-1.5 border-b border-line">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -187,6 +215,8 @@ export default function StaffTraining() {
       </div>
 
       <Current />
+
+      {started && <TrainingJourney onClose={() => setStarted(false)} />}
     </div>
   )
 }

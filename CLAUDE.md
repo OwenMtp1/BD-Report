@@ -49,6 +49,12 @@ npm run dev        # serveur de dev
   supprimé ne ressuscite pas. Ajouter un article = une entrée ici, rien d'autre. Côté client (`Support.jsx`,
   `KbBrowser`) : entrée par catégorie cliquable ou par recherche ; côté staff (`KnowledgeBase.jsx`) : filtre par
   catégorie, recherche et édition des mots-clés.
+- **Formation staff** — **`TrainingJourney`** monte la VRAIE app dans un `StoreProvider demo dataset="training"`
+  (isolé, sans persistance) alimenté par **`buildTrainingDb()`** : équipe support, 7 entreprises clientes aux
+  situations contrastées, 12 tickets à tous les stades (dont un urgent non pris), 3 demandes entrantes, notes de
+  satisfaction produit dont deux basses (client à risque), projets à paramétrer et un projet clôturé avec motif.
+  `trainingSession()` ouvre la session support. **Parcours guidé** de 13 étapes : `demo-navigate` change d'onglet,
+  `hub-tab` cible l'onglet interne de `SupportHub`.
 - **`src/trainingContent.js` + `src/pages/StaffTraining.jsx`** — onglet **« Formation staff »** de `SupportHub`
   (perm `demo.access`) : espace d'entraînement à cas fictifs — 10 projets (dont plusieurs « à paramétrer » avec leur
   liste de tâches), 12 cas de support couvrant tous les sujets avec la leçon à retenir, et une discussion de projet
