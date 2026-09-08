@@ -88,8 +88,10 @@ function Login() {
       const { signInWithGoogle } = await import('./supabaseAuth.js')
       const { error } = await signInWithGoogle()
       // Sans erreur, le navigateur part vers Google : la suite se joue au retour.
-      if (error) { setErr(t('login.googleErr')); setGBusy(false) }
-    } catch (e) { setErr(t('login.googleErr')); setGBusy(false) }
+      // La cause est reprise telle quelle : un message purement générique ne permet
+      // ni au support ni au client de savoir quoi corriger.
+      if (error) { setErr(`${t('login.googleErr')} (${error})`); setGBusy(false) }
+    } catch (e) { setErr(`${t('login.googleErr')} (${e?.message || e})`); setGBusy(false) }
   }
 
   const submit = () => {

@@ -5,6 +5,7 @@
 //  écoute des changements de session, réinitialisation de mot de passe.
 // ---------------------------------------------------------------------------
 import { getClient } from './supabaseClient.js'
+import { isSupabaseConfigured } from './supabaseConfig.js'
 
 export async function signIn(email, password) {
   const c = await getClient(); if (!c) return { error: 'Supabase indisponible' }
@@ -16,7 +17,10 @@ export async function signIn(email, password) {
 // session Supabase déjà posée (detectSessionInUrl). La jonction avec un compte
 // BD Report se fait ensuite sur l'e-mail, côté app.
 export async function signInWithGoogle(redirectTo) {
-  const c = await getClient(); if (!c) return { error: 'Supabase indisponible' }
+  const c = await getClient()
+  // Deux pannes très différentes se cachaient derrière « Supabase indisponible » :
+  // des clés absentes, ou la librairie qui n'a pas pu être chargée. On les sépare.
+  if (!c) return { error: isSupabaseConfigured() ? 'librairie Supabase non chargée' : 'Supabase non configuré' }
   const back = redirectTo || (typeof window !== 'undefined' ? window.location.href.split('#')[0] : undefined)
   const { error } = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: back } })
   return { error: error?.message || null }
