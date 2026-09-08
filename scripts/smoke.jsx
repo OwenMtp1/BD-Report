@@ -314,6 +314,11 @@ async function main() {
     }
     if (!text().includes('Manager') || !text().includes('Membre')) throw new Error('Default env roles missing')
     await click(find('button', 'Annuler'))
+    // Fiche d'un collaborateur : elle plantait, aucun gestionnaire n'étant transmis.
+    const profBtn = find('button', 'Afficher le profil')
+    if (!profBtn) throw new Error('Profile button missing from project org chart')
+    await click(profBtn)
+    if (!text().includes('Entrer dans cet espace')) throw new Error('Profile panel did not open')
     await click(find('button', 'Retour aux projets'))
   }
   if (!text().includes('ACME Corp')) throw new Error('Auto-project from request not created')

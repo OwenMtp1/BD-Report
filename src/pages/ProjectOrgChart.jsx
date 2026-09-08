@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
-import { ArrowLeft, Plus, Trash2, ShieldCheck, Save } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, ShieldCheck, Save, LogIn, User, KeyRound } from 'lucide-react'
 import { useStore, uid, CLIENT_PERMISSION_GROUPS, ROLE_COLORS, roleColor } from '../store.jsx'
 import { GRANTABLE_TABS } from '../nav.jsx'
-import { Confirm, Modal, toast } from '../ui.jsx'
+import { Confirm, Modal, Field, toast } from '../ui.jsx'
 import OrgChart from './OrgChart.jsx'
 
 // Organigramme d'un projet client, vu depuis le back-office. Deux volets : l'organisation
@@ -129,9 +129,87 @@ function RolesPanel({ envId, store, onClose }) {
   )
 }
 
+// Fiche d'un collaborateur du client, ouverte depuis l'organigramme. Elle permet au
+// staff de corriger ce qui relève de l'organisation, et surtout d'entrer dans l'espace
+// pour constater un problème là où il se produit plutôt que sur description.
+function ProfilePanel({ sub, envId, store, onClose }) {
+  const acc = store.db.accounts.find(a => a.id === sub.ownerId)
+  const roles = store.envRoles(envId)
+  const services = store.envServicesOf(envId)
+  const env = store.db.environments.find(e => e.id === envId)
+  const [confirmEnter, setConfirmEnter] = useState(false)
+
+  return (
+    <Modal title={`${sub.prenom} ${sub.nom}`.trim() || 'Profil'} onClose={onClose}>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-brand/15 text-brand font-extrabold flex items-center justify-center">
+            {`${sub.prenom?.[0] || ''}${sub.nom?.[0] || ''}`.toUpperCase() || '??'}
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold">{sub.prenom} {sub.nom}</div>
+            <div className="text-xs text-muted truncate">
+              {acc?.email || 'aucun compte lié'}{acc?.disabled ? ' · accès désactivé' : ''}
+            </div>
+            <div className="text-xs text-muted">{env?.name}</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Poste">
+            <input className="input" defaultValue={sub.poste || ''}
+              onBlur={e => { store.updateSubEnv(sub.id, { poste: e.target.value }); toast('Poste mis à jour') }} />
+          </Field>
+          <Field label="Service">
+            <select className="input" value={sub.serviceId || ''}
+              onChange={e => { store.assignSubService(sub.id, e.target.value); toast('Service mis à jour') }}>
+              <option value="">Sans service</option>
+              {services.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Rôle dans l'entreprise">
+            <select className="input" value={sub.roleId || ''}
+              onChange={e => { store.assignSubRole(sub.id, e.target.value); toast('Rôle attribué') }}>
+              <option value="">Sans rôle</option>
+              {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Code d'accès à l'espace">
+            <div className="flex items-center gap-1.5">
+              <KeyRound size={14} className="text-muted shrink-0" />
+              <input className="input font-mono" maxLength={4} defaultValue={sub.pin || ''}
+                onBlur={e => { store.updateSubEnv(sub.id, { pin: e.target.value.replace(/\D/g, '') }); toast('Code mis à jour') }} />
+            </div>
+          </Field>
+        </div>
+
+        <div className="rounded-xl bg-surface p-3">
+          <div className="flex items-center gap-2 text-sm font-semibold"><LogIn size={15} className="text-brand" /> Entrer dans cet espace</div>
+          <p className="text-xs text-muted mt-1">
+            Vous verrez l'application telle que cette personne l'utilise, avec vos propres droits.
+            Utile pour reproduire un problème plutôt que de se le faire décrire. L'accès est tracé dans les logs.
+          </p>
+          <button className="btn-primary !py-1.5 text-sm mt-2" onClick={() => setConfirmEnter(true)}>
+            <LogIn size={15} /> Ouvrir l'espace de {sub.prenom}
+          </button>
+        </div>
+      </div>
+
+      {confirmEnter && (
+        <Confirm
+          message={`Entrer dans l'espace de ${sub.prenom} ${sub.nom} ? Vous quitterez la console support et cet accès sera consigné.`}
+          yesLabel="Entrer"
+          onYes={() => { store.enterClientSpace(envId, sub.id); setConfirmEnter(false); onClose(); toast('Vous êtes dans l\'espace client') }}
+          onNo={() => setConfirmEnter(false)} />
+      )}
+    </Modal>
+  )
+}
+
 export default function ProjectOrgChart({ envId, title, onBack }) {
   const store = useStore()
   const [rolesOpen, setRolesOpen] = useState(false)
+  const [profileFor, setProfileFor] = useState(null)
 
   return (
     <div className="space-y-4">
@@ -149,9 +227,10 @@ export default function ProjectOrgChart({ envId, title, onBack }) {
 
       {/* Même composant que l'organigramme vu par le client : une correction de l'arbre
           vaut aussitôt pour les deux, il n'y a plus qu'une implémentation à maintenir. */}
-      <OrgChart envId={envId} />
+      <OrgChart envId={envId} onOpenProfile={setProfileFor} />
 
       {rolesOpen && <RolesPanel envId={envId} store={store} onClose={() => setRolesOpen(false)} />}
+      {profileFor && <ProfilePanel sub={profileFor} envId={envId} store={store} onClose={() => setProfileFor(null)} />}
     </div>
   )
 }

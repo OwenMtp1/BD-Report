@@ -2904,6 +2904,25 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           return d
         })
       },
+      // Le staff entre dans l'espace d'un client pour y vérifier ou corriger quelque chose.
+      // Il garde SON compte et donc ses droits : ce n'est pas une usurpation d'identité,
+      // seulement un changement de point de vue — et l'action est tracée, car voir les
+      // données d'un client ne doit jamais passer inaperçu.
+      enterClientSpace(envId, subId) {
+        const sub = db.subenvs.find(x => x.id === subId)
+        const env = db.environments.find(e => e.id === envId)
+        if (!sub || !env) return false
+        setDb(d => {
+          pushSupportLog(d, {
+            type: 'Accès', action: 'Entrée dans un espace client',
+            details: `${env.name} · ${sub.prenom} ${sub.nom}`.trim(),
+            actorId: account?.id || null, actorName,
+          })
+          return d
+        })
+        setSession(s => ({ ...s, envId, subEnvId: subId }))
+        return true
+      },
       // Rôles d'un environnement client. L'enregistrement est groupé et explicite : la
       // page présente un brouillon, on applique tout d'un coup après confirmation.
       // Rôle d'environnement porté par l'utilisateur courant, s'il en a un. C'est lui qui
