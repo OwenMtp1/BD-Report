@@ -222,9 +222,18 @@ async function main() {
   if (!['Fondateur', 'Support BD Report', 'Administrateur', 'Manager', 'Développeur', 'Membre'].every(k => staffRoles.some(r => (r.roleKey || r.name) === k))) throw new Error('Built-in staff roles missing from table')
   const founderRole = staffRoles.find(r => (r.roleKey || r.name) === 'Fondateur')
   if (!founderRole || (founderRole.permissions || []).length < 30) throw new Error('Founder role should hold every permission')
+  if (!(founderRole.permissions || []).includes('dashboard.view')) throw new Error('dashboard.view permission missing from catalogue')
+
+  // Tableau de bord support : portefeuille, churn et traitement des tickets.
+  await click(hubTab('Tableau de bord'))
+  for (const k of ['Taux de churn', 'Tickets ouverts', 'Portefeuille client', 'Raisons principales de churn']) {
+    if (!text().includes(k)) throw new Error('Support dashboard missing: ' + k)
+  }
+
   await click(hubTab('Clients'))
   // Chaque environnement existant est forcément un client (PeopleSpheres + Test).
   if (!text().includes('PeopleSpheres') || !text().includes('Test')) throw new Error('Environments not turned into clients')
+  if (!text().includes('Clients non aboutis')) throw new Error('« Clients non aboutis » column missing from client kanban')
   // La demande du site est arrivée dans « Demandes »...
   await click(hubTab('Demandes'))
   if (!text().includes('ACME Corp')) throw new Error('Contact request not ingested into Demandes')

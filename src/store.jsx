@@ -405,6 +405,7 @@ export const STAFF_PERMISSION_GROUPS = [
       { id: 'logs.view', label: 'Consulter les logs support' },
       { id: 'trash.manage', label: 'Gérer la corbeille support' },
       { id: 'stats.view', label: 'Voir les KPI / statistiques support' },
+      { id: 'dashboard.view', label: 'Consulter le tableau de bord support' },
       { id: 'demo.access', label: 'Lancer la démo commerciale / visite guidée' },
     ],
   },
@@ -496,10 +497,10 @@ function defaultPermsFor(roleKey) {
     'requests.view', 'requests.manage', 'kb.manage', 'canned.manage',
     'clients.view', 'clients.manage', 'projects.view', 'projects.manage',
     'accounts.view', 'accounts.create', 'accounts.role', 'accounts.offer', 'accounts.disable', 'accounts.remove',
-    'passwords.view', 'passwords.reset', 'services.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'demo.access',
+    'passwords.view', 'passwords.reset', 'services.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'demo.access',
   ]
-  if (roleKey === 'Développeur') return ['tickets.view', 'tickets.reply', 'tickets.priority', 'tickets.status', 'projects.view', 'logs.view', 'stats.view', 'demo.access']
-  if (roleKey === 'Manager') return ['passwords.view', 'passwords.reset', 'accounts.create', 'stats.view', 'orgchart.edit', 'demo.access']
+  if (roleKey === 'Développeur') return ['tickets.view', 'tickets.reply', 'tickets.priority', 'tickets.status', 'projects.view', 'logs.view', 'stats.view', 'dashboard.view', 'demo.access']
+  if (roleKey === 'Manager') return ['passwords.view', 'passwords.reset', 'accounts.create', 'stats.view', 'dashboard.view', 'orgchart.edit', 'demo.access']
   return [] // Membre + rôles personnalisés : aucune permission staff par défaut
 }
 
@@ -524,7 +525,6 @@ export function roleRankOf(role, db) {
   if (r && typeof r.rank === 'number') return r.rank
   return ROLE_RANKS[role] ?? 0
 }
-// Le compte détient-il la permission staff ? (Fondateur = toujours vrai)
 // Couleurs disponibles pour repérer un droit dans la matrice des permissions.
 export const PERM_COLORS = [
   { id: '', label: 'Aucune', dot: 'bg-gray-300 dark:bg-gray-600', row: '' },
@@ -536,6 +536,7 @@ export const PERM_COLORS = [
 ]
 export const permColor = (id) => PERM_COLORS.find(c => c.id === (id || '')) || PERM_COLORS[0]
 
+// Le compte détient-il la permission staff ? (Fondateur = toujours vrai)
 export function accountHasPerm(account, permId, db) {
   const role = account?.role
   // Le Fondateur passe avant la suspension : sans cela, suspendre « permissions.manage »
@@ -1650,6 +1651,17 @@ function migrate(db) {
   db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
   db.staffRoles = seedStaffRoles(db.staffRoles) // rôles + permissions de l'équipe staff (idempotent)
   if (!db.staffPermissionMeta || typeof db.staffPermissionMeta !== 'object') db.staffPermissionMeta = {} // couleur / suspension par droit
+  // Le tableau de bord support est un droit neuf : les rôles qui consultent déjà les KPI
+  // le reçoivent une seule fois, sinon il resterait invisible sur les bases existantes.
+  db._autoSeed = db._autoSeed || {}
+  if (!db._autoSeed.dashboardPerm) {
+    (db.staffRoles || []).forEach(r => {
+      const perms = r.permissions || []
+      if (perms.includes('stats.view') && !perms.includes('dashboard.view')) perms.push('dashboard.view')
+      r.permissions = perms
+    })
+    db._autoSeed.dashboardPerm = true
+  }
   // Intégrations externes (HubSpot…) — réglages de l'ÉDITEUR : URL du connecteur
   // publiée à tous les clients + valeurs par défaut. Aucun jeton ici.
   db.integrations = db.integrations || {}

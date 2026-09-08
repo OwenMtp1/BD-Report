@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck } from 'lucide-react'
+import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard } from 'lucide-react'
 import { useStore, slaInfo } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
@@ -12,6 +12,7 @@ import DemoSales from './DemoSales.jsx'
 import Conversations from './Conversations.jsx'
 import OffersAdmin from './OffersAdmin.jsx'
 import StaffPermissions from './StaffPermissions.jsx'
+import SupportDashboard from './SupportDashboard.jsx'
 
 const SupportConversations = () => <Conversations scope="support" />
 
@@ -19,6 +20,7 @@ const SupportConversations = () => <Conversations scope="support" />
 // tout le back-office support. Chaque onglet porte la permission (`perm`) qui le
 // déverrouille — un membre du staff ne voit que ce que son rôle autorise.
 const TABS = [
+  { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, El: SupportDashboard, perm: 'dashboard.view' },
   { id: 'requests', label: 'Demandes', icon: Inbox, El: Requests, perm: 'requests.view' },
   { id: 'conversations', label: 'Conversations', icon: MessagesSquare, El: SupportConversations },
   { id: 'tickets', label: 'Tickets', icon: LifeBuoy, El: Tickets, perm: 'tickets.view' },

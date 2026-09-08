@@ -66,7 +66,12 @@ npm run dev        # serveur de dev
   (`store.setEmployeeRole(subId, makeManager)`). Membres de conversation cliquables → fiche `CollaboratorCard` (via `open-collaborator`). **Mots de passe** : `account.passwordClear` conservé (visible manager/support/
   fondateur via `revealPassword`) EN PLUS du hash `password` (auth) — voir ⚠️ sécurité ci-dessous.
   Support back-office : **`SupportHub`** (onglet unique « Équipe support », rôles support) = console à onglets qui
-  regroupe `Requests`/`Tickets`/`TicketChat`/`Clients`/`Projects`/`KnowledgeBase`/`SupportLogs`/`SupportTrash` + KPI.
+  regroupe `SupportDashboard`/`Requests`/`Tickets`/`TicketChat`/`Clients`/`Projects`/`KnowledgeBase`/`SupportLogs`/`SupportTrash` + KPI.
+  **`SupportDashboard`** (onglet « Tableau de bord », perm `dashboard.view`) : portefeuille client, taux de churn (perdus / engagés),
+  raisons de churn agrégées depuis les motifs de clôture des projets, tickets ouverts / sans réponse, délais moyens de 1re réponse et
+  de résolution, respect du SLA, CSAT, répartitions par priorité / motif / statut de projet. Kanban Clients : colonne
+  **« Clients non aboutis »**. Clôturer un projet **exige** un motif (`closeReason`, `closedAt` posés par `saveProject` ; rouvrir efface
+  les deux) — le motif s'affiche sur la fiche client et alimente le dashboard.
   `Support` (client) reste dans « Mes données ». Menu simplifié : 5 catégories (Pilotage, Activité, Mes données,
   Administration, Support Client BD Report).
 - **`src/ui.jsx`** — Modal, Confirm (prop `yesLabel`), Field, Select, CommitInput/CommitTextarea (commit au blur = perf),
@@ -88,7 +93,11 @@ npm run dev        # serveur de dev
   **Gouvernance** : seul le Fondateur gère tout ; un rôle porteur de `permissions.manage` gère les rôles de **rang strictement
   inférieur** au sien et **n'accorde que des droits qu'il détient** (anti-escalade). Page **`StaffPermissions`** = onglet
   « Permissions staff » de `SupportHub` (visible si `permissions.manage`) : matrice droits×rôles + création/renommage/rang/suppression
-  de rôles + attribution aux comptes. Les onglets de `SupportHub` portent chacun une `perm` (filtrés par `hasPerm`). Les gardes
+  de rôles + attribution aux comptes. **Menu par droit** (`db.staffPermissionMeta[permId]` = `{color, disabled, disabledAt, disabledBy}`,
+  `PERM_COLORS`/`permColor`, `store.permMeta/setPermColor/setPermDisabled`) : couleur de repérage et **suspension**. Le catalogue étant
+  en dur (les gardes l'interrogent par id), un droit ne se supprime pas — il se suspend : `accountHasPerm` le refuse à tous **sauf au
+  Fondateur** (sinon suspendre `permissions.manage` verrouillerait la gouvernance), sans toucher à la configuration des rôles.
+  Les onglets de `SupportHub` portent chacun une `perm` (filtrés par `hasPerm`). Les gardes
   store staff-only (offres, `accounts.offer/disable/wipe/remove`, `canViewPasswords`) passent par `accountHasPerm`. L'éditeur de
   rôles d'`Admin` liste `store.allRoles()` (rôles personnalisés inclus).
 - **Offres = données** (`db.offers`, staff-managées) : `defaultOffers()` seed starter/beta. Chaque offre a
