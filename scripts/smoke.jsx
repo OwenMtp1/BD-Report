@@ -282,7 +282,14 @@ async function main() {
   await click(find('button', 'Support BD Report'))
   await act(async () => { await new Promise(r => setTimeout(r, 700)) })
   if (text().includes('4 chiffres')) throw new Error('Training space must not ask for an access code')
-  if (!text().includes('Console Support') && !text().includes('Formation staff')) throw new Error('Training space did not open the app')
+  // « Formation staff » figure dans la barre du haut même sur le sélecteur d'espace : on
+  // exige donc un repère de l'application elle-même, sans quoi le test resterait aveugle.
+  if (text().includes('choisir un espace') || text().includes('choisissez votre espace')) {
+    throw new Error('Training space stopped on the space picker instead of opening')
+  }
+  if (!text().includes('RDV réalisés') && !text().includes('Console Support')) {
+    throw new Error('Training space did not render the application itself')
+  }
   await click(find('button', 'Quitter'))
   await click(find('button', 'Cas de support'))
   if (!text().includes('Insatisfaction')) throw new Error('Training tickets missing')

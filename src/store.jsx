@@ -1474,6 +1474,7 @@ export function buildTrainingDb(roleKey, realRoles) {
     subState: 'active', departments: ['Support'], services: [], members: ['train-sup', 'train-mgr', 'train-dev'],
   })
   db.subenvs.push({ id: 'tsubi-sup', envId: 'tenv-interne', prenom: 'Vous', nom: '(formation)', poste: 'Support', service: '', pin: '', photo: '', ownerId: 'train-sup' })
+  db.data['tsubi-sup'] = emptySubEnvData()
 
   // --- Entreprises clientes, chacune illustrant une situation différente
   const CLIENTS = [
@@ -1497,6 +1498,7 @@ export function buildTrainingDb(roleKey, realRoles) {
       subState: 'active', departments: ['Sales'], services: [], members: [accId],
     })
     db.subenvs.push({ id: `tsub-${i}`, envId: c.id, prenom: c.name.split(' ')[0], nom: 'Contact', poste: 'Manager', service: '', pin: '', photo: '', ownerId: accId })
+    db.data[`tsub-${i}`] = emptySubEnvData()
   })
 
   // --- Tickets à tous les stades : non pris en charge, en cours, clôturés, notés bas.
@@ -1609,6 +1611,7 @@ export function buildTrainingDb(roleKey, realRoles) {
   out.subenvs = out.subenvs.filter(x => !String(x.id).startsWith('tsub-julie') && !String(x.id).startsWith('tsub-sarah') && !String(x.id).startsWith('tsub-thomas'))
   out.subenvs = out.subenvs.filter(x => out.environments.some(e => e.id === x.envId))
   Object.keys(out.data).forEach(k => { if (!out.subenvs.some(x => x.id === k)) delete out.data[k] })
+  out.subenvs.forEach(x => { if (!out.data[x.id]) out.data[x.id] = emptySubEnvData() })
   out.channels = (out.channels || []).filter(c => c.envId !== 'env-test')
   ;(out.environments || []).forEach(e => { e.pin = '' }) // aucun verrou dans un espace d'entraînement
   return out
