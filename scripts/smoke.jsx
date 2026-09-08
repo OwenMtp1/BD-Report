@@ -100,7 +100,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Main app / Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Primes & Commissions', 'Simulateur de primes', 'KPI Entreprise', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Administration', 'Intégration HubSpot', 'Équipe support']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Primes & Commissions', 'Simulateur de primes', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Manager', 'Équipe support']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
@@ -113,8 +113,18 @@ async function main() {
   await click(find('button', 'Ajouter une règle'))
   if (!text().includes('Paliers de prime')) throw new Error('Activity bonus rule editor did not render')
 
+  // 5b bis. Console « Gestion Manager » : tout le réservé manager tient en un seul écran.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Gestion Manager'))
+  for (const t of ['Utilisateurs', 'Organigramme', 'Pilotage équipe', 'KPI Entreprise', 'Intégration HubSpot']) {
+    if (!find('button', t)) throw new Error('Manager hub tab missing: ' + t)
+  }
+  // Les onglets regroupés ne doivent plus encombrer la barre latérale.
+  if ([...container.querySelectorAll('nav button')].some(b => b.textContent.trim() === 'Intégration HubSpot')) {
+    throw new Error('Manager tabs should be grouped, not left in the sidebar')
+  }
+
   // 5c. Intégration HubSpot : console de connexion, correspondances, synchro et catalogue d'appels.
-  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Intégration HubSpot'))
+  await click(find('button', 'Intégration HubSpot'))
   if (!text().includes('Connexion à HubSpot') || !text().includes('Tester la connexion')) throw new Error('HubSpot connection card missing')
   // Connexion PAR ENTREPRISE : le client relie son propre portail en un clic.
   if (!text().includes('Connecter mon HubSpot')) throw new Error('HubSpot per-company connect button missing')
@@ -291,8 +301,8 @@ async function main() {
   await click(find('button', 'Créer le contact'))
   if (!text().includes('Jean Test Manuel')) throw new Error('Manual contact not created')
 
-  // 8c. Gestion Administration : la page rend, et AUCUN mot de passe en clair n'est exposé (sécurité)
-  await click(navBtn('Gestion Administration'))
+  // 8c. Gestion Manager : la page rend, et AUCUN mot de passe en clair n'est exposé (sécurité)
+  await click(navBtn('Gestion Manager'))
   if ([...container.querySelectorAll('input')].some(i => i.value === 'demo1234')) throw new Error('Admin must not expose plaintext password')
 
   // 8d. ICP : page rendue + création d'un profil sur mesure

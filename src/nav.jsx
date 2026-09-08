@@ -8,7 +8,7 @@
 import {
   LayoutDashboard, Table2, Target, Trophy, Gauge, CalendarDays, KanbanSquare, ListChecks,
   CheckSquare, Coins, MessagesSquare, BookUser, ShieldCheck, StickyNote, ScrollText, Trash2,
-  LifeBuoy, Gift, Shield, Users, Link2,
+  LifeBuoy, Gift, Shield, Users, Link2, Network,
 } from 'lucide-react'
 
 const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
@@ -18,10 +18,10 @@ export const NAV_GROUPS = [
   {
     id: 'pilotage', label: 'Pilotage', items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
-      { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: MANAGER_ROLES },
+      { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: MANAGER_ROLES, inManagerHub: true },
       { id: 'icp', label: 'ICP', icon: Target, brick: 'ICP' },
       { id: 'classement', label: 'Classement', icon: Trophy, brick: 'Classement' },
-      { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, brick: 'Pilotage équipe', roles: MANAGER_ROLES },
+      { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, brick: 'Pilotage équipe', roles: MANAGER_ROLES, inManagerHub: true },
     ],
   },
   {
@@ -52,9 +52,15 @@ export const NAV_GROUPS = [
   },
   {
     id: 'administration', label: 'Administration', items: [
-      { id: 'admin', label: 'Gestion Administration', icon: Shield, brick: 'Gestion Administration', roles: ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'] },
-      { id: 'teams', label: 'Gérez mes équipes', icon: Users, brick: 'Gérez mes équipes', roles: ['Manager'] },
-      { id: 'hubspot', label: 'Intégration HubSpot', icon: Link2, brick: 'Intégration HubSpot', roles: MANAGER_ROLES },
+      // Entrée unique : la console « Gestion Manager » regroupe tout ce qu'un manager est
+      // seul à voir. Les onglets ci-dessous restent déclarés (donc toujours accordables via
+      // une offre) mais sont marqués `inManagerHub` : ils deviennent des onglets de la
+      // console au lieu d'entrées de la barre latérale.
+      { id: 'manager', label: 'Gestion Manager', icon: Shield, brick: 'Gestion Manager', roles: MANAGER_ROLES, perm: 'manager.view' },
+      { id: 'admin', label: 'Utilisateurs', icon: Shield, brick: 'Gestion Administration', roles: ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'], inManagerHub: true },
+      { id: 'teams', label: 'Mon équipe', icon: Users, brick: 'Gérez mes équipes', roles: ['Manager'], inManagerHub: true },
+      { id: 'orgchart', label: 'Organigramme', icon: Network, brick: 'Organigramme', roles: MANAGER_ROLES, inManagerHub: true },
+      { id: 'hubspot', label: 'Intégration HubSpot', icon: Link2, brick: 'Intégration HubSpot', roles: MANAGER_ROLES, inManagerHub: true },
     ],
   },
   {
@@ -65,6 +71,8 @@ export const NAV_GROUPS = [
 ]
 
 export const NAV = NAV_GROUPS.flatMap(g => g.items)
+// Onglets de la console « Gestion Manager » (masqués de la barre latérale).
+export const MANAGER_TABS = NAV.filter(i => i.inManagerHub)
 
 // Onglets accordables via une offre (tous ceux qui portent un `brick`).
 export const GRANTABLE_TABS = NAV.filter(i => i.brick).map(i => {

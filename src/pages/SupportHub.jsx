@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard } from 'lucide-react'
+import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield } from 'lucide-react'
 import { useStore, slaInfo } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
@@ -13,6 +13,7 @@ import Conversations from './Conversations.jsx'
 import OffersAdmin from './OffersAdmin.jsx'
 import StaffPermissions from './StaffPermissions.jsx'
 import SupportDashboard from './SupportDashboard.jsx'
+import Admin from './Admin.jsx'
 
 const SupportConversations = () => <Conversations scope="support" />
 
@@ -26,6 +27,9 @@ const TABS = [
   { id: 'tickets', label: 'Tickets', icon: LifeBuoy, El: Tickets, perm: 'tickets.view' },
   { id: 'clients', label: 'Clients', icon: Users2, El: Clients, perm: 'clients.view' },
   { id: 'projects', label: 'Projets', icon: FolderKanban, El: Projects, perm: 'projects.view' },
+  // Vue globale des comptes et environnements : c'est du back-office éditeur, sa place est
+  // ici et non côté client, où elle exposait les comptes des autres entreprises clientes.
+  { id: 'accounts', label: 'Comptes & environnements', icon: Shield, El: () => <Admin mode="admin" />, perm: 'accounts.view' },
   { id: 'offers', label: 'Offres', icon: Tag, El: OffersAdmin, perm: 'offers.manage' },
   { id: 'kb', label: 'Base de connaissances', icon: BookOpen, El: KnowledgeBase, perm: 'kb.manage' },
   { id: 'permissions', label: 'Permissions staff', icon: ShieldCheck, El: StaffPermissions, perm: 'permissions.manage' },

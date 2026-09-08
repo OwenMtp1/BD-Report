@@ -406,6 +406,7 @@ export const STAFF_PERMISSION_GROUPS = [
       { id: 'trash.manage', label: 'Gérer la corbeille support' },
       { id: 'stats.view', label: 'Voir les KPI / statistiques support' },
       { id: 'dashboard.view', label: 'Consulter le tableau de bord support' },
+      { id: 'manager.view', label: 'Accéder à la console Gestion Manager' },
       { id: 'demo.access', label: 'Lancer la démo commerciale / visite guidée' },
     ],
   },
@@ -497,10 +498,10 @@ function defaultPermsFor(roleKey) {
     'requests.view', 'requests.manage', 'kb.manage', 'canned.manage',
     'clients.view', 'clients.manage', 'projects.view', 'projects.manage',
     'accounts.view', 'accounts.create', 'accounts.role', 'accounts.offer', 'accounts.disable', 'accounts.remove',
-    'passwords.view', 'passwords.reset', 'services.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'demo.access',
+    'passwords.view', 'passwords.reset', 'services.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access',
   ]
-  if (roleKey === 'Développeur') return ['tickets.view', 'tickets.reply', 'tickets.priority', 'tickets.status', 'projects.view', 'logs.view', 'stats.view', 'dashboard.view', 'demo.access']
-  if (roleKey === 'Manager') return ['passwords.view', 'passwords.reset', 'accounts.create', 'stats.view', 'dashboard.view', 'orgchart.edit', 'demo.access']
+  if (roleKey === 'Développeur') return ['tickets.view', 'tickets.reply', 'tickets.priority', 'tickets.status', 'projects.view', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access']
+  if (roleKey === 'Manager') return ['passwords.view', 'passwords.reset', 'accounts.create', 'stats.view', 'dashboard.view', 'manager.view', 'orgchart.edit', 'demo.access']
   return [] // Membre + rôles personnalisés : aucune permission staff par défaut
 }
 
@@ -1663,6 +1664,16 @@ function migrate(db) {
       r.permissions = perms
     })
     db._autoSeed.dashboardPerm = true
+  }
+  // La console « Gestion Manager » est un droit neuf : tout le staff le reçoit une fois,
+  // sinon l'entrée resterait invisible aux rôles déjà en place.
+  if (!db._autoSeed.managerPerm) {
+    (db.staffRoles || []).forEach(r => {
+      const perms = r.permissions || []
+      if (perms.length && !perms.includes('manager.view')) perms.push('manager.view')
+      r.permissions = perms
+    })
+    db._autoSeed.managerPerm = true
   }
   // Intégrations externes (HubSpot…) — réglages de l'ÉDITEUR : URL du connecteur
   // publiée à tous les clients + valeurs par défaut. Aucun jeton ici.

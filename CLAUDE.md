@@ -29,6 +29,10 @@ npm run dev        # serveur de dev
   `GRANTABLE_TABS` (liste dérivée pour l'éditeur d'offres), `ALL_BRICKS` (= `store.BRICKS`), `LEGACY_BRICKS`.
   Ajouter un onglet ici l'ajoute automatiquement partout : nav, éditeur d'offres, page Souscrire, éditeur de briques par
   utilisateur. `migrate` accorde les nouveaux onglets à l'offre Beta + aux comptes en accès complet.
+  Un item peut porter `inManagerHub: true` (masqué de la barre latérale, rendu comme onglet de **`ManagerHub`** — il reste
+  déclaré ici, donc toujours accordable par une offre) et `perm: '<droit staff>'` (ouvre l'onglet même si le rôle n'est pas
+  dans `roles`, et court-circuite la garde par brique). `MANAGER_TABS` = les items `inManagerHub`. **Deux items ne doivent
+  jamais partager la même brique** : `GRANTABLE_TABS` la prend pour clé et React signalerait un doublon.
 - **`src/App.jsx`** — routing par `NAV_GROUPS` (importé de nav.jsx) + `pageEl` (switch d'id). `MainApp` = sidebar + header.
   Login avec « rester connecté 30 j » + « enregistrer mot de passe ». Pastilles non-lus support. Bandeau lecture seule.
   **Connexion Google** (Supabase Auth, provider google) : bouton « Continuer avec Google » → `signInWithGoogle()`
@@ -38,6 +42,12 @@ npm run dev        # serveur de dev
   `logout()` ferme aussi la session Supabase, sans quoi l'écran de connexion la retrouverait aussitôt. Côté Google Cloud :
   l'URI de redirection est celle de **Supabase** (`https://<ref>.supabase.co/auth/v1/callback`), pas celle du site.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
+- **`src/pages/ManagerHub.jsx`** — console **« Gestion Manager »** (nav Administration, brick homonyme, perm `manager.view`
+  accordée à tout le staff) : réunit ce qu'un manager est seul à voir — Utilisateurs (`Admin` en périmètre d'équipe),
+  Organigramme, Pilotage équipe, KPI Entreprise, Intégration HubSpot. Les onglets viennent de `MANAGER_TABS`, filtrés par les
+  briques de l'offre. La **vue globale** (tous les comptes, tous les environnements) a quitté le client pour l'onglet
+  « Comptes & environnements » de `SupportHub` (perm `accounts.view`) : côté client elle exposait les comptes des autres
+  entreprises clientes (`Admin.jsx`, mode `admin`, ne filtrait sur aucun environnement).
 - **`src/pages/*`** — Dashboard, Rdv, Leads (kanban + pipeline entreprise), Tasks, MyTasks, Contacts, Notes, Primes,
   Kpi, TeamLead, Trash, Settings, Admin, OrgChart, Company, **Conversations**, **DataQuality** (Qualité des données :
   score /100 + checks téléphone/email/doublons/prochaine action/inactivité), **Classement** (gamification équipe :

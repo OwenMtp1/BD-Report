@@ -28,6 +28,7 @@ import Icp from './pages/Icp.jsx'
 import Settings from './pages/Settings.jsx'
 import OrgChart from './pages/OrgChart.jsx'
 import SupportHub from './pages/SupportHub.jsx'
+import ManagerHub from './pages/ManagerHub.jsx'
 import Conversations from './pages/Conversations.jsx'
 import DataQuality from './pages/DataQuality.jsx'
 import Classement from './pages/Classement.jsx'
@@ -423,11 +424,14 @@ function MainApp() {
   const myOffer = findOffer(store.db.offers, me.plan)
   const noOffer = !myOffer && !isSupportUser          // compte sans offre : support + souscrire seulement
   const canSee = (item) => {
-    if (item.roles && !item.roles.includes(me.role)) return false
+    if (item.inManagerHub) return false                  // regroupé dans « Gestion Manager »
+    // Une permission staff ouvre l'onglet même quand le rôle n'est pas dans `roles`.
+    const byPerm = item.perm && store.hasPerm(item.perm)
+    if (item.roles && !item.roles.includes(me.role) && !byPerm) return false
     if (item.staffOnly) return isSupportUser            // console support : équipe BD Report uniquement
     if (item.always) return true                         // Support / Souscrire : toujours accessibles
     if (noOffer) return false                            // sans offre : rien d'autre que les onglets « always »
-    if (item.brick && !myBricks.includes(item.brick)) return false // l'offre décide de chaque onglet
+    if (item.brick && !myBricks.includes(item.brick) && !byPerm) return false // l'offre décide de chaque onglet
     return true
   }
   const groups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(canSee) })).filter(g => g.items.length)
@@ -504,6 +508,7 @@ function MainApp() {
     notes: <Notes onCreateRdvFromNote={goCreateRdvFromNote} />,
     primes: <Primes />,
     supporthub: <SupportHub />,
+    manager: <ManagerHub />,
     conversations: <Conversations scope="team" />,
     dataquality: <DataQuality />,
     classement: <Classement />,
