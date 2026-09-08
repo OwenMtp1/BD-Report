@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, Eye, EyeOff, KeyRound, Eraser, UserMinus } from 'lucide-react'
+import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, Eye, EyeOff, KeyRound, Eraser, UserMinus, Network } from 'lucide-react'
 import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, todayISO } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
+import ProjectOrgChart from './ProjectOrgChart.jsx'
 
 // Menu utilisateurs d'un projet (staff) : gère les membres de l'environnement rattaché —
 // offre, rôle manager, désactivation d'accès, mot de passe, effacement des données, retrait.
@@ -304,12 +305,18 @@ export default function Projects() {
   const [form, setForm] = useState(null) // {mode, data}
   const [confirmDel, setConfirmDel] = useState(null)
   const [usersFor, setUsersFor] = useState(null) // projet dont on gère les utilisateurs
+  const [orgFor, setOrgFor] = useState(null)     // projet dont on ouvre l'organigramme
 
   const save = (data) => {
     store.saveProject(data)
     toast(form.mode === 'create' ? 'Projet créé' : 'Projet mis à jour')
     setForm(null)
   }
+  // L'organigramme remplace la page : un arbre à manipuler tient mal dans une fenêtre.
+  if (orgFor) {
+    return <ProjectOrgChart envId={orgFor.envId} title={orgFor.name || orgFor.clientName || 'Projet'} onBack={() => setOrgFor(null)} />
+  }
+
   const progress = (p) => { const done = p.phases.filter(ph => ph.done).length; return p.phases.length ? Math.round(done / p.phases.length * 100) : 0 }
 
   return (
@@ -346,6 +353,7 @@ export default function Projects() {
                     <div className="flex items-center gap-1 shrink-0">
                       <span className={`chip ${st.color}`}>{st.label}</span>
                       {p.envId && <button className="p-1.5 rounded-lg hover:bg-surface" title="Utilisateurs du projet" onClick={() => setUsersFor(p)}><Users2 size={14} /></button>}
+                      {p.envId && <button className="p-1.5 rounded-lg hover:bg-surface" title="Organigramme du projet" onClick={() => setOrgFor(p)}><Network size={14} /></button>}
                       <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setForm({ mode: 'edit', data: structuredClone(p) })}><Pencil size={14} /></button>
                       <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" onClick={() => setConfirmDel(p.id)}><Trash2 size={14} /></button>
                     </div>

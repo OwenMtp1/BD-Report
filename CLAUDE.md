@@ -49,6 +49,16 @@ npm run dev        # serveur de dev
   supprimé ne ressuscite pas. Ajouter un article = une entrée ici, rien d'autre. Côté client (`Support.jsx`,
   `KbBrowser`) : entrée par catégorie cliquable ou par recherche ; côté staff (`KnowledgeBase.jsx`) : filtre par
   catégorie, recherche et édition des mots-clés.
+- **Organigrammes** — **`StaffOrgChart`** (onglet « Organigramme staff » de `SupportHub`, perm `services.manage`) :
+  arbre de l'équipe BD Report par `account.teamOf`, glisser-déposer (`store.setStaffManager`, anti-cycle), services
+  staff. **Aucun droit ici** : ils restent dans « Permissions staff », un seul endroit pour donner ou retirer un accès.
+  **`ProjectOrgChart`** (bouton sur chaque projet ayant un `envId`) : organigramme de l'environnement client
+  (`store.setSubManager`, services via `addEnvService/renameEnvService/removeEnvService` — les méthodes historiques
+  visent l'env COURANT, inadapté au staff) + panneau **« Rôles et accès »**. **Rôles par environnement** :
+  `env.roles = [{id, name, color, builtin, tabs[], perms[]}]`, `seedEnvRoles` garantit Manager et Membre partout,
+  `CLIENT_PERMISSION_GROUPS`/`CLIENT_PERMISSION_IDS` = droits de management, `tabs` = bricks visibles,
+  `subenv.roleId` = rôle porté. `store.envRoles/saveEnvRoles/assignSubRole`. Le panneau travaille sur un **brouillon**
+  appliqué en une fois après confirmation.
 - **`src/pages/ManagerHub.jsx`** — console **« Gestion Manager »** (nav Administration, brick homonyme, perm `manager.view`
   accordée à tout le staff) : réunit ce qu'un manager est seul à voir — Utilisateurs (`Admin` en périmètre d'équipe),
   Organigramme, Pilotage équipe, KPI Entreprise, Intégration HubSpot. Les onglets viennent de `MANAGER_TABS`, filtrés par les

@@ -2578,6 +2578,48 @@ export function StoreProvider({ children, demo = false }) {
           return d
         })
       },
+      // Services d'un environnement DÉSIGNÉ. Les méthodes historiques visent l'environnement
+      // courant, ce qui ne convient pas au staff : il intervient sur celui d'un client.
+      envServicesOf(envId) { return (db.environments.find(e => e.id === envId)?.services) || [] },
+      addEnvService(envId, name) {
+        const nm = (name || '').trim(); if (!nm) return
+        setDb(d => { const e = d.environments.find(x => x.id === envId); if (e) { e.services = e.services || []; e.services.push({ id: uid(), name: nm }) } return d })
+      },
+      renameEnvService(envId, sid, name) {
+        setDb(d => {
+          const e = d.environments.find(x => x.id === envId); if (!e) return d
+          const sv = (e.services || []).find(v => v.id === sid); if (!sv) return d
+          sv.name = (name || sv.name).trim()
+          d.subenvs.forEach(sub => { if (sub.serviceId === sid) sub.service = sv.name })
+          return d
+        })
+      },
+      removeEnvService(envId, sid) {
+        setDb(d => {
+          const e = d.environments.find(x => x.id === envId); if (e) e.services = (e.services || []).filter(v => v.id !== sid)
+          d.subenvs.forEach(sub => { if (sub.serviceId === sid) { sub.serviceId = null; sub.service = '' } })
+          ;(d.channels || []).forEach(c => { if (Array.isArray(c.services)) c.services = c.services.filter(x => x !== sid) })
+          return d
+        })
+      },
+      // Rattachement dans l'organigramme d'un environnement donné, par sous-espace.
+      setSubManager(subId, managerSubId) {
+        setDb(d => {
+          const sub = d.subenvs.find(x => x.id === subId); if (!sub) return d
+          const acc = d.accounts.find(a => a.id === sub.ownerId); if (!acc) return d
+          const target = managerSubId ? d.subenvs.find(x => x.id === managerSubId) : null
+          const parentId = target?.ownerId || null
+          if (parentId === acc.id) return d
+          let cur = parentId, seen = new Set()
+          while (cur && !seen.has(cur)) {
+            if (cur === acc.id) return d // cycle : le futur parent descend de cette personne
+            seen.add(cur)
+            cur = d.accounts.find(a => a.id === cur)?.teamOf || null
+          }
+          acc.teamOf = parentId
+          return d
+        })
+      },
       // Rôles d'un environnement client. L'enregistrement est groupé et explicite : la
       // page présente un brouillon, on applique tout d'un coup après confirmation.
       envRoles(envId) { return (db.environments.find(e => e.id === envId)?.roles) || [] },

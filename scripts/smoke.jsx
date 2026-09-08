@@ -289,6 +289,20 @@ async function main() {
   if (!text().includes('ACME Corp')) throw new Error('Contact request not ingested into Demandes')
   // ...et a généré automatiquement un projet ; chaque environnement a aussi son projet d'implémentation.
   await click(hubTab('Projets'))
+  // Organigramme d'un projet : organisation des personnes et rôles de l'entreprise.
+  {
+    const orgBtn = [...container.querySelectorAll('main button[title="Organigramme du projet"]')][0]
+    if (!orgBtn) throw new Error('Project org chart button missing')
+    await click(orgBtn)
+    if (!text().includes('Organigramme —')) throw new Error('Project org chart did not open')
+    await click(find('button', 'Rôles et accès'))
+    for (const k of ['Onglets visibles', 'Droits de management', 'Enregistrer vos modifications']) {
+      if (!text().includes(k)) throw new Error('Roles panel missing: ' + k)
+    }
+    if (!text().includes('Manager') || !text().includes('Membre')) throw new Error('Default env roles missing')
+    await click(find('button', 'Annuler'))
+    await click(find('button', 'Retour aux projets'))
+  }
   if (!text().includes('ACME Corp')) throw new Error('Auto-project from request not created')
   if (!text().includes('PeopleSpheres')) throw new Error('Environment project not created')
   // Création manuelle d'un projet : le formulaire + le planning Gantt doivent fonctionner.
