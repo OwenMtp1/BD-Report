@@ -50,6 +50,13 @@ import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
 
 // ---------------------------------------------------------------- Connexion
+// Marque qu'une connexion Google vient d'être lancée depuis cet onglet. Au retour,
+// l'écran de connexion sait qu'il doit rattacher l'identité ; sans cette marque, une
+// session Google encore ouverte est refermée, pour que le portail Google soit
+// redemandé à chaque fois plutôt que court-circuité (poste partagé).
+const GOOGLE_FLOW_KEY = 'bdr_google_flow'
+const clearGoogleFlow = () => { try { sessionStorage.removeItem(GOOGLE_FLOW_KEY) } catch (e) { /* stockage refusé */ } }
+
 function Login() {
   const store = useStore()
   const { t, lang } = useT()
@@ -75,19 +82,24 @@ function Login() {
     let cancelled = false, grace = null
     ;(async () => {
       try {
+        let returning = false
+        try { returning = sessionStorage.getItem(GOOGLE_FLOW_KEY) === '1' } catch (e) { /* stockage refusé */ }
+        // Personne ne revient de Google : une session encore ouverte est refermée,
+        // sinon l'app reconnecterait toute seule sans repasser par le portail.
+        if (!returning) { await signOutSupabase(); return }
         const user = await getCurrentUser()
         if (cancelled || !user?.email) return
         const r = store.loginWithGoogle(user.email)
-        if (!r?.error) return
+        if (!r?.error) { clearGoogleFlow(); return }
         if (r.error === 'disabled') {
-          await signOutSupabase()
+          clearGoogleFlow(); await signOutSupabase()
           setErr('Accès désactivé. Contactez le support BD Report.')
           return
         }
         // Compte introuvable : on laisse le temps aux comptes distants d'arriver.
         grace = setTimeout(async () => {
           if (cancelled) return
-          await signOutSupabase()
+          clearGoogleFlow(); await signOutSupabase()
           setErr(t('login.googleUnknown'))
         }, 6000)
       } catch (e) { /* Supabase absent : seule la connexion classique reste offerte */ }
@@ -98,12 +110,15 @@ function Login() {
   const googleSignIn = async () => {
     setErr(''); setGBusy(true)
     try {
+      try { sessionStorage.setItem(GOOGLE_FLOW_KEY, '1') } catch (e) { /* stockage refusé */ }
       const { error } = await signInWithGoogle()
       // Sans erreur, le navigateur part vers Google : la suite se joue au retour.
       // La cause est reprise telle quelle : un message purement générique ne permet
       // ni au support ni au client de savoir quoi corriger.
-      if (error) { setErr(`${t('login.googleErr')} (${error})`); setGBusy(false) }
-    } catch (e) { setErr(`${t('login.googleErr')} (${e?.message || e})`); setGBusy(false) }
+      // Le départ n'a pas eu lieu : on retire la marque, sinon le prochain affichage
+      // de cet écran croirait revenir de Google.
+      if (error) { clearGoogleFlow(); setErr(`${t('login.googleErr')} (${error})`); setGBusy(false) }
+    } catch (e) { clearGoogleFlow(); setErr(`${t('login.googleErr')} (${e?.message || e})`); setGBusy(false) }
   }
 
   const submit = () => {

@@ -22,7 +22,12 @@ export async function signInWithGoogle(redirectTo) {
   // des clés absentes, ou la librairie qui n'a pas pu être chargée. On les sépare.
   if (!c) return { error: isSupabaseConfigured() ? 'librairie Supabase non chargée' : 'Supabase non configuré' }
   const back = redirectTo || (typeof window !== 'undefined' ? window.location.href.split('#')[0] : undefined)
-  const { error } = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: back } })
+  // prompt=select_account : Google redemande systématiquement quel compte utiliser,
+  // au lieu d'enchaîner sur le dernier — indispensable sur un poste partagé.
+  const { error } = await c.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: back, queryParams: { prompt: 'select_account' } },
+  })
   return { error: error?.message || null }
 }
 
