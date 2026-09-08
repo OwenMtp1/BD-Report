@@ -3,17 +3,21 @@ import { Plus, X, Pencil, Check, Network, Users2, Move, ShieldCheck, Crown } fro
 import { useStore } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
 
-export default function OrgChart({ onOpenProfile }) {
+// Organigramme d'un environnement. `envId` permet au staff de l'ouvrir pour un client
+// depuis un projet : c'est la MÊME implémentation des deux côtés, si bien qu'une
+// correction de l'arbre profite aussitôt aux deux usages.
+export default function OrgChart({ onOpenProfile, envId }) {
   const store = useStore()
   const session = store.session
-  const env = store.db.environments.find(e => e.id === session.envId)
-  const subs = store.db.subenvs.filter(s => s.envId === session.envId)
+  const targetEnv = envId || session.envId
+  const env = store.db.environments.find(e => e.id === targetEnv)
+  const subs = store.db.subenvs.filter(s => s.envId === targetEnv)
   const role = store.account.role
   // Le droit du rôle d'environnement prime quand il en existe un ; sans rôle attribué,
   // hasClientPerm retombe sur le rôle du compte, comme auparavant.
   const canEdit = store.hasClientPerm('team.orgchart')
   const canRole = ['Administrateur', 'Fondateur', 'Support BD Report'].includes(role) // staff/fondateur : gestion du rôle Manager
-  const services = store.envServices()
+  const services = store.envServicesOf(targetEnv)
   const [edit, setEdit] = useState(false)
   const [newSvc, setNewSvc] = useState('')
   const [dragId, setDragId] = useState(null)
@@ -27,12 +31,12 @@ export default function OrgChart({ onOpenProfile }) {
   let roots = subs.filter(s => !parentSub(s))
   roots = roots.sort((a, b) => (a.id === managerSubId ? -1 : b.id === managerSubId ? 1 : 0))
 
-  const addService = () => { if (newSvc.trim()) { store.addService(newSvc.trim()); setNewSvc(''); toast('Service ajouté') } }
+  const addService = () => { if (newSvc.trim()) { store.addEnvService(targetEnv, newSvc.trim()); setNewSvc(''); toast('Service ajouté') } }
   const svcName = (s) => services.find(v => v.id === s.serviceId)?.name || s.service || ''
 
   const onDrop = (targetSubId) => {
     if (!dragId || dragId === targetSubId) { setDragId(null); return }
-    store.setManagerOf(dragId, targetSubId)
+    store.setSubManager(dragId, targetSubId)
     setDragId(null)
   }
 
@@ -58,7 +62,7 @@ export default function OrgChart({ onOpenProfile }) {
         {edit ? (
           <div className="mt-2 space-y-1.5 text-left">
             <label className="block text-[10px] font-semibold text-muted">Rattaché à
-              <select className="input !py-1 text-xs mt-0.5" value={parentSub(s)?.id || ''} onChange={e => store.setManagerOf(s.id, e.target.value || null)}>
+              <select className="input !py-1 text-xs mt-0.5" value={parentSub(s)?.id || ''} onChange={e => store.setSubManager(s.id, e.target.value || null)}>
                 <option value="">— Haut de l'organigramme —</option>
                 {subs.filter(x => x.id !== s.id).map(x => <option key={x.id} value={x.id}>{x.prenom} {x.nom}</option>)}
               </select>
@@ -126,7 +130,7 @@ export default function OrgChart({ onOpenProfile }) {
               <button className="btn-primary whitespace-nowrap" onClick={addService}><Plus size={15} /> Ajouter</button>
             </div>
             <div className="flex flex-wrap gap-2 mt-2">
-              {services.map(v => <ServiceChip key={v.id} svc={v} store={store} />)}
+              {services.map(v => <ServiceChip key={v.id} svc={v} store={store} envId={targetEnv} />)}
               {services.length === 0 && <span className="text-xs text-muted italic">Aucun service pour l'instant.</span>}
             </div>
           </div>
@@ -153,15 +157,15 @@ export default function OrgChart({ onOpenProfile }) {
   )
 }
 
-function ServiceChip({ svc, store }) {
+function ServiceChip({ svc, store, envId }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(svc.name)
   if (editing) {
     return (
       <span className="chip bg-surface">
         <input className="bg-transparent outline-none text-sm w-24" value={name} onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { store.renameService(svc.id, name); setEditing(false) } }} autoFocus />
-        <button className="text-emerald-600" onClick={() => { store.renameService(svc.id, name); setEditing(false) }}><Check size={13} /></button>
+          onKeyDown={e => { if (e.key === 'Enter') { store.renameEnvService(envId, svc.id, name); setEditing(false) } }} autoFocus />
+        <button className="text-emerald-600" onClick={() => { store.renameEnvService(envId, svc.id, name); setEditing(false) }}><Check size={13} /></button>
       </span>
     )
   }
@@ -169,7 +173,7 @@ function ServiceChip({ svc, store }) {
     <span className="chip bg-brand/10 text-brand">
       {svc.name}
       <button className="ml-1 opacity-70 hover:opacity-100" onClick={() => setEditing(true)}><Pencil size={11} /></button>
-      <button className="ml-0.5 text-red-500" onClick={() => store.removeService(svc.id)}><X size={12} /></button>
+      <button className="ml-0.5 text-red-500" onClick={() => store.removeEnvService(envId, svc.id)}><X size={12} /></button>
     </span>
   )
 }

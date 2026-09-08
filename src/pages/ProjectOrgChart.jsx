@@ -1,65 +1,14 @@
 import React, { useState } from 'react'
-import {
-  Network, ArrowLeft, Plus, Pencil, Trash2, Check, X, GripVertical, Users, ShieldCheck, Save,
-} from 'lucide-react'
-import {
-  useStore, uid, CLIENT_PERMISSION_GROUPS, ROLE_COLORS, roleColor,
-} from '../store.jsx'
+import { ArrowLeft, Plus, Trash2, ShieldCheck, Save } from 'lucide-react'
+import { useStore, uid, CLIENT_PERMISSION_GROUPS, ROLE_COLORS, roleColor } from '../store.jsx'
 import { GRANTABLE_TABS } from '../nav.jsx'
-import { Empty, Confirm, Modal, toast } from '../ui.jsx'
+import { Confirm, Modal, toast } from '../ui.jsx'
+import OrgChart from './OrgChart.jsx'
 
 // Organigramme d'un projet client, vu depuis le back-office. Deux volets : l'organisation
 // des personnes, et les rôles de l'environnement — qui voit quels onglets, et qui a quels
 // droits de management. Les modifications de rôles restent en brouillon jusqu'à un
 // enregistrement explicite : elles changent ce que des gens voient au quotidien.
-
-function PersonCard({ sub, store, envId, subs, services, roles, dragId, setDragId, depth }) {
-  const accById = Object.fromEntries(store.db.accounts.map(a => [a.id, a]))
-  const subByOwner = Object.fromEntries(subs.filter(s => s.ownerId).map(s => [s.ownerId, s]))
-  const children = subs.filter(s => {
-    const acc = accById[s.ownerId]
-    return acc?.teamOf && subByOwner[acc.teamOf]?.id === sub.id
-  })
-  const role = roles.find(r => r.id === sub.roleId)
-  const tint = roleColor(role?.color).tint || 'bg-brand/10 text-brand'
-
-  return (
-    <div className={depth ? 'ml-5 pl-4 border-l border-line' : ''}>
-      <div
-        draggable onDragStart={() => setDragId(sub.id)} onDragEnd={() => setDragId(null)}
-        onDragOver={e => e.preventDefault()}
-        onDrop={() => {
-          if (!dragId || dragId === sub.id) return
-          store.setSubManager(dragId, sub.id); setDragId(null); toast('Rattachement mis à jour')
-        }}
-        className={`card p-2.5 mb-1.5 flex items-center gap-2 flex-wrap cursor-grab active:cursor-grabbing ${dragId === sub.id ? 'opacity-40' : ''}`}>
-        <GripVertical size={14} className="text-muted shrink-0" />
-        <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-[11px] font-extrabold flex items-center justify-center shrink-0">
-          {`${sub.prenom || ''}${sub.nom || ''}`.slice(0, 2).toUpperCase() || '??'}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-semibold text-sm truncate">{sub.prenom} {sub.nom}</div>
-          <div className="text-[11px] text-muted truncate">{sub.poste || '—'}</div>
-        </div>
-        {role && <span className={`chip ${tint} !text-[10px] shrink-0`}>{role.name}</span>}
-        <select className="input !w-auto !py-1 !text-[11px] shrink-0" value={sub.roleId || ''}
-          onChange={e => { store.assignSubRole(sub.id, e.target.value); toast('Rôle attribué') }}>
-          <option value="">Sans rôle</option>
-          {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>
-        <select className="input !w-auto !py-1 !text-[11px] shrink-0" value={sub.serviceId || ''}
-          onChange={e => { store.assignSubService(sub.id, e.target.value); toast('Service mis à jour') }}>
-          <option value="">Sans service</option>
-          {services.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-        </select>
-      </div>
-      {children.map(c => (
-        <PersonCard key={c.id} sub={c} store={store} envId={envId} subs={subs} services={services}
-          roles={roles} dragId={dragId} setDragId={setDragId} depth={depth + 1} />
-      ))}
-    </div>
-  )
-}
 
 // Panneau des rôles : brouillon local, appliqué en une fois après confirmation.
 function RolesPanel({ envId, store, onClose }) {
@@ -182,22 +131,7 @@ function RolesPanel({ envId, store, onClose }) {
 
 export default function ProjectOrgChart({ envId, title, onBack }) {
   const store = useStore()
-  const [dragId, setDragId] = useState(null)
   const [rolesOpen, setRolesOpen] = useState(false)
-  const [newSvc, setNewSvc] = useState('')
-  const [renaming, setRenaming] = useState(null)
-  const [confirmDelSvc, setConfirmDelSvc] = useState(null)
-
-  const subs = store.db.subenvs.filter(s => s.envId === envId)
-  const services = store.envServicesOf(envId)
-  const roles = store.envRoles(envId)
-  const accById = Object.fromEntries(store.db.accounts.map(a => [a.id, a]))
-  const subByOwner = Object.fromEntries(subs.filter(s => s.ownerId).map(s => [s.ownerId, s]))
-  // Racine : personne sans responsable, ou dont le responsable n'est pas dans cet espace.
-  const roots = subs.filter(s => {
-    const acc = accById[s.ownerId]
-    return !acc?.teamOf || !subByOwner[acc.teamOf]
-  })
 
   return (
     <div className="space-y-4">
@@ -208,71 +142,16 @@ export default function ProjectOrgChart({ envId, title, onBack }) {
         </button>
       </div>
 
-      <div>
-        <h2 className="text-xl font-extrabold flex items-center gap-2">
-          <Network size={20} className="text-brand" /> Organigramme — {title}
-        </h2>
-        <p className="text-xs text-muted mt-0.5">
-          Glissez une personne sur une autre pour la lui rattacher. Le bouton « Rôles et accès » ouvre
-          les rôles de cette entreprise : qui voit quoi, et qui peut quoi.
-        </p>
-      </div>
+      <p className="text-xs text-muted">
+        Organisation de <b>{title}</b>. Le bouton « Rôles et accès » ouvre les rôles de cette entreprise :
+        qui voit quels onglets, et qui dispose de quels droits.
+      </p>
 
-      <div className="card p-3 space-y-2">
-        <div className="flex items-center gap-2"><Users size={15} className="text-brand" /><h3 className="font-bold text-sm">Services</h3></div>
-        <div className="flex flex-wrap gap-1.5 items-center">
-          {services.map(v => (
-            renaming === v.id ? (
-              <span key={v.id} className="chip bg-surface flex items-center gap-1">
-                <input className="input !py-0.5 !px-1.5 !w-28 text-xs" defaultValue={v.name} autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') { store.renameEnvService(envId, v.id, e.target.value); setRenaming(null); toast('Service renommé') } }}
-                  onBlur={e => { store.renameEnvService(envId, v.id, e.target.value); setRenaming(null) }} />
-                <button className="text-muted" onClick={() => setRenaming(null)}><X size={12} /></button>
-              </span>
-            ) : (
-              <span key={v.id} className="chip bg-surface text-ink flex items-center gap-1.5">
-                {v.name}
-                <button className="opacity-60 hover:opacity-100" title="Renommer" onClick={() => setRenaming(v.id)}><Pencil size={11} /></button>
-                <button className="opacity-60 hover:opacity-100 text-red-500" title="Supprimer" onClick={() => setConfirmDelSvc(v.id)}><Trash2 size={11} /></button>
-              </span>
-            )
-          ))}
-          {services.length === 0 && <span className="text-xs text-muted italic">Aucun service.</span>}
-        </div>
-        <div className="flex gap-2">
-          <input className="input !py-1.5 text-sm" placeholder="Nom d'un nouveau service…" value={newSvc}
-            onChange={e => setNewSvc(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && newSvc.trim()) { store.addEnvService(envId, newSvc); setNewSvc(''); toast('Service créé') } }} />
-          <button className="btn-ghost !py-1.5 text-sm shrink-0" disabled={!newSvc.trim()}
-            onClick={() => { store.addEnvService(envId, newSvc); setNewSvc(''); toast('Service créé') }}>
-            <Plus size={14} /> Ajouter
-          </button>
-        </div>
-      </div>
-
-      <div onDragOver={e => e.preventDefault()}
-        onDrop={() => { if (dragId) { store.setSubManager(dragId, null); setDragId(null); toast('Détaché de son responsable') } }}
-        className={`rounded-xl border border-dashed p-2.5 text-center text-xs ${dragId ? 'border-brand text-brand bg-brand/5' : 'border-line text-muted'}`}>
-        Déposer ici pour détacher de tout responsable
-      </div>
-
-      {subs.length === 0 ? (
-        <Empty text="Aucune personne dans cet espace client." />
-      ) : (
-        <div>
-          {roots.map(s => (
-            <PersonCard key={s.id} sub={s} store={store} envId={envId} subs={subs} services={services}
-              roles={roles} dragId={dragId} setDragId={setDragId} depth={0} />
-          ))}
-        </div>
-      )}
+      {/* Même composant que l'organigramme vu par le client : une correction de l'arbre
+          vaut aussitôt pour les deux, il n'y a plus qu'une implémentation à maintenir. */}
+      <OrgChart envId={envId} />
 
       {rolesOpen && <RolesPanel envId={envId} store={store} onClose={() => setRolesOpen(false)} />}
-      {confirmDelSvc && (
-        <Confirm message="Supprimer ce service ? Les personnes rattachées n'auront plus de service."
-          onYes={() => { store.removeEnvService(envId, confirmDelSvc); setConfirmDelSvc(null); toast('Service supprimé') }}
-          onNo={() => setConfirmDelSvc(null)} />
-      )}
     </div>
   )
 }
