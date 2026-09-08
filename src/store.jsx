@@ -577,6 +577,75 @@ export function dueSurveyMilestone(account, now = Date.now()) {
   return due.length ? due[due.length - 1] : null
 }
 
+// ---------------------------------------------------------------------------
+//  Rôles PAR ENVIRONNEMENT CLIENT (distincts des rôles staff).
+//  Chaque entreprise dispose de ses propres rôles : Manager et Membre existent
+//  partout, le staff peut en créer d'autres et choisir, pour chacun, les onglets
+//  visibles et les droits de management accordés.
+// ---------------------------------------------------------------------------
+export const CLIENT_PERMISSION_GROUPS = [
+  {
+    id: 'equipe', label: 'Équipe', perms: [
+      { id: 'team.view', label: "Voir l'équipe et l'organigramme" },
+      { id: 'team.manage', label: 'Créer et modifier des utilisateurs' },
+      { id: 'team.orgchart', label: "Modifier l'organigramme" },
+      { id: 'team.services', label: 'Gérer les services' },
+    ],
+  },
+  {
+    id: 'pilotage', label: 'Pilotage', perms: [
+      { id: 'pilot.kpi', label: "Consulter les KPI de l'entreprise" },
+      { id: 'pilot.team', label: "Piloter l'activité de l'équipe" },
+      { id: 'pilot.pipeline', label: "Voir le pipeline de toute l'équipe" },
+      { id: 'pilot.targets', label: 'Définir les objectifs' },
+    ],
+  },
+  {
+    id: 'primes', label: 'Primes', perms: [
+      { id: 'primes.rules', label: 'Définir les barèmes et les règles' },
+      { id: 'primes.all', label: "Voir les primes de toute l'équipe" },
+      { id: 'primes.validate', label: 'Valider ou corriger une prime' },
+    ],
+  },
+  {
+    id: 'donnees', label: 'Données', perms: [
+      { id: 'data.export', label: 'Exporter les données' },
+      { id: 'data.import', label: 'Importer des données' },
+      { id: 'data.trash', label: 'Vider la corbeille' },
+    ],
+  },
+  {
+    id: 'integrations', label: 'Intégrations', perms: [
+      { id: 'integrations.manage', label: 'Connecter et configurer un CRM' },
+    ],
+  },
+]
+export const CLIENT_PERMISSIONS = CLIENT_PERMISSION_GROUPS.flatMap(g => g.perms)
+export const CLIENT_PERMISSION_IDS = CLIENT_PERMISSIONS.map(p => p.id)
+
+// Onglets ouverts au Membre par défaut : son activité, pas le pilotage de l'équipe.
+const MEMBER_TABS = ['Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches',
+  'Mes contacts', 'Mes notes', 'Primes & Commissions', 'Simulateur de primes', 'Conversations',
+  'Qualité des données', 'ICP', 'Classement', 'Corbeille']
+
+export function defaultEnvRoles() {
+  return [
+    { id: 'erole-manager', name: 'Manager', builtin: true, color: 'amber', tabs: [...ALL_BRICKS], perms: [...CLIENT_PERMISSION_IDS] },
+    { id: 'erole-membre', name: 'Membre', builtin: true, color: 'emerald', tabs: [...MEMBER_TABS], perms: [] },
+  ]
+}
+// Complète une liste de rôles d'environnement sans écraser ce qui a été personnalisé :
+// les deux rôles intégrés doivent toujours exister, le reste appartient au staff.
+export function seedEnvRoles(existing) {
+  const list = Array.isArray(existing) ? existing.slice() : []
+  defaultEnvRoles().forEach(def => {
+    const found = list.find(r => r.id === def.id || r.name === def.name)
+    if (!found) list.push(def)
+    else { found.builtin = true; if (!Array.isArray(found.tabs)) found.tabs = def.tabs; if (!Array.isArray(found.perms)) found.perms = def.perms }
+  })
+  return list
+}
+
 // Statuts de présence (choisis manuellement par l'utilisateur).
 export const PRESENCE_META = {
   online: { label: 'En ligne', dot: 'bg-emerald-500', text: 'text-emerald-600' },
@@ -1725,6 +1794,7 @@ function migrate(db) {
   }
   ;(db.environments || []).forEach(e => {
     if (!Array.isArray(e.services)) e.services = (e.departments && e.departments.length ? e.departments : ['Sales', 'Marketing']).map(n => ({ id: uid(), name: n }))
+    e.roles = seedEnvRoles(e.roles) // Manager et Membre partout, le reste créé par le staff
   })
   seedAutoChannels(db)
   reconcileReporting(db)
@@ -2507,6 +2577,22 @@ export function StoreProvider({ children, demo = false }) {
           a.teamOf = managerId || null
           return d
         })
+      },
+      // Rôles d'un environnement client. L'enregistrement est groupé et explicite : la
+      // page présente un brouillon, on applique tout d'un coup après confirmation.
+      envRoles(envId) { return (db.environments.find(e => e.id === envId)?.roles) || [] },
+      saveEnvRoles(envId, roles) {
+        setDb(d => {
+          const e = d.environments.find(x => x.id === envId); if (!e) return d
+          // Les deux rôles intégrés ne peuvent pas disparaître : des personnes les portent.
+          e.roles = seedEnvRoles((roles || []).map(r => ({ ...r })))
+          const ids = new Set(e.roles.map(r => r.id))
+          d.subenvs.forEach(sub => { if (sub.envId === envId && sub.roleId && !ids.has(sub.roleId)) sub.roleId = null })
+          return d
+        })
+      },
+      assignSubRole(subId, roleId) {
+        setDb(d => { const sub = d.subenvs.find(x => x.id === subId); if (sub) sub.roleId = roleId || null; return d })
       },
       assignStaffService(accId, serviceId) {
         setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.staffServiceId = serviceId || null; return d })
