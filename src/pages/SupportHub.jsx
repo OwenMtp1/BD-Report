@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network } from 'lucide-react'
+import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network, GraduationCap } from 'lucide-react'
 import { useStore, slaInfo, ticketHasUnread } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
@@ -15,6 +15,7 @@ import StaffPermissions from './StaffPermissions.jsx'
 import SupportDashboard from './SupportDashboard.jsx'
 import Admin from './Admin.jsx'
 import StaffOrgChart from './StaffOrgChart.jsx'
+import StaffTraining from './StaffTraining.jsx'
 
 const SupportConversations = () => <Conversations scope="support" />
 
@@ -37,6 +38,7 @@ const TABS = [
   { id: 'orgchart', label: 'Organigramme staff', icon: Network, El: StaffOrgChart, perm: 'services.manage' },
   { id: 'logs', label: 'Logs', icon: ScrollText, El: SupportLogs, perm: 'logs.view' },
   { id: 'trash', label: 'Corbeille', icon: Trash2, El: SupportTrash, perm: 'trash.manage' },
+  { id: 'training', label: 'Formation staff', icon: GraduationCap, El: StaffTraining, perm: 'demo.access' },
   { id: 'demo', label: 'Démo commerciale', icon: MonitorPlay, El: DemoSales, perm: 'demo.access' },
 ]
 

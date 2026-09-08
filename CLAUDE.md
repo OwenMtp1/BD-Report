@@ -49,6 +49,11 @@ npm run dev        # serveur de dev
   supprimé ne ressuscite pas. Ajouter un article = une entrée ici, rien d'autre. Côté client (`Support.jsx`,
   `KbBrowser`) : entrée par catégorie cliquable ou par recherche ; côté staff (`KnowledgeBase.jsx`) : filtre par
   catégorie, recherche et édition des mots-clés.
+- **`src/trainingContent.js` + `src/pages/StaffTraining.jsx`** — onglet **« Formation staff »** de `SupportHub`
+  (perm `demo.access`) : espace d'entraînement à cas fictifs — 10 projets (dont plusieurs « à paramétrer » avec leur
+  liste de tâches), 12 cas de support couvrant tous les sujets avec la leçon à retenir, et une discussion de projet
+  difficile (demandes de rôles que le produit ne sait pas satisfaire). **Rien n'est enregistré ni synchronisé** :
+  l'état vit le temps de la session, volontairement.
 - **Organigrammes** — **`StaffOrgChart`** (onglet « Organigramme staff » de `SupportHub`, perm `services.manage`) :
   arbre de l'équipe BD Report par `account.teamOf`, glisser-déposer (`store.setStaffManager`, anti-cycle), services
   staff. **Aucun droit ici** : ils restent dans « Permissions staff », un seul endroit pour donner ou retirer un accès.

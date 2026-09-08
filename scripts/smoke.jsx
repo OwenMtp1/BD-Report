@@ -268,6 +268,14 @@ async function main() {
   if (!text().includes('Enregistrer vos modifications')) throw new Error('Save bar should appear once a permission changes')
   if (!text().includes("rien n'est encore appliqué")) throw new Error('Draft state should be stated explicitly')
 
+  // Formation staff : cas fictifs, sans effet sur les données réelles.
+  await click(hubTab('Formation staff'))
+  if (!text().includes('Rien n\'est enregistré')) throw new Error('Staff training space did not render')
+  await click(find('button', 'Cas de support'))
+  if (!text().includes('Insatisfaction')) throw new Error('Training tickets missing')
+  await click(find('button', 'Discussion de projet'))
+  if (!text().includes('Onboarding Groupe Lamarche')) throw new Error('Training thread missing')
+
   // Organigramme du staff : rattachements et services, sans droits (gérés ailleurs).
   await click(hubTab('Organigramme staff'))
   if (!text().includes('Services du staff')) throw new Error('Staff org chart did not render')
