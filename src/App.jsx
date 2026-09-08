@@ -324,6 +324,8 @@ function SubEnvPicker() {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ prenom: '', nom: '', poste: '', service: '', pin: '' })
   const [pinFor, setPinFor] = useState(null)
+  // Encadrer, c'est pouvoir entrer chez les autres — avec leur code, qui reste demandé.
+  const canOpenOthers = store.hasClientPerm('team.view') || store.hasClientPerm('team.manage')
 
   if (pinFor) return <PinGate title={`${pinFor.prenom} ${pinFor.nom}`} expected={pinFor.pin} onOk={() => store.enterSubEnv(pinFor.id)} onBack={() => setPinFor(null)} />
 
@@ -334,17 +336,28 @@ function SubEnvPicker() {
         <h2 className="text-2xl font-extrabold">{env?.name} — {t('env.chooseSpace')}</h2>
       </div>
       <div className="flex flex-wrap justify-center gap-4">
-        {subs.map(s => (
-          <button key={s.id} className="card w-44 h-44 flex flex-col items-center justify-center gap-2 hover:scale-105 transition fade-in"
-            onClick={() => s.pin ? setPinFor(s) : store.enterSubEnv(s.id)}>
-            {s.photo
-              ? <img src={s.photo} alt="" className="w-14 h-14 rounded-full object-cover" />
-              : <div className="w-14 h-14 rounded-full bg-brand/15 text-brand font-extrabold flex items-center justify-center text-lg">{(s.prenom?.[0] || '') + (s.nom?.[0] || '')}</div>}
-            <span className="font-bold text-sm">{s.prenom} {s.nom}</span>
-            <span className="text-xs text-muted">{s.poste} · {s.service}</span>
-            {s.pin && <Lock size={12} className="text-muted" />}
-          </button>
-        ))}
+        {subs.map(s => {
+          // Sans droit d'encadrement, on n'ouvre que son propre espace : le code PIN
+          // protège d'un regard, il n'a jamais eu vocation à autoriser un collègue à
+          // entrer dans les données d'un autre.
+          const mine = s.ownerId === store.account?.id
+          const open = mine || canOpenOthers
+          return (
+            <button key={s.id} disabled={!open}
+              title={open ? '' : "Vous ne pouvez ouvrir que votre propre espace"}
+              className={`card w-44 h-44 flex flex-col items-center justify-center gap-2 transition fade-in ${open ? 'hover:scale-105' : 'opacity-55 cursor-not-allowed'}`}
+              onClick={() => { if (!open) return; s.pin ? setPinFor(s) : store.enterSubEnv(s.id) }}>
+              {s.photo
+                ? <img src={s.photo} alt="" className="w-14 h-14 rounded-full object-cover" />
+                : <div className="w-14 h-14 rounded-full bg-brand/15 text-brand font-extrabold flex items-center justify-center text-lg">{(s.prenom?.[0] || '') + (s.nom?.[0] || '')}</div>}
+              <span className="font-bold text-sm">{s.prenom} {s.nom}</span>
+              <span className="text-xs text-muted">{s.poste} · {s.service}</span>
+              {!open
+                ? <span className="text-[10px] text-muted flex items-center gap-1"><Lock size={11} /> espace privé</span>
+                : (s.pin && <Lock size={12} className="text-muted" />)}
+            </button>
+          )
+        })}
         <button className="card w-44 h-44 flex flex-col items-center justify-center gap-2 border-dashed hover:scale-105 transition text-muted" onClick={() => setCreating(true)}>
           <Plus size={28} /> <span className="text-sm font-semibold">{t('env.newSpace')}</span>
         </button>

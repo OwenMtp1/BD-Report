@@ -92,6 +92,8 @@ async function main() {
   // 4. Sous-environnement protégé par PIN
   if (!text().includes('Owen Mrani Bonnier')) throw new Error('SubEnv picker missing: ' + text().slice(0, 300))
   await click(find('button', 'Owen Mrani Bonnier'))
+  // Le compte de test encadre : aucun espace ne doit lui être verrouillé.
+  if (text().includes('espace privé')) throw new Error('Manager should not see colleagues\' spaces locked')
   if (!text().includes('4 chiffres')) throw new Error('PIN gate missing: ' + text().slice(0, 300))
   await type(container.querySelector('input'), '1205')
   await act(async () => { await new Promise(r => setTimeout(r, 600)) }) // laisse passer le squelette de chargement
