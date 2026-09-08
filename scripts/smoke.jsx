@@ -194,8 +194,14 @@ async function main() {
   if (!text().includes('Console Support')) throw new Error('Support hub did not render')
   await click(hubTab('Tickets'))
   if (!text().includes('Connexion & authentification')) throw new Error('Ticket not visible in support Tickets tab')
-  // Clôture du ticket → le client repasse en « Clients actifs »
+  // Prise en charge : le ticket n'appartient à personne tant qu'un agent ne s'en saisit pas.
   await click(find('button', 'Connexion & authentification'))
+  if (!text().includes("Ce ticket n'est pris en charge par personne")) throw new Error('Take-over banner missing on unassigned ticket')
+  await click(find('button', 'Prendre en charge'))
+  if (!text().includes('Pris en charge par')) throw new Error('Ticket take-over did not register')
+  if (!dbNow().tickets.find(t => t.category === 'Connexion & authentification')?.assignedTo) throw new Error('Take-over should assign the ticket')
+
+  // Clôture du ticket → le client repasse en « Clients actifs »
   await click(find('button', 'Clôturer'))
   if (psClient()?.status !== 'actifs') throw new Error('Client not restored to "actifs" on ticket close: ' + psClient()?.status)
   // Helpdesk : priorité par défaut + notation de satisfaction (CSAT) après clôture.

@@ -111,6 +111,48 @@ export default function Tickets() {
     return (
       <div className="space-y-3">
         <button className="btn-ghost text-xs" onClick={() => setOpenId('')}><ArrowLeft size={14} /> Retour aux tickets</button>
+
+        {/* Prise en charge : on sait qui mène l'échange. Tout le support peut répondre —
+            c'est une responsabilité affichée, pas un verrou. */}
+        {openTicket.status !== 'closed' && (
+          openTicket.assignedTo ? (
+            <div className="card p-2.5 flex items-center gap-2 flex-wrap text-sm">
+              <UserCog size={15} className="text-brand shrink-0" />
+              <span>Pris en charge par <b>{memberName(openTicket.assignedTo)}</b></span>
+              {openTicket.takenAt && <span className="text-xs text-muted">· depuis le {fmtDate(openTicket.takenAt.slice(0, 10))}</span>}
+              {openTicket.assignedTo !== me.id && (
+                <button className="btn-ghost !py-1 text-xs ml-auto" onClick={() => { store.takeTicket(openTicket.id); toast('Vous reprenez ce ticket') }}>
+                  Reprendre à mon compte
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="card p-3 flex items-center gap-2 flex-wrap bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+              <span className="text-sm">Ce ticket n'est pris en charge par personne.</span>
+              <div className="flex gap-2 ml-auto">
+                <button className="btn-ghost !py-1 text-xs" onClick={() => setOpenId('')}>Retour</button>
+                <button className="btn-primary !py-1 text-xs" onClick={() => { store.takeTicket(openTicket.id); toast('Ticket pris en charge') }}>
+                  <UserCog size={13} /> Prendre en charge
+                </button>
+              </div>
+            </div>
+          )
+        )}
+
+        {/* Clôture demandée par le client : son motif, tel qu'il l'a écrit. */}
+        {openTicket.closure?.by === 'client' && (
+          <div className="card p-2.5 text-sm">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+              <span>Clôturé par le client — <b>{openTicket.closure.reason === 'resolved' ? 'problème résolu' : 'autre motif'}</b></span>
+            </div>
+            {openTicket.closure.comment && (
+              <p className="text-xs text-muted italic mt-1 whitespace-pre-wrap">« {openTicket.closure.comment} »</p>
+            )}
+          </div>
+        )}
+
         <div className="card p-3 space-y-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="min-w-0">

@@ -2978,6 +2978,41 @@ export function StoreProvider({ children, demo = false }) {
           return d
         })
       },
+      // Prise en charge : l'agent s'attribue le ticket et son nom s'affiche dans le fil.
+      // Les autres membres du support peuvent toujours répondre — c'est une responsabilité
+      // rendue visible, pas un verrou d'accès.
+      takeTicket(ticketId) {
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (!t) return d
+          t.assignedTo = account?.id || null
+          t.takenAt = new Date().toISOString()
+          if (t.status === 'open') t.status = 'in_progress'
+          pushSupportLog(d, { type: 'Ticket', action: 'Ticket pris en charge', details: `${t.category} · ${t.userName}`, actorId: account?.id || null, actorName })
+          return d
+        })
+      },
+      // Clôture demandée par le client : le motif qu'il indique est restitué au support,
+      // qui saurait sinon qu'un ticket s'est fermé sans savoir pourquoi.
+      closeTicketByClient(ticketId, { reason, comment }) {
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (!t) return d
+          t.status = 'closed'
+          t.closedAt = new Date().toISOString()
+          t.closure = {
+            by: 'client', reason: reason || 'other', comment: (comment || '').trim(),
+            name: account?.pseudo || t.userName || '', ts: t.closedAt,
+          }
+          syncClientStatusFromTickets(d, t)
+          pushSupportLog(d, {
+            type: 'Ticket', action: 'Ticket clôturé par le client',
+            details: `${t.category} · ${reason === 'resolved' ? 'problème résolu' : 'autre motif'}`,
+            actorId: account?.id || null, actorName,
+          })
+          return d
+        })
+      },
       assignTicket(ticketId, assigneeId) {
         setDb(d => {
           const t = (d.tickets || []).find(x => x.id === ticketId)

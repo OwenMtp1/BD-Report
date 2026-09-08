@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { LifeBuoy, Plus, ArrowLeft, MessageSquare, Star, BookOpen, ChevronDown, ChevronRight, Search } from 'lucide-react'
+import { LifeBuoy, Plus, ArrowLeft, MessageSquare, Star, BookOpen, ChevronDown, ChevronRight, Search, CheckCircle2 } from 'lucide-react'
 import { useStore, TICKET_CATEGORIES, TICKET_PRIORITIES, KB_CATEGORIES, fmtDate, ticketHasUnread } from '../store.jsx'
 import { Modal, Field, Empty, toast } from '../ui.jsx'
 import TicketChat from './TicketChat.jsx'
@@ -146,6 +146,47 @@ function KbBrowser() {
   )
 }
 
+// Clôture par le client : le motif est demandé, car un ticket qui se ferme sans
+// explication ne dit rien au support de ce qui a fonctionné ou non.
+function CloseTicketModal({ ticket, onClose }) {
+  const store = useStore()
+  const [reason, setReason] = useState('resolved')
+  const [comment, setComment] = useState('')
+  return (
+    <Modal title="Fermer ce ticket" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-sm text-muted">Dites-nous où vous en êtes : votre réponse est transmise à l'équipe support.</p>
+        <label className="flex items-start gap-2 p-2.5 rounded-xl border border-line cursor-pointer">
+          <input type="radio" className="mt-0.5" checked={reason === 'resolved'} onChange={() => setReason('resolved')} />
+          <span>
+            <span className="font-semibold text-sm">Mon problème est résolu</span>
+            <span className="block text-xs text-muted">La réponse du support a répondu à ma demande.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 p-2.5 rounded-xl border border-line cursor-pointer">
+          <input type="radio" className="mt-0.5" checked={reason === 'other'} onChange={() => setReason('other')} />
+          <span>
+            <span className="font-semibold text-sm">Autre raison</span>
+            <span className="block text-xs text-muted">Je ferme pour une autre raison, que j'explique ci-dessous.</span>
+          </span>
+        </label>
+        <Field label={reason === 'other' ? 'Précisez' : 'Un commentaire ? (facultatif)'} required={reason === 'other'}>
+          <textarea className="input min-h-[80px]" value={comment} onChange={e => setComment(e.target.value)}
+            placeholder={reason === 'other' ? "Ex : j'ai trouvé la réponse ailleurs, la demande n'est plus d'actualité…" : 'Ce qui vous a aidé, ou ce qui manquait…'} />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <button className="btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn-primary" onClick={() => {
+            if (reason === 'other' && !comment.trim()) { toast('Précisez la raison de la fermeture.'); return }
+            store.closeTicketByClient(ticket.id, { reason, comment })
+            onClose(); toast('Ticket fermé — merci pour votre retour')
+          }}>Fermer le ticket</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export default function Support() {
   const store = useStore()
   const me = store.account
@@ -166,6 +207,7 @@ export default function Support() {
     .sort((a, b) => (b.messages.at(-1)?.ts || b.createdAt).localeCompare(a.messages.at(-1)?.ts || a.createdAt))
 
   const openTicket = openId ? myTickets.find(t => t.id === openId) : null
+  const [closing, setClosing] = useState(false)
 
   const create = () => {
     if (!form.message.trim()) { toast('Décrivez votre problème.'); return }
@@ -188,10 +230,16 @@ export default function Support() {
           <div className="flex items-center gap-1.5">
             <span className={`chip ${prio(openTicket.priority).color}`}>{prio(openTicket.priority).label}</span>
             <span className={`chip ${STATUS_CLASS[openTicket.status]}`}>{STATUS_LABEL[openTicket.status]}</span>
+            {openTicket.status !== 'closed' && (
+              <button className="btn-ghost !py-1 text-xs" onClick={() => setClosing(true)}>
+                <CheckCircle2 size={13} /> Fermer ce ticket
+              </button>
+            )}
           </div>
         </div>
         {openTicket.status === 'closed' && <CsatPrompt ticket={openTicket} />}
         <div className="card p-3 h-[60vh]"><TicketChat ticket={openTicket} role="user" /></div>
+        {closing && <CloseTicketModal ticket={openTicket} onClose={() => setClosing(false)} />}
       </div>
     )
   }
