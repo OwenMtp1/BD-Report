@@ -422,6 +422,40 @@ async function main() {
   raw.projects = raw.projects.filter(p => p.sourceEnvId !== 'env-peoplespheres')
   win.localStorage.setItem('bdrflow_db_v1', JSON.stringify(raw))
   win.sessionStorage.clear()
+  // ---- Page de démo commerciale : montée seule elle aussi (#/demo), visite comprise.
+  {
+    const { default: DemoJourney } = await import('../src/pages/DemoJourney.jsx')
+    const cd = win.document.createElement('div')
+    win.document.body.appendChild(cd)
+    const rootd = createRoot(cd)
+    await act(async () => { rootd.render(Root(React.createElement(DemoJourney, { onClose: () => {} }))) })
+    const td = () => cd.textContent || ''
+    const btnd = (label) => [...cd.querySelectorAll('button')].find(b => b.textContent.trim().includes(label))
+    const clickd = async (el) => act(async () => { el.dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true })) })
+
+    // Parcours d'achat : le formulaire exige un mot de passe avant de créer l'espace.
+    const pwField = [...cd.querySelectorAll('input[type="password"]')][0]
+    if (!pwField) throw new Error('Demo signup password field missing')
+    await type(pwField, 'demo1234')
+    const create = btnd('Créer mon espace')
+    if (!create) throw new Error('Demo signup step missing')
+    await clickd(create)
+    await act(async () => { await new Promise(r => setTimeout(r, 1500)) })
+    if (!btnd('Visite guidée')) throw new Error('Demo did not reach the isolated app after signup')
+
+    await clickd(btnd('Visite guidée'))
+    await act(async () => { await new Promise(r => setTimeout(r, 500)) })
+    if (!td().includes('Étape 1 /')) throw new Error('Guided demo did not start')
+    for (let i = 0; i < 25; i++) {
+      const next = btnd('Suivant')
+      if (!next) break
+      await clickd(next)
+      await act(async () => { await new Promise(r => setTimeout(r, 380)) })
+    }
+    if (!btnd('Terminer')) throw new Error('Guided demo never reached its last step')
+    rootd.unmount()
+  }
+
   // ---- Page de formation : montée seule, comme en production (#/formation).
   // C'est le seul endroit où le parcours guidé est exercé de bout en bout : il navigue
   // d'un écran à l'autre, et une étape qui plante doit faire tomber le test.
