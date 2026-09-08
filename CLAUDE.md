@@ -61,6 +61,10 @@ npm run dev        # serveur de dev
   que l'espace reflète les droits en vigueur. **Parcours guidé** dont chaque étape porte la `perm` qu'elle suppose —
   les étapes hors de portée du rôle sont retirées, guider vers un écran interdit apprendrait l'inverse du bon geste.
   `demo-navigate` change d'onglet, `hub-tab` cible l'onglet interne de `SupportHub`.
+  **Page dédiée** : la formation vit sur la route **`#/formation`** (`main.jsx` monte `TrainingJourney` À LA PLACE
+  de `App`). Elle n'est PAS un calque : deux applications montées côte à côte écoutaient les mêmes événements
+  (`demo-navigate`) et se disputaient la main, ce qui faisait dérailler le parcours guidé. `openTrainingPage()`
+  (exportée par `StaffTraining.jsx`) ouvre la page dans un nouvel onglet, avec repli sur la page courante.
   **Accès libre** : un lien de l'écran de connexion l'ouvre sans authentification (environnement isolé, données
   fictives) — au prix de rendre la structure de la console support visible à tout visiteur.
 - **`src/trainingContent.js` + `src/pages/StaffTraining.jsx`** — onglet **« Formation staff »** de `SupportHub`

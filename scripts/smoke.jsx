@@ -274,24 +274,8 @@ async function main() {
   await click(hubTab('Formation staff'))
   if (!text().includes('Rien n\'est enregistré')) throw new Error('Staff training space did not render')
   if (!find('button', "Ouvrir l'espace de formation")) throw new Error('Isolated training environment launcher missing')
-  // L'entrée passe par le choix d'une casquette staff, qui règle le parcours.
-  await click(find('button', "Ouvrir l'espace de formation"))
-  if (!text().includes('Quelle casquette voulez-vous prendre')) throw new Error('Training role picker missing')
-  if (!text().includes('étape')) throw new Error('Role cards should announce how many steps the tour holds')
-  // Entrer dans une casquette doit ouvrir l'espace directement : aucun code d'accès.
-  await click(find('button', 'Support BD Report'))
-  await act(async () => { await new Promise(r => setTimeout(r, 700)) })
-  if (text().includes('4 chiffres')) throw new Error('Training space must not ask for an access code')
-  // « Formation staff » figure dans la barre du haut même sur le sélecteur d'espace : on
-  // exige donc un repère de l'application elle-même, sans quoi le test resterait aveugle.
-  // Ces deux écrans n'existent que dans l'overlay de formation : l'app réelle, déjà
-  // entrée dans son espace, ne les affiche pas. Ils font donc des repères fiables.
-  if (text().includes('Choisissez votre espace')) throw new Error('Training stopped on the workspace picker')
-  if (text().includes('Choisissez un environnement')) throw new Error('Training stopped on the environment picker')
-  if (!text().includes('RDV réalisés') && !text().includes('Console Support')) {
-    throw new Error('Training space did not render the application itself')
-  }
-  await click(find('button', 'Quitter'))
+  // La formation vit désormais sur sa propre page (#/formation) : le bouton se contente
+  // de l'ouvrir, l'application n'est plus montée derrière. Son parcours se vérifie à part.
   await click(find('button', 'Cas de support'))
   if (!text().includes('Insatisfaction')) throw new Error('Training tickets missing')
   await click(find('button', 'Discussion de projet'))
@@ -438,6 +422,40 @@ async function main() {
   raw.projects = raw.projects.filter(p => p.sourceEnvId !== 'env-peoplespheres')
   win.localStorage.setItem('bdrflow_db_v1', JSON.stringify(raw))
   win.sessionStorage.clear()
+  // ---- Page de formation : montée seule, comme en production (#/formation).
+  // C'est le seul endroit où le parcours guidé est exercé de bout en bout : il navigue
+  // d'un écran à l'autre, et une étape qui plante doit faire tomber le test.
+  {
+    const { default: TrainingJourney } = await import('../src/pages/TrainingJourney.jsx')
+    const c3 = win.document.createElement('div')
+    win.document.body.appendChild(c3)
+    const root3 = createRoot(c3)
+    await act(async () => { root3.render(Root(React.createElement(TrainingJourney, { onClose: () => {} }))) })
+    const t3 = () => c3.textContent || ''
+    const btn3 = (label) => [...c3.querySelectorAll('button')].find(b => b.textContent.trim().includes(label))
+    const click3 = async (el) => act(async () => { el.dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true })) })
+
+    if (!t3().includes('Quelle casquette voulez-vous prendre')) throw new Error('Training role picker missing on its own page')
+    await click3(btn3('Support BD Report'))
+    await act(async () => { await new Promise(r => setTimeout(r, 600)) })
+    if (t3().includes('Choisissez votre espace')) throw new Error('Training stopped on the workspace picker')
+    if (t3().includes('Choisissez un environnement')) throw new Error('Training stopped on the environment picker')
+
+    // Parcours guidé : on le déroule entièrement, chaque étape naviguant réellement.
+    await click3(btn3('Formation guidée'))
+    await act(async () => { await new Promise(r => setTimeout(r, 500)) })
+    if (!t3().includes('Étape 1 /')) throw new Error('Guided training did not start')
+    for (let i = 0; i < 20; i++) {
+      const next = btn3('Suivant')
+      if (!next) break
+      await click3(next)
+      await act(async () => { await new Promise(r => setTimeout(r, 420)) })
+    }
+    if (!btn3('Terminer')) throw new Error('Guided training never reached its last step')
+    await click3(btn3('Terminer'))
+    root3.unmount()
+  }
+
   const c2 = win.document.createElement('div')
   win.document.body.appendChild(c2)
   const root2 = createRoot(c2)

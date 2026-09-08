@@ -5,7 +5,15 @@ import {
 } from 'lucide-react'
 import { TRAINING_PROJECTS, TRAINING_TICKETS, TRAINING_THREAD, TRAINING_STATUS } from '../trainingContent.js'
 import { TICKET_PRIORITIES } from '../store.jsx'
-import TrainingJourney from './TrainingJourney.jsx'
+
+
+// Ouvre la formation sur sa propre page. Un nouvel onglet si le navigateur l'autorise,
+// sinon la page courante : dans les deux cas l'application n'est plus montée derrière.
+export function openTrainingPage() {
+  const url = window.location.pathname + window.location.search + '#/formation'
+  const win = window.open(url, '_blank')
+  if (!win) { window.location.hash = '/formation'; window.location.reload() }
+}
 
 // Espace de formation du staff : des cas fictifs pour s'entraîner sans toucher aux
 // données réelles. Rien n'est enregistré ni synchronisé — les cases cochées et les
@@ -166,7 +174,7 @@ const TABS = [
 
 export default function StaffTraining() {
   const [tab, setTab] = useState('projects')
-  const [started, setStarted] = useState(false)
+
   const Current = TABS.find(t => t.id === tab)?.El || Projects
   return (
     <div className="space-y-4">
@@ -190,7 +198,7 @@ export default function StaffTraining() {
           personne n'a pris —, des clients satisfaits et un client à risque, des projets à paramétrer et des notes de
           satisfaction. C'est la vraie application, avec de vraies données fictives : vous pouvez tout essayer.
         </p>
-        <button className="btn-primary mt-5" onClick={() => setStarted(true)}><Play size={16} /> Ouvrir l'espace de formation</button>
+        <button className="btn-primary mt-5" onClick={openTrainingPage}><Play size={16} /> Ouvrir l'espace de formation</button>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 max-w-3xl">
           {[[Inbox, 'Tout est rempli', 'Demandes, tickets, clients, projets, notes.'],
             [ShieldCheck, 'Rien n\'est risqué', 'Aucune donnée réelle, aucun enregistrement.'],
@@ -216,7 +224,6 @@ export default function StaffTraining() {
 
       <Current />
 
-      {started && <TrainingJourney onClose={() => setStarted(false)} />}
     </div>
   )
 }
