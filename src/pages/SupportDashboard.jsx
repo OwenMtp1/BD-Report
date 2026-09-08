@@ -1,27 +1,29 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   LayoutDashboard, Users2, TrendingDown, LifeBuoy, Timer, CheckCircle2,
-  Star, FolderKanban, AlertTriangle,
+  Star, FolderKanban, AlertTriangle, Heart, ShieldAlert,
 } from 'lucide-react'
 import {
   useStore, CLIENT_STATUSES, PROJECT_STATUSES, TICKET_PRIORITIES,
   firstResponseMs, slaInfo, fmtDuration, fmtDate,
 } from '../store.jsx'
-import { Empty } from '../ui.jsx'
+import { Empty, Modal } from '../ui.jsx'
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0)
 const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 
 // Carte d'indicateur. `tone` colore la valeur quand elle porte un jugement.
-function Kpi({ icon: Icon, label, value, hint, tone = '' }) {
+function Kpi({ icon: Icon, label, value, hint, tone = '', onClick }) {
+  const Tag = onClick ? 'button' : 'div'
   return (
-    <div className="card p-3.5">
+    <Tag onClick={onClick} className={`card p-3.5 text-left w-full ${onClick ? 'hover:border-brand transition' : ''}`}>
       <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted">
         <Icon size={13} className="shrink-0" /> <span className="truncate">{label}</span>
       </div>
       <div className={`text-2xl font-extrabold mt-1 ${tone}`}>{value}</div>
       {hint && <div className="text-[11px] text-muted mt-0.5">{hint}</div>}
-    </div>
+      {onClick && <div className="text-[10px] text-brand font-semibold mt-1">Détail →</div>}
+    </Tag>
   )
 }
 
@@ -50,6 +52,7 @@ export default function SupportDashboard() {
   const clients = store.db.clients || []
   const tickets = store.db.tickets || []
   const projects = store.db.projects || []
+  const ratings = store.db.productRatings || []
 
   const m = useMemo(() => {
     const countBy = (id) => clients.filter(c => c.status === id).length
@@ -69,6 +72,10 @@ export default function SupportDashboard() {
     const onTime = responded.filter(t => !slaInfo(t).breached).length
     const breached = tickets.filter(t => slaInfo(t).breached).length
     const scores = tickets.map(t => t.csat?.score).filter(v => typeof v === 'number')
+    // Deux satisfactions distinctes : la prise en charge d'une demande, et l'attachement
+    // au produit. Les confondre masquerait un support irréprochable sur un produit qu'on
+    // s'apprête à quitter — ou l'inverse.
+    const productScores = ratings.map(r => r.score).filter(v => typeof v === 'number')
 
     // Motifs de churn : texte libre, regroupé sur une forme normalisée pour que deux
     // saisies identiques comptent ensemble sans écraser la casse d'origine.
@@ -84,6 +91,31 @@ export default function SupportDashboard() {
     })
     const reasons = [...byReason.values()].sort((a, b) => b.value - a.value)
 
+    // Client à risque : un signal isolé ne veut rien dire. On croise l'insatisfaction
+    // exprimée (toutes notes confondues) avec la charge de demandes en cours, et on
+    // conserve les faits qui ont motivé le classement plutôt qu'un score opaque.
+    const risks = clients.map(c => {
+      const its = tickets.filter(t => t.envId === c.envId || t.clientName === c.name)
+      const lowTickets = its.filter(t => typeof t.csat?.score === 'number' && t.csat.score < 3)
+      const lowProduct = ratings.filter(r => r.envId === c.envId && r.score < 3)
+      const openIts = its.filter(t => t.status !== 'closed')
+      const breached = openIts.filter(t => slaInfo(t).breached)
+      const lost = projects.filter(p => p.status === 'termine' && p.closeReason && (p.clientName === c.name || p.envId === c.envId))
+      const signals = []
+      lowTickets.forEach(t => signals.push({ kind: 'Note support', when: t.csat.ts || t.closedAt || t.createdAt, text: `${t.csat.score}/5 sur « ${t.category} »${t.csat.comment ? ` — « ${t.csat.comment} »` : ''}` }))
+      lowProduct.forEach(r => signals.push({ kind: 'Note produit', when: r.ts, text: `${r.score}/5 par ${r.accountName || 'un utilisateur'}${r.comment ? ` — « ${r.comment} »` : ''}` }))
+      openIts.forEach(t => signals.push({ kind: 'Ticket ouvert', when: t.createdAt, text: `${t.category}${slaInfo(t).breached ? ' — SLA dépassé' : ''}` }))
+      lost.forEach(p => signals.push({ kind: 'Projet clôturé', when: p.closedAt, text: `${p.name} — ${p.closeReason}` }))
+      // Le score pèse l'insatisfaction plus lourd que le volume : trois tickets ouverts
+      // chez un client satisfait n'ont pas la même valeur qu'une note de 1/5.
+      const score = lowTickets.length * 3 + lowProduct.length * 3 + breached.length * 2 + Math.min(openIts.length, 5)
+      return {
+        id: c.id, name: c.name, score,
+        lowCount: lowTickets.length + lowProduct.length, openCount: openIts.length, breached: breached.length,
+        signals: signals.sort((a, b) => new Date(b.when || 0) - new Date(a.when || 0)),
+      }
+    }).filter(r => r.score >= 3).sort((a, b) => b.score - a.score)
+
     const catCount = new Map()
     tickets.forEach(t => catCount.set(t.category, (catCount.get(t.category) || 0) + 1))
     const categories = [...catCount.entries()]
@@ -97,10 +129,15 @@ export default function SupportDashboard() {
       slaRate: responded.length ? pct(onTime, responded.length) : null,
       breached, unanswered: open.filter(t => firstResponseMs(t) == null).length,
       csat: avg(scores), csatCount: scores.length,
+      product: avg(productScores), productCount: productScores.length,
       reasons, categories, closedProjects,
+      supportDetail: tickets.filter(t => t.csat).sort((a, b) => (a.csat.score - b.csat.score)),
+      productDetail: [...ratings].sort((a, b) => a.score - b.score),
+      risks,
     }
-  }, [clients, tickets, projects])
+  }, [clients, tickets, projects, ratings])
 
+  const [detail, setDetail] = useState('')
   const churn = pct(m.anciens, m.engages)
   const partActifs = pct(m.actifs, clients.length)
 
@@ -154,8 +191,18 @@ export default function SupportDashboard() {
         <Kpi icon={CheckCircle2} label="SLA respecté" value={m.slaRate == null ? '—' : `${m.slaRate} %`}
           tone={m.slaRate == null ? '' : m.slaRate >= 90 ? 'text-emerald-600' : m.slaRate >= 70 ? 'text-amber-600' : 'text-red-600'}
           hint={m.breached ? `${m.breached} hors délai` : 'Aucun dépassement'} />
-        <Kpi icon={Star} label="Satisfaction" value={m.csat == null ? '—' : `${m.csat.toFixed(1)}/5`}
-          hint={m.csatCount ? `${m.csatCount} avis à la clôture` : 'Aucun avis'} />
+        <Kpi icon={Star} label="Satisfaction support" value={m.csat == null ? '—' : `${m.csat.toFixed(1)}/5`}
+          tone={m.csat == null ? '' : m.csat >= 4 ? 'text-emerald-600' : m.csat >= 3 ? 'text-amber-600' : 'text-red-600'}
+          hint={m.csatCount ? `${m.csatCount} avis sur la prise en charge` : 'Aucun avis'}
+          onClick={m.csatCount ? () => setDetail('support') : undefined} />
+        <Kpi icon={Heart} label="Fidélisation produit" value={m.product == null ? '—' : `${m.product.toFixed(1)}/5`}
+          tone={m.product == null ? '' : m.product >= 4 ? 'text-emerald-600' : m.product >= 3 ? 'text-amber-600' : 'text-red-600'}
+          hint={m.productCount ? `${m.productCount} note${m.productCount > 1 ? 's' : ''} sur le produit` : 'Aucune note'}
+          onClick={m.productCount ? () => setDetail('product') : undefined} />
+        <Kpi icon={ShieldAlert} label="Clients à risque" value={m.risks.length}
+          tone={m.risks.length ? 'text-red-600' : 'text-emerald-600'}
+          hint={m.risks.length ? 'Insatisfaction croisée aux demandes en cours' : 'Aucun signal préoccupant'}
+          onClick={m.risks.length ? () => setDetail('risk') : undefined} />
         <Kpi icon={FolderKanban} label="Projets en cours" value={projects.filter(p => p.status === 'encours').length}
           hint={`${projects.length} projet${projects.length > 1 ? 's' : ''} au total`} />
       </div>
@@ -226,6 +273,80 @@ export default function SupportDashboard() {
           )}
         </div>
       </div>
+
+      {detail && (
+        <Modal wide title={
+          detail === 'support' ? 'Satisfaction sur la prise en charge'
+            : detail === 'product' ? 'Fidélisation produit'
+              : 'Clients à risque'
+        } onClose={() => setDetail('')}>
+          {detail === 'support' && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted">Notes laissées à la clôture d'un ticket, des plus basses aux plus hautes.</p>
+              {m.supportDetail.map(t => (
+                <div key={t.id} className="p-2.5 rounded-lg bg-surface">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold truncate">{t.category}</span>
+                    <span className={`chip shrink-0 ${t.csat.score < 3 ? 'bg-red-100 text-red-700' : t.csat.score < 4 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {t.csat.score}/5
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted">{t.clientName} · {fmtDate((t.closedAt || t.createdAt).slice(0, 10))}</div>
+                  {t.csat.comment && <p className="text-xs text-muted italic mt-1">« {t.csat.comment} »</p>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {detail === 'product' && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted">Notes données spontanément sur le produit, aux jalons d'usage.</p>
+              {m.productDetail.map(r => (
+                <div key={r.id} className="p-2.5 rounded-lg bg-surface">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold truncate">{r.accountName || 'Utilisateur'}</span>
+                    <span className={`chip shrink-0 ${r.score < 3 ? 'bg-red-100 text-red-700' : r.score < 4 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {r.score}/5
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted">après {r.milestone} jours · {fmtDate((r.ts || '').slice(0, 10))}</div>
+                  {r.comment && <p className="text-xs text-muted italic mt-1">« {r.comment} »</p>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {detail === 'risk' && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted">
+                Un signal isolé ne dit rien : le classement croise les notes inférieures à 3/5, tous canaux
+                confondus, avec les demandes en cours et les dépassements de délai. Les faits retenus sont listés.
+              </p>
+              {m.risks.map(r => (
+                <div key={r.id} className="rounded-xl border border-line p-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="font-bold text-sm">{r.name}</span>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {r.lowCount > 0 && <span className="chip bg-red-100 text-red-700">{r.lowCount} note{r.lowCount > 1 ? 's' : ''} &lt; 3/5</span>}
+                      {r.openCount > 0 && <span className="chip bg-amber-100 text-amber-700">{r.openCount} ticket{r.openCount > 1 ? 's' : ''} ouvert{r.openCount > 1 ? 's' : ''}</span>}
+                      {r.breached > 0 && <span className="chip bg-red-100 text-red-700">{r.breached} hors délai</span>}
+                    </div>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {r.signals.map((sig, i) => (
+                      <div key={i} className="text-xs flex gap-2">
+                        <span className="chip bg-surface text-muted shrink-0">{sig.kind}</span>
+                        <span className="text-muted flex-1">{sig.text}</span>
+                        {sig.when && <span className="text-muted shrink-0">{fmtDate(String(sig.when).slice(0, 10))}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
     </div>
   )
 }

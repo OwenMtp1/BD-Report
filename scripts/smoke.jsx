@@ -257,7 +257,8 @@ async function main() {
 
   // Tableau de bord support : portefeuille, churn et traitement des tickets.
   await click(hubTab('Tableau de bord'))
-  for (const k of ['Taux de churn', 'Tickets ouverts', 'Portefeuille client', 'Raisons principales de churn']) {
+  for (const k of ['Taux de churn', 'Tickets ouverts', 'Portefeuille client', 'Raisons principales de churn',
+                   'Satisfaction support', 'Fidélisation produit', 'Clients à risque']) {
     if (!text().includes(k)) throw new Error('Support dashboard missing: ' + k)
   }
 
