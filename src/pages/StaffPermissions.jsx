@@ -70,12 +70,12 @@ function RoleMenu({ store, role }) {
 }
 
 // En-tête de colonne : nom du rôle + rang + effectif + actions (rang / renommer / supprimer).
-function RoleHead({ role, store, memberCount, canManage }) {
+function RoleHead({ role, store, memberCount, canManage, perms }) {
   const key = role.roleKey || role.name
   const isFounder = key === 'Fondateur'
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(role.name)
-  const permCount = isFounder ? STAFF_PERMISSION_IDS.length : (role.permissions || []).length
+  const permCount = isFounder ? STAFF_PERMISSION_IDS.length : (perms || role.permissions || []).length
   return (
     <th className="px-2 py-2 align-bottom text-center min-w-[124px]">
       <div className="flex flex-col items-center gap-1">
@@ -166,6 +166,11 @@ export default function StaffPermissions() {
   const canGovern = actor?.role === 'Fondateur' || store.hasPerm('permissions.manage')
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ name: '', rank: '' })
+  // Les modifications de droits restent locales jusqu'à un enregistrement explicite :
+  // une matrice qui s'applique à chaque clic ne laisse aucune place à l'hésitation, ni
+  // aucun moyen de revenir en arrière avant de valider.
+  const [pending, setPending] = useState({})
+  const [confirmSave, setConfirmSave] = useState(false)
 
   if (!canGovern) {
     return (
@@ -180,6 +185,16 @@ export default function StaffPermissions() {
   // Manager et Membre sont des rôles clients : ils n'apparaissent pas ici.
   const roles = store.staffRoles().filter(r => !isClientRole(r.roleKey || r.name)).slice().sort((a, b) => b.rank - a.rank)
   const memberCount = (key) => store.db.accounts.filter(a => a.role === key).length
+
+  // Droits effectifs affichés : le brouillon prime sur l'état enregistré.
+  const permsOf = (role) => pending[role.roleKey || role.name] || role.permissions || []
+  const stage = (roleKey, next) => setPending(p => ({ ...p, [roleKey]: next }))
+  const dirtyCount = Object.keys(pending).length
+  const applyAll = () => {
+    Object.entries(pending).forEach(([roleKey, perms]) => store.setRolePermissions(roleKey, perms))
+    setPending({}); setConfirmSave(false)
+    toast('Modifications enregistrées')
+  }
 
   const create = () => {
     const r = store.createStaffRole({ name: form.name, rank: form.rank === '' ? undefined : Number(form.rank) })
@@ -210,7 +225,7 @@ export default function StaffPermissions() {
                 <span className="flex items-center gap-1.5 font-bold"><KeyRound size={15} className="text-brand" /> Permission</span>
               </th>
               {roles.map(r => (
-                <RoleHead key={r.id} role={r} store={store} memberCount={memberCount(r.roleKey || r.name)} canManage={store.canManageRole(r.roleKey || r.name)} />
+                <RoleHead key={r.id} role={r} store={store} perms={permsOf(r)} memberCount={memberCount(r.roleKey || r.name)} canManage={store.canManageRole(r.roleKey || r.name)} />
               ))}
             </tr>
           </thead>
@@ -225,7 +240,7 @@ export default function StaffPermissions() {
                     const key = r.roleKey || r.name
                     const isFounder = key === 'Fondateur'
                     const ids = g.perms.map(p => p.id)
-                    const held = ids.filter(id => isFounder || (r.permissions || []).includes(id)).length
+                    const held = ids.filter(id => isFounder || permsOf(r).includes(id)).length
                     const all = held === ids.length
                     const editable = !isFounder && !r.suspended && store.canManageRole(key)
                       && ids.some(id => actor?.role === 'Fondateur' || store.hasPerm(id))
@@ -235,7 +250,11 @@ export default function StaffPermissions() {
                           ref={el => { if (el) el.indeterminate = held > 0 && !all }}
                           className={editable ? 'cursor-pointer opacity-60 hover:opacity-100' : 'opacity-30'}
                           title={editable ? `${all ? 'Retirer' : 'Accorder'} toute la catégorie « ${g.label} »` : ''}
-                          onChange={e => store.toggleRolePermGroup(key, ids, e.target.checked)} />
+                          onChange={e => {
+                            const cur = new Set(permsOf(r))
+                            ids.forEach(id => (e.target.checked ? cur.add(id) : cur.delete(id)))
+                            stage(key, [...cur])
+                          }} />
                       </td>
                     )
                   })}
@@ -249,7 +268,7 @@ export default function StaffPermissions() {
                     {roles.map(r => {
                       const key = r.roleKey || r.name
                       const isFounder = key === 'Fondateur'
-                      const checked = isFounder || (r.permissions || []).includes(p.id)
+                      const checked = isFounder || permsOf(r).includes(p.id)
                       // Éditable si l'acteur gère ce rôle ET (fondateur OU détient lui-même ce droit).
                       const editable = !isFounder && !r.suspended && store.canManageRole(key) && (actor?.role === 'Fondateur' || store.hasPerm(p.id))
                       return (
@@ -257,7 +276,11 @@ export default function StaffPermissions() {
                           <input type="checkbox" checked={checked} disabled={!editable}
                             className={editable ? 'cursor-pointer' : 'opacity-50'}
                             title={isFounder ? 'Fondateur : tous les droits' : r.suspended ? 'Rôle suspendu' : editable ? '' : 'Non modifiable par vous'}
-                            onChange={e => store.toggleRolePerm(key, p.id, e.target.checked)} />
+                            onChange={e => {
+                              const cur = new Set(permsOf(r))
+                              e.target.checked ? cur.add(p.id) : cur.delete(p.id)
+                              stage(key, [...cur])
+                            }} />
                         </td>
                       )
                     })}
@@ -268,6 +291,29 @@ export default function StaffPermissions() {
           </tbody>
         </table>
       </div>
+
+      {/* Barre d'enregistrement : tant qu'elle est là, rien n'est appliqué. */}
+      {dirtyCount > 0 && (
+        <div className="sticky bottom-3 z-20 card p-3 flex items-center gap-3 flex-wrap border-brand shadow-lg">
+          <ShieldCheck size={17} className="text-brand shrink-0" />
+          <span className="text-sm">
+            <b>{dirtyCount}</b> rôle{dirtyCount > 1 ? 's' : ''} modifié{dirtyCount > 1 ? 's' : ''} — rien n'est encore appliqué.
+          </span>
+          <div className="flex gap-2 ml-auto">
+            <button className="btn-ghost !py-1.5 text-sm" onClick={() => setPending({})}>Abandonner</button>
+            <button className="btn-primary !py-1.5 text-sm" onClick={() => setConfirmSave(true)}>
+              <Check size={15} /> Enregistrer vos modifications
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmSave && (
+        <Confirm
+          message={`Appliquer les droits de ${dirtyCount} rôle${dirtyCount > 1 ? 's' : ''} ? Les personnes concernées gagneront ou perdront ces accès immédiatement.`}
+          yesLabel="Confirmer"
+          onYes={applyAll} onNo={() => setConfirmSave(false)} />
+      )}
 
       <Assignment store={store} />
 

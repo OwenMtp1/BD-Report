@@ -2643,6 +2643,18 @@ export function StoreProvider({ children, demo = false }) {
         on ? cur.add(permId) : cur.delete(permId)
         this.updateStaffRole(roleKey, { permissions: [...cur] })
       },
+      // Applique en une fois le jeu de droits d'un rôle (enregistrement explicite).
+      // L'acteur ne peut ni accorder ni retirer un droit qu'il ne détient pas lui-même :
+      // ceux-là sont repris inchangés, sans quoi un enregistrement global contournerait
+      // la garde qui protège l'octroi unitaire.
+      setRolePermissions(roleKey, permIds) {
+        if (!this.canManageRole(roleKey)) return
+        const r = (db.staffRoles || []).find(x => (x.roleKey || x.name) === roleKey)
+        if (!r || (r.roleKey || r.name) === 'Fondateur') return
+        const mine = (p) => account?.role === 'Fondateur' || accountHasPerm(account, p, db)
+        const outOfReach = (r.permissions || []).filter(p => !mine(p))
+        this.updateStaffRole(roleKey, { permissions: [...new Set([...outOfReach, ...(permIds || []).filter(mine)])] })
+      },
       // Coche ou décoche un groupe entier de droits pour un rôle. Même garde que l'octroi
       // unitaire : on ne distribue que les droits qu'on détient soi-même (anti-escalade),
       // les autres sont ignorés au lieu de faire échouer l'opération entière.

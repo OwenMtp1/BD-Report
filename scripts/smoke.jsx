@@ -255,6 +255,19 @@ async function main() {
   if (!founderRole || (founderRole.permissions || []).length < 30) throw new Error('Founder role should hold every permission')
   if (!(founderRole.permissions || []).includes('dashboard.view')) throw new Error('dashboard.view permission missing from catalogue')
 
+  // Permissions staff : les modifications restent en brouillon jusqu'à un enregistrement.
+  await click(hubTab('Permissions staff'))
+  if (!text().includes('Attribution des rôles')) throw new Error('Staff permissions tab did not render')
+  if (text().includes('Enregistrer vos modifications')) throw new Error('Save bar should stay hidden until something changes')
+  if (text().includes('Membre') && [...container.querySelectorAll('main th')].some(th => th.textContent.trim().startsWith('Membre'))) {
+    throw new Error('Client roles must not appear as staff permission columns')
+  }
+  const permBox = [...container.querySelectorAll('main input[type="checkbox"]')].find(i => !i.disabled)
+  if (!permBox) throw new Error('No editable permission checkbox found')
+  await act(async () => { Simulate.change(permBox, { target: { checked: !permBox.checked } }) })
+  if (!text().includes('Enregistrer vos modifications')) throw new Error('Save bar should appear once a permission changes')
+  if (!text().includes("rien n'est encore appliqué")) throw new Error('Draft state should be stated explicitly')
+
   // Tableau de bord support : portefeuille, churn et traitement des tickets.
   await click(hubTab('Tableau de bord'))
   for (const k of ['Taux de churn', 'Tickets ouverts', 'Portefeuille client', 'Raisons principales de churn',
