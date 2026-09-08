@@ -525,9 +525,23 @@ export function roleRankOf(role, db) {
   return ROLE_RANKS[role] ?? 0
 }
 // Le compte détient-il la permission staff ? (Fondateur = toujours vrai)
+// Couleurs disponibles pour repérer un droit dans la matrice des permissions.
+export const PERM_COLORS = [
+  { id: '', label: 'Aucune', dot: 'bg-gray-300 dark:bg-gray-600', row: '' },
+  { id: 'red', label: 'Rouge', dot: 'bg-red-500', row: 'bg-red-50 dark:bg-red-500/10' },
+  { id: 'amber', label: 'Ambre', dot: 'bg-amber-500', row: 'bg-amber-50 dark:bg-amber-500/10' },
+  { id: 'emerald', label: 'Vert', dot: 'bg-emerald-500', row: 'bg-emerald-50 dark:bg-emerald-500/10' },
+  { id: 'blue', label: 'Bleu', dot: 'bg-blue-500', row: 'bg-blue-50 dark:bg-blue-500/10' },
+  { id: 'violet', label: 'Violet', dot: 'bg-violet-500', row: 'bg-violet-50 dark:bg-violet-500/10' },
+]
+export const permColor = (id) => PERM_COLORS.find(c => c.id === (id || '')) || PERM_COLORS[0]
+
 export function accountHasPerm(account, permId, db) {
   const role = account?.role
+  // Le Fondateur passe avant la suspension : sans cela, suspendre « permissions.manage »
+  // verrouillerait la gouvernance sans aucun moyen de revenir en arrière.
   if (role === 'Fondateur') return true
+  if (db?.staffPermissionMeta?.[permId]?.disabled) return false
   const r = (db?.staffRoles || []).find(x => (x.roleKey || x.name) === role)
   if (r) return (r.permissions || []).includes(permId)
   // Repli si la table n'est pas encore initialisée : parité avec l'ancien comportement.
@@ -1634,6 +1648,7 @@ function migrate(db) {
   db.channelMessages = db.channelMessages || {}
   db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
   db.staffRoles = seedStaffRoles(db.staffRoles) // rôles + permissions de l'équipe staff (idempotent)
+  if (!db.staffPermissionMeta || typeof db.staffPermissionMeta !== 'object') db.staffPermissionMeta = {} // couleur / suspension par droit
   // Intégrations externes (HubSpot…) — réglages de l'ÉDITEUR : URL du connecteur
   // publiée à tous les clients + valeurs par défaut. Aucun jeton ici.
   db.integrations = db.integrations || {}
@@ -2584,6 +2599,34 @@ export function StoreProvider({ children, demo = false }) {
         const cur = new Set(r.permissions || [])
         on ? cur.add(permId) : cur.delete(permId)
         this.updateStaffRole(roleKey, { permissions: [...cur] })
+      },
+      // Métadonnées d'un droit : couleur de repérage et suspension. Le catalogue lui-même
+      // est en dur (les gardes l'interrogent par identifiant) : un droit ne se supprime
+      // donc pas, il se suspend — refusé à tous, et réactivable à tout moment.
+      permMeta(permId) { return db.staffPermissionMeta?.[permId] || {} },
+      setPermColor(permId, color) {
+        if (!this.hasPerm('permissions.manage')) return
+        setDb(d => {
+          const meta = { ...(d.staffPermissionMeta || {}) }
+          const m = { ...(meta[permId] || {}) }
+          if (color) m.color = color; else delete m.color
+          meta[permId] = m; d.staffPermissionMeta = meta
+          return d
+        })
+      },
+      setPermDisabled(permId, disabled) {
+        if (!this.hasPerm('permissions.manage')) return
+        setDb(d => {
+          const meta = { ...(d.staffPermissionMeta || {}) }
+          const m = { ...(meta[permId] || {}) }
+          if (disabled) {
+            m.disabled = true
+            m.disabledAt = new Date().toISOString()
+            m.disabledBy = account?.pseudo || account?.email || ''
+          } else { delete m.disabled; delete m.disabledAt; delete m.disabledBy }
+          meta[permId] = m; d.staffPermissionMeta = meta
+          return d
+        })
       },
       deleteStaffRole(roleKey) {
         if (!this.canManageRole(roleKey)) return
