@@ -56,6 +56,13 @@ const DEFAULT_OPTIONAL_SCOPES = [
   'tickets',
 ]
 
+// Clés dont on retire les espaces parasites : un copier-coller trop large en laisse
+// souvent, et HubSpot rejette alors la demande sans message exploitable.
+const TRIMMED_VARS = [
+  'HUBSPOT_CLIENT_ID', 'HUBSPOT_CLIENT_SECRET', 'STATE_SECRET',
+  'HUBSPOT_REDIRECT_URI', 'HUBSPOT_TOKEN', 'SHARED_SECRET',
+]
+
 // Préfixes de chemins relayables — tout le reste est refusé (moindre privilège).
 const ALLOWED_PREFIXES = [
   '/crm/v3/', '/crm/v4/', '/account-info/v3/', '/marketing/v3/forms',
@@ -183,6 +190,8 @@ async function tokenInfo(token) {
 
 export default {
   async fetch(request, env) {
+    // Normalise les clés une fois pour toutes (les liaisons comme TENANTS sont conservées).
+    env = { ...env, ...Object.fromEntries(TRIMMED_VARS.map(k => [k, String(env[k] ?? '').trim()])) }
     const url = new URL(request.url)
     const path = url.pathname
     const origin = request.headers.get('Origin') || ''
@@ -213,6 +222,12 @@ export default {
       const label = url.searchParams.get('label') || ''
       if (!env.HUBSPOT_CLIENT_ID || !env.HUBSPOT_CLIENT_SECRET || !env.STATE_SECRET) {
         return closingPage(back, { ok: false, message: 'Connecteur incomplet : HUBSPOT_CLIENT_ID / HUBSPOT_CLIENT_SECRET / STATE_SECRET manquants.' })
+      }
+      // Confusion fréquente : le jeton d'une application PRIVÉE (pat-…) n'est pas un
+      // Client ID OAuth. HubSpot répondrait « Unable to load app information », sans
+      // indiquer la cause — on la nomme ici.
+      if (env.HUBSPOT_CLIENT_ID.startsWith('pat-')) {
+        return closingPage(back, { ok: false, message: "HUBSPOT_CLIENT_ID contient un jeton d'application privée (pat-…) au lieu d'un Client ID OAuth. Créez une application publique sur developers.hubspot.com et recopiez son Client ID." })
       }
       if (!tenantId || !key) return closingPage(back, { ok: false, message: 'Requête de connexion incomplète (entreprise manquante).' })
       if (allowed.length && back && !allowed.includes(back)) return closingPage('', { ok: false, message: 'Origine non autorisée par le connecteur.' })
