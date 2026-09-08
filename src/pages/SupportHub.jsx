@@ -75,10 +75,10 @@ export default function SupportHub() {
         ))}
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto border-b border-line">
+      <div className="flex flex-wrap gap-1.5 border-b border-line">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-t-lg whitespace-nowrap border-b-2 -mb-px ${tab === t.id ? 'border-brand text-brand' : 'border-transparent text-muted hover:bg-surface'}`}>
+            className={`flex items-center gap-1.5 px-2.5 py-2 text-[13px] font-semibold rounded-t-lg whitespace-nowrap border-b-2 -mb-px ${tab === t.id ? 'border-brand text-brand' : 'border-transparent text-muted hover:bg-surface'}`}>
             <t.icon size={15} /> {t.label}
           </button>
         ))}

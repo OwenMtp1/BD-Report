@@ -217,7 +217,27 @@ export default function StaffPermissions() {
             {STAFF_PERMISSION_GROUPS.map(g => (
               <React.Fragment key={g.id}>
                 <tr className="bg-surface/40">
-                  <td className="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-muted sticky left-0 bg-surface/40 z-10" colSpan={1 + roles.length}>{g.label}</td>
+                  <td className="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-muted sticky left-0 bg-surface/40 z-10">{g.label}</td>
+                  {/* Case de groupe : accorde ou retire d'un coup tous les droits de la
+                      catégorie, sans avoir à cocher ligne à ligne. */}
+                  {roles.map(r => {
+                    const key = r.roleKey || r.name
+                    const isFounder = key === 'Fondateur'
+                    const ids = g.perms.map(p => p.id)
+                    const held = ids.filter(id => isFounder || (r.permissions || []).includes(id)).length
+                    const all = held === ids.length
+                    const editable = !isFounder && !r.suspended && store.canManageRole(key)
+                      && ids.some(id => actor?.role === 'Fondateur' || store.hasPerm(id))
+                    return (
+                      <td key={r.id} className="text-center px-2 py-1.5">
+                        <input type="checkbox" checked={all} disabled={!editable}
+                          ref={el => { if (el) el.indeterminate = held > 0 && !all }}
+                          className={editable ? 'cursor-pointer opacity-60 hover:opacity-100' : 'opacity-30'}
+                          title={editable ? `${all ? 'Retirer' : 'Accorder'} toute la catégorie « ${g.label} »` : ''}
+                          onChange={e => store.toggleRolePermGroup(key, ids, e.target.checked)} />
+                      </td>
+                    )
+                  })}
                 </tr>
                 {g.perms.map(p => (
                   <tr key={p.id} className="border-b border-line/60 hover:bg-surface/40">

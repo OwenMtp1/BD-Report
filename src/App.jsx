@@ -439,10 +439,10 @@ function MainApp() {
   // d'onglets (et se relâchent quand il y en a moins) pour tenir sur une seule page sans scroll.
   const navRows = groups.reduce((n, g) => n + g.items.length, 0) + groups.length
   const dense = navRows > 26 ? 2 : navRows > 20 ? 1 : 0
-  const itemCls = dense === 2 ? 'py-[3px] text-[12px]' : dense === 1 ? 'py-[5px] text-[12.5px]' : 'py-[7px] text-[13px]'
+  const itemCls = dense === 2 ? 'py-[5px] text-[12.5px]' : dense === 1 ? 'py-[7px] text-[13px]' : 'py-2 text-[13.5px]'
   const grpHdrCls = dense >= 1 ? 'py-1' : 'py-1.5'
-  const grpWrapCls = dense === 2 ? 'mb-0.5' : 'mb-1'
-  const iconSz = dense === 2 ? 14 : 15
+  const grpWrapCls = dense === 2 ? 'mb-1' : dense === 1 ? 'mb-2' : 'mb-3'
+  const iconSz = dense === 2 ? 15 : dense === 1 ? 16 : 17
   const [closedGroups, setClosedGroups] = useState({})
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [booting, setBooting] = useState(true)
@@ -584,7 +584,7 @@ function MainApp() {
                       const dimmed = store.readOnly && item.brick
                       return (
                         <button key={item.id} onClick={() => goto(item.id)} title={dimmed ? `${label} — lecture seule` : label}
-                          className={`w-full flex items-center gap-2 pl-3 pr-2 ${itemCls} rounded-lg font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'} ${dimmed && page !== item.id ? 'opacity-40' : ''}`}>
+                          className={`w-full flex items-center gap-2.5 pl-3 pr-2.5 ${itemCls} rounded-xl font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'} ${dimmed && page !== item.id ? 'opacity-40' : ''}`}>
                           <item.icon size={iconSz} className={`shrink-0 ${page === item.id ? '' : 'text-muted'}`} />
                           <span className="truncate">{label}</span>
                           {badges[item.id] > 0 && (

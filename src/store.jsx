@@ -2626,6 +2626,19 @@ export function StoreProvider({ children, demo = false }) {
         on ? cur.add(permId) : cur.delete(permId)
         this.updateStaffRole(roleKey, { permissions: [...cur] })
       },
+      // Coche ou décoche un groupe entier de droits pour un rôle. Même garde que l'octroi
+      // unitaire : on ne distribue que les droits qu'on détient soi-même (anti-escalade),
+      // les autres sont ignorés au lieu de faire échouer l'opération entière.
+      toggleRolePermGroup(roleKey, permIds, on) {
+        if (!this.canManageRole(roleKey)) return
+        const r = (db.staffRoles || []).find(x => (x.roleKey || x.name) === roleKey)
+        if (!r || (r.roleKey || r.name) === 'Fondateur') return
+        const cur = new Set(r.permissions || [])
+        ;(permIds || [])
+          .filter(p => account?.role === 'Fondateur' || accountHasPerm(account, p, db))
+          .forEach(p => (on ? cur.add(p) : cur.delete(p)))
+        this.updateStaffRole(roleKey, { permissions: [...cur] })
+      },
       // Couleur de repérage d'un rôle dans la matrice et les listes.
       setRoleColor(roleKey, color) { this.updateStaffRole(roleKey, { color: color || '' }) },
       // Suspension d'un rôle : ses titulaires perdent leurs droits staff sans que le rôle
