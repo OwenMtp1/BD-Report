@@ -31,6 +31,12 @@ npm run dev        # serveur de dev
   utilisateur. `migrate` accorde les nouveaux onglets à l'offre Beta + aux comptes en accès complet.
 - **`src/App.jsx`** — routing par `NAV_GROUPS` (importé de nav.jsx) + `pageEl` (switch d'id). `MainApp` = sidebar + header.
   Login avec « rester connecté 30 j » + « enregistrer mot de passe ». Pastilles non-lus support. Bandeau lecture seule.
+  **Connexion Google** (Supabase Auth, provider google) : bouton « Continuer avec Google » → `signInWithGoogle()`
+  (`src/supabaseAuth.js`) ; au retour, `detectSessionInUrl` pose la session et `store.loginWithGoogle(email)` rattache
+  l'identité à un compte par son **e-mail**. **Aucune création implicite** : une adresse sans compte est refusée et la
+  session Supabase refermée (les accès restent délivrés par un manager, sinon les sièges d'une offre seraient contournés).
+  `logout()` ferme aussi la session Supabase, sans quoi l'écran de connexion la retrouverait aussitôt. Côté Google Cloud :
+  l'URI de redirection est celle de **Supabase** (`https://<ref>.supabase.co/auth/v1/callback`), pas celle du site.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
 - **`src/pages/*`** — Dashboard, Rdv, Leads (kanban + pipeline entreprise), Tasks, MyTasks, Contacts, Notes, Primes,
   Kpi, TeamLead, Trash, Settings, Admin, OrgChart, Company, **Conversations**, **DataQuality** (Qualité des données :

@@ -71,7 +71,9 @@ const DICT = {
   'login.errBad': { fr: 'Identifiants incorrects (mail ou pseudo + mot de passe).', en: 'Wrong credentials (email or username + password).', es: 'Credenciales incorrectas (correo o usuario + contraseña).' },
   'login.errEmail': { fr: 'Entrez un email valide pour créer un compte.', en: 'Enter a valid email to create an account.', es: 'Introduce un correo válido para crear una cuenta.' },
   'login.errPw': { fr: 'Choisissez un mot de passe.', en: 'Choose a password.', es: 'Elige una contraseña.' },
-  'login.googleSoon': { fr: "La connexion Google nécessite un déploiement avec OAuth configuré — utilisez l'email + mot de passe en attendant.", en: 'Google login needs an OAuth-configured deployment — use email + password meanwhile.', es: 'El acceso con Google requiere un despliegue con OAuth — usa correo + contraseña mientras tanto.' },
+  'login.googleBusy': { fr: 'Connexion en cours…', en: 'Signing in…', es: 'Conectando…' },
+  'login.googleUnknown': { fr: "Aucun compte BD Report n'est associé à cette adresse Google. Demandez à votre manager de vous créer un accès.", en: 'No BD Report account matches this Google address. Ask your manager to create your access.', es: 'Ninguna cuenta de BD Report corresponde a esta dirección de Google. Pide a tu responsable que te cree un acceso.' },
+  'login.googleErr': { fr: "La connexion Google est indisponible pour le moment — utilisez l'e-mail et le mot de passe.", en: 'Google sign-in is unavailable right now — use email and password.', es: 'El acceso con Google no está disponible ahora — usa correo y contraseña.' },
   // --- Bienvenue
   'welcome.hello': { fr: 'Bienvenue', en: 'Welcome', es: 'Bienvenido' },
   'welcome.inSpace': { fr: 'dans votre Espace BDR', en: 'to your BDR Workspace', es: 'a tu Espacio BDR' },

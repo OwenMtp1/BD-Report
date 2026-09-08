@@ -58,6 +58,39 @@ function Login() {
   const [err, setErr] = useState('')
   const [remember, setRemember] = useState(false)
   const [savePw, setSavePw] = useState(!!saved)
+  const [gBusy, setGBusy] = useState(false)
+
+  // Retour de Google : Supabase a posé la session, on rattache l'identité à un compte
+  // BD Report par son e-mail. Une adresse sans compte est refusée et la session
+  // refermée — les accès restent délivrés par un manager.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { getCurrentUser, signOut } = await import('./supabaseAuth.js')
+        const user = await getCurrentUser()
+        if (cancelled || !user?.email) return
+        const r = store.loginWithGoogle(user.email)
+        if (r?.error) {
+          await signOut()
+          setErr(r.error === 'disabled'
+            ? 'Accès désactivé. Contactez le support BD Report.'
+            : t('login.googleUnknown'))
+        }
+      } catch (e) { /* Supabase absent : seule la connexion classique reste offerte */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const googleSignIn = async () => {
+    setErr(''); setGBusy(true)
+    try {
+      const { signInWithGoogle } = await import('./supabaseAuth.js')
+      const { error } = await signInWithGoogle()
+      // Sans erreur, le navigateur part vers Google : la suite se joue au retour.
+      if (error) { setErr(t('login.googleErr')); setGBusy(false) }
+    } catch (e) { setErr(t('login.googleErr')); setGBusy(false) }
+  }
 
   const submit = () => {
     setErr('')
@@ -89,10 +122,10 @@ function Login() {
           <p className="text-sm text-gray-500">{t('login.tagline')}</p>
         </div>
         <div className="space-y-3">
-          <button className="w-full btn border border-gray-200 justify-center text-gray-700 hover:bg-gray-50"
-            onClick={() => setErr(t('login.googleSoon'))}>
+          <button className="w-full btn border border-gray-200 justify-center text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            onClick={googleSignIn} disabled={gBusy}>
             <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20H24v8h11.3C33.7 33.4 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 5.8 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20c11 0 19.5-8 19.5-20 0-1.3-.1-2.7-.9-4z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 5.8 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.7 13.5-4.7l-6.2-5.3C29.2 35.3 26.7 36 24 36c-5.3 0-9.7-2.6-11.3-7l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.9l6.2 5.3C41.4 35.8 44 30.5 44 24c0-1.3-.1-2.7-.4-4z"/></svg>
-            {t('login.google')}
+            {gBusy ? t('login.googleBusy') : t('login.google')}
           </button>
           <div className="flex items-center gap-3 text-xs text-gray-400"><div className="flex-1 h-px bg-gray-200" />{t('login.or')}<div className="flex-1 h-px bg-gray-200" /></div>
           <input className="input !bg-gray-50" placeholder={mode === 'login' ? t('login.idph') : t('login.emailph')} value={id} onChange={e => setId(e.target.value)} />

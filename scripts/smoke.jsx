@@ -70,6 +70,11 @@ async function main() {
   // 0. Splash screen BD Report puis écran de connexion
   await act(async () => { await new Promise(r => setTimeout(r, 1700)) })
   if (!text().includes('BD Report')) throw new Error('Login screen missing: ' + text().slice(0, 200))
+  // Connexion Google : le bouton est proposé et actif. La jonction avec un compte
+  // BD Report se fait par e-mail au retour de Google, et refuse les inconnus.
+  const gBtn = find('button', 'Continuer avec Google')
+  if (!gBtn) throw new Error('Google sign-in button missing')
+  if (gBtn.disabled) throw new Error('Google sign-in button must be enabled')
   const inputs = container.querySelectorAll('input')
   await type(inputs[0], 'OwenMtp')
   await type(inputs[1], 'demo1234')

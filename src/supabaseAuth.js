@@ -12,6 +12,16 @@ export async function signIn(email, password) {
   return { user: data?.user || null, session: data?.session || null, error: error?.message || null }
 }
 
+// Connexion Google : redirige vers Google, qui renvoie sur `redirectTo` avec une
+// session Supabase déjà posée (detectSessionInUrl). La jonction avec un compte
+// BD Report se fait ensuite sur l'e-mail, côté app.
+export async function signInWithGoogle(redirectTo) {
+  const c = await getClient(); if (!c) return { error: 'Supabase indisponible' }
+  const back = redirectTo || (typeof window !== 'undefined' ? window.location.href.split('#')[0] : undefined)
+  const { error } = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: back } })
+  return { error: error?.message || null }
+}
+
 export async function signOut() {
   const c = await getClient(); if (!c) return
   try { await c.auth.signOut() } catch { /* ignore */ }

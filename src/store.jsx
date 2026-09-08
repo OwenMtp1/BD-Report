@@ -1926,6 +1926,17 @@ export function StoreProvider({ children, demo = false }) {
         }
         return acc
       },
+      // Connexion par identité Google : la jonction se fait sur l'e-mail. Aucun compte
+      // n'est créé implicitement — les accès restent délivrés par un manager, ce qui
+      // évite qu'une simple adresse Google contourne les sièges d'une offre.
+      loginWithGoogle(email) {
+        const mail = String(email || '').trim().toLowerCase()
+        const acc = mail && db.accounts.find(a => String(a.email || '').toLowerCase() === mail)
+        if (!acc) return { error: 'unknown' }
+        if (acc.disabled) return { error: 'disabled' }
+        setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
+        return acc
+      },
       getSavedCreds() { try { return JSON.parse(localStorage.getItem(CREDS_KEY)) } catch (e) { return null } },
       register({ email, pseudo, password }) {
         if (db.accounts.some(a => a.email.toLowerCase() === email.toLowerCase())) return { error: 'Un compte existe déjà avec cet email.' }
@@ -1937,7 +1948,12 @@ export function StoreProvider({ children, demo = false }) {
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return { account: acc }
       },
-      logout() { setSession(null); localStorage.removeItem(REMEMBER_KEY) },
+      // La session Google est fermée aussi : sans cela, l'écran de connexion la
+      // retrouverait aussitôt et rouvrirait la session à peine quittée.
+      logout() {
+        setSession(null); localStorage.removeItem(REMEMBER_KEY)
+        import('./supabaseAuth.js').then(m => m.signOut()).catch(() => {})
+      },
       enterEnv(envId) { setSession(s => ({ ...s, envId, subEnvId: null })) },
       setCurrency(c) { if (roBlocked()) return; setDb(d => { if (session?.subEnvId && d.data[session.subEnvId]) d.data[session.subEnvId].currency = c; return d }); setCurrentCurrency(c) },
       enterSubEnv(subEnvId) {
