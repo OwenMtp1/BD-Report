@@ -44,8 +44,7 @@ jobs:
       - name: Assemble gh-pages tree (site at root, app under /app)
         run: |
           rm -rf out && mkdir -p out/app
-          cp site/index.html out/index.html
-          cp site/securite.html out/securite.html
+          cp site/*.html out/            # toutes les pages du site, y compris celles ajoutées plus tard
           cp -r site/produit out/produit
           cp -r site/blog out/blog
           cp -r site/assets out/assets
