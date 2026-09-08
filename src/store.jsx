@@ -2720,6 +2720,22 @@ export function StoreProvider({ children, demo = false }) {
       },
       // Rôles d'un environnement client. L'enregistrement est groupé et explicite : la
       // page présente un brouillon, on applique tout d'un coup après confirmation.
+      // Rôle d'environnement porté par l'utilisateur courant, s'il en a un. C'est lui qui
+      // restreint les onglets au-delà de l'offre : sans cela, les cases du panneau
+      // « Rôles et accès » ne décideraient de rien.
+      myEnvRole() {
+        const sub = db.subenvs.find(x => x.id === session?.subEnvId)
+        if (!sub?.roleId) return null
+        const env = db.environments.find(e => e.id === sub.envId)
+        return (env?.roles || []).find(r => r.id === sub.roleId) || null
+      },
+      // Le compte porte-t-il ce droit de management ? Sans rôle attribué, on s'en remet au
+      // comportement historique fondé sur le rôle du compte.
+      hasClientPerm(permId) {
+        const r = this.myEnvRole()
+        if (!r) return ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role)
+        return (r.perms || []).includes(permId)
+      },
       envRoles(envId) { return (db.environments.find(e => e.id === envId)?.roles) || [] },
       saveEnvRoles(envId, roles) {
         setDb(d => {

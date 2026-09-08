@@ -469,6 +469,9 @@ function MainApp() {
   const myTeam = hasTeamAccess(me, store.db.offers)   // accès équipe/pilotage (offre `team` ou support)
   const myOffer = findOffer(store.db.offers, me.plan)
   const noOffer = !myOffer && !isSupportUser          // compte sans offre : support + souscrire seulement
+  // Rôle d'environnement : il restreint EN PLUS de l'offre. Le staff n'y est pas soumis,
+  // il intervient chez les clients et doit garder ses accès.
+  const envRole = isSupportUser ? null : (store.myEnvRole ? store.myEnvRole() : null)
   const canSee = (item) => {
     if (item.inManagerHub) return false                  // regroupé dans « Gestion Manager »
     // Une permission staff ouvre l'onglet même quand le rôle n'est pas dans `roles`.
@@ -478,6 +481,7 @@ function MainApp() {
     if (item.always) return true                         // Support / Souscrire : toujours accessibles
     if (noOffer) return false                            // sans offre : rien d'autre que les onglets « always »
     if (item.brick && !myBricks.includes(item.brick) && !byPerm) return false // l'offre décide de chaque onglet
+    if (envRole && item.brick && !(envRole.tabs || []).includes(item.brick)) return false // puis le rôle affine
     return true
   }
   const groups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(canSee) })).filter(g => g.items.length)

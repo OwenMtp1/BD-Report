@@ -63,7 +63,9 @@ npm run dev        # serveur de dev
   `env.roles = [{id, name, color, builtin, tabs[], perms[]}]`, `seedEnvRoles` garantit Manager et Membre partout,
   `CLIENT_PERMISSION_GROUPS`/`CLIENT_PERMISSION_IDS` = droits de management, `tabs` = bricks visibles,
   `subenv.roleId` = rôle porté. `store.envRoles/saveEnvRoles/assignSubRole`. Le panneau travaille sur un **brouillon**
-  appliqué en une fois après confirmation.
+  appliqué en une fois après confirmation. ⚠️ Les `tabs` d'un rôle **restreignent EN PLUS de l'offre** dans
+  `canSee` (`store.myEnvRole()`), et `store.hasClientPerm(id)` lit ses `perms` (repli sur `account.role` sans rôle
+  attribué) : un sous-espace sans `roleId` n'est pas restreint, et le staff n'est jamais filtré.
 - **`src/pages/ManagerHub.jsx`** — console **« Gestion Manager »** (nav Administration, brick homonyme, perm `manager.view`
   accordée à tout le staff) : réunit ce qu'un manager est seul à voir — Utilisateurs (`Admin` en périmètre d'équipe),
   Organigramme, Pilotage équipe, KPI Entreprise, Intégration HubSpot. Les onglets viennent de `MANAGER_TABS`, filtrés par les
