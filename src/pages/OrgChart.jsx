@@ -9,7 +9,9 @@ export default function OrgChart({ onOpenProfile }) {
   const env = store.db.environments.find(e => e.id === session.envId)
   const subs = store.db.subenvs.filter(s => s.envId === session.envId)
   const role = store.account.role
-  const canEdit = ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(role)
+  // Le droit du rôle d'environnement prime quand il en existe un ; sans rôle attribué,
+  // hasClientPerm retombe sur le rôle du compte, comme auparavant.
+  const canEdit = store.hasClientPerm('team.orgchart')
   const canRole = ['Administrateur', 'Fondateur', 'Support BD Report'].includes(role) // staff/fondateur : gestion du rôle Manager
   const services = store.envServices()
   const [edit, setEdit] = useState(false)

@@ -341,7 +341,9 @@ export default function Admin({ mode }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold">{mode === 'teams' ? 'Gérez mes équipes' : 'Gestion Administration'}</h2>
-        <button className="btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Créer un utilisateur</button>
+        {store.hasClientPerm('team.manage') && (
+          <button className="btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Créer un utilisateur</button>
+        )}
       </div>
 
       {/* Vue d'ensemble */}

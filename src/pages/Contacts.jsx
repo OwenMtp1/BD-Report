@@ -152,7 +152,9 @@ export default function Contacts() {
         <div className="flex items-center gap-2 flex-wrap">
           <button className="btn-primary text-xs" onClick={() => setForm(emptyContact())}><Plus size={14} /> Nouveau contact</button>
           <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={e => { if (e.target.files[0]) importCSV(e.target.files[0]); e.target.value = '' }} />
-          <button className="btn-ghost text-xs" onClick={() => fileRef.current.click()}><Upload size={14} /> Importer CSV</button>
+          {store.hasClientPerm('data.import') && (
+            <button className="btn-ghost text-xs" onClick={() => fileRef.current.click()}><Upload size={14} /> Importer CSV</button>
+          )}
           <button className="btn-ghost text-xs" onClick={() => exportCSV(false)}>
             <Download size={14} /> {hasFilters ? `CSV filtré (${contacts.length})` : 'Exporter CSV'}
           </button>

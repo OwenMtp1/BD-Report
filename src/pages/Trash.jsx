@@ -76,7 +76,7 @@ export default function Trash() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold flex items-center gap-2"><Trash2 size={20} className="text-brand" /> Corbeille</h2>
-        {(rdvs.length > 0 || notes.length > 0 || tasks.length > 0) && (
+        {(rdvs.length > 0 || notes.length > 0 || tasks.length > 0) && store.hasClientPerm('data.trash') && (
           <button className="btn-ghost text-xs text-red-500" onClick={() => setConfirmPurge({ kind: 'all' })}>Vider la corbeille</button>
         )}
       </div>
