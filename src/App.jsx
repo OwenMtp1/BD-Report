@@ -10,6 +10,9 @@ import { NAV_GROUPS, NAV } from './nav.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
+// Import statique : le déploiement inline l'app en un seul fichier, un import
+// dynamique local produirait un morceau séparé qui ne serait jamais publié.
+import { signInWithGoogle, getCurrentUser, signOut as signOutSupabase } from './supabaseAuth.js'
 import { Modal, Field, Toasts, Confetti } from './ui.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Rdv from './pages/Rdv.jsx'
@@ -67,12 +70,11 @@ function Login() {
     let cancelled = false
     ;(async () => {
       try {
-        const { getCurrentUser, signOut } = await import('./supabaseAuth.js')
         const user = await getCurrentUser()
         if (cancelled || !user?.email) return
         const r = store.loginWithGoogle(user.email)
         if (r?.error) {
-          await signOut()
+          await signOutSupabase()
           setErr(r.error === 'disabled'
             ? 'Accès désactivé. Contactez le support BD Report.'
             : t('login.googleUnknown'))
@@ -85,7 +87,6 @@ function Login() {
   const googleSignIn = async () => {
     setErr(''); setGBusy(true)
     try {
-      const { signInWithGoogle } = await import('./supabaseAuth.js')
       const { error } = await signInWithGoogle()
       // Sans erreur, le navigateur part vers Google : la suite se joue au retour.
       // La cause est reprise telle quelle : un message purement générique ne permet

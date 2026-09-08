@@ -184,6 +184,10 @@ Le **proxy git de l'environnement de dev bloque la branche `gh-pages`** (seul le
 - **`.github/workflows/desktop-release.yml`** : build l'app de bureau **Tauri** (Windows/macOS/Linux) et publie une release
   GitHub (tag `desktop-latest`). Déclencheur : tag `v*` ou manuel. ⚠️ Tauri : `src-tauri/Cargo.toml` désactive la feature
   `compression` de Tauri (`default-features=false, features=["wry"]`) pour éviter le crate `brotli` cassé.
+- ⚠️ **Pas d'`import()` dynamique vers un module local** : le workflow inline l'app en un seul fichier et ne
+  publie que lui, donc tout morceau séparé produit par Vite finit en 404 (« Failed to fetch dynamically imported
+  module »). Utiliser des imports statiques ; l'exception est l'import d'une **URL externe** (esm.sh), qui ne
+  produit pas de morceau local.
 - App live : `owenmtp1.github.io/Claude/app/` (ou `/BD-Report/app/`). Site : la racine.
   Domaine perso **`bdreport.js.org`** (js.org, gratuit) : fichier `CNAME` généré par le workflow ; une fois la
   PR js.org fusionnée, le site sert à la racine du domaine. Toutes les URLs SEO (canonical/OG/sitemap) pointent dessus.

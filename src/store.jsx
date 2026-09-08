@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { isSupabaseConfigured } from './supabaseConfig.js'
 import { stripDangerousKeys } from './security.js'
+// Import statique : le déploiement inline l'app en un seul fichier, un import
+// dynamique local produirait un morceau séparé qui ne serait jamais publié.
+import { signOut as signOutSupabase } from './supabaseAuth.js'
 import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests, publishOffersDebounced } from './supabaseSync.js'
 import { ALL_BRICKS, LEGACY_BRICKS } from './nav.jsx'
 import { configureHubspot, HS_API_BASE } from './hubspot.js'
@@ -1952,7 +1955,7 @@ export function StoreProvider({ children, demo = false }) {
       // retrouverait aussitôt et rouvrirait la session à peine quittée.
       logout() {
         setSession(null); localStorage.removeItem(REMEMBER_KEY)
-        import('./supabaseAuth.js').then(m => m.signOut()).catch(() => {})
+        Promise.resolve(signOutSupabase()).catch(() => {})
       },
       enterEnv(envId) { setSession(s => ({ ...s, envId, subEnvId: null })) },
       setCurrency(c) { if (roBlocked()) return; setDb(d => { if (session?.subEnvId && d.data[session.subEnvId]) d.data[session.subEnvId].currency = c; return d }); setCurrentCurrency(c) },
