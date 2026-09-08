@@ -45,6 +45,12 @@ npm run dev        # serveur de dev
   `logout()` ferme aussi la session Supabase, sans quoi l'écran de connexion la retrouverait aussitôt. Côté Google Cloud :
   l'URI de redirection est celle de **Supabase** (`https://<ref>.supabase.co/auth/v1/callback`), pas celle du site.
 - **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
+- **`src/themes.js`** — **4 thèmes seulement** : `ocean-pro` (design BD Report d'origine, défaut), `sombre`,
+  `nuit`, et **`bdr-studio`**. Les 17 variantes colorées et les fonds animés ont été retirés — ils multipliaient
+  les rendus à vérifier sans rien apporter. Un thème peut porter un **`skin`** : `applyTheme` pose alors
+  `skin-<nom>` sur `<html>`, et le CSS (fin de `src/index.css`) change les **formes** — rayons, dégradés de
+  boutons, chiffres colorés, pastilles d'icônes, navigation. Ajouter un skin = une entrée ici + un bloc CSS,
+  aucun écran à refaire. `migrate` ramène toute préférence pointant vers un thème disparu sur `ocean-pro`.
 - **`src/kbContent.js`** — contenu de la base de connaissances : `KB_CATEGORIES` (11 catégories avec emoji et
   description) et `KB_ARTICLES` (~45 articles, chacun avec un `id` **stable**, une `category` et des `keywords`
   élargissant la recherche aux mots que les clients emploient). `migrate` publie les articles **une seule fois**

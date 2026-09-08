@@ -387,6 +387,16 @@ async function main() {
   await click(find('button', 'Terminer'))
   await click(container.querySelector('button[title="Paramètres"]'))
   if (!text().includes('Thèmes de design')) throw new Error('Settings did not render')
+  // Catalogue réduit à quatre thèmes, dont le nouveau design « Studio ».
+  for (const th of ['BD Report', 'Sombre', 'Nuit profonde', 'BD Report Studio']) {
+    if (!text().includes(th)) throw new Error('Theme missing from picker: ' + th)
+  }
+  if (text().includes('Ambiances animées')) throw new Error('Animated themes should be gone')
+  if (text().includes('Rose Punch') || text().includes('Sakura')) throw new Error('Removed themes still offered')
+  // Le skin pose une classe sur <html> : c'est elle qui change les formes.
+  await click(find('button', 'BD Report Studio'))
+  await click(find('button', 'Sauvegarder le thème'))
+  if (!win.document.documentElement.classList.contains('skin-studio')) throw new Error('Studio skin class not applied')
 
   // 9a. Profil + statut de présence : la fiche récap s'ouvre et le statut est modifiable.
   await click(container.querySelector('button[title="Mon profil et statut"]'))

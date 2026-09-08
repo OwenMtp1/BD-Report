@@ -98,3 +98,57 @@ body.animated-bg { animation: bgshift 18s ease infinite; }
   animation: shimmer 1.2s ease-in-out infinite;
 }
 @keyframes shimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+
+/* ---------------------------------------------------------------------------
+   Skin « BD Report Studio ». Reprend l'identité du site vitrine : angles très
+   arrondis, aplats en dégradé bleu → cyan, reliefs doux et chiffres colorés.
+   Il ne touche QUE les formes et les matières — la structure des pages et les
+   composants restent les mêmes, si bien qu'aucun écran n'est à refaire.
+   Activé par la classe posée sur <html> par applyTheme().
+   --------------------------------------------------------------------------- */
+.skin-studio .card {
+  border-radius: 22px;
+  box-shadow: 0 6px 22px rgba(16, 22, 46, .06);
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+.skin-studio .card:hover { box-shadow: 0 12px 32px rgba(59, 91, 219, .12); }
+
+.skin-studio .btn { border-radius: 13px; }
+.skin-studio .btn-primary {
+  background: linear-gradient(135deg, rgb(var(--brand)), rgb(var(--brand2)));
+  box-shadow: 0 6px 18px rgba(59, 91, 219, .28);
+}
+.skin-studio .btn-primary:hover { transform: translateY(-1px); opacity: 1; }
+
+.skin-studio .chip { border-radius: 999px; padding: .28rem .72rem; }
+.skin-studio .input { border-radius: 13px; }
+
+/* Les chiffres clés prennent le dégradé de la marque, comme les titres du site. */
+.skin-studio .stat-num, .skin-studio .kpi-num {
+  background: linear-gradient(120deg, rgb(var(--brand)), rgb(var(--brand2)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Icônes de titre serties dans une pastille, à la manière des cartes du site. */
+.skin-studio h2 > svg:first-child,
+.skin-studio h3 > svg:first-child {
+  border-radius: 10px;
+  box-shadow: 0 0 0 7px rgba(59, 91, 219, .08);
+  margin-right: 5px;
+}
+
+/* Navigation : pastilles franches, onglet actif en dégradé plutôt qu'en aplat. */
+.skin-studio nav button { border-radius: 14px; }
+.skin-studio nav button.bg-brand {
+  background: linear-gradient(135deg, rgb(var(--brand)), rgb(var(--brand2)));
+  box-shadow: 0 4px 14px rgba(59, 91, 219, .3);
+}
+
+/* Tableaux : lignes plus aérées et en-têtes discrets, comme les tableaux du site. */
+.skin-studio table th { letter-spacing: .04em; text-transform: uppercase; font-size: 11px; }
+.skin-studio table td, .skin-studio table th { padding-top: .55rem; padding-bottom: .55rem; }
+
+/* Barres de progression et jauges arrondies jusqu'au bout. */
+.skin-studio .rounded-full { border-radius: 999px; }

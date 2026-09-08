@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { isSupabaseConfigured } from './supabaseConfig.js'
 import { deob } from './obf.js'
+import { isKnownTheme } from './themes.js'
 import { stripDangerousKeys } from './security.js'
 // Import statique : le déploiement inline l'app en un seul fichier, un import
 // dynamique local produirait un morceau séparé qui ne serait jamais publié.
@@ -2070,6 +2071,9 @@ function migrate(db) {
       if (offer?.team) a.bricks = [...new Set([...(a.bricks || []), ...NEW_BRICKS])]
     })
   }
+  // Thèmes retirés : une préférence pointant vers un thème disparu doit revenir au design
+  // par défaut, faute de quoi elle serait ignorée en silence à chaque chargement.
+  Object.values(db.data || {}).forEach(d => { if (d && d.theme && !isKnownTheme(d.theme)) d.theme = 'ocean-pro' })
   ;(db.environments || []).forEach(e => {
     if (!Array.isArray(e.services)) e.services = (e.departments && e.departments.length ? e.departments : ['Sales', 'Marketing']).map(n => ({ id: uid(), name: n }))
     e.roles = seedEnvRoles(e.roles) // Manager et Membre partout, le reste créé par le staff

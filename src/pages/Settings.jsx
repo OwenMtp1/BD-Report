@@ -236,25 +236,24 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
             </button>
             <p className="text-[11px] text-muted mt-1">Suit le mode clair/sombre de votre appareil.</p>
           </div>
-          {['static', 'animated'].map(type => (
-            <div key={type}>
-              <p className="label">{type === 'static' ? 'Thèmes classiques' : 'Ambiances animées'}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                {THEMES.filter(t => t.type === type).map(t => (
-                  <button key={t.id} onClick={() => setPendingTheme(t.id)}
-                    className={`rounded-xl border-2 p-2 text-left transition ${pendingTheme === t.id ? 'border-brand' : 'border-line hover:border-muted'}`}>
-                    <div className="h-10 rounded-lg mb-1.5" style={{
-                      background: t.type === 'animated' ? t.bg : `linear-gradient(120deg, rgb(${t.vars.brand}), rgb(${t.vars.brand2}))`,
-                    }} />
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold">{t.name}</span>
-                      {pendingTheme === t.id && <Check size={13} className="text-brand" />}
-                    </div>
-                  </button>
-                ))}
-              </div>
+          <div>
+            <p className="label">Thèmes</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {THEMES.map(t => (
+                <button key={t.id} onClick={() => setPendingTheme(t.id)}
+                  className={`rounded-xl border-2 p-2 text-left transition ${pendingTheme === t.id ? 'border-brand' : 'border-line hover:border-muted'}`}>
+                  <div className={`h-10 mb-1.5 ${t.skin ? 'rounded-2xl' : 'rounded-lg'}`} style={{
+                    background: `linear-gradient(120deg, rgb(${t.vars.brand}), rgb(${t.vars.brand2}))`,
+                  }} />
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold">{t.name}</span>
+                    {pendingTheme === t.id && <Check size={13} className="text-brand" />}
+                  </div>
+                  {t.skin && <span className="text-[10px] text-muted">formes et reliefs revus</span>}
+                </button>
+              ))}
             </div>
-          ))}
+          </div>
           <button className="btn-primary" onClick={() => { applyTheme(pendingTheme); onThemeSaved(pendingTheme); store.logAction('Paramètres', 'Thème appliqué', THEMES.find(t => t.id === pendingTheme)?.name || pendingTheme) }}>Sauvegarder le thème</button>
         </div>
       )}
