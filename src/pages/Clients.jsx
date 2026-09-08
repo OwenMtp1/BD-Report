@@ -108,6 +108,31 @@ export default function Clients() {
                     onCommit={v => { setDetail({ ...detail, note: v }); store.updateClient(detail.id, { note: v }) }}
                     placeholder="Notes de l'équipe support sur ce client…" />
                 </div>
+                {/* Motifs de clôture des projets : saisis à la fermeture, ils expliquent
+                    ici pourquoi la relation s'est arrêtée. */}
+                {(() => {
+                  const closed = (store.db.projects || []).filter(p => p.status === 'termine'
+                    && (p.clientName === detail.name || (p.envId && p.envId === detail.envId)))
+                  if (!closed.length) return null
+                  return (
+                    <div>
+                      <span className="label">Projets clôturés ({closed.length})</span>
+                      <div className="space-y-1.5">
+                        {closed.map(p => (
+                          <div key={p.id} className="p-2 rounded-lg bg-surface">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium truncate">{p.name}</span>
+                              {p.closedAt && <span className="text-[11px] text-muted shrink-0">{fmtDate(p.closedAt.slice(0, 10))}</span>}
+                            </div>
+                            <p className="text-xs text-muted mt-0.5 whitespace-pre-wrap">
+                              {p.closeReason || 'Aucun motif renseigné (projet clôturé avant que le motif ne soit obligatoire).'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
                 <div>
                   <span className="label">Tickets ({ts.length})</span>
                   {ts.length === 0 ? <p className="text-xs text-muted">Aucun ticket.</p> : (

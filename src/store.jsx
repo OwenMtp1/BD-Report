@@ -562,6 +562,7 @@ export const CLIENT_STATUSES = [
   { id: 'demandes', label: 'Demandes en cours', color: 'bg-amber-100 text-amber-700' },
   { id: 'actifs', label: 'Clients actifs', color: 'bg-emerald-100 text-emerald-700' },
   { id: 'attente', label: 'En attente de support', color: 'bg-blue-100 text-blue-700' },
+  { id: 'nonaboutis', label: 'Clients non aboutis', color: 'bg-rose-100 text-rose-700' },
   { id: 'anciens', label: 'Anciens clients', color: 'bg-gray-200 text-gray-600' },
 ]
 
@@ -3054,6 +3055,10 @@ export function StoreProvider({ children, demo = false }) {
       saveProject(project) {
         // Un projet enregistré manuellement verrouille son statut (la synchro auto ne l'écrase plus).
         const locked = { ...project, statusLocked: true }
+        // La clôture est horodatée pour le suivi du churn ; rouvrir un projet efface
+        // son motif, qui ne décrirait plus rien.
+        if (locked.status === 'termine') locked.closedAt = locked.closedAt || new Date().toISOString()
+        else { delete locked.closedAt; delete locked.closeReason }
         setDb(d => {
           d.projects = d.projects || []
           const i = d.projects.findIndex(p => p.id === locked.id)

@@ -254,6 +254,16 @@ function ProjectForm({ initial, clients, onSave, onClose }) {
           </select>
         </Field>
       </div>
+      {/* Clôturer un projet impose d'en dire la raison : c'est elle qui alimente
+          l'analyse du churn et qui s'affiche ensuite sur la fiche du client. */}
+      {p.status === 'termine' && (
+        <Field label="Raisons de la fermeture" required>
+          <textarea className="input min-h-[70px]" value={p.closeReason || ''}
+            onChange={e => set('closeReason', e.target.value)}
+            placeholder="Ex : périmètre livré et recette validée / budget arrêté par le client / passage à un concurrent…" />
+          <p className="text-[11px] text-muted mt-1">Ce texte apparaîtra sur la fiche du client, dans le panneau Clients.</p>
+        </Field>
+      )}
       <div>
         <div className="flex items-center justify-between mb-1">
           <span className="label !mb-0">Phases du projet</span>
@@ -276,7 +286,11 @@ function ProjectForm({ initial, clients, onSave, onClose }) {
       </div>
       <div className="flex justify-end gap-2 pt-1">
         <button className="btn-ghost" onClick={onClose}>Annuler</button>
-        <button className="btn-primary" onClick={() => { if (!p.name.trim()) { toast('Donnez un nom au projet.'); return } onSave(p) }}>Enregistrer</button>
+        <button className="btn-primary" onClick={() => {
+          if (!p.name.trim()) { toast('Donnez un nom au projet.'); return }
+          if (p.status === 'termine' && !String(p.closeReason || '').trim()) { toast('Indiquez les raisons de la fermeture.'); return }
+          onSave(p)
+        }}>Enregistrer</button>
       </div>
     </div>
   )
