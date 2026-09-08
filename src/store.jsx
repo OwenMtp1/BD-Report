@@ -560,6 +560,23 @@ export function accountHasPerm(account, permId, db) {
   return false
 }
 
+// Enquête de satisfaction produit : on sollicite l'utilisateur aux moments où son
+// jugement change vraiment — la découverte, l'installation dans l'usage — puis on
+// s'espace, pour mesurer la fidélisation sans devenir importun.
+export const SURVEY_DAYS = [5, 15, 30, 60]
+export const SURVEY_PERIOD = 90
+export function dueSurveyMilestone(account, now = Date.now()) {
+  const start = new Date(account?.createdAt || 0).getTime()
+  if (!start || Number.isNaN(start)) return null
+  const days = Math.floor((now - start) / 86400000)
+  const done = account?.productSurveys || []
+  const milestones = [...SURVEY_DAYS]
+  for (let m = SURVEY_DAYS[SURVEY_DAYS.length - 1] + SURVEY_PERIOD; m <= days; m += SURVEY_PERIOD) milestones.push(m)
+  // On ne rattrape pas les jalons manqués un par un : seul le plus récent est proposé.
+  const due = milestones.filter(m => m <= days && !done.includes(m))
+  return due.length ? due[due.length - 1] : null
+}
+
 // Statuts de présence (choisis manuellement par l'utilisateur).
 export const PRESENCE_META = {
   online: { label: 'En ligne', dot: 'bg-emerald-500', text: 'text-emerald-600' },
@@ -1649,6 +1666,11 @@ function migrate(db) {
   db.channelMessages = db.channelMessages || {}
   db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
   db.staffRoles = seedStaffRoles(db.staffRoles) // rôles + permissions de l'équipe staff (idempotent)
+  if (!Array.isArray(db.productRatings)) db.productRatings = [] // notes de satisfaction produit
+  // Sans date de création, aucun jalon d'enquête ne peut être calculé : les comptes
+  // existants démarrent leur compteur maintenant plutôt que d'être sollicités aussitôt.
+  const nowIso = new Date().toISOString()
+  ;(db.accounts || []).forEach(a => { if (!a.createdAt) a.createdAt = nowIso })
   // Le tableau de bord support est un droit neuf : les rôles qui consultent déjà les KPI
   // le reçoivent une seule fois, sinon il resterait invisible sur les bases existantes.
   db._autoSeed = db._autoSeed || {}
@@ -3024,6 +3046,24 @@ export function StoreProvider({ children, demo = false }) {
         })
       },
       // Note de satisfaction laissée par le client à la clôture (CSAT).
+      // Note de satisfaction produit, rattachée au jalon qui l'a déclenchée. Un report
+      // marque le jalon comme traité : on ne harcèle pas quelqu'un qui a dit non.
+      rateProduct(milestone, score, comment = '') {
+        setDb(d => {
+          const a = (d.accounts || []).find(x => x.id === account?.id)
+          if (a) a.productSurveys = [...new Set([...(a.productSurveys || []), milestone])]
+          if (score) {
+            d.productRatings = d.productRatings || []
+            d.productRatings.unshift({
+              id: uid(), accountId: account?.id || null, accountName: account?.pseudo || '',
+              envId: session?.envId || null, milestone, score, comment: (comment || '').trim(),
+              ts: new Date().toISOString(),
+            })
+          }
+          return d
+        })
+      },
+      dueSurvey() { return dueSurveyMilestone(account) },
       rateTicket(ticketId, score, comment = '') {
         setDb(d => {
           const t = (d.tickets || []).find(x => x.id === ticketId)

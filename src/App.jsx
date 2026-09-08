@@ -3,7 +3,7 @@ import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
-  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Trophy, ShieldCheck,
+  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Trophy, ShieldCheck, Star,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER } from './store.jsx'
 import { NAV_GROUPS, NAV } from './nav.jsx'
@@ -13,7 +13,7 @@ import { THEMES, applyTheme } from './themes.js'
 // Import statique : le déploiement inline l'app en un seul fichier, un import
 // dynamique local produirait un morceau séparé qui ne serait jamais publié.
 import { signInWithGoogle, getCurrentUser, signOut as signOutSupabase } from './supabaseAuth.js'
-import { Modal, Field, Toasts, Confetti } from './ui.jsx'
+import { Modal, Field, Toasts, Confetti, toast } from './ui.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Rdv from './pages/Rdv.jsx'
 import Leads from './pages/Leads.jsx'
@@ -383,6 +383,46 @@ function SubEnvPicker() {
 // ---------------------------------------------------------------- App principale
 // NAV_GROUPS / NAV proviennent de src/nav.jsx (source unique des onglets).
 
+// Enquête de satisfaction produit. Présentée à la connexion, aux jalons calculés par le
+// store ; « plus tard » consomme le jalon plutôt que de revenir à chaque écran, un rappel
+// insistant coûtant plus de bonne volonté qu'il n'en récolte.
+function ProductSurvey() {
+  const store = useStore()
+  const milestone = store.dueSurvey ? store.dueSurvey() : null
+  const [score, setScore] = useState(0)
+  const [hover, setHover] = useState(0)
+  const [comment, setComment] = useState('')
+  const [closed, setClosed] = useState(false)
+  if (!milestone || closed) return null
+  const dismiss = () => { store.rateProduct(milestone, 0, ''); setClosed(true) }
+  return (
+    <Modal title="Votre avis sur BD Report" onClose={dismiss}>
+      <div className="space-y-3">
+        <p className="text-sm text-muted">
+          Vous utilisez BD Report depuis {milestone} jours. En une note, comment le trouvez-vous ?
+        </p>
+        <div className="flex items-center gap-1 justify-center py-1">
+          {[1, 2, 3, 4, 5].map(n => (
+            <button key={n} type="button" title={`${n}/5`}
+              onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(0)} onClick={() => setScore(n)}>
+              <Star size={30} className={(hover || score) >= n ? 'text-amber-400 fill-amber-400' : 'text-line'} />
+            </button>
+          ))}
+        </div>
+        <textarea className="input min-h-[70px] text-sm" value={comment} onChange={e => setComment(e.target.value)}
+          placeholder="Ce qui vous plaît, ce qui vous manque… (facultatif)" />
+        <div className="flex justify-end gap-2">
+          <button className="btn-ghost" onClick={dismiss}>Plus tard</button>
+          <button className="btn-primary" disabled={!score}
+            onClick={() => { store.rateProduct(milestone, score, comment); setClosed(true); toast('Merci pour votre retour !') }}>
+            Envoyer
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function MainApp() {
   const store = useStore()
   const me = store.account
@@ -696,6 +736,7 @@ function MainApp() {
       </nav>
       <CompanyModal />
       <GlobalSearch onNavigate={goto} />
+      <ProductSurvey />
       <Chatbot />
       <Toasts />
       <Confetti />

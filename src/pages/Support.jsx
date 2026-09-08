@@ -35,7 +35,7 @@ function CsatPrompt({ ticket }) {
   if (ticket.csat) {
     return (
       <div className="card p-3 flex items-center gap-2 text-sm">
-        <span className="text-muted">Votre satisfaction :</span>
+        <span className="text-muted">Votre note sur la prise en charge :</span>
         <Stars value={ticket.csat.score} readOnly />
         {ticket.csat.comment && <span className="text-muted italic truncate">« {ticket.csat.comment} »</span>}
       </div>
@@ -43,7 +43,7 @@ function CsatPrompt({ ticket }) {
   }
   return (
     <div className="card p-3 space-y-2">
-      <div className="text-sm font-bold">Ce ticket est clôturé — comment évaluez-vous notre support ?</div>
+      <div className="text-sm font-bold">Ce ticket est clôturé — comment évaluez-vous sa prise en charge ?</div>
       <Stars value={score} onChange={setScore} />
       <input className="input text-sm" placeholder="Un commentaire (optionnel)…" value={comment} onChange={e => setComment(e.target.value)} />
       <button className="btn-primary !py-1.5 text-xs" disabled={!score} onClick={() => { store.rateTicket(ticket.id, score, comment.trim()); toast('Merci pour votre retour !') }}>Envoyer mon avis</button>
