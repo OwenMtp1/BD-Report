@@ -100,85 +100,116 @@ body.animated-bg { animation: bgshift 18s ease infinite; }
 @keyframes shimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
 
 /* ---------------------------------------------------------------------------
-   Skin « BD Report Studio ». Reprend l'en-tête du site vitrine : bleu nuit
-   profond, accents cyan, cartes en verre et halos. Il ne touche QUE les formes
-   et les matières — la structure des pages reste la même, aucun écran n'est à
-   refaire. Activé par la classe posée sur <html> par applyTheme().
+   Skin « BD Report Studio ». Quasi-noir, vert néon en accent principal et cyan en
+   second. Il ne touche QUE les formes et les matières — la structure des pages
+   reste la même, aucun écran n'est à refaire.
+   Activé par la classe posée sur <html> par applyTheme().
    --------------------------------------------------------------------------- */
 .skin-studio body,
 .skin-studio .bg-app {
-  background: radial-gradient(1200px 700px at 15% -10%, #1e2a52 0%, transparent 55%),
-              radial-gradient(900px 600px at 95% 0%, #14346b 0%, transparent 50%),
-              #0b1026;
+  background: radial-gradient(1100px 620px at 12% -12%, rgba(16, 185, 129, .16) 0%, transparent 58%),
+              radial-gradient(900px 560px at 96% 2%, rgba(56, 189, 248, .12) 0%, transparent 52%),
+              #05080f;
   background-attachment: fixed;
 }
 
-/* Cartes en verre : fond translucide, liseré clair, ombre profonde. */
+/* Cartes en verre très sombre, liseré qui s'allume en vert au survol. */
 .skin-studio .card {
-  border-radius: 22px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .025));
-  border-color: rgba(255, 255, 255, .10);
-  box-shadow: 0 18px 40px rgba(4, 8, 24, .45);
-  backdrop-filter: blur(6px);
-  transition: box-shadow .25s ease, border-color .25s ease, transform .25s ease;
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .015));
+  border-color: rgba(255, 255, 255, .08);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, .55);
+  backdrop-filter: blur(7px);
+  transition: box-shadow .25s ease, border-color .25s ease;
 }
 .skin-studio .card:hover {
-  border-color: rgba(94, 220, 255, .35);
-  box-shadow: 0 22px 52px rgba(4, 8, 24, .55), 0 0 0 1px rgba(94, 220, 255, .12);
+  border-color: rgba(52, 211, 153, .40);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, .6), 0 0 22px rgba(52, 211, 153, .16);
 }
 
-/* Les chiffres clés portent le dégradé cyan du site — c'est la signature de l'écran. */
+/* Chiffres clés : vert néon lumineux, la signature de l'écran. */
 .skin-studio .stat-num, .skin-studio .kpi-num {
-  background: linear-gradient(120deg, #5EDCFF, #7aa2ff 60%, #a78bfa);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #34d399;
+  text-shadow: 0 0 18px rgba(52, 211, 153, .55), 0 0 42px rgba(52, 211, 153, .22);
   font-weight: 800;
 }
 
-.skin-studio .btn { border-radius: 13px; }
+.skin-studio .btn { border-radius: 12px; }
 .skin-studio .btn-primary {
-  background: linear-gradient(135deg, #5EDCFF, #3b82f6);
-  color: #06132a;
+  background: linear-gradient(135deg, #34d399, #10b981);
+  color: #04140e;
   font-weight: 800;
-  box-shadow: 0 10px 26px rgba(59, 130, 246, .38);
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, .45), 0 10px 26px rgba(16, 185, 129, .32);
 }
-.skin-studio .btn-primary:hover { transform: translateY(-1px); opacity: 1; }
-.skin-studio .btn-ghost:hover { background: rgba(255, 255, 255, .07); }
+.skin-studio .btn-primary:hover {
+  transform: translateY(-1px);
+  opacity: 1;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, .7), 0 12px 32px rgba(16, 185, 129, .48);
+}
+.skin-studio .btn-ghost:hover { background: rgba(255, 255, 255, .06); }
 
-/* Puces translucides, à la manière des étiquettes du site. */
 .skin-studio .chip {
   border-radius: 999px;
-  padding: .28rem .72rem;
-  background-color: rgba(255, 255, 255, .08);
-  border: 1px solid rgba(255, 255, 255, .10);
+  padding: .26rem .7rem;
+  background-color: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .09);
 }
 
 .skin-studio .input {
-  border-radius: 13px;
-  background: rgba(255, 255, 255, .05);
-  border-color: rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .04);
+  border-color: rgba(255, 255, 255, .10);
 }
+.skin-studio .input:focus { border-color: rgba(52, 211, 153, .5); box-shadow: 0 0 0 3px rgba(52, 211, 153, .14); }
 
-/* Icônes de titre serties dans un halo cyan. */
+/* Icônes de titre dans un halo vert. */
 .skin-studio h2 > svg:first-child,
 .skin-studio h3 > svg:first-child {
   border-radius: 10px;
-  box-shadow: 0 0 0 8px rgba(94, 220, 255, .10);
+  box-shadow: 0 0 0 8px rgba(52, 211, 153, .10);
   margin-right: 5px;
 }
 
-/* Navigation : onglet actif en dégradé cyan, comme les boutons du site. */
-.skin-studio nav button { border-radius: 14px; }
+.skin-studio nav button { border-radius: 13px; }
 .skin-studio nav button.bg-brand {
-  background: linear-gradient(135deg, #5EDCFF, #3b82f6);
-  color: #06132a;
-  box-shadow: 0 8px 22px rgba(59, 130, 246, .35);
+  background: linear-gradient(135deg, #34d399, #10b981);
+  color: #04140e;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, .45), 0 8px 22px rgba(16, 185, 129, .3);
 }
 
-/* Tableaux : en-têtes discrets et lignes aérées. */
-.skin-studio table th { letter-spacing: .05em; text-transform: uppercase; font-size: 11px; }
-.skin-studio table td, .skin-studio table th { padding-top: .55rem; padding-bottom: .55rem; }
+/* ---- Tableaux : traitement soigné, pensé pour de la lecture de chiffres.
+   En-tête tenu au défilement, lignes alternées à peine marquées, ligne survolée
+   signalée par un liseré vert, et colonnes numériques alignées à droite. */
+.skin-studio table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .07);
+}
+.skin-studio table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(18, 26, 44, .98), rgba(12, 18, 32, .98));
+  backdrop-filter: blur(6px);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: rgb(var(--muted));
+  border-bottom: 1px solid rgba(52, 211, 153, .22);
+  padding: .6rem .7rem;
+}
+.skin-studio table tbody td {
+  padding: .58rem .7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, .05);
+}
+.skin-studio table tbody tr:nth-child(even) { background: rgba(255, 255, 255, .018); }
+.skin-studio table tbody tr:hover { background: rgba(52, 211, 153, .07); }
+.skin-studio table tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 #34d399; }
+.skin-studio table tbody tr:last-child td { border-bottom: none; }
+/* Les nombres se lisent en colonne : chasse fixe et alignement à droite. */
+.skin-studio table td.num, .skin-studio table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
-/* Barres et jauges arrondies jusqu'au bout. */
 .skin-studio .rounded-full { border-radius: 999px; }

@@ -17,14 +17,14 @@ export const THEMES = [
     id: 'nuit', name: 'Nuit profonde', type: 'static',
     vars: { brand: '99 132 255', brand2: '56 189 248', surface: '10 13 21', card: '18 23 35', ink: '230 236 246', muted: '140 152 175', line: '38 46 64' },
   },
-  // « Studio » reprend l'identité du site : le bleu nuit de son en-tête et le cyan de ses
-  // accents. Volontairement SOMBRE — en version claire il ne se distinguait du thème
-  // d'origine que par ses angles, ce qui ne justifiait pas un thème à part.
+  // « Studio » : quasi-noir et vert néon, avec le cyan en second accent. Volontairement
+  // très contrasté — une version claire, puis une version bleu nuit, se confondaient
+  // toutes deux avec le thème d'origine.
   // Le `skin` pose une classe sur <html> : c'est elle qui change les FORMES et les
   // MATIÈRES (fond dégradé, cartes en verre, halos, chiffres colorés).
   {
     id: 'bdr-studio', name: 'BD Report Studio', type: 'static', skin: 'studio',
-    vars: { brand: '94 220 255', brand2: '59 130 246', surface: '11 16 38', card: '19 28 56', ink: '233 240 253', muted: '146 163 196', line: '42 58 98' },
+    vars: { brand: '52 211 153', brand2: '94 220 255', surface: '5 8 16', card: '12 17 30', ink: '228 238 244', muted: '128 146 168', line: '28 39 58' },
   },
 ]
 
