@@ -268,6 +268,11 @@ async function main() {
   if (!text().includes('Enregistrer vos modifications')) throw new Error('Save bar should appear once a permission changes')
   if (!text().includes("rien n'est encore appliqué")) throw new Error('Draft state should be stated explicitly')
 
+  // Organigramme du staff : rattachements et services, sans droits (gérés ailleurs).
+  await click(hubTab('Organigramme staff'))
+  if (!text().includes('Services du staff')) throw new Error('Staff org chart did not render')
+  if (!text().includes('Permissions staff')) throw new Error('Org chart should point permissions elsewhere')
+
   // Tableau de bord support : portefeuille, churn et traitement des tickets.
   await click(hubTab('Tableau de bord'))
   for (const k of ['Taux de churn', 'Tickets ouverts', 'Portefeuille client', 'Raisons principales de churn',

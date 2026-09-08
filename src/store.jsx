@@ -2491,6 +2491,23 @@ export function StoreProvider({ children, demo = false }) {
           return d
         })
       },
+      // Rattache un membre du staff à un autre dans l'organigramme interne. Un cycle est
+      // refusé : une hiérarchie qui se referme sur elle-même ne s'affiche plus et ne se
+      // répare qu'à la main dans les données.
+      setStaffManager(accId, managerId) {
+        if (!accId || accId === managerId) return
+        setDb(d => {
+          const a = d.accounts.find(x => x.id === accId); if (!a) return d
+          let cur = managerId, seen = new Set()
+          while (cur && !seen.has(cur)) {
+            if (cur === accId) return d // le futur parent descend de ce compte
+            seen.add(cur)
+            cur = d.accounts.find(x => x.id === cur)?.teamOf || null
+          }
+          a.teamOf = managerId || null
+          return d
+        })
+      },
       assignStaffService(accId, serviceId) {
         setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.staffServiceId = serviceId || null; return d })
       },

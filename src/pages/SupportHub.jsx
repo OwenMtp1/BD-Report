@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield } from 'lucide-react'
+import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network } from 'lucide-react'
 import { useStore, slaInfo, ticketHasUnread } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
@@ -14,6 +14,7 @@ import OffersAdmin from './OffersAdmin.jsx'
 import StaffPermissions from './StaffPermissions.jsx'
 import SupportDashboard from './SupportDashboard.jsx'
 import Admin from './Admin.jsx'
+import StaffOrgChart from './StaffOrgChart.jsx'
 
 const SupportConversations = () => <Conversations scope="support" />
 
@@ -33,6 +34,7 @@ const TABS = [
   { id: 'offers', label: 'Offres', icon: Tag, El: OffersAdmin, perm: 'offers.manage' },
   { id: 'kb', label: 'Base de connaissances', icon: BookOpen, El: KnowledgeBase, perm: 'kb.manage' },
   { id: 'permissions', label: 'Permissions staff', icon: ShieldCheck, El: StaffPermissions, perm: 'permissions.manage' },
+  { id: 'orgchart', label: 'Organigramme staff', icon: Network, El: StaffOrgChart, perm: 'services.manage' },
   { id: 'logs', label: 'Logs', icon: ScrollText, El: SupportLogs, perm: 'logs.view' },
   { id: 'trash', label: 'Corbeille', icon: Trash2, El: SupportTrash, perm: 'trash.manage' },
   { id: 'demo', label: 'Démo commerciale', icon: MonitorPlay, El: DemoSales, perm: 'demo.access' },
