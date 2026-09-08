@@ -1242,6 +1242,65 @@ export function makeDemoRdvs() { return makeTestRdvs(DEMO_NAMES, DEMO_OPTS) }
 // AUCUN lien avec le compte de la personne qui lance la démo. Beaucoup de données (manager + 4 BDR,
 // dizaines de RDV, primes, règle d'activité, conversations) pour dérouler toutes les fonctionnalités.
 const DEMO_PW = 'sha256:937e8d5fbb48bd4949536cd65b8d35c426b80d2f830c5c308e2cdec422ae2244' // hash factice (login inutile en démo)
+// Contenu quotidien d'un espace de démonstration. Sans tâches, notes ni ICP, la démo
+// présente un produit vide là où le prospect attend une journée de travail crédible.
+function seedDemoWorkspace(d, who = '') {
+  const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10)
+  const nowIso = new Date().toISOString()
+  const noShow = d.rdvs.find(r => String(r.opportunite || '').startsWith('No Show'))
+  const enCours = d.rdvs.find(r => r.opportunite === 'En cours')
+  const gagne = d.rdvs.find(r => r.opportunite === 'Gagnée' || r.opportunite === 'Signée')
+
+  d.tasks = [
+    {
+      id: uid(), title: `Replanifier ${noShow?.entreprise || 'le rendez-vous manqué'}`,
+      description: 'Le contact ne s\'est pas présenté : reproposer deux créneaux et confirmer par e-mail.',
+      dueDate: day(-1), company: noShow?.entreprise || '', done: false, pinned: true, createdAt: nowIso,
+    },
+    {
+      id: uid(), title: `Préparer le R2 ${enCours?.entreprise || ''}`.trim(),
+      description: 'Relire le compte rendu du R1 et préparer trois questions de qualification budget.',
+      dueDate: day(1), company: enCours?.entreprise || '', done: false, createdAt: nowIso,
+    },
+    {
+      id: uid(), title: 'Mettre à jour les effectifs du portefeuille',
+      description: 'Trois fiches ont un effectif estimé : vérifier sur LinkedIn avant le calcul des primes.',
+      dueDate: day(4), done: false, createdAt: nowIso,
+    },
+    {
+      id: uid(), title: `Envoyer la proposition à ${gagne?.entreprise || 'la société signée'}`,
+      description: 'Devis validé en interne, reste à envoyer.', dueDate: day(-3), done: true, createdAt: nowIso,
+    },
+  ]
+
+  d.notes = [
+    {
+      id: uid(), title: `Compte rendu R1 — ${enCours?.entreprise || 'prospect'}`, folder: 'Général', createdAt: nowIso,
+      content: `Interlocuteur réceptif, projet identifié pour le trimestre prochain.\n\nBesoin : structurer le suivi des candidatures, aujourd'hui éclaté entre trois outils.\nBudget : évoqué, non chiffré — à qualifier au R2.\nDécideur : notre contact prépare la décision, l'arbitrage revient à la direction.\n\nProchaine étape : R2 avec la direction, démo ciblée sur le reporting.`,
+    },
+    {
+      id: uid(), title: 'Objections récurrentes cette semaine', folder: 'Général', createdAt: nowIso,
+      content: `« On a déjà un outil » → demander lequel, puis creuser ce qui manque plutôt que comparer.\n« Pas le budget cette année » → viser une mise en place au prochain exercice, garder le contact tiède.\n« Rappelez-moi dans six mois » → proposer une date précise, sinon la relance se perd.`,
+    },
+    {
+      id: uid(), title: 'À retenir sur le secteur industrie', folder: 'Général', createdAt: nowIso,
+      content: `Les DRH industrie décident rarement seuls : le DAF entre presque toujours dans la boucle.\nLes cycles sont longs mais les renouvellements quasi automatiques.\nArgument qui porte : le temps passé à consolider les tableaux de bord.`,
+    },
+  ]
+
+  d.icpProfiles = [
+    {
+      id: uid(), name: 'ETI industrie 200-800', secteurs: ['Industrie', 'Énergie', 'Logistique'],
+      effMin: 200, effMax: 800, postes: ['DRH', 'DAF', 'DG'], createdAt: nowIso,
+    },
+    {
+      id: uid(), name: 'Scale-up SaaS', secteurs: ['SaaS', 'IT', 'Cybersécurité'],
+      effMin: 30, effMax: 250, postes: ['CEO', 'COO', 'Head of People'], createdAt: nowIso,
+    },
+  ]
+  return d
+}
+
 export function buildDemoDb() {
   const db = {
     accounts: [], environments: [], subenvs: [], data: {},
@@ -1280,6 +1339,7 @@ export function buildDemoDb() {
     d.rdvs = makeTestRdvs(rows, opts)
     d.contacts = []; d.rdvs.forEach(r => syncContacts(d, r))
     d.goals = { rdvSemaine: 12, sqlMois: 8, primesMois: 2000 }
+    seedDemoWorkspace(d)
     if (extra) extra(d)
     return d
   }
@@ -1288,11 +1348,16 @@ export function buildDemoDb() {
     ['Datapulse', 'SaaS', 35, 'Lucas Brun', 'CEO'], ['Verdana Group', 'Retail', 800, 'Chloé Martin', 'VP People'],
     ['CleanTech SE', 'Énergie', 230, 'Inès Dupré', 'Head of HR'], ['Groupe Méridien', 'Banque', 2500, 'François Bayard', 'DRH'],
     ['Solstice Énergie', 'Énergie', 380, 'Laura Pinto', 'Head of Talent'], ['Atelier Mobilier', 'Manufacture', 60, 'Hugo Lefort', 'DG'],
+    ['Kairos Santé', 'Santé', 340, 'Nora Belkacem', 'DRH'], ['Vent du Nord', 'Énergie', 150, 'Antoine Lemoine', 'DG'],
+    ['Papeterie Auber', 'Industrie', 95, 'Sylvie Marchand', 'Responsable RH'],
   ], [
     { phase: 'SQL', opp: 'Gagnée', sql: 6, source: 'Outbound', prov: 'Cold Call' }, { phase: 'MQL', opp: 'En cours', source: 'Inbound', prov: 'Site Web' },
     { phase: 'R1', opp: 'No Show R1', motifNoShow: 'A annulé', source: 'Outbound', prov: 'LinkedIn' }, { phase: 'Signée', opp: 'Signée', sql: 20, source: 'Event', prov: 'Salon' },
     { phase: 'KO', opp: 'Perdue', motifKo: 'Pas de budget', source: 'Outbound' }, { phase: 'SQL', opp: 'Gagnée', sql: 3, source: 'Partner', prov: 'Référence client' },
     { phase: 'R2', opp: 'En cours', source: 'Inbound' }, { phase: 'R1', opp: 'En cours', source: 'Outbound', prise: 3, rdv: -2 },
+    { phase: 'R1', opp: 'No Show R1', motifNoShow: 'A oublié', source: 'Inbound', prise: 5, rdv: -4 },
+    { phase: 'MQL', opp: 'En cours', source: 'Emailing', prov: 'Séquence email' },
+    { phase: 'SQL', opp: 'Gagnée', sql: 9, source: 'Inbound', prov: 'Site Web' },
   ], (d) => {
     // Une règle de prime par activité pour illustrer le simulateur RDV-based.
     d.activityRules = [{ id: uid(), label: 'Cadence R1/R2', period: 'mois', phases: ['R1', 'R2'], tiers: [{ id: uid(), min: 6, montant: 200 }, { id: uid(), min: 12, montant: 500 }, { id: uid(), min: 20, montant: 1000 }] }]
@@ -1301,26 +1366,37 @@ export function buildDemoDb() {
     ['BlueWave Conseil', 'Conseil', 25, 'Emma Petit', 'Associée'], ['FerroTrans', 'Transport', 1500, 'Nadia Slimani', 'DRH Groupe'],
     ['Studio Pixel', 'Création', 15, 'Léo Garnier', 'Fondateur'], ['AgriPlus', 'Agroalimentaire', 320, 'Paul Mercier', 'DAF'],
     ['Maison Bélier', 'Luxe', 90, 'Sophie Arnaud', 'DRH'], ['TechSecure', 'Cybersécurité', 200, 'Yann Morel', 'COO'],
+    ['Orbis Formation', 'Formation', 70, 'Camille Ferrand', 'Directrice'], ['Halte Gourmande', 'Restauration', 210, 'Marc Ovide', 'DRH'],
+    ['Nordic Furniture', 'Retail', 430, 'Elin Persson', 'Head of People'],
   ], [
     { phase: 'MQL', opp: 'En cours', source: 'Inbound' }, { phase: 'SQL', opp: 'Gagnée', sql: 12, source: 'Outbound' },
     { phase: 'KO', opp: 'Perdue', motifKo: 'Concurrent retenu', source: 'Event' }, { phase: 'R1', opp: 'En cours', source: 'Partner', prise: 2, rdv: -3 },
     { phase: 'Signée', opp: 'Signée', sql: 26, source: 'Outbound' }, { phase: 'R2', opp: 'En cours', source: 'Inbound' },
+    { phase: 'R1', opp: 'No Show R1', motifNoShow: 'Reporté sans date', source: 'Outbound', prise: 6, rdv: -5 },
+    { phase: 'MQL', opp: 'En cours', source: 'Partner' },
+    { phase: 'SQL', opp: 'Gagnée', sql: 14, source: 'Event', prov: 'Salon' },
   ])
   db.data['dsub-b3'] = build([
     ['Urbavert', 'Paysagisme', 45, 'Julien Caron', 'Gérant'], ['Grand Large Hotels', 'Hôtellerie', 600, 'Claire Fontaine', 'VP RH'],
     ['Oreca', 'Sport auto', 400, 'Clémence Boutier', 'DRH'], ['Advans', 'Finance', 1200, 'Rémy Ducret', 'CFO'],
     ['Clinique du Parc', 'Santé', 800, 'Lisa March', 'DRH'],
+    ['Atlas Béton', 'BTP', 520, 'Karim Haddad', 'DRH'], ['Studio Lumen', 'Média', 40, 'Alice Robin', 'Fondatrice'],
   ], [
     { phase: 'R1', opp: 'No Show R1', motifNoShow: 'Injoignable', source: 'Outbound' }, { phase: 'MQL', opp: 'En cours', source: 'Emailing' },
     { phase: 'SQL', opp: 'Gagnée', sql: 20, source: 'Event' }, { phase: 'R2', opp: 'En cours', source: 'Inbound' },
     { phase: 'SQL', opp: 'En cours', sql: 4, source: 'Outbound' },
+    { phase: 'R1', opp: 'En cours', source: 'Inbound', prise: 2, rdv: -1 },
+    { phase: 'KO', opp: 'Perdue', motifKo: 'Mauvais timing', source: 'Emailing' },
   ])
   db.data['dsub-b4'] = build([
     ['Stratus', 'SaaS', 500, 'Nassim Benchikh', 'CTO'], ['Thom Group', 'Retail', 6450, 'Florian Forthomme', 'DRH'],
     ['Odalia', 'Immobilier', 255, 'Rémi Rommelard', 'DG'], ['Evernex', 'IT', 1400, 'Nicolas Combemorel', 'VP'],
+    ['Mistral Cloud', 'SaaS', 180, 'Théo Vidal', 'CEO'], ['Ateliers Renard', 'Artisanat', 55, 'Manon Girard', 'Gérante'],
   ], [
     { phase: 'R1', opp: 'En cours', source: 'Inbound' }, { phase: 'R1', opp: 'En cours', source: 'Outbound', prise: 40, rdv: 38 },
     { phase: 'MQL', opp: 'En cours', source: 'Inbound' }, { phase: 'SQL', opp: 'Gagnée', sql: 10, source: 'Outbound' },
+    { phase: 'R2', opp: 'En cours', source: 'Partner' },
+    { phase: 'R1', opp: 'No Show R1', motifNoShow: 'Injoignable', source: 'Outbound', prise: 4, rdv: -3 },
   ])
   db.data['dsub-mgr'] = build([
     ['Cooperative U', 'Grande distribution', 80000, 'Audrey Hillaert', 'DRH Groupe'], ['Verisure', 'Sécurité', 17000, 'Charles Devresse', 'VP'],
@@ -1329,6 +1405,28 @@ export function buildDemoDb() {
   ])
 
   const out = migrate(db)
+
+  // Conversation d'équipe déjà entamée : un canal vide donne l'impression d'un produit
+  // que personne n'utilise, alors que c'est justement ce qu'on veut montrer vivant.
+  const general = (out.channels || []).find(c => c.envId === 'env-demo' && !c.personal && !c.reporting)
+  if (general) {
+    const ago = (h) => new Date(Date.now() - h * 3600000).toISOString()
+    const msg = (h, subId, name, text) => ({
+      id: uid(), ts: ago(h), authorId: null, authorSubId: subId, authorName: name,
+      authorPhoto: '', text, reactions: {},
+    })
+    out.channelMessages = out.channelMessages || {}
+    out.channelMessages[general.id] = [
+      msg(26, 'dsub-mgr', 'Chloé Nguyen', 'Point rapide : il nous manque 3 SQL pour tenir l\'objectif du mois. On se concentre sur les dossiers déjà en R2.'),
+      msg(25, 'dsub-b1', 'Lucas Fabre', 'De mon côté NovaCorp est signé 🎉 Le DAF a validé hier soir.'),
+      msg(24, 'dsub-mgr', 'Chloé Nguyen', 'Bravo Lucas. Tu peux partager ce qui a débloqué ? Ça peut servir sur Groupe Méridien.'),
+      msg(23, 'dsub-b1', 'Lucas Fabre', 'Le passage par le DAF plutôt que par la DRH. Sur ce secteur c\'est lui qui arbitre, on perdait du temps ailleurs.'),
+      msg(6, 'dsub-b2', 'Sara Ben Ali', 'J\'ai deux no-show cette semaine, je replanifie aujourd\'hui. Quelqu\'un a un modèle de relance qui marche bien ?'),
+      msg(5, 'dsub-b3', 'Mehdi Cohen', 'Je t\'envoie le mien, il tourne à ~40 % de reprise de RDV.'),
+      msg(2, 'dsub-mgr', 'Chloé Nguyen', 'Pensez à renseigner la provenance sur vos RDV : sans elle la prime ne se calcule pas.'),
+    ]
+  }
+
   // On ne garde que la société de démo dédiée (retire l'env de test générique ajouté par migrate).
   out.environments = out.environments.filter(e => e.id !== 'env-test')
   out.accounts = out.accounts.filter(a => !String(a.id).startsWith('test-'))
