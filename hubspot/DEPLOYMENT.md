@@ -194,16 +194,80 @@ relier son propre HubSpot en deux clics, sans jamais manipuler de clé.
 
 ---
 
-## 🆘 Si ça coince
+## ⚠️ Les pièges (vécus)
 
-| Message | Cause probable | Correctif |
+### App **publique** ≠ app **privée**
+
+C'est la confusion n°1, et elle coûte cher.
+
+| | App **publique** (OAuth) | App **privée** |
 |---|---|---|
-| « Espace KV TENANTS non lié » | étape 4 manquée ou nom mal orthographié | vérifiez que le **Variable name** est bien `TENANTS` en majuscules |
-| « redirect_uri mismatch » côté HubSpot | l'adresse de l'étape 6 ne correspond pas | recopiez-la, avec `/oauth/callback` à la fin, sans `/` en trop |
-| La fenêtre s'ouvre puis se ferme sans rien | `ALLOWED_ORIGINS` incomplet | vérifiez l'entrée 4 de l'étape 5 |
-| « scope manquant » | un droit non coché dans l'app HubSpot | onglet Auth → Scopes, comparez avec `SETUP.md` |
+| Où on la crée | `developers.hubspot.com` (compte développeur) | `app.hubspot.com/private-apps` (votre CRM) |
+| Ce qu'elle donne | **Client ID** + **Client Secret** (format `xxxxxxxx-xxxx-…`) | un **jeton** `pat-eu1-…` |
+| À quoi ça sert | **chaque client relie SON portail** ← l'objectif | **votre portail à vous** uniquement |
+| Où ça se met | secrets Cloudflare (étape 5) | champ « Jeton d'application privée » dans BD Report |
 
-Dans tous les cas : dites-moi **à quelle étape** et **le message exact**, je vous débloque.
+Un jeton `pat-…` collé dans `HUBSPOT_CLIENT_ID` produit une page HubSpot
+**« Unable to load app information »** : HubSpot ne reconnaît pas ce jeton comme un
+`client_id`. Si vous voyez ce message, vérifiez d'abord ce point.
+
+### Les variables Cloudflare restent en brouillon
+
+Ajouter une variable ne suffit pas : elle n'entre en vigueur qu'après un clic sur
+**« Deploy »**. Symptôme : *« Connecteur incomplet : HUBSPOT_CLIENT_ID / … manquants »*
+alors que les 4 lignes sont bien affichées.
+
+Si « Deploy » est grisé dans l'éditeur de code, ajoutez une ligne vide à la fin du
+fichier pour le réactiver.
+
+### Espaces parasites au copier-coller
+
+Un espace avant ou après une clé la rend invalide, sans message clair. Recopiez sans
+déborder sur les caractères voisins.
+
+### Deux champs « Jeton d'application privée »
+
+Dans les réglages avancés de BD Report, l'intitulé apparaît deux fois :
+
+- celui avec un bouton **« Enregistrer »** → le jeton part au **connecteur** ✅
+- celui avec une icône **œil 👁️** → mode « API directe », le navigateur bloquera (CORS) ❌
+
+Repère : **le bon champ a un bouton « Enregistrer » à côté.**
+
+### Les champs ne s'enregistrent qu'en les quittant
+
+Après avoir collé une valeur, **cliquez à côté du champ** (ou `Tab`). Sinon rien n'est
+retenu — et le bouton « Connecter mon HubSpot » reste grisé, sans message d'erreur.
+
+---
+
+## 🆘 Table de dépannage
+
+| Message | Cause | Correctif |
+|---|---|---|
+| « Unable to load app information » | un jeton `pat-…` est dans `HUBSPOT_CLIENT_ID` | mettez-y le Client ID d'une app **publique** |
+| « Connecteur incomplet : … manquants » | variables non déployées | rouvrez le worker et cliquez **Deploy** |
+| « Espace KV TENANTS non lié » | étape 4 manquée ou mal nommée | le **Variable name** doit être `TENANTS`, en majuscules |
+| « Appel bloqué par le navigateur (CORS) » | mode « API directe » sélectionné | repassez sur « Connexion HubSpot du client » |
+| « Clé d'entreprise invalide » | l'app et le coffre ne sont plus synchronisés | supprimez l'entrée `tenant:…` dans le KV, puis reconnectez |
+| « redirect_uri mismatch » | l'adresse de l'étape 6 diffère | recopiez-la avec `/oauth/callback`, sans `/` en trop |
+| Bouton « Connecter » grisé, aucun message | URL du connecteur non enregistrée | recollez-la et **cliquez à côté du champ** |
+
+---
+
+## Voie de repli : marcher tout de suite avec un jeton privé
+
+Pour valider la chaîne sur **votre propre portail** sans attendre l'app publique :
+
+1. **<https://app.hubspot.com/private-apps>** → créez une app privée (ou ouvrez la vôtre)
+2. Onglet **Portées** : cochez les 14 autorisations requises (liste dans `SETUP.md`)
+3. Onglet **Jeton d'accès** → **« Faire pivoter le jeton »** → copiez-le
+4. BD Report → réglages avancés → laissez le mode sur **« Connexion HubSpot du client »**
+   → collez le jeton dans le champ **muni du bouton « Enregistrer »** → Enregistrer
+5. **« Tester la connexion »**
+
+Le jeton part au connecteur, qui le garde côté serveur : il ne reste jamais dans l'app.
+Ce mode ne dessert que votre portail — vos clients ont toujours besoin de l'app publique.
 
 ---
 
