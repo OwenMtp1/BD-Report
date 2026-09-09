@@ -1,0 +1,12 @@
+﻿Effectif min;Effectif max;Provenance du lead;Montant par opportunité qualifiée (€);Commentaire
+1;49;Sortant;;
+1;49;Entrant;;Souvent 30 à 50 % du sortant
+50;249;Sortant;;
+50;249;Entrant;;
+250;99999;Sortant;;Grand compte : cycle plus long
+250;99999;Entrant;;
+;;;;
+Palier objectif;Multiplicateur;;;
+Jusqu'à 100 %;1;;;
+De 100 % à 130 %;;;;1,3 est un point de départ courant
+Au-delà de 130 %;;;;Plafonner ou non : décision de direction
