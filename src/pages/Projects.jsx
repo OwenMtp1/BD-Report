@@ -4,6 +4,36 @@ import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, 
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 import ProjectOrgChart from './ProjectOrgChart.jsx'
 
+// Liste de libellés éditable : on ajoute, on retire, rien d'autre. Suffisant pour un
+// vocabulaire — et surtout impossible à casser depuis un champ texte libre.
+function ChipEditor({ label, values, onChange }) {
+  const [adding, setAdding] = useState('')
+  const add = () => {
+    const v = adding.trim()
+    if (!v || values.includes(v)) return
+    onChange([...values, v]); setAdding('')
+  }
+  return (
+    <div>
+      <div className="text-xs font-semibold text-muted mb-1.5">{label}</div>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {values.map(v => (
+          <span key={v} className="chip bg-surface text-muted flex items-center gap-1">
+            {v}
+            <button className="text-red-400 hover:text-red-600" title="Retirer" onClick={() => onChange(values.filter(x => x !== v))}>×</button>
+          </span>
+        ))}
+        {values.length === 0 && <span className="text-[11px] text-muted italic">Aucune valeur : le champ ne sera pas proposé.</span>}
+      </div>
+      <div className="flex gap-2">
+        <input className="input !py-1 text-xs" placeholder="Ajouter…" value={adding}
+          onChange={e => setAdding(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} />
+        <button className="btn-ghost !py-1 text-xs shrink-0" disabled={!adding.trim()} onClick={add}><Plus size={13} /> Ajouter</button>
+      </div>
+    </div>
+  )
+}
+
 // Menu utilisateurs d'un projet (staff) : gère les membres de l'environnement rattaché —
 // offre, rôle manager, désactivation d'accès, mot de passe, effacement des données, retrait.
 function ProjectUsers({ project, store, onClose }) {
@@ -89,6 +119,25 @@ function ProjectUsers({ project, store, onClose }) {
               })}
             </div>
             <p className="text-[11px] text-muted">Retirer un module masque ses écrans sans supprimer les données déjà saisies.</p>
+          </div>
+        )}
+
+        {env && store.envModules(envId).committee && (
+          <div className="rounded-xl border border-line p-3 space-y-3">
+            <div>
+              <div className="text-sm font-bold">Comité d'achat — vocabulaire du client</div>
+              <p className="text-[11px] text-muted">
+                Les rôles et niveaux de relation proposés sur chaque interlocuteur. Ils varient d'un
+                secteur à l'autre : on les adapte ici, une fois, pour toute l'entreprise.
+              </p>
+            </div>
+            <ChipEditor label="Rôles dans la décision" values={store.envCommitteeRoles(envId)}
+              onChange={v => store.setCommittee(envId, { roles: v })} />
+            <ChipEditor label="Niveaux de relation" values={store.envCommitteeRelations(envId)}
+              onChange={v => store.setCommittee(envId, { relations: v })} />
+            <p className="text-[11px] text-muted">
+              Retirer un rôle ne l'efface pas des rendez-vous qui le portent déjà : il n'est simplement plus proposé.
+            </p>
           </div>
         )}
 

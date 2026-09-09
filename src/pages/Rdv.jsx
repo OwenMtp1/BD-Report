@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList, Search, Target } from 'lucide-react'
 import { googleCalUrl, downloadIcs } from '../calendar.js'
-import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey, icpVerdict } from '../store.jsx'
+import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey, icpVerdict, committeeGaps, DECIDING_ROLES } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 import { HubspotPushButton } from './Hubspot.jsx'
@@ -72,7 +72,7 @@ function ContactSearch({ onPick }) {
   )
 }
 
-function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners }) {
+function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners, committee }) {
   const [f, setF] = useState(initial)
   const icp = useMemo(() => icpVerdict(f, sub), [f.secteur, f.effectif, f.contacts, sub.icpProfiles]) // eslint-disable-line
   const [err, setErr] = useState('')
@@ -197,6 +197,26 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
               {visible('email') && <input className="input" placeholder="Email" value={c.email} onChange={e => setContact(i, 'email', e.target.value)} />}
               {visible('tel') && <input className="input" placeholder="Téléphone" value={c.tel} onChange={e => setContact(i, 'tel', e.target.value)} />}
               </div>
+              {/* Comité d'achat : qui pèse dans la décision, et où en est la relation avec lui.
+                  Le poste dit ce que la personne fait, pas ce qu'elle peut. */}
+              {committee && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                  <label className="text-[11px] text-muted">
+                    Rôle dans la décision
+                    <select className="input !py-1.5 mt-0.5" value={c.role || ''} onChange={e => setContact(i, 'role', e.target.value)}>
+                      <option value="">— non qualifié —</option>
+                      {committee.roles.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[11px] text-muted">
+                    Relation
+                    <select className="input !py-1.5 mt-0.5" value={c.relation || ''} onChange={e => setContact(i, 'relation', e.target.value)}>
+                      <option value="">—</option>
+                      {committee.relations.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </label>
+                </div>
+              )}
               {f.contacts.length > 1 && (
                 <button type="button" className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs"
                   onClick={() => setF(x => ({ ...x, contacts: x.contacts.filter((_, j) => j !== i) }))}>×</button>
@@ -227,6 +247,15 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
         <div className="mt-2 rounded-xl bg-sky-50 border border-sky-300 p-3 text-xs text-sky-800 flex gap-2">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
           <span>Contact déjà connu ({dupEmails.join(', ')}) : il ne sera pas dupliqué dans Mes contacts.</span>
+        </div>
+      )}
+      {/* Alerte de multithreading : ce n'est pas l'argumentaire qui fait perdre les affaires
+          B2B, c'est qu'une seule personne les portait en interne. */}
+      {committee && committeeGaps(f, sub, committee.roles) && (
+        <div className="mt-2 rounded-xl bg-amber-50 border border-amber-300 dark:bg-amber-500/10 dark:border-amber-500/30 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span><b>Comité d'achat incomplet :</b> {committeeGaps(f, sub, committee.roles).join(', ')}.
+            Une affaire à ce stade qui ne tient qu'à une personne se perd souvent sans explication.</span>
         </div>
       )}
       {orgOwners.length > 0 && (
@@ -402,6 +431,11 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   const [sort, setSort] = useState('date-desc')
   const [dateCustom, setDateCustom] = useState({ start: '', end: '' })
   const [view, setView] = useState('cards') // 'cards' | 'table' | 'calendar'
+  // Vocabulaire du comité d'achat : réglé par le staff sur l'environnement, absent si le
+  // module n'est pas installé (l'écran redevient alors exactement celui d'avant).
+  const committee = store.hasModule('committee')
+    ? { roles: store.committeeRoles(), relations: store.committeeRelations() }
+    : null
 
   React.useEffect(() => {
     if (pendingNote) {
@@ -641,6 +675,25 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
         <div><div className="text-muted">Date du RDV</div><div className="font-semibold">{fmtDate(r.dateRdv) || '—'}</div></div>
         <div><div className="text-muted">Effectif</div><div>{r.effectif || '—'}</div></div>
       </div>
+      {/* Cartographie du comité, lisible d'un coup d'œil : qui décide, et si personne ne décide. */}
+      {committee && (r.contacts || []).some(c => c.role) && (
+        <div className="flex flex-wrap gap-1 mt-2.5">
+          {(r.contacts || []).filter(c => c.role).map(c => (
+            <span key={c.id} className={`chip !text-[10px] ${DECIDING_ROLES.includes(c.role)
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+              : c.role === 'Opposant'
+                ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+                : 'bg-surface text-muted'}`}>
+              {c.nom || c.email} · {c.role}{c.relation ? ` (${c.relation})` : ''}
+            </span>
+          ))}
+        </div>
+      )}
+      {committee && committeeGaps(r, sub, committee.roles) && (
+        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
+          <AlertTriangle size={11} /> {committeeGaps(r, sub, committee.roles).join(' · ')}
+        </p>
+      )}
       {r.notes && <p className="text-xs text-muted mt-2.5 line-clamp-2" title={r.notes}>📝 {r.notes}</p>}
       {!isChild && childCount > 0 && (
         <button className="flex items-center gap-1 text-xs font-bold text-brand mt-2.5" onClick={() => setOpenGroups(g => ({ ...g, [r.id]: !g[r.id] }))}>
@@ -753,7 +806,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       {form && (
         <RdvForm
           title={form.mode === 'create' ? 'Créer un RDV' : form.mode === 'sub' ? 'Créer le rendez-vous suivant' : 'Modifier le RDV'}
-          initial={form.data} sub={sub} setSubList={setSubList} isCreate={form.mode === 'create'}
+          initial={form.data} sub={sub} setSubList={setSubList} isCreate={form.mode === 'create'} committee={committee}
           findOrgOwners={(name) => {
             const k = companyKey(name)
             return store.db.subenvs

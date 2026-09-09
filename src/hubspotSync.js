@@ -43,6 +43,13 @@ export const CUSTOM_PROPERTIES = {
   contacts: [
     { name: 'bdr_contact_id', label: 'BD Report — ID du contact', type: 'string', fieldType: 'text' },
     { name: 'bdr_source', label: 'BD Report — Source', type: 'string', fieldType: 'text' },
+    // Comité d'achat. Volontairement des propriétés de CONTACT, et non des libellés
+    // d'association HubSpot : ces libellés n'existent que sur certaines offres du portail,
+    // et un envoi qui échoue chez la moitié des clients ne vaut rien. Le vocabulaire étant
+    // paramétrable côté BD Report, on l'envoie en texte plutôt qu'en liste fermée — une
+    // valeur ajoutée par le client ne doit pas faire rejeter la propriété par HubSpot.
+    { name: 'bdr_role_achat', label: "BD Report — Rôle dans la décision", type: 'string', fieldType: 'text' },
+    { name: 'bdr_relation', label: 'BD Report — Niveau de relation', type: 'string', fieldType: 'text' },
   ],
   companies: [
     { name: 'bdr_secteur', label: 'BD Report — Secteur', type: 'string', fieldType: 'text' },
@@ -141,6 +148,10 @@ export function contactToHs(c, extra = {}) {
     company: c.entreprise || extra.entreprise,
     bdr_contact_id: c.id,
     bdr_source: c.source || extra.source,
+    // `clean` retire les valeurs vides : un contact non qualifié n'écrase pas ce que le
+    // portail sait déjà de lui.
+    bdr_role_achat: c.role,
+    bdr_relation: c.relation,
     hubspot_owner_id: extra.ownerId || undefined,
   })
 }

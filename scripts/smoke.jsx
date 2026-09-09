@@ -207,6 +207,19 @@ async function main() {
     await type(search, '')
   }
 
+  // 5. Comité d'achat : le formulaire de RDV qualifie chaque interlocuteur, et alerte quand
+  // l'affaire ne tient qu'à une personne.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes Rendez-vous'))
+  {
+    const create = find('button', 'Créer un RDV')
+    if (!create) throw new Error('Create RDV button missing')
+    await click(create)
+    if (!text().includes('Rôle dans la décision')) throw new Error('Buying committee fields missing from the RDV form')
+    const roleSel = [...container.querySelectorAll('select')].find(s => [...s.options].some(o => o.textContent === 'Prescripteur'))
+    if (!roleSel) throw new Error('Buying committee roles not offered')
+    await click(find('button', 'Annuler'))
+  }
+
   // 5a. Mes notes : la bibliothèque d'objections vit dans une catégorie de la même page.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes notes'))
   {

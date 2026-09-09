@@ -886,6 +886,32 @@ function defaultKbArticles() {
 }
 
 // ---------------------------------------------------------------- Seed
+// ---------------------------------------------------------------- Comité d'achat (module `committee`)
+// En B2B, l'affaire ne se perd presque jamais faute d'arguments : elle se perd parce qu'une
+// seule personne portait le sujet en interne. On qualifie donc chaque interlocuteur — son rôle
+// dans la décision, et où en est la relation avec lui.
+// Le vocabulaire appartient au STAFF, pas au commercial : il varie d'un secteur à l'autre et
+// doit rester cohérent dans toute l'entreprise cliente. Il vit donc sur l'environnement.
+export const DEFAULT_COMMITTEE_ROLES = ['Décideur', 'Prescripteur', 'Utilisateur', 'Acheteur', 'Sponsor', 'Opposant']
+export const DEFAULT_COMMITTEE_RELATIONS = ['Jamais parlé', 'Contacté', 'En relation', 'Allié']
+// Rôles qui, à eux seuls, permettent de signer. Sans l'un d'eux identifié, l'affaire repose
+// sur une supposition.
+export const DECIDING_ROLES = ['Décideur', 'Acheteur']
+export const committeeRoles = (env) => (env?.committee?.roles?.length ? env.committee.roles : DEFAULT_COMMITTEE_ROLES)
+export const committeeRelations = (env) => (env?.committee?.relations?.length ? env.committee.relations : DEFAULT_COMMITTEE_RELATIONS)
+// Ce qui manque à la cartographie d'un rendez-vous, ou null si elle tient debout.
+// Volontairement silencieux tant que l'affaire n'a pas atteint la qualification : exiger un
+// comité complet dès le premier appel n'apprendrait rien à personne.
+export function committeeGaps(rdv, data, roles = DEFAULT_COMMITTEE_ROLES) {
+  if (!rdv || !phaseAtLeast(data, rdv.phase, qualifyPhase(data))) return null
+  const contacts = (rdv.contacts || []).filter(c => c.nom || c.email)
+  const gaps = []
+  if (contacts.length < 2) gaps.push('un seul interlocuteur engagé')
+  const deciders = roles.filter(r => DECIDING_ROLES.includes(r))
+  if (deciders.length && !contacts.some(c => deciders.includes(c.role))) gaps.push('aucun décideur identifié')
+  return gaps.length ? gaps : null
+}
+
 // ---------------------------------------------------------------- Objections (onglet de « Mes notes »)
 // Les objections d'un marché se répètent : une équipe qui les affronte pour la première fois
 // à chaque appel réinvente une réponse moyenne. On les range donc par famille, avec la réponse
@@ -1570,6 +1596,30 @@ function seedDemoWorkspace(d, who = '') {
 // `brand.company` remplace le nom de l'environnement fictif : en rendez-vous, la démo
 // porte le nom de l'entreprise du prospect, qui se voit chez lui plutôt que chez « Atlas
 // Revenue ». Rien d'autre n'est touché — les données restent entièrement inventées.
+// Comités d'achat de démonstration. Les affaires avancées sont cartographiées à plusieurs
+// personnes ; deux dossiers restent volontairement mono-interlocuteur pour que l'alerte de
+// multithreading soit visible — c'est elle qu'on veut montrer, pas un tableau parfait.
+function seedDemoCommittee(d) {
+  const roles = ['Décideur', 'Prescripteur', 'Utilisateur', 'Sponsor']
+  const relations = ['Allié', 'En relation', 'Contacté']
+  const seconds = [
+    ['Nathalie Vidal', 'Responsable des opérations'], ['Olivier Rey', 'Directeur financier'],
+    ['Karim Aziz', 'Responsable SI'], ['Julie Renard', 'Responsable formation'],
+  ]
+  let n = 0
+  ;(d.rdvs || []).forEach(r => {
+    if (!phaseAtLeast(d, r.phase, qualifyPhase(d))) return
+    const i = n++
+    if (i % 5 === 4) return // un dossier sur cinq reste seul : l'alerte doit exister
+    r.contacts = r.contacts || []
+    if (r.contacts[0]) { r.contacts[0].role = roles[i % 2]; r.contacts[0].relation = relations[i % relations.length] }
+    if (r.contacts.length < 2) {
+      const [nom, poste] = seconds[i % seconds.length]
+      r.contacts.push({ id: uid(), nom, poste, email: '', tel: '', role: roles[(i % 2) ? 0 : 2], relation: relations[(i + 1) % relations.length] })
+    }
+  })
+}
+
 // Passations de démonstration. Une file uniformément verte ne montrerait rien : on veut les
 // trois états, avec des motifs de refus qui ressemblent à ceux qu'un closer écrit vraiment.
 function seedDemoHandoffs(d) {
@@ -1630,6 +1680,7 @@ export function buildDemoDb(brand) {
     d.contacts = []; d.rdvs.forEach(r => syncContacts(d, r))
     d.goals = { rdvSemaine: 12, sqlMois: 8, primesMois: 2000 }
     seedDemoWorkspace(d)
+    seedDemoCommittee(d)
     seedDemoHandoffs(d)
     if (extra) extra(d)
     return d
@@ -2892,6 +2943,20 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       hasModule(id) {
         if (demo) return true
         return envModuleOn(db.environments.find(e => e.id === session?.envId), id)
+      },
+      // ----- Comité d'achat : vocabulaire de l'environnement (staff)
+      committeeRoles() { return committeeRoles(db.environments.find(e => e.id === session?.envId)) },
+      committeeRelations() { return committeeRelations(db.environments.find(e => e.id === session?.envId)) },
+      // Variantes visant un environnement précis : le staff règle le vocabulaire d'un client
+      // depuis sa propre session, sans y entrer.
+      envCommitteeRoles(envId) { return committeeRoles(db.environments.find(e => e.id === envId)) },
+      envCommitteeRelations(envId) { return committeeRelations(db.environments.find(e => e.id === envId)) },
+      setCommittee(envId, patch) {
+        setDb(d => {
+          const env = d.environments.find(e => e.id === envId); if (!env) return d
+          env.committee = { roles: committeeRoles(env), relations: committeeRelations(env), ...patch }
+          return d
+        })
       },
       envModules(envId) {
         const env = db.environments.find(e => e.id === envId)
