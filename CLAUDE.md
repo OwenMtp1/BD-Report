@@ -73,9 +73,10 @@ npm run dev        # serveur de dev
   - **Contrôle** : `npm run i18n:missing` (et la dernière ligne de `npm run audit`) extrait les chaînes
     d'interface de `src/**/*.jsx` — texte JSX, props d'affichage, `toast(…)`, et libellés déclarés en objet
     (`{ label: '…' }`) — et liste ce qui manque au dictionnaire. **Doit rester à 100 %.** Le smoke complète
-    par un contrôle À L'EXÉCUTION (`window.__bdrI18nMissing`) : il bascule en EN puis en ES et échoue si une
-    phrase française subsiste à l'écran ; le contenu SAISI (notes, messages) est écarté en le retrouvant
-    dans l'espace de travail — une donnée reste dans sa langue.
+    par un contrôle À L'EXÉCUTION (`window.__bdrI18nMissing`) : bascule EN puis ES sur l'écran des RDV, et en
+    fin de parcours **balayage de TOUS les onglets en anglais** — c'est là que se voient les phrases qu'aucun
+    écran testé en anglais ne montrait. Le contenu SAISI (notes, messages) est écarté en le retrouvant dans la
+    base : une donnée reste dans la langue de qui l'a écrite, la traduire serait la réécrire.
 - **`src/themes.js`** — **4 thèmes seulement** : `ocean-pro` (design BD Report d'origine, défaut), `sombre`,
   `nuit`, et **`bdr-studio`** (quasi-noir, **vert néon** en accent principal et cyan en second : cartes en verre,
   halos, chiffres lumineux, et **tableaux soignés** — en-tête tenu au défilement, lignes alternées, liseré vert sur
