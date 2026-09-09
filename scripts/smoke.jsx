@@ -205,6 +205,12 @@ async function main() {
   for (const t of ['Utilisateurs', 'Organigramme', 'Créer votre écosystème', 'Pilotage équipe', 'KPI Entreprise', 'Intégration HubSpot']) {
     if (!find('button', t)) throw new Error('Manager hub tab missing: ' + t)
   }
+  // Pilotage équipe : la fourchette de primes, telle qu'on la présente en comité.
+  await click(find('button', 'Pilotage équipe'))
+  for (const k of ['Primes du mois — fourchette', 'Acquis', 'Attendu', 'Haut']) {
+    if (!text().includes(k)) throw new Error('Forecast range missing: ' + k)
+  }
+
   // Écosystème : étapes du pipeline, règle de rattachement et barème au même endroit.
   await click(find('button', 'Créer votre écosystème'))
   for (const k of ['Étapes de votre pipeline', 'Règle de rattachement au mois', 'Barème des primes', 'déclenche une prime']) {

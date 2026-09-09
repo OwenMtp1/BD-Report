@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { TrendingUp, Sun, AlertTriangle, ArrowRightLeft, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, fmtMoney, PHASE_COLORS, phaseColor } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, fmtMoney, baremeMatch, phaseProbability, milestonePhase, PHASE_COLORS, phaseColor } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
 
 const dayISO = (offset = 0) => {
@@ -63,8 +63,30 @@ function memberStats(data) {
   const noShows = rdvs.filter(r => (r.opportunite || '').startsWith('No Show')).length
   const noShowRate = rdvs.length ? Math.round((noShows / rdvs.length) * 100) : 0
   const dormant = rdvs.filter(r => r.opportunite === 'En cours' && lastActivity(r) < dayISO(-14))
+  // Fourchette de primes du mois. Un chiffre unique ne se défend pas en comité : on
+  // annonce ce qui est acquis, ce qu'on vise, et le plafond si tout passe.
+  //  · basse    = déjà déclenché, plus rien à faire pour l'obtenir
+  //  · attendue = acquis + pipeline ouvert pondéré par la probabilité de chaque étape
+  //  · haute    = acquis + pipeline ouvert en totalité, sans pondération
+  const ouvert = rdvs.filter(r => r.opportunite === 'En cours')
+  let attendu = 0, haut = 0
+  ouvert.forEach(r => {
+    const row = baremeMatch(data.bareme || [], r.effectif, r.source)
+    const montant = row ? Number(row.montant) || 0 : 0
+    if (!montant) return
+    const p = phaseProbability(data, r.phase)
+    if (p <= 0 || p >= 1) return // étape perdue, inconnue, ou déjà au jalon (donc acquise)
+    attendu += montant * p
+    haut += montant
+  })
+  const forecast = {
+    basse: primesMois,
+    attendue: primesMois + Math.round(attendu),
+    haute: primesMois + haut,
+    ouvertes: ouvert.length,
+  }
   return {
-    prisMois, sqlMois, primesMois, projection,
+    prisMois, sqlMois, primesMois, projection, forecast,
     goals: data.goals || {}, daysSinceLast, noShowRate, dormant,
     hier: rdvs.filter(r => r.dateRdv === dayISO(-1)),
     aujourdhui: rdvs.filter(r => r.dateRdv === dayISO(0)),
@@ -109,7 +131,10 @@ export default function TeamLead() {
   const team = stats.reduce((a, { s }) => ({
     pris: a.pris + s.prisMois, sql: a.sql + s.sqlMois, primes: a.primes + s.primesMois,
     proj: a.proj + s.projection, goalPris: a.goalPris + 4 * (Number(s.goals.rdvSemaine) || 0), goalSql: a.goalSql + (Number(s.goals.sqlMois) || 0),
-  }), { pris: 0, sql: 0, primes: 0, proj: 0, goalPris: 0, goalSql: 0 })
+    fBasse: a.fBasse + s.forecast.basse, fAttendue: a.fAttendue + s.forecast.attendue,
+    fHaute: a.fHaute + s.forecast.haute, fOuvertes: a.fOuvertes + s.forecast.ouvertes,
+    goalPrimes: a.goalPrimes + (Number(s.goals.primesMois) || 0),
+  }), { pris: 0, sql: 0, primes: 0, proj: 0, goalPris: 0, goalSql: 0, fBasse: 0, fAttendue: 0, fHaute: 0, fOuvertes: 0, goalPrimes: 0 })
 
   // ---- Alertes de dérive
   const alerts = []
@@ -134,6 +159,46 @@ export default function TeamLead() {
           </ul>
         </div>
       )}
+
+      {/* Fourchette de primes du mois — le chiffre qu'on présente en comité */}
+      <div className="card p-4">
+        <h3 className="font-bold mb-1 flex items-center gap-2"><TrendingUp size={17} className="text-brand" /> Primes du mois — fourchette</h3>
+        <p className="text-xs text-muted mb-3">
+          {team.fOuvertes} opportunité{team.fOuvertes > 1 ? 's' : ''} encore ouverte{team.fOuvertes > 1 ? 's' : ''}.
+          L'attendu pondère chaque affaire par sa probabilité d'atteindre {milestonePhase(store.sub)} ; le haut suppose qu'elles passent toutes.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            ['Acquis', team.fBasse, 'Déjà déclenché — plus rien à faire pour l\'obtenir.', 'text-emerald-600'],
+            ['Attendu', team.fAttendue, 'Acquis + pipeline ouvert pondéré. Le chiffre à annoncer.', 'text-brand'],
+            ['Haut', team.fHaute, 'Si toutes les affaires ouvertes passent. Le plafond, pas la prévision.', 'text-muted'],
+          ].map(([label, val, hint, cls]) => (
+            <div key={label} className="rounded-xl bg-surface p-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-muted">{label}</div>
+              <div className={`text-2xl font-extrabold ${cls}`}>{fmtMoney(val)}</div>
+              <p className="text-[11px] text-muted mt-1">{hint}</p>
+            </div>
+          ))}
+        </div>
+        {/* Une barre qui montre où se situe l'acquis dans la fourchette : c'est la
+            distance à parcourir qui se discute en comité, pas le total. */}
+        {team.fHaute > 0 && (
+          <div className="mt-3">
+            <div className="h-2.5 rounded-full bg-surface overflow-hidden flex">
+              <div className="bg-emerald-500" style={{ width: `${(team.fBasse / team.fHaute) * 100}%` }} title="Acquis" />
+              <div className="bg-brand/50" style={{ width: `${((team.fAttendue - team.fBasse) / team.fHaute) * 100}%` }} title="Attendu en plus" />
+            </div>
+            {team.goalPrimes > 0 && (
+              <p className="text-[11px] text-muted mt-1.5">
+                Objectif équipe {fmtMoney(team.goalPrimes)} —{' '}
+                {team.fAttendue >= team.goalPrimes
+                  ? <span className="text-emerald-600 font-semibold">atteint dans le scénario attendu.</span>
+                  : <span className="text-amber-600 font-semibold">il manque {fmtMoney(team.goalPrimes - team.fAttendue)} au scénario attendu.</span>}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Forecast d'équipe */}
       <div className="card p-4 overflow-x-auto">
