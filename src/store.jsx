@@ -340,6 +340,17 @@ export const isClientRole = (key) => CLIENT_ROLE_KEYS.includes(key)
 
 // Rôles de l'équipe support BD Report : accès au back-office support (Nouvelles demandes,
 // Tickets Techniques). « Support BD Report » a exactement les mêmes permissions que « Fondateur ».
+// Rôles qui encadrent côté client TANT QU'AUCUN rôle d'environnement n'est attribué.
+// Cette liste était recopiée dans neuf écrans, si bien qu'un rôle créé sur mesure n'y
+// figurait jamais : la personne avait tous les droits et voyait quand même le bouton
+// disparaître, sans explication. Un seul endroit la définit désormais, et partout où un
+// droit existe, c'est le droit qui est interrogé — pas le nom du rôle.
+export const CLIENT_MANAGER_ROLES = ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report']
+export const isClientManagerRole = (role) => CLIENT_MANAGER_ROLES.includes(role)
+// Rôles de l'éditeur qui passent au-dessus des cloisons d'un environnement client.
+export const ELEVATED_ROLES = ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur']
+export const isElevatedRole = (role) => ELEVATED_ROLES.includes(role)
+
 export const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
 export const isSupportRole = (role) => SUPPORT_ROLES.includes(role)
 
@@ -415,6 +426,7 @@ export const STAFF_PERMISSION_GROUPS = [
   {
     id: 'org', label: 'Organisation & services', perms: [
       { id: 'services.manage', label: 'Gérer les services (organigramme staff)' },
+      { id: 'channels.manage', label: 'Créer et administrer les canaux du staff' },
       { id: 'orgchart.edit', label: 'Modifier l\'organigramme' },
     ],
   },
@@ -516,7 +528,7 @@ function defaultPermsFor(roleKey) {
     'requests.view', 'requests.manage', 'kb.manage', 'canned.manage',
     'clients.view', 'clients.manage', 'projects.view', 'projects.manage',
     'accounts.view', 'accounts.create', 'accounts.role', 'accounts.offer', 'accounts.disable', 'accounts.remove',
-    'passwords.view', 'passwords.reset', 'services.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access',
+    'passwords.view', 'passwords.reset', 'services.manage', 'channels.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access',
   ]
   if (roleKey === 'Développeur') return ['tickets.view', 'tickets.reply', 'tickets.priority', 'tickets.status', 'projects.view', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access']
   if (roleKey === 'Manager') return ['passwords.view', 'passwords.reset', 'accounts.create', 'stats.view', 'dashboard.view', 'manager.view', 'orgchart.edit', 'demo.access']
@@ -602,6 +614,7 @@ export const CLIENT_PERMISSION_GROUPS = [
       { id: 'team.manage', label: 'Créer et modifier des utilisateurs' },
       { id: 'team.orgchart', label: "Modifier l'organigramme" },
       { id: 'team.services', label: 'Gérer les services' },
+      { id: 'team.channels', label: 'Créer et administrer les canaux de conversation' },
     ],
   },
   {
@@ -2801,8 +2814,8 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       currentSub() { return db.subenvs.find(s => s.id === session?.subEnvId) || null },
       // Peut créer/administrer des canaux : manager (équipe) ou support/fondateur (staff).
       canManageChannels(scope) {
-        if (scope === 'support') return isSupportRole(account?.role)
-        return ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role)
+        if (scope === 'support') return accountHasPerm(account, 'channels.manage', db)
+        return this.hasClientPerm('team.channels')
       },
       // Un canal est-il visible pour l'utilisateur courant ?
       canSeeChannel(c) {
@@ -2820,7 +2833,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         // Messages directs (1:1) : visibles uniquement des deux interlocuteurs, même pour un manager.
         if (c.dm) return (c.members || []).includes(session?.subEnvId)
         if (c.createdBy === account?.id) return true
-        if (['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role)) return true
+        if (this.hasClientPerm('team.channels')) return true // qui administre les canaux les voit
         const subId = session?.subEnvId
         const sub = db.subenvs.find(s => s.id === subId)
         if (c.access === 'members') return (c.members || []).includes(subId)
@@ -3205,7 +3218,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // comportement historique fondé sur le rôle du compte.
       hasClientPerm(permId) {
         const r = this.myEnvRole()
-        if (!r) return ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(account?.role)
+        if (!r) return isClientManagerRole(account?.role)
         return (r.perms || []).includes(permId)
       },
       envRoles(envId) { return (db.environments.find(e => e.id === envId)?.roles) || [] },
@@ -3245,7 +3258,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       },
       // Staff/fondateur/admin : attribue ou retire le rôle Manager à une personne.
       setEmployeeRole(subId, makeManager) {
-        if (!['Fondateur', 'Support BD Report', 'Administrateur'].includes(account?.role)) return
+        if (!accountHasPerm(account, 'accounts.role', db) && !this.hasClientPerm('team.manage')) return
         if (roBlocked()) return
         setDb(d => {
           const sub = d.subenvs.find(s => s.id === subId); if (!sub) return d
@@ -3613,7 +3626,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (roBlocked()) return
         // Palliatif d'autorisation : seuls Fondateur/Support/Administrateur peuvent modifier
         // rôle, offre, briques ou statut développeur d'un compte (le reste = self-edit permis).
-        const elevated = ['Fondateur', 'Support BD Report', 'Administrateur'].includes(account?.role)
+        const elevated = isElevatedRole(account?.role) || accountHasPerm(account, 'accounts.role', db)
         const safe = stripDangerousKeys({ ...patch })
         if (!elevated) { delete safe.role; delete safe.plan; delete safe.bricks; delete safe.developer }
         setDb(d => { const a = d.accounts.find(x => x.id === id); if (a) Object.assign(a, safe); return d })

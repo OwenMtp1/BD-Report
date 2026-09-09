@@ -36,9 +36,14 @@ export default function ManagerHub() {
   const bricks = allowedBricks(me, store.db.offers)
   const byPerm = store.hasPerm('manager.view')
 
+  // Un rôle d'environnement décide seul de ce que voit son titulaire : ses onglets
+  // priment sur le filtre par nom de rôle, sans quoi un rôle créé sur mesure ne pourrait
+  // jamais ouvrir un onglet que celui-ci réserve aux managers.
+  const envRole = store.myEnvRole ? store.myEnvRole() : null
   const visible = MANAGER_TABS
     .filter(t => RENDERERS[t.id])
-    .filter(t => !t.roles || t.roles.includes(me?.role) || byPerm)
+    .filter(t => envRole || !t.roles || t.roles.includes(me?.role) || byPerm)
+    .filter(t => !envRole || !t.brick || (envRole.tabs || []).includes(t.brick))
     .filter(t => !t.brick || bricks.includes(t.brick) || byPerm)
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id))
 

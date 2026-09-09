@@ -1,7 +1,7 @@
 import { deob } from '../obf.js'
 import React, { useRef, useState, useEffect } from 'react'
 import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock, Cloud, GraduationCap } from 'lucide-react'
-import { useStore, hashPw } from '../store.jsx'
+import { useStore, hashPw, isElevatedRole } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
 import { Modal, Field, Confirm, toast, CommitInput } from '../ui.jsx'
 import { testConnection } from '../supabaseSync.js'
@@ -13,7 +13,7 @@ function EnvServicesCard({ store, env, me }) {
   const [name, setName] = useState('')
   const services = store.envServices(env.id)
   const subs = store.db.subenvs.filter(s => s.envId === env.id)
-  const canManage = ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'].includes(me.role) || env.createdBy === me.id
+  const canManage = store.hasClientPerm('team.services') || env.createdBy === me.id
   const add = () => { if (name.trim()) { store.addService(name.trim()); setName('') } }
   if (!canManage) return null
   return (
@@ -315,8 +315,8 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
               const envServices = store.envServices(env?.id)
               const owner = store.db.accounts.find(a => a.id === s.ownerId)
               const isPrincipal = env?.createdBy === me.id
-              const elevated = ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'].includes(me.role) || isPrincipal
-              const managesThem = me.role === 'Manager' && owner?.teamOf === me.id
+              const elevated = isElevatedRole(me.role) || isPrincipal
+              const managesThem = (store.hasClientPerm('team.view') || me.role === 'Manager') && owner?.teamOf === me.id
               const own = s.ownerId === me.id
               const canPin = elevated || managesThem || own
               return (

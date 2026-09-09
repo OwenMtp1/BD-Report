@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus, Search, UserCog, Eye, EyeOff, Network, X, Pencil, Check } from 'lucide-react'
-import { useStore, ROLES, BRICKS, uid, hashPw, isSupportRole } from '../store.jsx'
+import { useStore, ROLES, BRICKS, uid, hashPw, isSupportRole, isElevatedRole } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 
 // Gestion du mot de passe d'un compte. Le manager/support/fondateur peut désormais afficher
@@ -206,7 +206,7 @@ function canManage(actor, target) {
   if (isSupportRole(actor.role)) return true
   if (actor.role === 'Développeur') return !isSupportRole(target.role)
   if (actor.role === 'Administrateur') return !isSupportRole(target.role)
-  if (actor.role === 'Manager') return target.teamOf === actor.id && !['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'].includes(target.role)
+  if (actor.role === 'Manager') return target.teamOf === actor.id && !isElevatedRole(target.role)
   return false
 }
 

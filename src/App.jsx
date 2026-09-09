@@ -5,7 +5,7 @@ import {
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
   AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Radio, Trophy, ShieldCheck, Star, GraduationCap,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER, isElevatedRole } from './store.jsx'
 import { NAV_GROUPS, NAV } from './nav.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
@@ -613,8 +613,10 @@ function MainApp() {
       // ou si on est principal/dev/admin/fondateur ; sinon on passe par la saisie du code.
       const env = store.db.environments.find(e => e.id === session.envId)
       const owner = store.db.accounts.find(a => a.id === s.ownerId)
-      const elevated = ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'].includes(me.role) || env?.createdBy === me.id
-      const manages = me.role === 'Manager' && owner?.teamOf === me.id
+      const elevated = isElevatedRole(me.role) || env?.createdBy === me.id
+      // Encadrer se prouve par le droit, pas par le nom du rôle : un rôle créé sur mesure
+      // avec « voir l'équipe » encadre autant qu'un Manager.
+      const manages = (store.hasClientPerm('team.view') || me.role === 'Manager') && owner?.teamOf === me.id
       const own = s.ownerId === me.id
       if (elevated || manages || own || !s.pin) { store.enterSubEnv(s.id); setPage('dashboard') }
       else { store.setSession(sx => ({ ...sx, subEnvId: null })) } // renvoie au sélecteur d'espace (avec PIN)

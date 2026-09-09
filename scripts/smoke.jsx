@@ -30,7 +30,7 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability } = await import('../src/store.jsx')
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -64,6 +64,16 @@ async function main() {
 
     // Un pipeline sans issue déclarée ne doit pas planter : repli sur les valeurs d'origine.
     if (milestonePhase({}) !== 'SQL' || firstPhase({}) !== 'R1') throw new Error('Repli par défaut cassé')
+  }
+
+  // Un rôle créé sur mesure doit ouvrir ce que ses droits accordent. Neuf écrans
+  // comparaient le NOM du rôle à une liste figée : la personne avait tous les droits et
+  // voyait quand même le bouton disparaître, sans explication.
+  {
+    if (!CLIENT_PERMISSION_IDS.includes('team.channels')) throw new Error('Le droit sur les canaux manque au catalogue client')
+    if (!STAFF_PERMISSION_IDS.includes('channels.manage')) throw new Error('Le droit sur les canaux manque au catalogue staff')
+    if (!isClientManagerRole('Manager') || isClientManagerRole('Membre')) throw new Error('Repli historique fauss\u00e9')
+    if (!isElevatedRole('Fondateur') || isElevatedRole('Manager')) throw new Error('Rôles élevés faussés')
   }
 
   // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue
