@@ -296,6 +296,32 @@ export const RDV_FIELDS = [
 // dans l'éditeur d'offres + la page Souscrire).
 export const BRICKS = ALL_BRICKS
 
+// ---------------------------------------------------------------- Modules optionnels
+// Toutes les organisations ne travaillent pas pareil : une équipe sans closer n'a que faire
+// d'une passation, une PME de trois personnes n'a pas d'entretien 1:1 formalisé. Ces briques
+// métier s'installent donc à la carte — le staff coche ce qu'il livre à la création de
+// l'environnement, et peut y revenir depuis la fiche du projet.
+// ⚠️ L'absence de réglage vaut « tout activé » : un environnement créé avant ces modules ne
+// doit rien perdre au premier chargement de la nouvelle version.
+export const ENV_MODULES = [
+  { id: 'handoff', label: 'Passation au closer', tab: 'Passation au closer',
+    desc: "Le lead qualifié part en attente d'acceptation chez le closer, qui l'accepte ou le refuse avec un motif. Mesure la qualité réelle des leads." },
+  { id: 'committee', label: "Comité d'achat",
+    desc: "Rôle (décideur, prescripteur, opposant…) et niveau de relation sur chaque interlocuteur d'un rendez-vous." },
+  { id: 'quotas', label: 'Objectifs & montée en charge',
+    desc: 'Quotas par personne et par période, avec un plan de montée en charge pour les arrivées récentes.' },
+  { id: 'oneToOne', label: 'Entretiens 1:1',
+    desc: "Un fil de discussion dédié entre chaque membre et son manager, rangé dans un dossier « 1:1 » des Conversations." },
+  { id: 'challenges', label: "Challenges d'équipe",
+    desc: "Concours à durée limitée annoncés sur le tableau de bord de chaque commercial pendant l'événement." },
+  { id: 'statements', label: 'Relevés de primes',
+    desc: 'Relevé mensuel par personne, signé par le manager avant de devenir téléchargeable par le collaborateur.' },
+]
+export const ENV_MODULE_IDS = ENV_MODULES.map(m => m.id)
+// Un module absent du réglage est actif : voir l'avertissement ci-dessus.
+export const envModuleOn = (env, id) => (env?.modules?.[id] !== false)
+export const defaultEnvModules = () => Object.fromEntries(ENV_MODULE_IDS.map(id => [id, true]))
+
 // ---------------------------------------------------------------- Offres (plans)
 // Les offres sont désormais des DONNÉES (db.offers) que le staff peut créer/modifier/supprimer.
 // starter : offre gratuite mono-compte (pas d'équipe / pilotage). beta : accès complet.
@@ -651,7 +677,7 @@ export const CLIENT_PERMISSION_IDS = CLIENT_PERMISSIONS.map(p => p.id)
 // Onglets ouverts au Membre par défaut : son activité, pas le pilotage de l'équipe.
 const MEMBER_TABS = ['Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches',
   'Mes contacts', 'Mes notes', 'Primes & Commissions', 'Simulateur de primes', 'Conversations',
-  'Qualité des données', 'ICP', 'Classement', 'Corbeille']
+  'Qualité des données', 'ICP', 'Classement', 'Corbeille', 'Passation au closer']
 
 export function defaultEnvRoles() {
   return [
@@ -902,6 +928,9 @@ function emptySubEnvData() {
     wonPhases: [...DEFAULT_WON_PHASES],     // phases signifiant « affaire gagnée »
     lostPhases: [...DEFAULT_LOST_PHASES],   // phases signifiant « affaire perdue »
     icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
+    handoffPhases: [],       // étapes déclenchant une passation ([] = le jalon de l'espace)
+    handoffReasons: [...DEFAULT_HANDOFF_REASONS], // motifs de refus proposés au closer
+    primeOnAccept: false,    // ne payer la prime qu'une fois le dossier accepté (facultatif)
   }
 }
 
@@ -1212,6 +1241,60 @@ export const nextPhase = (data, p) => {
   if (i < 0 || i >= order.length - 1) return null
   return order[i + 1]
 }
+// ============================================================ Passation au closer (module `handoff`)
+// Le passage au jalon commercial (SQL par défaut) ne prouve rien à lui seul : c'est le closer
+// qui sait si le lead était réellement travaillable. On matérialise donc la remise du dossier —
+// en attente, accepté, ou refusé avec un motif. Le taux d'acceptation devient la mesure de
+// qualité d'un BDR, et les motifs de refus alimentent le coaching.
+export const DEFAULT_HANDOFF_REASONS = [
+  'Hors cible', 'Pas de budget', 'Mauvais interlocuteur', 'Doublon', 'Trop tôt', 'Informations insuffisantes',
+]
+// Étapes qui déclenchent une passation. Par défaut le jalon de l'espace : c'est là que le
+// dossier change de mains, et c'est aussi ce qui déclenche la prime.
+export const handoffPhases = (data) => {
+  const list = (data?.handoffPhases || []).filter(p => phaseList(data).includes(p))
+  return list.length ? list : [milestonePhase(data)].filter(Boolean)
+}
+// Un dossier est concerné dès qu'il ATTEINT l'étape de passation — et le reste ensuite :
+// une affaire signée est passée par le closer, elle ne doit pas disparaître du suivi sous
+// prétexte qu'elle a avancé depuis.
+export const rdvNeedsHandoff = (rdv, data) => {
+  if (!rdv?.phase) return false
+  return handoffPhases(data).some(p => rdv.phase === p || phaseAtLeast(data, rdv.phase, p))
+}
+// État de la passation d'un rendez-vous, ou null s'il n'est pas encore concerné.
+// Un dossier arrivé au jalon sans enregistrement de passation est « en attente » : c'est
+// bien ce qu'il est, et cela peuple la file dès l'activation du module.
+export const handoffState = (rdv, data) => (rdvNeedsHandoff(rdv, data) ? (rdv?.handoff?.state || 'pending') : null)
+export const HANDOFF_STATES = {
+  pending: { label: 'En attente', chip: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
+  accepted: { label: 'Accepté', chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' },
+  refused: { label: 'Refusé', chip: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300' },
+}
+// Taux d'acceptation d'un jeu de rendez-vous — les dossiers encore en attente ne comptent
+// dans aucun des deux camps : un lead non traité n'est ni bon ni mauvais.
+export function handoffStats(rdvs, data) {
+  let pending = 0, accepted = 0, refused = 0
+  ;(rdvs || []).forEach(r => {
+    const s = handoffState(r, data)
+    if (s === 'pending') pending++
+    else if (s === 'accepted') accepted++
+    else if (s === 'refused') refused++
+  })
+  const decided = accepted + refused
+  return { pending, accepted, refused, decided, rate: decided ? Math.round((accepted / decided) * 100) : null }
+}
+
+// Options de calcul des primes d'un espace, en un seul endroit. Elles étaient recopiées à la
+// main sur chaque appel — et deux écrans les avaient oubliées, ignorant en silence le
+// paramétrage de « Créer votre écosystème ».
+export const primeOpts = (data) => ({
+  triggerPhases: data?.primePhases,
+  cutoffDay: data?.primeCutoffDay,
+  requireAccepted: !!data?.primeOnAccept,
+  data,
+})
+
 export function computePrimes(rdvs, bareme, opts = {}) {
   const triggers = opts.triggerPhases?.length ? opts.triggerPhases : DEFAULT_PRIME_PHASES
   const cutoff = opts.cutoffDay || DEFAULT_PRIME_CUTOFF
@@ -1221,6 +1304,10 @@ export function computePrimes(rdvs, bareme, opts = {}) {
   const primes = []
   rdvs.forEach(r => {
     if (!triggers.includes(r.phase)) return
+    // Option « prime à l'acceptation » : tant que le closer n'a pas pris le dossier, la prime
+    // n'est pas due. Volontairement désactivée par défaut — c'est un choix de rémunération,
+    // pas une règle du produit.
+    if (opts.requireAccepted && r.handoff?.state !== 'accepted') return
     const trigger = r.datePassageSQL || r.datePriseRdv || r.dateRdv || r.createdAt
     const snap = r.primeSnapshot
     const row = snap ? null : baremeMatch(bareme, r.effectif, r.source)
@@ -1449,6 +1536,27 @@ function seedDemoWorkspace(d, who = '') {
 // `brand.company` remplace le nom de l'environnement fictif : en rendez-vous, la démo
 // porte le nom de l'entreprise du prospect, qui se voit chez lui plutôt que chez « Atlas
 // Revenue ». Rien d'autre n'est touché — les données restent entièrement inventées.
+// Passations de démonstration. Une file uniformément verte ne montrerait rien : on veut les
+// trois états, avec des motifs de refus qui ressemblent à ceux qu'un closer écrit vraiment.
+function seedDemoHandoffs(d) {
+  const closers = ['Chloé Nguyen', 'Lucas Fabre']
+  const reasons = ['Hors cible', 'Pas de budget', 'Mauvais interlocuteur']
+  let i = 0
+  ;(d.rdvs || []).forEach(r => {
+    if (!rdvNeedsHandoff(r, d)) return
+    const n = i++
+    const at = new Date(Date.now() - (3 + n) * 86400000).toISOString()
+    if (n % 4 === 3) { r.handoff = { state: 'pending', to: '', at, decidedAt: '', decidedBy: '', reason: '' }; return }
+    const refused = n % 5 === 1
+    r.handoff = {
+      state: refused ? 'refused' : 'accepted', to: '', at,
+      decidedAt: new Date(Date.now() - (2 + n) * 86400000).toISOString(),
+      decidedBy: closers[n % closers.length],
+      reason: refused ? reasons[n % reasons.length] : '',
+    }
+  })
+}
+
 export function buildDemoDb(brand) {
   const db = {
     accounts: [], environments: [], subenvs: [], data: {},
@@ -1488,6 +1596,7 @@ export function buildDemoDb(brand) {
     d.contacts = []; d.rdvs.forEach(r => syncContacts(d, r))
     d.goals = { rdvSemaine: 12, sqlMois: 8, primesMois: 2000 }
     seedDemoWorkspace(d)
+    seedDemoHandoffs(d)
     if (extra) extra(d)
     return d
   }
@@ -2165,6 +2274,10 @@ function migrate(db) {
     data.taskTrash = data.taskTrash || []
     data.icpProfiles = data.icpProfiles || []
     data.activityRules = data.activityRules || [] // primes d'activité (volume de RDV)
+    // Passation au closer (module `handoff`)
+    if (!Array.isArray(data.handoffPhases)) data.handoffPhases = []
+    if (!Array.isArray(data.handoffReasons)) data.handoffReasons = [...DEFAULT_HANDOFF_REASONS]
+    if (typeof data.primeOnAccept !== 'boolean') data.primeOnAccept = false
     // Sens commercial des étapes. Les espaces créés avant ce réglage héritent des valeurs
     // d'origine, mais uniquement si l'étape existe encore chez eux : réintroduire « KO »
     // dans un pipeline qui ne l'a plus ferait réapparaître une étape supprimée.
@@ -2243,6 +2356,21 @@ function migrate(db) {
     if (!Array.isArray(e.services)) e.services = (e.departments && e.departments.length ? e.departments : ['Sales', 'Marketing']).map(n => ({ id: uid(), name: n }))
     e.roles = seedEnvRoles(e.roles) // Manager et Membre partout, le reste créé par le staff
   })
+  // Onglets livrés après coup : les rôles d'environnement INTÉGRÉS les reçoivent une seule fois
+  // (suivi par brique dans `_autoSeed.envRoleTabs`), sinon un nouveau module resterait invisible
+  // chez les clients déjà installés — le rôle décide en plus de l'offre. Un rôle créé sur mesure
+  // n'est jamais touché : son périmètre est une décision, pas un oubli.
+  db._autoSeed.envRoleTabs = Array.isArray(db._autoSeed.envRoleTabs) ? db._autoSeed.envRoleTabs : []
+  const ungranted = ALL_BRICKS.filter(b => !db._autoSeed.envRoleTabs.includes(b))
+  if (ungranted.length) {
+    ;(db.environments || []).forEach(e => {
+      ;(e.roles || []).forEach(r => {
+        if (r.id === 'erole-manager') r.tabs = [...new Set([...(r.tabs || []), ...ungranted])]
+        if (r.id === 'erole-membre') r.tabs = [...new Set([...(r.tabs || []), ...ungranted.filter(b => MEMBER_TABS.includes(b))])]
+      })
+    })
+    db._autoSeed.envRoleTabs = [...db._autoSeed.envRoleTabs, ...ungranted]
+  }
   seedAutoChannels(db)
   reconcileReporting(db)
   // Les canaux de reporting se sont mis à notifier : sans repère de lecture, tout leur
@@ -2669,12 +2797,15 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // pipeline, issues, barèmes, règles de prime, services et rôles. Jamais les données
       // du client d'origine : ouvrir un espace ne doit pas y recopier les rendez-vous,
       // contacts ou notes de quelqu'un d'autre.
-      createEnv({ name, logo, templateOf }) {
+      createEnv({ name, logo, templateOf, modules }) {
         // L'environnement hérite de l'offre de son créateur (Starter reste limité).
         const plan = account?.plan || 'starter'
         const src = templateOf ? db.environments.find(e => e.id === templateOf) : null
         const env = {
           id: uid(), name, logo: logo || '', pin: '', plan, createdBy: session.accountId,
+          // Modules optionnels retenus à l'installation. Repris du modèle quand il y en a un :
+          // dupliquer une configuration sans ses modules livrerait un espace différent.
+          modules: { ...defaultEnvModules(), ...(src?.modules || {}), ...(modules || {}) },
           departments: src ? [...(src.departments || [])] : ['Marketing', 'Sales'],
           services: src ? (src.services || []).map(sv => ({ ...sv, id: uid() })) : undefined,
           roles: src ? (src.roles || []).map(r => ({ ...r, id: uid() })) : undefined,
@@ -2717,6 +2848,76 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         return sub
       },
       updateEnv(envId, patch) { if (roBlocked()) return; setDb(d => { Object.assign(d.environments.find(e => e.id === envId), patch); return d }) },
+      // ----- Modules optionnels de l'environnement
+      // `hasModule` répond pour l'environnement COURANT : c'est ce que consultent la
+      // navigation et les écrans. La démo montre le produit complet, tout y est actif.
+      hasModule(id) {
+        if (demo) return true
+        return envModuleOn(db.environments.find(e => e.id === session?.envId), id)
+      },
+      envModules(envId) {
+        const env = db.environments.find(e => e.id === envId)
+        return Object.fromEntries(ENV_MODULE_IDS.map(id => [id, envModuleOn(env, id)]))
+      },
+      setEnvModules(envId, patch) {
+        setDb(d => {
+          const env = d.environments.find(e => e.id === envId); if (!env) return d
+          env.modules = { ...defaultEnvModules(), ...(env.modules || {}), ...patch }
+          return d
+        })
+      },
+      // ===================================================== Passation au closer
+      // Renvoie toutes les passations de l'environnement, espace par espace. Le filtrage
+      // (les miennes, celles que j'ai à traiter) se fait chez l'appelant : un membre ne voit
+      // que son espace, un encadrant voit l'équipe.
+      envHandoffs(envId = session?.envId) {
+        const out = []
+        db.subenvs.filter(s => s.envId === envId).forEach(s => {
+          const data = db.data[s.id]; if (!data) return
+          ;(data.rdvs || []).forEach(r => {
+            const state = handoffState(r, data)
+            if (!state) return
+            out.push({ subId: s.id, sub: s, rdv: r, state, handoff: r.handoff || null })
+          })
+        })
+        return out.sort((a, b) => (b.rdv.datePassageSQL || b.rdv.datePriseRdv || '').localeCompare(a.rdv.datePassageSQL || a.rdv.datePriseRdv || ''))
+      },
+      // Décision du closer : accepter ou refuser, avec un motif quand c'est un refus.
+      decideHandoff(subId, rdvId, state, reason = '') {
+        if (readOnly) return
+        const who = session?.subEnvId ? db.subenvs.find(s => s.id === session.subEnvId) : null
+        const by = who ? `${who.prenom} ${who.nom}`.trim() : (account?.pseudo || 'Inconnu')
+        setDb(d => {
+          const data = d.data[subId]; if (!data) return d
+          const r = (data.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          const ts = new Date().toISOString()
+          r.handoff = {
+            ...(r.handoff || { to: '', at: ts }),
+            state, reason: state === 'refused' ? reason : '',
+            decidedAt: ts, decidedBy: by,
+          }
+          // Le commercial doit l'apprendre sans surveiller un écran : un refus se corrige.
+          if (subId !== session?.subEnvId) {
+            data.notifs = [{
+              id: uid(), ts, read: false, type: 'handoff', page: 'handoff',
+              title: state === 'accepted' ? 'Lead accepté' : 'Lead refusé',
+              text: state === 'accepted'
+                ? `${r.entreprise || 'Votre lead'} — accepté par ${by}`
+                : `${r.entreprise || 'Votre lead'} — refusé par ${by}${reason ? ' (' + reason + ')' : ''}`,
+            }, ...(data.notifs || [])].slice(0, 100)
+          }
+          return d
+        })
+      },
+      // Désigne le closer chargé du dossier (facultatif : sans destinataire, la file est commune).
+      assignHandoff(subId, rdvId, toSubId) {
+        if (readOnly) return
+        setDb(d => {
+          const r = (d.data[subId]?.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          r.handoff = { ...(r.handoff || { state: 'pending', at: new Date().toISOString() }), to: toSubId || '' }
+          return d
+        })
+      },
       updateSubEnv(subId, patch) { if (roBlocked()) return; setDb(d => { Object.assign(d.subenvs.find(s => s.id === subId), patch); return d }) },
       deleteSubEnv(subId) { if (roBlocked()) return; setDb(d => { d.subenvs = d.subenvs.filter(s => s.id !== subId); delete d.data[subId]; return d }) },
       // ----- données du sous-environnement courant
@@ -4075,6 +4276,13 @@ export function applyRdvAutomations(rdv, patch, data) {
   }
   if ('phase' in out && out.phase !== rdv.phase) {
     hist.push({ type: 'phase', value: out.phase, date: day })
+    // Passation au closer : franchir le jalon remet le dossier entre d'autres mains. On
+    // ouvre la demande ici plutôt que dans l'écran, pour que le glisser-déposer du kanban
+    // et le tableau la déclenchent aussi. L'enregistrement est inerte tant que le module
+    // n'est pas activé sur l'environnement — c'est l'affichage qui décide, pas la donnée.
+    if (data && rdvNeedsHandoff({ phase: out.phase }, data) && !rdv.handoff) {
+      out.handoff = { state: 'pending', to: '', at: new Date().toISOString(), decidedAt: '', decidedBy: '', reason: '' }
+    }
   }
   if (hist.length) out.history = [...(rdv.history || []), ...hist]
   return out

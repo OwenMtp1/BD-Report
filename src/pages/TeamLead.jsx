@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { TrendingUp, Sun, AlertTriangle, ArrowRightLeft, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, fmtMoney, baremeMatch, phaseProbability, milestonePhase, PHASE_COLORS, phaseColor } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, primeOpts, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, fmtMoney, baremeMatch, phaseProbability, milestonePhase, PHASE_COLORS, phaseColor } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
 
 const dayISO = (offset = 0) => {
@@ -13,7 +13,7 @@ const dayISO = (offset = 0) => {
 function MemberPrimes({ m, store }) {
   const [open, setOpen] = useState(false)
   const data = store.db.data[m.id] || { rdvs: [], bareme: [] }
-  const primes = computePrimes(data.rdvs || [], data.bareme || [], { triggerPhases: data.primePhases, cutoffDay: data.primeCutoffDay }).sort((a, b) => (b.triggerDate || '').localeCompare(a.triggerDate || ''))
+  const primes = computePrimes(data.rdvs || [], data.bareme || [], primeOpts(data)).sort((a, b) => (b.triggerDate || '').localeCompare(a.triggerDate || ''))
   if (!primes.length) return null
   const total = primes.filter(p => !p.invalidated).reduce((a, p) => a + p.montant, 0)
   const nbInval = primes.filter(p => p.invalidated).length
@@ -55,7 +55,7 @@ function memberStats(data) {
   const dayOfMonth = now.getDate()
   const prisMois = rdvs.filter(r => inTimeline(r.datePriseRdv, 'month')).length
   const sqlMois = rdvs.filter(r => inTimeline(r.datePassageSQL, 'month')).length
-  const primes = computePrimes(rdvs, data.bareme, { triggerPhases: data.primePhases, cutoffDay: data.primeCutoffDay })
+  const primes = computePrimes(rdvs, data.bareme, primeOpts(data))
   const primesMois = primes.filter(p => p.payMonthKey === monthKey(new Date(now.getFullYear(), now.getMonth(), 1))).reduce((a, p) => a + p.montant, 0)
   const projection = Math.round((prisMois / Math.max(1, dayOfMonth)) * daysInMonth)
   const lastPrise = rdvs.map(r => r.datePriseRdv).filter(Boolean).sort().pop() || null

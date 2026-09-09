@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { Trophy, Flame, Target, Coins, TrendingUp, Percent, CalendarCheck, Medal, Crown } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, monthKey, fmtMoney } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, primeOpts, monthKey, fmtMoney } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 const dayISO = (o = 0) => { const d = new Date(); d.setDate(d.getDate() + o); return d.toISOString().slice(0, 10) }
@@ -13,7 +13,7 @@ function memberRow(m, data) {
   const rdvMois = rdvs.filter(r => inTimeline(r.datePriseRdv, 'month')).length
   const sqlMois = rdvs.filter(r => inTimeline(r.datePassageSQL, 'month')).length
   const sql7j = rdvs.filter(r => r.datePassageSQL && r.datePassageSQL >= dayISO(-7)).length
-  const primes = computePrimes(rdvs, data.bareme || []).filter(p => !p.invalidated)
+  const primes = computePrimes(rdvs, data.bareme || [], primeOpts(data)).filter(p => !p.invalidated)
   const primesMois = primes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)
   const primesPrev = primes.filter(p => p.payMonthKey === prevK).reduce((a, p) => a + p.montant, 0)
   const conv = rdvMois ? Math.round((sqlMois / rdvMois) * 100) : 0

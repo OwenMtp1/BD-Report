@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Gauge, Coins, TrendingUp, Sparkles, Target, MousePointer2 } from 'lucide-react'
-import { useStore, computePrimes, computeActivityPrimes, activityPeriodKey, monthKey, fmtMoney, baremeMatch, todayISO, milestonePhase, phaseProbability } from '../store.jsx'
+import { useStore, computePrimes, primeOpts, computeActivityPrimes, activityPeriodKey, monthKey, fmtMoney, baremeMatch, todayISO, milestonePhase, phaseProbability } from '../store.jsx'
 
 // Géométrie de la jauge : arc de 270° (ouverture en bas).
 const CX = 130, CY = 130, R = 100, START = 135, SWEEP = 270
@@ -23,7 +23,7 @@ export default function Simulateur() {
     const now = new Date()
     const curK = monthKey(new Date(now.getFullYear(), now.getMonth(), 1))
     const rdvs = sub.rdvs || []
-    const primes = computePrimes(rdvs, sub.bareme || [], { triggerPhases: sub.primePhases, cutoffDay: sub.primeCutoffDay }).filter(p => !p.invalidated)
+    const primes = computePrimes(rdvs, sub.bareme || [], primeOpts(sub)).filter(p => !p.invalidated)
     const acquiseLead = primes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)
     const actPrimes = computeActivityPrimes(rdvs, sub.activityRules || [])
     const acquiseAct = actPrimes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)

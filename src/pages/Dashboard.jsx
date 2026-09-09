@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Trophy, Pencil, EyeOff, Eye, MonitorPlay } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase } from '../store.jsx'
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
 
 const DEFAULT_WIDGETS = [
@@ -72,7 +72,7 @@ function reportStats(rdvs, bareme, mode, data) {
       mql: real.filter(r => phaseAtLeast(data, r.phase, qualifyPhase(data))).length,
       sql: rdvs.filter(r => within(r.datePassageSQL, s, e)).length,
       signatures: real.filter(r => isWonPhase(data, r.phase)).length,
-      primes: computePrimes(rdvs.filter(r => within(r.datePassageSQL || r.datePriseRdv, s, e)), bareme).reduce((a, p) => a + p.montant, 0),
+      primes: computePrimes(rdvs.filter(r => within(r.datePassageSQL || r.datePriseRdv, s, e)), bareme, primeOpts(data)).reduce((a, p) => a + p.montant, 0),
     }
   }
   return { cur: compute(start, end), prev: compute(prevStart, prevEnd), start, end }
@@ -243,7 +243,7 @@ export default function Dashboard() {
   const oppEnCours = filtered.filter(r => r.opportunite === 'En cours')
   const oppPerdues = filtered.filter(r => r.opportunite === 'Perdue')
 
-  const primes = computePrimes(rdvs, sub.bareme)
+  const primes = computePrimes(rdvs, sub.bareme, primeOpts(sub))
   const now = new Date()
   const curKey = monthKey(new Date(now.getFullYear(), now.getMonth(), 1))
   const nextKey = monthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1))

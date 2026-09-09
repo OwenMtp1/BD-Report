@@ -186,7 +186,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Main app / Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Primes & Commissions', 'Simulateur de primes', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Manager', 'Équipe support']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Passation au closer', 'Primes & Commissions', 'Simulateur de primes', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Manager', 'Équipe support']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
@@ -205,6 +205,33 @@ async function main() {
     await type(search, 'zzzaucunechance')
     if (text() === before) throw new Error('Audit log search did not filter')
     await type(search, '')
+  }
+
+  // 5a bis. Passation au closer : le lead qualifié attend un verdict, et le verdict se pose.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Passation au closer'))
+  for (const k of ['Mon taux d\'acceptation', 'Mes leads']) {
+    if (!text().includes(k)) throw new Error('Handoff page section missing: ' + k)
+  }
+  {
+    const mineTab = [...container.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('Mes leads'))
+    if (!mineTab) throw new Error('Handoff « Mes leads » tab missing')
+    await click(mineTab)
+    if (!text().includes('En attente')) throw new Error('Handoff should list qualified leads awaiting a verdict: ' + text().slice(0, 300))
+  }
+  {
+    // Un lead qualifié par quelqu'un d'autre se traite depuis « À traiter ». On en accepte un
+    // et on vérifie que le taux d'acceptation cesse d'être vide : sans décision, il n'existe pas.
+    const todoTab = [...container.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('À traiter'))
+    await click(todoTab)
+    const accept = find('button', 'Accepter')
+    if (accept) {
+      await click(accept)
+      // Lecture APRÈS vidage de la sauvegarde différée, sinon on relirait l'état d'avant le clic.
+      win.__bdrFlushSave?.()
+      const state = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+      const decided = Object.values(state.data).some(d => (d.rdvs || []).some(r => r.handoff?.state === 'accepted'))
+      if (!decided) throw new Error('Handoff acceptance was not persisted')
+    }
   }
 
   // 5b. Primes : ajout d'une règle de barème par activité (volume de RDV).

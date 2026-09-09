@@ -8,7 +8,7 @@
 import {
   LayoutDashboard, Table2, Target, Trophy, Gauge, CalendarDays, KanbanSquare, ListChecks,
   CheckSquare, Coins, MessagesSquare, BookUser, ShieldCheck, StickyNote, ScrollText, Trash2,
-  LifeBuoy, Gift, Shield, Users, Link2, Network, Workflow,
+  LifeBuoy, Gift, Shield, Users, Link2, Network, Workflow, ArrowRightLeft,
 } from 'lucide-react'
 
 const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
@@ -30,6 +30,9 @@ export const NAV_GROUPS = [
       { id: 'leads', label: 'Leads', icon: KanbanSquare, brick: 'Leads' },
       { id: 'tasks', label: 'Recommandations prioritaires', icon: ListChecks, brick: 'Recommandations prioritaires' },
       { id: 'mytasks', label: 'Mes tâches', icon: CheckSquare, brick: 'Mes tâches' },
+      // `module` : onglet livré à la carte. Le staff coche ou décoche le module à la création
+      // de l'environnement ; l'onglet disparaît alors de la navigation pour toute l'entreprise.
+      { id: 'handoff', label: 'Passation au closer', icon: ArrowRightLeft, brick: 'Passation au closer', module: 'handoff' },
       { id: 'primes', label: 'Primes & Commissions', icon: Coins, brick: 'Primes & Commissions' },
       { id: 'simulateur', label: 'Simulateur de primes', icon: Gauge, brick: 'Simulateur de primes' },
     ],

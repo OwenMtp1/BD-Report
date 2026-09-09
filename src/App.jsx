@@ -5,7 +5,7 @@ import {
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
   AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Radio, Trophy, ShieldCheck, Star, GraduationCap,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER, isElevatedRole } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER, isElevatedRole, ENV_MODULES, defaultEnvModules } from './store.jsx'
 import { NAV_GROUPS, NAV } from './nav.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
@@ -22,6 +22,7 @@ import MyTasks from './pages/MyTasks.jsx'
 import Contacts from './pages/Contacts.jsx'
 import Notes from './pages/Notes.jsx'
 import Primes from './pages/Primes.jsx'
+import Handoff from './pages/Handoff.jsx'
 import Admin from './pages/Admin.jsx'
 import Kpi from './pages/Kpi.jsx'
 import Icp from './pages/Icp.jsx'
@@ -248,7 +249,7 @@ function EnvPicker() {
   const { t } = useT()
   const me = store.account
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ name: '', logo: '' })
+  const [form, setForm] = useState({ name: '', logo: '', modules: defaultEnvModules() })
   const [pinFor, setPinFor] = useState(null)
 
   // Owen (développeur) voit tous les environnements ; les autres, ceux qu'ils ont créés
@@ -318,6 +319,26 @@ function EnvPicker() {
                 ? "Étapes du pipeline, barèmes, règles de prime, services et rôles sont repris. Aucune donnée du client d'origine n'est copiée : ni rendez-vous, ni contacts, ni notes."
                 : "Le nouvel environnement contient toutes les fonctionnalités de l'app, vide de données. Vous en devenez le Manager."}
             </p>
+
+            {/* Modules livrés à la carte : toutes les organisations n'ont pas de closer, de 1:1
+                formalisé ni de challenges. Décoché ici, le module n'apparaît nulle part chez le
+                client — et reste réactivable plus tard depuis la fiche du projet. */}
+            <div className="rounded-xl border border-line p-3">
+              <div className="font-bold text-sm mb-1">Modules à installer</div>
+              <p className="text-[11px] text-muted mb-2">Tout est activé par défaut. Décochez ce que cette organisation n'utilisera pas — c'est modifiable ensuite.</p>
+              <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                {ENV_MODULES.map(m => (
+                  <label key={m.id} className="flex items-start gap-2 text-sm p-1.5 rounded-lg hover:bg-surface cursor-pointer">
+                    <input type="checkbox" className="mt-1" checked={form.modules?.[m.id] !== false}
+                      onChange={e => setForm(f => ({ ...f, modules: { ...f.modules, [m.id]: e.target.checked } }))} />
+                    <span className="min-w-0">
+                      <span className="font-semibold">{m.label}</span>
+                      <span className="block text-[11px] text-muted">{m.desc}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
             <div className="flex justify-end gap-2">
               <button className="btn-ghost" onClick={() => setCreating(false)}>Annuler</button>
               <button className="btn-primary" onClick={() => {
@@ -517,6 +538,9 @@ function MainApp() {
     // conserve l'ancien filtre par rôle de compte — sinon un rôle sur mesure ne pourrait
     // jamais ouvrir un onglet que celui-ci réserve aux managers.
     if (!envRole && item.roles && !item.roles.includes(me.role) && !byPerm) return false
+    // Module optionnel non installé sur cet environnement : l'onglet n'existe pas ici.
+    // Le staff en décide à la création, jamais le client — c'est une question de périmètre livré.
+    if (item.module && !store.hasModule(item.module)) return false
     if (item.staffOnly) return isSupportUser            // console support : équipe BD Report uniquement
     if (item.always) return true                         // Support / Souscrire : toujours accessibles
     if (noOffer) return false                            // sans offre : rien d'autre que les onglets « always »
@@ -597,6 +621,7 @@ function MainApp() {
     contacts: <Contacts />,
     notes: <Notes onCreateRdvFromNote={goCreateRdvFromNote} />,
     primes: <Primes />,
+    handoff: <Handoff />,
     supporthub: <SupportHub />,
     manager: <ManagerHub />,
     conversations: <Conversations scope="team" />,

@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import {
   Workflow, Plus, Trash2, Pencil, Check, X, Coins, CalendarClock, AlertTriangle,
-  ChevronUp, ChevronDown, Save, Activity, CalendarRange, Layers,
+  ChevronUp, ChevronDown, Save, Activity, CalendarRange, Layers, ArrowRightLeft,
 } from 'lucide-react'
-import { useStore, uid, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, fmtMoney, ACTIVITY_PERIODS, activityRuleTitle, computeActivityPrimes } from '../store.jsx'
+import { useStore, uid, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, fmtMoney, ACTIVITY_PERIODS, activityRuleTitle, computeActivityPrimes, handoffPhases, DEFAULT_HANDOFF_REASONS } from '../store.jsx'
 import { Confirm, Field, Empty, toast } from '../ui.jsx'
 
 // « Créer votre écosystème » : le manager compose ici le vocabulaire de son équipe —
@@ -333,6 +333,83 @@ function ActivityBaremeCard({ store, sub, phaseOptions }) {
   )
 }
 
+// -------------------------------------------------- Passation au closer (module `handoff`)
+function HandoffCard({ store, sub }) {
+  const phases = sub.phases?.length ? sub.phases : DEFAULT_PHASES
+  const active = handoffPhases(sub)
+  const explicit = sub.handoffPhases || []
+  const reasons = sub.handoffReasons?.length ? sub.handoffReasons : DEFAULT_HANDOFF_REASONS
+  const [adding, setAdding] = useState('')
+
+  const togglePhase = (p) => {
+    // Liste vide = « le jalon », résolu automatiquement. Le premier clic matérialise donc la
+    // sélection courante avant de la modifier, sinon décocher le jalon ne changerait rien.
+    const base = explicit.length ? explicit : active
+    const next = base.includes(p) ? base.filter(x => x !== p) : [...base, p]
+    store.setEcosystem({ handoffPhases: next })
+  }
+
+  return (
+    <div className="card p-4 space-y-3">
+      <div>
+        <h3 className="font-bold flex items-center gap-2"><ArrowRightLeft size={17} className="text-brand" /> Passation au closer</h3>
+        <p className="text-xs text-muted mt-0.5">
+          À partir de quelle étape le dossier change-t-il de mains ? Le closer l'accepte ou le refuse
+          avec un motif : c'est ce verdict qui mesure la qualité réelle des leads transmis.
+        </p>
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-muted mb-1.5">Étapes déclenchant une passation</div>
+        <div className="flex flex-wrap gap-1.5">
+          {phases.map(p => (
+            <button key={p} onClick={() => togglePhase(p)}
+              className={`chip cursor-pointer ${active.includes(p) ? 'bg-brand text-white' : 'bg-card border border-line text-muted'}`}>{p}</button>
+          ))}
+        </div>
+        {!explicit.length && <p className="text-[11px] text-muted mt-1.5">Par défaut : le jalon qui déclenche vos primes.</p>}
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-muted mb-1.5">Motifs de refus proposés</div>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {reasons.map(r => (
+            <span key={r} className="chip bg-surface text-muted flex items-center gap-1">
+              {r}
+              <button className="text-red-400 hover:text-red-600" title="Retirer ce motif"
+                onClick={() => store.setEcosystem({ handoffReasons: reasons.filter(x => x !== r) })}>×</button>
+            </span>
+          ))}
+          {reasons.length === 0 && <span className="text-[11px] text-muted italic">Aucun motif : le closer saisira du texte libre.</span>}
+        </div>
+        <div className="flex gap-2">
+          <input className="input !py-1.5 text-sm" placeholder="Nouveau motif de refus…" value={adding}
+            onChange={e => setAdding(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && adding.trim()) { store.setEcosystem({ handoffReasons: [...reasons, adding.trim()] }); setAdding('') } }} />
+          <button className="btn-ghost !py-1.5 text-sm shrink-0" disabled={!adding.trim() || reasons.includes(adding.trim())}
+            onClick={() => { store.setEcosystem({ handoffReasons: [...reasons, adding.trim()] }); setAdding('') }}>
+            <Plus size={14} /> Ajouter
+          </button>
+        </div>
+      </div>
+
+      {/* Choix de rémunération, pas règle du produit : rien n'est imposé, l'option reste
+          décochée tant qu'un manager ne la retient pas explicitement. */}
+      <label className="flex items-start gap-2 text-sm p-2 rounded-xl bg-surface/60 cursor-pointer">
+        <input type="checkbox" className="mt-1" checked={!!sub.primeOnAccept}
+          onChange={e => { store.setEcosystem({ primeOnAccept: e.target.checked }); toast(e.target.checked ? 'Primes payées à l\'acceptation' : 'Primes payées au passage d\'étape') }} />
+        <span>
+          <span className="font-semibold">Ne payer la prime qu'une fois le lead accepté</span>
+          <span className="block text-[11px] text-muted">
+            Facultatif. Décoché, la prime se déclenche au passage d'étape comme aujourd'hui.
+            Coché, un lead en attente ou refusé ne génère aucun montant — plus défendable, mais plus exigeant.
+          </span>
+        </span>
+      </label>
+    </div>
+  )
+}
+
 export default function Ecosystem() {
   const store = useStore()
   const sub = store.sub
@@ -349,6 +426,7 @@ export default function Ecosystem() {
         </p>
       </div>
       <Phases store={store} sub={sub} />
+      {store.hasModule('handoff') && <HandoffCard store={store} sub={sub} />}
       <PayRule store={store} sub={sub} />
       <Bareme store={store} sub={sub} />
       <ActivityBaremeCard store={store} sub={sub}

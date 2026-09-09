@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Network, Unlock, ShieldAlert } from 'lucide-react'
-import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, todayISO } from '../store.jsx'
+import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, todayISO, ENV_MODULES } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 import ProjectOrgChart from './ProjectOrgChart.jsx'
 
@@ -64,6 +64,31 @@ function ProjectUsers({ project, store, onClose }) {
               <button className="btn-ghost !py-1.5 text-xs !text-red-600" onClick={() => setConfirm({ kind: 'delEnv' })}><Trash2 size={13} /> Supprimer l'environnement</button>
             </div>
             <p className="text-[11px] text-muted">Désactiver met tout l'environnement en lecture seule (ex. impayé) : le client garde ses données et son accès au support. Supprimer efface ses données et le classe en « Anciens clients ».</p>
+          </div>
+        )}
+
+        {/* Modules optionnels : le périmètre réellement livré à ce client. Décocher un module
+            le retire de la navigation et des écrans de toute l'entreprise sans rien effacer —
+            les données restent, elles redeviennent visibles si on le réactive. */}
+        {env && (
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <div className="text-sm font-bold">Modules installés</div>
+            <div className="space-y-1.5">
+              {ENV_MODULES.map(m => {
+                const on = store.envModules(envId)[m.id]
+                return (
+                  <label key={m.id} className="flex items-start gap-2 text-sm p-1.5 rounded-lg hover:bg-surface cursor-pointer">
+                    <input type="checkbox" className="mt-1" checked={on}
+                      onChange={e => { store.setEnvModules(envId, { [m.id]: e.target.checked }); toast(e.target.checked ? `« ${m.label} » activé` : `« ${m.label} » retiré`) }} />
+                    <span className="min-w-0">
+                      <span className="font-semibold">{m.label}</span>
+                      <span className="block text-[11px] text-muted">{m.desc}</span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-muted">Retirer un module masque ses écrans sans supprimer les données déjà saisies.</p>
           </div>
         )}
 

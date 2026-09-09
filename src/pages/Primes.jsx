@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { AlertTriangle, Activity, Settings2 } from 'lucide-react'
-import { useStore, computePrimes, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, DEFAULT_PRIME_PHASES, phaseProbability, milestonePhase } from '../store.jsx'
+import { useStore, computePrimes, primeOpts, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, DEFAULT_PRIME_PHASES, phaseProbability, milestonePhase } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 const SUIVI_TL = [
@@ -43,7 +43,7 @@ export default function Primes() {
   const sub = store.sub
   // Deux types de barème : par lead (effectif × source) + par activité (volume de RDV × phases).
   const allPrimes = useMemo(() => [
-    ...computePrimes(sub.rdvs, sub.bareme, { triggerPhases: sub.primePhases, cutoffDay: sub.primeCutoffDay }),
+    ...computePrimes(sub.rdvs, sub.bareme, primeOpts(sub)),
     ...computeActivityPrimes(sub.rdvs, sub.activityRules),
   ], [sub.rdvs, sub.bareme, sub.activityRules])
   const primes = allPrimes.filter(p => !p.invalidated)   // stats & sommes : primes valides uniquement

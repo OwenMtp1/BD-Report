@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Sparkles, Trash2 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import { useStore, computePrimes, uid, parseISO, SOURCES } from '../store.jsx'
+import { useStore, computePrimes, primeOpts, uid, parseISO, SOURCES } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 const COLORS = ['#3b5bdb', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
@@ -59,7 +59,7 @@ function widgetData(w, sub) {
     }
     case 'primesMois': {
       const m = {}
-      computePrimes(sub.rdvs, sub.bareme, { triggerPhases: sub.primePhases, cutoffDay: sub.primeCutoffDay }).forEach(p => { m[p.payMonthLabel] = (m[p.payMonthLabel] || 0) + p.montant })
+      computePrimes(sub.rdvs, sub.bareme, primeOpts(sub)).forEach(p => { m[p.payMonthLabel] = (m[p.payMonthLabel] || 0) + p.montant })
       return Object.entries(m).map(([name, value]) => ({ name, value }))
     }
     default: return []
