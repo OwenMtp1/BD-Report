@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { AlertTriangle, Activity, Settings2 } from 'lucide-react'
-import { useStore, computePrimes, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES } from '../store.jsx'
+import { useStore, computePrimes, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, DEFAULT_PRIME_PHASES } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 const SUIVI_TL = [
@@ -49,6 +49,9 @@ export default function Primes() {
   const primes = allPrimes.filter(p => !p.invalidated)   // stats & sommes : primes valides uniquement
   const invalidated = allPrimes.filter(p => p.invalidated)
   const phaseOptions = (sub.phases && sub.phases.length ? sub.phases : DEFAULT_PHASES)
+  // Réglages de l'écosystème rappelés à l'écran : la règle décrite doit être celle qui s'applique.
+  const cutoffDay = sub.primeCutoffDay || DEFAULT_PRIME_CUTOFF
+  const triggerLabel = (sub.primePhases && sub.primePhases.length ? sub.primePhases : DEFAULT_PRIME_PHASES).join(' ou ')
 
   const [repTl, setRepTl] = useState('cur')
   const [repCustom, setRepCustom] = useState({})
@@ -119,7 +122,9 @@ export default function Primes() {
                 <XAxis dataKey="label" fontSize={11} stroke="rgb(var(--muted))" />
                 <YAxis fontSize={11} stroke="rgb(var(--muted))" />
                 <Tooltip formatter={(v) => fmtMoney(v)} />
-                <Bar dataKey="total" name="Primes" fill="rgb(var(--brand))" radius={[6, 6, 0, 0]} />
+                {/* Sans plafond, un seul mois de données occupe toute la largeur de la
+                    zone et se lit comme un aplat de couleur, plus comme un graphique. */}
+                <Bar dataKey="total" name="Primes" fill="rgb(var(--brand))" radius={[6, 6, 0, 0]} maxBarSize={56} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -142,7 +147,9 @@ export default function Primes() {
               </>}
             </div>
           </div>
-          <p className="text-xs text-muted mb-3">Règle : déclenchée à la date de passage en SQL. Payée le mois en cours si le passage a lieu avant le 15, sinon le mois suivant. 🔒 = prime figée au barème en vigueur lors du passage en SQL (un changement de barème ne réécrit pas le passé).</p>
+          {/* Le jour de bascule se règle dans « Créer votre écosystème » : l'annoncer en dur
+              décrirait une règle que l'équipe a pu changer. */}
+          <p className="text-xs text-muted mb-3">Règle : déclenchée à la date de passage en {triggerLabel}. Payée le mois en cours si le passage a lieu avant le {cutoffDay}, sinon le mois suivant. 🔒 = prime figée au barème en vigueur lors du passage (un changement de barème ne réécrit pas le passé).</p>
           {repPrimes.length === 0 ? <Empty text="Aucune prime sur cette période." /> : (
             <div className="space-y-1.5">
               {repPrimes.sort((a, b) => b.montant - a.montant).map((p, i) => {

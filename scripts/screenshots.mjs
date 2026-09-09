@@ -39,9 +39,12 @@ const SHOTS = [
   { file: 'tasks.png', page: 'mytasks', wait: 'tâches' },
   { file: 'contacts.png', page: 'contacts', wait: 'contacts' },
   { file: 'primes.png', page: 'primes', wait: 'Primes' },
-  { file: 'calendar.png', page: 'rdv', wait: 'Rendez-vous' },
+  // `click` : une capture peut demander d'entrer dans une vue interne. Sans cela,
+  // calendar.png dupliquait rdv.png et company.png dupliquait leads.png — le site
+  // publiait deux fois la même image sous deux légendes différentes.
+  { file: 'calendar.png', page: 'rdv', click: 'Calendrier' },
   { file: 'logs.png', page: 'logs', wait: 'Logs' },
-  { file: 'company.png', page: 'leads', wait: 'Leads' },
+  { file: 'company.png', page: 'leads', clickTitle: 'Ouvrir la fiche entreprise' },
   { file: 'teamlead.png', page: 'teamlead', role: 'manager' },
   { file: 'orgchart.png', page: 'manager', role: 'manager' },
 ]
@@ -83,10 +86,12 @@ const run = async () => {
   await page.goto(`http://localhost:${PORT}/#/demo`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(1500)
 
-  // Parcours d'achat de la démo : le formulaire exige un mot de passe pour continuer.
-  const pw = page.locator('input[type="password"]').first()
-  await pw.waitFor({ state: 'visible', timeout: 10000 })
-  await pw.fill('demo1234')
+  // Parcours d'achat de la démo : le formulaire part vide et n'exige rien. On nomme
+  // quand même l'entreprise, pour que les captures publiées portent toujours le nom de
+  // la société FICTIVE et jamais celui d'un prospect saisi lors d'un rendez-vous.
+  const comp = page.locator('input[placeholder*="nom de votre entreprise"]').first()
+  await comp.waitFor({ state: 'visible', timeout: 10000 })
+  await comp.fill('Atlas Revenue')
   await clickText(page, 'Créer mon espace')
   await page.waitForTimeout(2600)
 
@@ -130,6 +135,13 @@ const run = async () => {
     await page.evaluate((p) => window.dispatchEvent(new CustomEvent('demo-navigate', { detail: p })), shot.page)
     await page.waitForTimeout(1600)
     await dismissOnboarding()
+    if (shot.click) { await clickText(page, shot.click); await page.waitForTimeout(1200) }
+    if (shot.clickTitle) {
+      const el = page.locator(`button[title="${shot.clickTitle}"]`).first()
+      await el.waitFor({ state: 'visible', timeout: 8000 })
+      await el.click()
+      await page.waitForTimeout(1400)
+    }
     await page.screenshot({ path: path.join(OUT, shot.file), scale: 'css' })
     console.log('✓', shot.file)
   }
