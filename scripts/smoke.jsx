@@ -217,7 +217,9 @@ async function main() {
   await type(container.querySelector('textarea'), 'Test smoke : impossible de me connecter')
   await click(find('button', 'Créer le ticket'))
   if (!text().includes('équipe technique')) throw new Error('Bot auto-message missing in ticket conversation')
-  const dbNow = () => JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+  // L'écriture dans localStorage est différée (regroupement des changements rapprochés) :
+  // on la force avant de lire, sinon on relirait l'état d'avant la dernière action.
+  const dbNow = () => { win.__bdrFlushSave?.(); return JSON.parse(win.localStorage.getItem('bdrflow_db_v1')) }
   const psClient = () => dbNow().clients.find(c => c.envId === 'env-peoplespheres')
   if (psClient()?.status !== 'attente') throw new Error('Client not set to "en attente" on ticket open: ' + psClient()?.status)
   // Console Support unifiée : navBtn ouvre le hub, hubTab change d'onglet interne.
@@ -488,7 +490,7 @@ async function main() {
   await click(container.querySelector('button[title="Mon profil et statut"]'))
   if (!text().includes('Mon statut') || !text().includes('Manager direct')) throw new Error('Profile modal missing')
   await click(find('button', 'Hors ligne'))
-  if (JSON.parse(win.localStorage.getItem('bdrflow_db_v1')).accounts.find(a => a.id === '01').presence !== 'offline') throw new Error('Presence not updated')
+  if (dbNow().accounts.find(a => a.id === '01').presence !== 'offline') throw new Error('Presence not updated')
   await click(find('button', 'En ligne')) // remet en ligne pour la suite
 
   // 9b. Recherche globale d'un collaborateur : la personne apparaît comme résultat « Collaborateur ».
@@ -503,12 +505,12 @@ async function main() {
   await click(find('button', 'Gérer mes environnements'))
   await click(find('button', 'Résilier mon abonnement'))
   await click(findExact('Résilier')) // confirmation
-  const dbR = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+  const dbR = dbNow()
   if (dbR.environments.find(e => e.id === 'env-peoplespheres').subState !== 'cancelling') throw new Error('Résiliation did not set env to cancelling')
   if (!dbR.tickets.some(t => t.category === 'Facturation & abonnement')) throw new Error('Résiliation ticket not created')
 
   // 10. Migration : un ancien stockage SANS l'environnement Test doit le récupérer au rechargement
-  const raw = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+  const raw = dbNow()
   raw.environments = raw.environments.filter(x => x.id !== 'env-test')
   raw.accounts = raw.accounts.filter(a => !String(a.id).startsWith('test-'))
   raw.subenvs = raw.subenvs.filter(s => !String(s.id).startsWith('tsub-'))
@@ -610,7 +612,7 @@ async function main() {
   await act(async () => { await new Promise(r => setTimeout(r, 2800)) })
   if (!c2.textContent.includes('Test')) throw new Error('Migration failed: env Test not injected into legacy storage')
   // La suppression du projet auto-créé a bien persisté (migrate ne l'a pas ressuscité).
-  const afterReload = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+  const afterReload = dbNow()
   if (afterReload.projects.some(p => p.sourceEnvId === 'env-peoplespheres')) throw new Error('Deleted auto-project resurrected after reload')
 
   const realErrors = errors.filter(e => !e.includes('act(') && !e.includes('width(0) and height(0)') && !e.includes('Not implemented') && !e.includes('test-utils'))

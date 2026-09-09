@@ -21,6 +21,13 @@ npm run dev        # serveur de dev
     par environnement et par demande) suivi via `db._autoSeed` pour **ne créer qu'une fois** (sinon les suppressions « ressuscitent »).
   - `setSub(fn)` = écrit dans l'espace courant ; `setSubData(subId, fn)` = écrit dans un espace précis (pipeline entreprise).
     Les deux sont **bloqués en lecture seule** (`readOnly`, voir résiliation).
+  - ⚠️ **Sauvegarde différée (400 ms)** : `JSON.stringify` de tout l'état coûte cher dès qu'une équipe a de
+    l'historique, et bien plus quand des images/fichiers circulent dans les conversations. L'écrire à chaque
+    changement figeait l'interface le temps de la sérialisation — les clics tombés pendant ce gel étaient perdus
+    (boutons « qui ne font rien », kanban haché). Les changements rapprochés sont regroupés en une écriture,
+    vidée aussi sur `pagehide`, `visibilitychange` et au démontage du provider. `window.__bdrFlushSave()` force
+    l'écriture (utilisé par le smoke : **toute lecture de `localStorage` dans un test doit passer par `dbNow()`**,
+    sinon elle relit l'état d'avant la dernière action).
   - `APP_VERSION` (string), `ROLES`, `SUPPORT_ROLES = ['Fondateur','Support BD Report']`, `PLANS` (starter/beta), `BRICKS`.
   - **Primes — 2 types** : par lead (`data.bareme` effectif × source, `computePrimes`, figée au passage SQL, règle du 15) ET
     par activité (`data.activityRules` = règles façon Excel : période semaine/mois/trimestre/année × phases × paliers « ≥ N RDV → montant »,

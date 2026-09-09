@@ -2137,28 +2137,59 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
     injectPipelineOwen(next)
     return next
   })
-  useEffect(() => {
-    if (demo) return // démo isolée : aucune persistance ni synchro
+  // Sauvegarde DIFFÉRÉE. `JSON.stringify` de tout l'état coûte cher dès qu'une équipe a
+  // de l'historique, et davantage encore quand des images ou des fichiers circulent dans
+  // les conversations. L'écrire à chaque changement figeait l'interface le temps de la
+  // sérialisation : les clics tombés pendant ce gel étaient purement perdus, ce qui
+  // donnait des boutons « qui ne font rien » et des déplacements de cartes hachés.
+  // Les changements rapprochés sont donc regroupés en une seule écriture.
+  const pendingSave = React.useRef(null)
+  const flushSave = React.useCallback(() => {
+    const p = pendingSave.current
+    if (!p) return
+    pendingSave.current = null
     // Sauvegarde sûre : capture l'erreur de quota au lieu d'échouer silencieusement (bug 5).
     try {
-      if (applyingRemote.current) {
-        // On vient d'adopter l'état distant : on conserve son estampille et on NE re-pousse PAS.
-        applyingRemote.current = false
-        const stamp = db._savedAt || Date.now()
-        lastSavedAt.current = stamp
-        localStorage.setItem(LS_KEY, JSON.stringify({ ...db, _savedAt: stamp }))
-        return
-      }
-      const stamp = Date.now()
-      lastSavedAt.current = stamp
-      const payload = { ...db, _savedAt: stamp, _client: clientId.current }
-      localStorage.setItem(LS_KEY, JSON.stringify(payload))
+      localStorage.setItem(LS_KEY, JSON.stringify(p.payload))
       // Synchro Supabase (inerte si non configuré) : seulement après la 1re synchro distante.
-      if (remoteReady.current) pushRemoteStateDebounced(payload)
+      if (p.push && remoteReady.current) pushRemoteStateDebounced(p.payload)
     } catch (err) {
       window.dispatchEvent(new CustomEvent('app-toast', { detail: "⚠️ Stockage plein : sauvegarde impossible. Allégez vos photos/logos ou exportez vos données." }))
     }
-  }, [db])
+  }, [])
+
+  useEffect(() => {
+    if (demo) return // démo isolée : aucune persistance ni synchro
+    // L'état vient-il d'être adopté depuis le distant ? Le drapeau se consomme tout de
+    // suite : différer sa lecture ferait passer pour « distante » la modification locale
+    // suivante, qui ne serait alors jamais repoussée.
+    const fromRemote = applyingRemote.current
+    if (fromRemote) applyingRemote.current = false
+    // Venant du distant, on conserve son estampille et on NE re-pousse PAS.
+    const stamp = fromRemote ? (db._savedAt || Date.now()) : Date.now()
+    lastSavedAt.current = stamp
+    pendingSave.current = {
+      payload: fromRemote ? { ...db, _savedAt: stamp } : { ...db, _savedAt: stamp, _client: clientId.current },
+      push: !fromRemote,
+    }
+    const t = setTimeout(flushSave, 400)
+    return () => clearTimeout(t)
+  }, [db, demo, flushSave])
+
+  // Rien ne doit se perdre si l'onglet est fermé ou masqué pendant le délai d'écriture.
+  useEffect(() => {
+    if (demo) return
+    const onHide = () => { if (document.visibilityState === 'hidden') flushSave() }
+    // Point d'entrée pour forcer l'écriture (test de fumée, diagnostic en console).
+    window.__bdrFlushSave = flushSave
+    window.addEventListener('pagehide', flushSave)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      window.removeEventListener('pagehide', flushSave)
+      document.removeEventListener('visibilitychange', onHide)
+      flushSave() // démontage du provider (déconnexion, rechargement) : on écrit avant de partir
+    }
+  }, [demo, flushSave])
 
   // Synchronisation Supabase temps réel (toute l'app + demandes de contact). Inerte si non configuré.
   useEffect(() => {
