@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { AlertTriangle, Activity, Settings2, Gauge } from 'lucide-react'
 import { useStore, computePrimes, primeOpts, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, DEFAULT_PRIME_PHASES, phaseProbability, milestonePhase, applyPrimeRules } from '../store.jsx'
 import { Empty } from '../ui.jsx'
+import { MyStatement } from './Statements.jsx'
 
 const SUIVI_TL = [
   { id: 'next', label: 'Le mois suivant' },
@@ -129,6 +130,9 @@ export default function Primes() {
           </div>
         </div>
       )}
+
+      {/* Le relevé mensuel : le document opposable, une fois le manager passé dessus. */}
+      {store.hasModule('statements') && <MyStatement />}
 
       {invalidated.length > 0 && (
         <div className="card p-4 !border-amber-300 bg-amber-50/60">

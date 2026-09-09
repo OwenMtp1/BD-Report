@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { TrendingUp, Sun, AlertTriangle, ArrowRightLeft, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react'
 import { useStore, inTimeline, computePrimes, primeOpts, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, fmtMoney, baremeMatch, phaseProbability, milestonePhase, PHASE_COLORS, phaseColor } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
+import { StatementsManager } from './Statements.jsx'
 
 const dayISO = (offset = 0) => {
   const d = new Date(); d.setDate(d.getDate() + offset)
@@ -238,6 +239,9 @@ export default function TeamLead() {
           </tbody>
         </table>
       </div>
+
+      {/* Relevés mensuels : le document que le collaborateur pourra opposer, une fois signé. */}
+      {store.hasModule('statements') && <StatementsManager />}
 
       {/* Validation des primes (manager) */}
       <div className="card p-4">

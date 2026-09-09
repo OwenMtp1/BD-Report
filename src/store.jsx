@@ -1055,6 +1055,28 @@ export function applyPrimeRules(rawTotal, { data, env, subId, monthKey }) {
   return { total: Math.round(total), steps, reference }
 }
 
+// ---------------------------------------------------------------- Relevés de primes (module `statements`)
+// Les litiges sur la variable coûtent des heures de management chaque mois, faute d'un document
+// que les deux parties reconnaissent. Le relevé en est un : figé à la signature, opposable.
+// ⚠️ Le contenu est GELÉ au moment de la signature. Si le relevé se recalculait après coup, un
+// document signé pourrait changer sans que personne ne s'en aperçoive — c'est exactement ce
+// qu'un relevé est censé empêcher.
+export const statementKey = (subId, monthKey) => `${subId}|${monthKey}`
+export const envStatements = (env) => (env?.statements || {})
+
+export function buildStatement(data, env, subId, mKey) {
+  const perLead = computePrimes(data?.rdvs || [], data?.bareme || [], primeOpts(data))
+    .filter(p => !p.invalidated && p.payMonthKey === mKey)
+    .map(p => ({ label: p.entreprise || 'Lead', detail: [p.source, p.effectif ? `${p.effectif} salariés` : ''].filter(Boolean).join(' · '), montant: p.montant, date: p.triggerDate }))
+  const perActivity = computeActivityPrimes(data?.rdvs || [], data?.activityRules || [])
+    .filter(p => !p.invalidated && p.payMonthKey === mKey)
+    .map(p => ({ label: p.label || 'Prime d\'activité', detail: p.periodLabel || '', montant: p.montant, date: p.triggerDate }))
+  const lines = [...perLead, ...perActivity].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  const raw = lines.reduce((a, l) => a + l.montant, 0)
+  const mod = applyPrimeRules(raw, { data, env, subId, monthKey: mKey })
+  return { subId, monthKey: mKey, lines, raw, steps: mod.steps, total: mod.total, currency: data?.currency || 'EUR' }
+}
+
 // ---------------------------------------------------------------- Comité d'achat (module `committee`)
 // En B2B, l'affaire ne se perd presque jamais faute d'arguments : elle se perd parce qu'une
 // seule personne portait le sujet en interne. On qualifie donc chaque interlocuteur — son rôle
@@ -3250,6 +3272,50 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const env = db.environments.find(e => e.id === session?.envId)
         const q = memberQuota(env, session?.subEnvId, metricId)
         return q.target > 0 ? q : null
+      },
+      // ----- Relevés de primes
+      // Le relevé signé est LU depuis l'environnement (gelé) ; tant qu'il n'existe pas, on
+      // le calcule à la volée pour que le manager voie ce qu'il s'apprête à signer.
+      statementFor(subId, mKey) {
+        const env = db.environments.find(e => e.id === session?.envId)
+        const saved = envStatements(env)[statementKey(subId, mKey)]
+        if (saved) return saved
+        return { ...buildStatement(db.data[subId] || {}, env, subId, mKey), signature: null }
+      },
+      canSignStatements() { return this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
+      signStatement(subId, mKey) {
+        if (readOnly || !this.canSignStatements()) return
+        const who = db.subenvs.find(s => s.id === session?.subEnvId)
+        // La signature porte un NOM, pas un pseudo : c'est ce qui figure sur le document.
+        const name = who ? `${who.prenom} ${who.nom}`.trim() : (account?.pseudo || '')
+        setDb(d => {
+          const env = d.environments.find(e => e.id === session?.envId); if (!env) return d
+          const snap = buildStatement(d.data[subId] || {}, env, subId, mKey)
+          env.statements = { ...envStatements(env), [statementKey(subId, mKey)]: {
+            ...snap, signature: { by: name, accountId: account?.id || null, at: new Date().toISOString() },
+          } }
+          // Le collaborateur doit savoir que son relevé est disponible.
+          const data = d.data[subId]
+          if (data) {
+            data.notifs = [{
+              id: uid(), ts: new Date().toISOString(), read: false, type: 'prime', page: 'primes',
+              title: 'Relevé de primes validé', text: `${name} a signé votre relevé — il est téléchargeable.`,
+            }, ...(data.notifs || [])].slice(0, 100)
+          }
+          return d
+        })
+      },
+      // Retirer une signature efface le document figé : le relevé redevient un brouillon
+      // recalculé, et non un document signé dont le contenu aurait changé en douce.
+      unsignStatement(subId, mKey) {
+        if (readOnly || !this.canSignStatements()) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === session?.envId); if (!env) return d
+          const next = { ...envStatements(env) }
+          delete next[statementKey(subId, mKey)]
+          env.statements = next
+          return d
+        })
       },
       // ----- Challenges d'équipe
       challenges() { return envChallenges(db.environments.find(e => e.id === session?.envId)) },

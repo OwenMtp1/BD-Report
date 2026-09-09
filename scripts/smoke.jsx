@@ -351,6 +351,26 @@ async function main() {
   for (const k of ['Primes du mois — fourchette', 'Acquis', 'Attendu', 'Haut']) {
     if (!text().includes(k)) throw new Error('Forecast range missing: ' + k)
   }
+  // Relevés de primes : un relevé non signé n'est pas téléchargeable — c'est tout le sujet.
+  if (!text().includes('Relevés de primes')) throw new Error('La section Relevés de primes manque au pilotage')
+  if (!find('button', 'Valider et signer')) throw new Error('Le manager doit pouvoir signer un relevé')
+  {
+    await click(find('button', 'Valider et signer'))
+    if (!text().includes("Je certifie l'exactitude")) throw new Error("L'attestation de signature ne s'affiche pas")
+    const signBtn = find('button', 'Signer le relevé')
+    if (!signBtn || !signBtn.disabled) throw new Error('Signer doit rester impossible tant que la case n\'est pas cochée')
+    const box = [...container.querySelectorAll('.fixed.z-50 input[type=checkbox]')].pop()
+    if (!box) throw new Error('Case d\'attestation introuvable')
+    await act(async () => { box.checked = true; Simulate.change(box) })
+    await click(find('button', 'Signer le relevé'))
+    win.__bdrFlushSave?.()
+    const st = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+    const env = st.environments.find(e => e.id === 'env-peoplespheres')
+    const signed = Object.values(env.statements || {}).find(x => x.signature)
+    if (!signed) throw new Error('Le relevé signé doit être figé sur l\'environnement')
+    if (!signed.signature.by) throw new Error('La signature doit porter un nom')
+    if (!('total' in signed) || !Array.isArray(signed.lines)) throw new Error('Un relevé signé doit figer son contenu')
+  }
 
   // Écosystème : étapes du pipeline, règle de rattachement et barème au même endroit.
   await click(find('button', 'Créer votre écosystème'))
