@@ -1177,6 +1177,19 @@ export const qualifyPhase = (data) => {
   const i = order.indexOf(milestonePhase(data))
   return i > 0 ? order[i - 1] : order[0] || ''
 }
+// Probabilité qu'une affaire à cette étape atteigne le jalon. Elle était écrite en dur
+// ({ R1: .25, R2: .4, MQL: .6 }) : un pipeline renommé retombait à zéro, et le
+// prévisionnel comme le simulateur annonçaient 0 € sans rien expliquer. Elle se déduit
+// désormais du chemin restant à parcourir — une affaire à mi-parcours vaut la moitié.
+export const phaseProbability = (data, phase) => {
+  const order = phaseList(data).filter(p => !isLostPhase(data, p))
+  const m = order.indexOf(milestonePhase(data))
+  const r = order.indexOf(phase)
+  if (r < 0 || m < 0) return 0        // étape inconnue ou perdue : rien à espérer
+  if (r >= m) return 1                // déjà au jalon : ce n'est plus une prévision
+  return (r + 1) / (m + 1)
+}
+
 export const firstPhase = (data) => phaseList(data).filter(p => !isLostPhase(data, p))[0] || ''
 // Étape suivante dans le parcours (bouton « Faire avancer »), sans jamais franchir le jalon
 // tout seul : passer une affaire en prime est une décision, pas un enchaînement.

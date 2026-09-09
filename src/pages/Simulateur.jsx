@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Gauge, Coins, TrendingUp, Sparkles, Target, MousePointer2 } from 'lucide-react'
-import { useStore, computePrimes, computeActivityPrimes, activityPeriodKey, monthKey, fmtMoney, baremeMatch, todayISO, milestonePhase } from '../store.jsx'
+import { useStore, computePrimes, computeActivityPrimes, activityPeriodKey, monthKey, fmtMoney, baremeMatch, todayISO, milestonePhase, phaseProbability } from '../store.jsx'
 
-const PROBA = { R1: 0.25, R2: 0.4, MQL: 0.6 }
 // Géométrie de la jauge : arc de 270° (ouverture en bas).
 const CX = 130, CY = 130, R = 100, START = 135, SWEEP = 270
 const polar = (angleDeg) => {
@@ -29,8 +28,8 @@ export default function Simulateur() {
     const actPrimes = computeActivityPrimes(rdvs, sub.activityRules || [])
     const acquiseAct = actPrimes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)
     const acquise = acquiseLead + acquiseAct
-    const pending = rdvs.filter(r => r.opportunite === 'En cours' && PROBA[r.phase])
-    const probable = pending.reduce((a, r) => { const row = baremeMatch(sub.bareme || [], r.effectif, r.source); return a + (row ? (Number(row.montant) || 0) * PROBA[r.phase] : 0) }, 0)
+    const pending = rdvs.filter(r => r.opportunite === 'En cours' && phaseProbability(sub, r.phase) > 0 && phaseProbability(sub, r.phase) < 1)
+    const probable = pending.reduce((a, r) => { const row = baremeMatch(sub.bareme || [], r.effectif, r.source); return a + (row ? (Number(row.montant) || 0) * phaseProbability(sub, r.phase) : 0) }, 0)
     const objectif = Number((sub.goals || {}).primesMois) || 1000
 
     const rules = (sub.activityRules || []).filter(r => (r.tiers || []).length)

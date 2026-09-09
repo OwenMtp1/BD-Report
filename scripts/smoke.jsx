@@ -30,7 +30,7 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict } = await import('../src/store.jsx')
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -55,6 +55,13 @@ async function main() {
     if (firstPhase(perso) !== 'Découverte') throw new Error('« Replanifier » doit ramener à la première étape')
     if (nextPhase(perso, 'Découverte') !== 'Cadrage') throw new Error('« Faire avancer » doit passer à l\'étape suivante')
     if (nextPhase(perso, 'Gagné') !== null) throw new Error('La dernière étape n\'a pas de suivante')
+    // Pondération du prévisionnel : déduite du chemin restant, pas d'une table figée.
+    if (phaseProbability(def, 'R1') !== 0.25) throw new Error('R1 doit valoir 25 % sur le pipeline par défaut')
+    if (phaseProbability(def, 'SQL') !== 1) throw new Error('Au jalon, ce n\'est plus une prévision')
+    if (phaseProbability(def, 'KO') !== 0) throw new Error('Une étape perdue ne pèse rien')
+    if (!(phaseProbability(perso, 'Découverte') < phaseProbability(perso, 'Cadrage'))) throw new Error('La probabilité doit croître le long du pipeline')
+    if (phaseProbability(perso, 'Inconnue') !== 0) throw new Error('Une étape absente du pipeline ne pèse rien')
+
     // Un pipeline sans issue déclarée ne doit pas planter : repli sur les valeurs d'origine.
     if (milestonePhase({}) !== 'SQL' || firstPhase({}) !== 'R1') throw new Error('Repli par défaut cassé')
   }

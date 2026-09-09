@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { AlertTriangle, Activity, Settings2 } from 'lucide-react'
-import { useStore, computePrimes, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, DEFAULT_PRIME_PHASES } from '../store.jsx'
+import { useStore, computePrimes, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, DEFAULT_PRIME_PHASES, phaseProbability, milestonePhase } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 const SUIVI_TL = [
@@ -186,16 +186,21 @@ export default function Primes() {
       {/* Prévisionnel de primes : opportunités en cours pondérées par leur phase */}
       <div className="card p-4">
         <h3 className="font-bold mb-1">Prévisionnel de primes</h3>
-        <p className="text-xs text-muted mb-3">Estimation des primes à venir : montant du barème de chaque opportunité en cours, pondéré par sa probabilité de passage en SQL selon la phase (R1 : 25 % · R2 : 40 % · MQL : 60 %).</p>
+        <p className="text-xs text-muted mb-3">
+          Estimation des primes à venir : montant du barème de chaque opportunité en cours, pondéré par sa
+          probabilité d'atteindre {milestonePhase(sub)} — déduite du chemin restant dans votre pipeline
+          ({phaseOptions.filter(p => phaseProbability(sub, p) > 0 && phaseProbability(sub, p) < 1)
+            .map(p => `${p} : ${Math.round(phaseProbability(sub, p) * 100)} %`).join(' · ')}).
+        </p>
         {(() => {
-          const PROBA = { R1: 0.25, R2: 0.4, MQL: 0.6 }
-          const pending = sub.rdvs.filter(r => r.opportunite === 'En cours' && PROBA[r.phase])
+          const proba = (ph) => phaseProbability(sub, ph)
+          const pending = sub.rdvs.filter(r => r.opportunite === 'En cours' && proba(r.phase) > 0 && proba(r.phase) < 1)
           const rows = pending.map(r => {
             const eff = Number(r.effectif) || 0
             const bar = sub.bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max) && (!b.leadSource || b.leadSource === r.source))
               || sub.bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max))
             const montant = bar ? Number(bar.montant) || 0 : 0
-            return { r, montant, espere: montant * PROBA[r.phase], proba: PROBA[r.phase] }
+            return { r, montant, espere: montant * proba(r.phase), proba: proba(r.phase) }
           }).filter(x => x.montant > 0)
           const total = rows.reduce((a, x) => a + x.espere, 0)
           if (!rows.length) return <Empty text="Aucune opportunité en cours avec un barème applicable." />
