@@ -1874,6 +1874,31 @@ export function buildDemoDb(brand) {
     ]
   }
 
+  // Un 1:1 déjà entamé : un dossier vide ne montrerait ni le fil, ni le compte rendu, ni le
+  // suivi des engagements — c'est-à-dire rien de ce qui fait l'intérêt de la brique.
+  const o2o = (out.channels || []).find(c => c.oneToOne?.memberSubId === 'dsub-b2')
+  if (o2o) {
+    const ago = (h) => new Date(Date.now() - h * 3600000).toISOString()
+    out.channelMessages = out.channelMessages || {}
+    out.channelMessages[o2o.id] = [
+      { id: uid(), ts: ago(30 * 24), authorId: null, authorSubId: 'dsub-mgr', authorName: 'Chloé Nguyen', authorPhoto: '', text: '', reactions: {},
+        report: {
+          date: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
+          points: "Deux no-show cette semaine, tous les deux sur des RDV pris plus de trois semaines à l'avance. Bonne dynamique sur l'inbound.",
+          axis: 'Confirmer chaque RDV la veille, par écrit.',
+          engagements: [
+            { id: uid(), text: 'Mettre en place une relance de confirmation J-1', done: true },
+            { id: uid(), text: 'Reprendre les 4 comptes recyclés de juin', done: false },
+          ],
+          snapshot: { period: 'mois', metrics: { rdvPris: { done: 31, target: 40 }, sql: { done: 6, target: 8 }, primes: { done: 1400, target: 2000 } } },
+        } },
+      { id: uid(), ts: ago(29 * 24), authorId: null, authorSubId: 'dsub-b2', authorName: 'Sara Ben Ali', authorPhoto: '', reactions: {},
+        text: "C'est en place depuis lundi, je confirme la veille par message. Un no-show évité déjà cette semaine." },
+      { id: uid(), ts: ago(5 * 24), authorId: null, authorSubId: 'dsub-mgr', authorName: 'Chloé Nguyen', authorPhoto: '', reactions: {},
+        text: 'Très bien. On refait le point vendredi, avec les chiffres du mois.' },
+    ]
+  }
+
   // On ne garde que la société de démo dédiée (retire l'env de test générique ajouté par migrate).
   out.environments = out.environments.filter(e => e.id !== 'env-test')
   out.accounts = out.accounts.filter(a => !String(a.id).startsWith('test-'))
@@ -2308,6 +2333,40 @@ function reconcileReporting(db) {
 
 // Crée automatiquement (une seule fois, respecte les suppressions) un canal « Général » par
 // environnement (tous les profils) et un canal « Bloc notes » personnel par personne.
+// ---------------------------------------------------------------- Entretiens 1:1 (module `oneToOne`)
+// Un 1:1 sans historique se répète ; avec historique, il progresse. Le fil vit dans les
+// Conversations — c'est là qu'on écrit à quelqu'un — mais il porte en plus des comptes rendus
+// structurés : ce qui a été dit, ce qui a été promis, et les chiffres de la personne CE JOUR-LÀ.
+// Sans les chiffres figés, relire un 1:1 d'il y a trois mois ne dit plus rien.
+export function managerSubOf(db, sub) {
+  const acc = (db.accounts || []).find(a => a.id === sub?.ownerId)
+  if (!acc?.teamOf) return null
+  return (db.subenvs || []).find(s => s.envId === sub.envId && s.ownerId === acc.teamOf) || null
+}
+function seedOneToOneChannels(db) {
+  db._autoSeed = db._autoSeed || {}
+  // Suivi par paire : un 1:1 supprimé ne doit pas repousser au chargement suivant.
+  db._autoSeed.oneToOne = db._autoSeed.oneToOne || []
+  db.channels = db.channels || []
+  const now = new Date().toISOString()
+  ;(db.subenvs || []).forEach(sub => {
+    const env = (db.environments || []).find(e => e.id === sub.envId)
+    if (!env || !envModuleOn(env, 'oneToOne')) return
+    const mgr = managerSubOf(db, sub)
+    if (!mgr || mgr.id === sub.id) return
+    const key = `${env.id}:${mgr.id}>${sub.id}`
+    if (db._autoSeed.oneToOne.includes(key)) return
+    db.channels.push({
+      id: uid(), scope: 'team', envId: env.id,
+      name: `1:1 · ${`${sub.prenom} ${sub.nom}`.trim()}`,
+      kind: 'chat', access: 'members', members: [mgr.id, sub.id], services: [], reporting: null,
+      oneToOne: { memberSubId: sub.id, managerSubId: mgr.id },
+      createdBy: mgr.ownerId || null, _seen: {}, createdAt: now,
+    })
+    db._autoSeed.oneToOne.push(key)
+  })
+}
+
 function seedAutoChannels(db) {
   db._autoSeed = db._autoSeed || {}
   db._autoSeed.generalChannels = db._autoSeed.generalChannels || []
@@ -2556,6 +2615,7 @@ function migrate(db) {
     db._autoSeed.envRoleTabs = [...db._autoSeed.envRoleTabs, ...ungranted]
   }
   seedAutoChannels(db)
+  seedOneToOneChannels(db)
   reconcileReporting(db)
   // Les canaux de reporting se sont mis à notifier : sans repère de lecture, tout leur
   // historique compterait d'un coup comme non lu. On pose donc une fois la barre à
@@ -3347,6 +3407,10 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (c.envId !== session?.envId) return false
         // Messages directs (1:1) : visibles uniquement des deux interlocuteurs, même pour un manager.
         if (c.dm) return (c.members || []).includes(session?.subEnvId)
+        // Entretien 1:1 : aussi privé qu'un message direct. Le droit d'administrer les canaux
+        // ne doit pas ouvrir les entretiens des AUTRES binômes — on y parle de rémunération,
+        // de difficultés, parfois de la hiérarchie elle-même.
+        if (c.oneToOne) return (c.members || []).includes(session?.subEnvId)
         if (c.createdBy === account?.id) return true
         if (this.hasClientPerm('team.channels')) return true // qui administre les canaux les voit
         const subId = session?.subEnvId
@@ -3422,6 +3486,53 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const hidden = new Set(account?.hiddenMessages || [])
         const arr = (db.channelMessages || {})[id] || []
         return arr.filter(m => !hidden.has(m.id)).slice().sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')))
+      },
+      // ----- Entretiens 1:1
+      // Le compte rendu est un MESSAGE du fil, pas une table à part : il hérite ainsi des
+      // non-lus, de la recherche et de la suppression, et les deux interlocuteurs le voient
+      // arriver là où ils se parlent déjà.
+      oneToOneChannelFor(memberSubId) {
+        return (db.channels || []).find(c => c.oneToOne?.memberSubId === memberSubId && c.envId === session?.envId) || null
+      },
+      // Chiffres de la personne AU MOMENT du compte rendu. Figés : sans eux, relire un 1:1
+      // d'il y a trois mois ne dit plus rien de la situation dont on a parlé.
+      oneToOneSnapshot(memberSubId) {
+        const data = db.data[memberSubId]
+        if (!data) return {}
+        const env = db.environments.find(e => e.id === session?.envId)
+        const q = envQuotas(env)
+        const period = q.byMember?.[memberSubId]?.period || q.period
+        const out = { period, metrics: {} }
+        ;(q.metrics || []).forEach(mid => {
+          const mq = memberQuota(env, memberSubId, mid)
+          out.metrics[mid] = { done: quotaAchieved(data, mid, period), target: mq.target }
+        })
+        return out
+      },
+      postOneToOneReport(channelId, report) {
+        if (roBlocked()) return
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const name = sub ? `${sub.prenom} ${sub.nom}`.trim() : (account?.pseudo || 'Moi')
+        setDb(d => {
+          d.channelMessages = d.channelMessages || {}
+          d.channelMessages[channelId] = d.channelMessages[channelId] || []
+          d.channelMessages[channelId].push({
+            id: uid(), ts: new Date().toISOString(),
+            authorId: account?.id || null, authorSubId: sub?.id || null, authorName: name,
+            authorPhoto: sub?.photo || '', text: '', reactions: {}, report,
+          })
+          return d
+        })
+      },
+      // Un engagement se coche des DEUX côtés : c'est un contrat, pas une consigne.
+      toggleOneToOneEngagement(channelId, msgId, engId) {
+        if (roBlocked()) return
+        setDb(d => {
+          const m = (d.channelMessages?.[channelId] || []).find(x => x.id === msgId)
+          if (!m?.report?.engagements) return d
+          m.report.engagements = m.report.engagements.map(e => e.id === engId ? { ...e, done: !e.done } : e)
+          return d
+        })
       },
       postChannelMessage(id, { text, image, file, replyTo } = {}) {
         if (roBlocked()) return

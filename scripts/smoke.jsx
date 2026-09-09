@@ -76,6 +76,26 @@ async function main() {
     if (!isElevatedRole('Fondateur') || isElevatedRole('Manager')) throw new Error('Rôles élevés faussés')
   }
 
+  // Entretiens 1:1 : un canal par binôme, créé automatiquement, et aussi privé qu'un message
+  // direct — un manager qui administre les canaux ne doit pas lire ceux des autres binômes.
+  {
+    const d = buildDemoDb({})
+    const o2o = (d.channels || []).filter(c => c.oneToOne)
+    if (!o2o.length) throw new Error('Aucun canal 1:1 créé automatiquement')
+    const sara = o2o.find(c => c.oneToOne.memberSubId === 'dsub-b2')
+    if (!sara) throw new Error('Le 1:1 de Sara avec son manager est absent')
+    if (sara.members.length !== 2) throw new Error('Un 1:1 ne réunit que le membre et son manager')
+    if (!sara.members.includes('dsub-mgr') || !sara.members.includes('dsub-b2')) throw new Error('Mauvais binôme sur le 1:1')
+    // Le manager n'a pas de 1:1 avec lui-même, et personne n'est dans le 1:1 d'un tiers.
+    if (o2o.some(c => c.oneToOne.memberSubId === c.oneToOne.managerSubId)) throw new Error('Un 1:1 avec soi-même a été créé')
+    if (o2o.some(c => c.members.includes('dsub-b1') && c.oneToOne.memberSubId !== 'dsub-b1')) {
+      throw new Error("Un membre ne doit pas figurer dans le 1:1 d'un collègue")
+    }
+    const msgs = (d.channelMessages || {})[sara.id] || []
+    if (!msgs.some(m => m.report?.engagements?.length)) throw new Error('Le 1:1 de démonstration doit porter un compte rendu avec engagements')
+    if (!msgs.some(m => m.report?.snapshot?.metrics)) throw new Error('Un compte rendu doit figer les chiffres du jour')
+  }
+
   // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue
   // le lead qui ressemble aux comptes qui signent de celui qui s'en écarte.
   {

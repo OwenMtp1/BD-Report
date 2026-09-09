@@ -3,8 +3,9 @@ import {
   MessagesSquare, Plus, Hash, Radio, Send, ImagePlus, Smile, Trash2, Settings2, Users2,
   Lock, Globe, X, ChevronLeft, Bell, BellOff, Paperclip, MoreVertical, Reply, Forward,
   Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft, User, LogOut, Search, CheckCheck,
+  ClipboardList, ChevronDown, ChevronRight, UserCheck,
 } from 'lucide-react'
-import { useStore, reportEventsFor, PRESENCE_META } from '../store.jsx'
+import { useStore, reportEventsFor, PRESENCE_META, QUOTA_METRICS, fmtMoney, fmtDate, todayISO, uid } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 import { uploadAttachment, attachmentUrl, humanSize } from '../attachments.js'
 
@@ -46,11 +47,21 @@ export default function Conversations({ scope = 'team' }) {
   // Nom affiché d'un canal (pour un message direct : le nom de l'autre interlocuteur).
   const chName = (c) => {
     if (c.dm) { const others = store.channelMembers(c).filter(m => m.subId !== meId && m.accountId !== meId); return others.map(o => o.name).join(', ') || 'Conversation' }
+    // Un 1:1 porte le nom de l'AUTRE : « 1:1 · Sara » n'a aucun sens quand on est Sara.
+    if (c.oneToOne && c.oneToOne.memberSubId === meId) {
+      const mgr = store.db.subenvs.find(s => s.id === c.oneToOne.managerSubId)
+      return `1:1 · ${mgr ? `${mgr.prenom} ${mgr.nom}`.trim() : 'mon manager'}`
+    }
     return c.name
   }
-  const chIcon = (c) => c.dm ? User : c.personal ? FileText : c.kind === 'reporting' ? Radio : Hash
+  const chIcon = (c) => c.dm ? User : c.personal ? FileText : c.oneToOne ? UserCheck : c.kind === 'reporting' ? Radio : Hash
   // Épinglés d'abord, puis ordre d'origine.
-  const orderedChannels = [...channels].sort((a, b) => (store.isChannelPinned(b.id) ? 1 : 0) - (store.isChannelPinned(a.id) ? 1 : 0))
+  const ordered = [...channels].sort((a, b) => (store.isChannelPinned(b.id) ? 1 : 0) - (store.isChannelPinned(a.id) ? 1 : 0))
+  // Les 1:1 se rangent dans leur propre dossier : un manager de six personnes en a six, et
+  // noyés dans la liste ils repousseraient les canaux d'équipe hors de l'écran.
+  const oneToOnes = ordered.filter(c => c.oneToOne)
+  const orderedChannels = ordered.filter(c => !c.oneToOne)
+  const [o2oOpen, setO2oOpen] = useState(true)
 
   return (
     <div className="space-y-4">
@@ -91,6 +102,39 @@ export default function Conversations({ scope = 'team' }) {
               )
             })}
           </div>
+
+          {oneToOnes.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-line">
+              <button className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-muted hover:text-brand"
+                onClick={() => setO2oOpen(v => !v)}>
+                {o2oOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                Entretiens 1:1
+                <span className="ml-auto normal-case font-semibold">{oneToOnes.length}</span>
+              </button>
+              {o2oOpen && (
+                <div className="space-y-1 mt-1">
+                  {oneToOnes.map(c => {
+                    const unread = store.isChannelMuted(c.id) ? 0 : store.channelUnread(c.id)
+                    // Côté membre, le fil s'appelle du nom de son manager : « 1:1 · Sara » n'a
+                    // aucun sens quand on EST Sara.
+                    const mgr = store.db.subenvs.find(s => s.id === c.oneToOne.managerSubId)
+                    const label = c.oneToOne.memberSubId === meId
+                      ? `1:1 · ${mgr ? `${mgr.prenom} ${mgr.nom}`.trim() : 'mon manager'}`
+                      : c.name
+                    return (
+                      <button key={c.id} onClick={() => setSelId(c.id)}
+                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-sm ${sel?.id === c.id ? 'bg-brand/10 text-brand font-bold' : 'hover:bg-surface'}`}>
+                        <UserCheck size={15} className="shrink-0 text-brand/70" />
+                        <span className="truncate flex-1">{label}</span>
+                        {store.isChannelMuted(c.id) && <BellOff size={12} className="opacity-40 shrink-0" />}
+                        {unread > 0 && <span className="shrink-0 text-[10px] font-extrabold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white">{unread > 9 ? '9+' : unread}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Thread du canal sélectionné */}
@@ -173,6 +217,8 @@ function MuteMenu({ channel, store, muted }) {
 
 // -------------------------------------------------- Fil de discussion d'un canal
 function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelete, onBack }) {
+  const [reportOpen, setReportOpen] = useState(false)
+  const onReport = () => setReportOpen(true)
   const allMsgs = store.channelMessages(channel.id)
   const draftKey = 'bdr_draft_' + channel.id
   const [text, setText] = useState(() => { try { return localStorage.getItem(draftKey) || '' } catch (e) { return '' } })
@@ -252,6 +298,11 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
           {personal && <div className="text-[11px] text-muted">Votre espace personnel — visible de vous seul</div>}
         </div>
         <div className="ml-auto flex gap-1">
+          {/* Le compte rendu est rédigé par l'encadrant : c'est lui qui tient le fil des
+              engagements d'un entretien à l'autre. */}
+          {channel.oneToOne && channel.oneToOne.managerSubId === meId && (
+            <button className="btn-primary !py-1 text-xs" onClick={onReport}><ClipboardList size={14} /> Compte rendu</button>
+          )}
           <button className={`btn-ghost !p-1.5 ${searchOpen ? 'text-brand' : ''}`} title="Rechercher dans les messages" onClick={() => { setSearchOpen(v => !v); if (searchOpen) setQuery('') }}><Search size={16} /></button>
           {!personal && <MuteMenu channel={channel} store={store} muted={muted} />}
           {canManage && !personal && !channel._general && !channel.dm && (
@@ -365,14 +416,132 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
       {confirm?.kind === 'pin' && <DoubleChoice title="Épingler le message" desc="Épingler ce message :" a="Pour moi" b="Pour tout le monde" onA={() => doPin(confirm.msg, false)} onB={() => doPin(confirm.msg, true)} onClose={() => setConfirm(null)} />}
       {convPending === 'leave' && <Confirm yesLabel="Quitter" message={`Quitter le groupe « ${title || channel.name} » ? Vous ne le verrez plus (un manager peut vous y rajouter).`} onYes={() => { store.leaveChannel(channel.id); setConvPending(null); toast('Vous avez quitté le groupe') }} onNo={() => setConvPending(null)} />}
       {convPending === 'deleteAll' && <Confirm message={`Supprimer la conversation « ${title || channel.name} » pour tout le monde ? Cette action est définitive.`} onYes={() => { store.deleteChannel(channel.id); setConvPending(null); toast('Conversation supprimée') }} onNo={() => setConvPending(null)} />}
+      {reportOpen && <ReportEditor channel={channel} store={store} onClose={() => setReportOpen(false)} />}
       {convPending === 'deletePersonal' && <Confirm message="Supprimer définitivement votre bloc-notes et toutes ses notes ?" onYes={() => { store.deleteChannel(channel.id); setConvPending(null); toast('Bloc-notes supprimé') }} onNo={() => setConvPending(null)} />}
     </div>
   )
 }
 
 // Une ligne de message avec son menu d'actions (répondre, transférer, épingler, non-lu, supprimer).
+// Saisie d'un compte rendu de 1:1. Les chiffres ne se saisissent pas : ils sont relevés à
+// l'ouverture, pour que le document dise la situation réelle du jour et non ce qu'on en a retenu.
+function ReportEditor({ channel, store, onClose }) {
+  const memberSubId = channel.oneToOne?.memberSubId
+  const [date, setDate] = useState(todayISO())
+  const [points, setPoints] = useState('')
+  const [axis, setAxis] = useState('')
+  const [engagements, setEngagements] = useState([{ id: uid(), text: '', done: false }])
+  const snapshot = useMemo(() => store.oneToOneSnapshot(memberSubId), [memberSubId]) // eslint-disable-line
+  const sub = store.db.subenvs.find(s => s.id === memberSubId)
+
+  const save = () => {
+    const eng = engagements.filter(e => e.text.trim()).map(e => ({ ...e, text: e.text.trim() }))
+    if (!points.trim() && !axis.trim() && !eng.length) return
+    store.postOneToOneReport(channel.id, { date, points: points.trim(), axis: axis.trim(), engagements: eng, snapshot })
+    store.logAction('1:1', 'Compte rendu enregistré', sub ? `${sub.prenom} ${sub.nom}` : '')
+    toast('Compte rendu publié dans le fil')
+    onClose()
+  }
+
+  return (
+    <Modal title={`Compte rendu du 1:1 — ${sub ? `${sub.prenom} ${sub.nom}` : ''}`} onClose={onClose} wide>
+      <div className="space-y-3">
+        <Field label="Date de l'entretien"><input type="date" className="input !w-auto" value={date} onChange={e => setDate(e.target.value)} /></Field>
+        <Field label="Points abordés">
+          <textarea className="input min-h-[110px]" value={points} onChange={e => setPoints(e.target.value)}
+            placeholder="Ce qui a été dit, dans l'ordre où ça compte." />
+        </Field>
+        <Field label="Axe de progrès jusqu'au prochain entretien">
+          <input className="input" value={axis} onChange={e => setAxis(e.target.value)} placeholder="Un seul — deux, personne ne les tient." />
+        </Field>
+        <div>
+          <div className="label !mb-1.5">Engagements pris</div>
+          <div className="space-y-1.5">
+            {engagements.map((e, i) => (
+              <div key={e.id} className="flex gap-2">
+                <input className="input !py-1.5 text-sm" value={e.text} placeholder="Qui fait quoi, d'ici quand"
+                  onChange={ev => setEngagements(list => list.map(x => x.id === e.id ? { ...x, text: ev.target.value } : x))} />
+                {engagements.length > 1 && (
+                  <button className="btn-ghost !p-1.5 !text-red-500 shrink-0" onClick={() => setEngagements(list => list.filter(x => x.id !== e.id))}><X size={14} /></button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button className="btn-ghost !py-1 text-xs mt-1.5" onClick={() => setEngagements(l => [...l, { id: uid(), text: '', done: false }])}>
+            <Plus size={13} /> Ajouter un engagement
+          </button>
+        </div>
+        {snapshot?.metrics && Object.keys(snapshot.metrics).length > 0 && (
+          <div className="rounded-xl bg-surface/60 p-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">Chiffres relevés, qui seront figés dans le compte rendu</div>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(snapshot.metrics).map(([id, v]) => (
+                <span key={id} className="chip bg-card border border-line text-muted">
+                  {(QUOTA_METRICS.find(x => x.id === id) || {}).label || id} : {id === 'primes' ? fmtMoney(v.done) : v.done}{v.target ? ` / ${id === 'primes' ? fmtMoney(v.target) : v.target}` : ''}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button className="btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn-primary" onClick={save}>Publier le compte rendu</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// Compte rendu de 1:1. Rendu en pleine largeur plutôt qu'en bulle : ce n'est pas une réplique
+// de conversation, c'est le document que les deux relisent avant le prochain entretien.
+function ReportCard({ m, channel, store }) {
+  const r = m.report || {}
+  const done = (r.engagements || []).filter(e => e.done).length
+  return (
+    <div className="rounded-2xl border border-brand/30 bg-brand/5 p-3.5">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <span className="font-bold text-sm flex items-center gap-1.5"><ClipboardList size={15} className="text-brand" /> Compte rendu du {fmtDate(r.date)}</span>
+        <span className="text-[11px] text-muted">par {m.authorName} · {timeStr(m.ts)}</span>
+      </div>
+      {r.points && <p className="text-sm whitespace-pre-wrap mb-2">{r.points}</p>}
+      {r.axis && (
+        <p className="text-sm mb-2"><span className="text-muted text-xs uppercase tracking-wide">Axe de progrès — </span>{r.axis}</p>
+      )}
+      {(r.engagements || []).length > 0 && (
+        <div className="mb-2">
+          <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Engagements ({done}/{r.engagements.length})</div>
+          <div className="space-y-1">
+            {r.engagements.map(e => (
+              <label key={e.id} className="flex items-start gap-2 text-sm cursor-pointer">
+                <input type="checkbox" className="mt-1" checked={!!e.done}
+                  onChange={() => store.toggleOneToOneEngagement(channel.id, m.id, e.id)} />
+                <span className={e.done ? 'line-through text-muted' : ''}>{e.text}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      {r.snapshot?.metrics && Object.keys(r.snapshot.metrics).length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-2 border-t border-brand/20">
+          {Object.entries(r.snapshot.metrics).map(([id, v]) => {
+            const label = (QUOTA_METRICS.find(x => x.id === id) || {}).label || id
+            const ok = v.target ? v.done >= v.target : false
+            return (
+              <span key={id} className={`chip !text-[10px] ${ok ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-surface text-muted'}`}>
+                {label} : {id === 'primes' ? fmtMoney(v.done) : v.done}{v.target ? ` / ${id === 'primes' ? fmtMoney(v.target) : v.target}` : ''}
+              </span>
+            )
+          })}
+          <span className="text-[10px] text-muted self-center">chiffres figés le jour de l'entretien</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function MessageRow({ m, channel, store, meId, canManage, pickerFor, setPickerFor, menuFor, setMenuFor, onReply, onForward, onDelete, onPin, onUnread }) {
   const mine = m.authorSubId === meId || m.authorId === meId
+  if (m.report) return <ReportCard m={m} channel={channel} store={store} />
   if (m.system) return (
     <div className="flex justify-center">
       <div className="max-w-[92%] rounded-xl px-3 py-2 text-sm bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-200">
