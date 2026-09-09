@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { Target, Plus, Trash2, Building2, Users2, Briefcase, Sparkles, Save, CalendarDays } from 'lucide-react'
-import { useStore, uid, todayISO, fmtDate, phaseRank, isWonPhase, qualifyPhase, milestonePhase } from '../store.jsx'
+import { useStore, uid, todayISO, fmtDate, phaseRank, isWonPhase, qualifyPhase, milestonePhase, icpMatches } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 
 // Rang de progression d'un deal : sa position dans le pipeline DE L'ÉQUIPE. Une table figée
@@ -43,23 +43,6 @@ function statsFor(deals, data) {
 }
 // Date de référence d'un deal (ouverture) pour le filtrage par période.
 const dealDate = (d) => d.datePriseRdv || d.dateRdv || d.createdAt || ''
-function matchProfile(deal, p) {
-  if (p.secteurs?.length && !p.secteurs.includes(deal.secteur)) return false
-  const eff = Number(deal.effectif) || 0
-  if (p.effMin != null && eff < p.effMin) return false
-  if (p.effMax != null && eff > p.effMax) return false
-  if (p.postes?.length) {
-    const postes = (deal.contacts || []).map(c => c.poste).filter(Boolean)
-    if (!postes.some(po => p.postes.includes(po))) return false
-  }
-  if (p.dateStart || p.dateEnd) {
-    const dd = dealDate(deal)
-    if (!dd) return false
-    if (p.dateStart && dd < p.dateStart) return false
-    if (p.dateEnd && dd > p.dateEnd) return false
-  }
-  return true
-}
 const mode = (arr) => {
   const m = {}; arr.forEach(v => { if (v) m[v] = (m[v] || 0) + 1 })
   return Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] || null
@@ -74,7 +57,7 @@ const autoName = (p) => {
 }
 
 function ProfileCard({ profile, deals, global, data, onSave, onDelete }) {
-  const matched = deals.filter(d => matchProfile(d, profile))
+  const matched = deals.filter(d => icpMatches(d, profile))
   const s = statsFor(matched, data)
   const delta = s.r1ToSql - global.r1ToSql
   const share = pct(matched.length, global.total)

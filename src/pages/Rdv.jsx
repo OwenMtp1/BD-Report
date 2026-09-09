@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
-import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList, Search } from 'lucide-react'
+import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList, Search, Target } from 'lucide-react'
 import { googleCalUrl, downloadIcs } from '../calendar.js'
-import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
+import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey, icpVerdict } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 import { HubspotPushButton } from './Hubspot.jsx'
@@ -74,6 +74,7 @@ function ContactSearch({ onPick }) {
 
 function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners }) {
   const [f, setF] = useState(initial)
+  const icp = useMemo(() => icpVerdict(f, sub), [f.secteur, f.effectif, f.contacts, sub.icpProfiles]) // eslint-disable-line
   const [err, setErr] = useState('')
   const visible = (k) => sub.fieldsConfig.find(c => c.key === k)?.visible !== false
   const set = (k, v) => setF(x => ({ ...x, [k]: v }))
@@ -116,6 +117,20 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
         {visible('secteur') && <Field label="Secteur d'activité">
           <input className="input" value={f.secteur} onChange={e => set('secteur', e.target.value)} />
         </Field>}
+        {/* Verdict ICP au moment où il sert : le commercial peut encore arbitrer son temps.
+            Purement informatif — c'est une aide à la décision, pas une autorisation. */}
+        {icp && (
+          <div className="sm:col-span-2">
+            <div className={`rounded-xl border p-2.5 flex items-start gap-2 text-xs ${icp.level === 'match'
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+              : 'border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300'}`}>
+              <Target size={14} className="shrink-0 mt-0.5" />
+              {icp.level === 'match'
+                ? <span>Ce lead correspond à <b>{icp.name}</b> — le profil qui signe le mieux chez vous.</span>
+                : <span>S'écarte de <b>{icp.name}</b> : {icp.gaps.join(', ')}. À travailler en connaissance de cause.</span>}
+            </div>
+          </div>
+        )}
         {visible('source') && <Field label="Source">
           <Select value={f.source} onChange={v => set('source', v)} options={SOURCES} />
         </Field>}

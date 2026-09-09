@@ -30,7 +30,7 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase } = await import('../src/store.jsx')
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -57,6 +57,17 @@ async function main() {
     if (nextPhase(perso, 'Gagné') !== null) throw new Error('La dernière étape n\'a pas de suivante')
     // Un pipeline sans issue déclarée ne doit pas planter : repli sur les valeurs d'origine.
     if (milestonePhase({}) !== 'SQL' || firstPhase({}) !== 'R1') throw new Error('Repli par défaut cassé')
+  }
+
+  // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue
+  // le lead qui ressemble aux comptes qui signent de celui qui s'en écarte.
+  {
+    const profils = { icpProfiles: [{ id: 'p1', name: 'Scale-up SaaS', secteurs: ['SaaS'], effMin: 50, effMax: 500, postes: ['DRH'] }] }
+    if (icpVerdict({ secteur: 'SaaS', effectif: 120, contacts: [{ poste: 'DRH' }] }, profils)?.level !== 'match') throw new Error('Un lead conforme doit être reconnu')
+    const off = icpVerdict({ secteur: 'BTP', effectif: 120, contacts: [{ poste: 'DRH' }] }, profils)
+    if (off?.level !== 'off' || !off.gaps.some(g => g.includes('BTP'))) throw new Error("L'écart de secteur doit être nommé")
+    if (icpVerdict({ secteur: '', effectif: '', contacts: [] }, profils)) throw new Error('Sans donnée saisie, aucun verdict ne doit s\'afficher')
+    if (icpVerdict({ secteur: 'SaaS' }, { icpProfiles: [] })) throw new Error('Sans profil ICP, aucun verdict')
   }
 
   // fmtDate reçoit tantôt une date seule, tantôt un horodatage ISO complet (createdAt).

@@ -1086,6 +1086,57 @@ export function ensurePrimeSnapshot(data, rdv) {
 }
 
 export const DEFAULT_PRIME_PHASES = ['SQL', 'Signée']
+// ---------------------------------------------------------------------------
+//  Profil client idéal (ICP) — lecture partagée
+//  Le calcul vivait dans la page ICP, donc il ne servait qu'à l'analyse après coup.
+//  Exporté ici, il sert aussi AU MOMENT DE LA SAISIE, quand le commercial peut encore
+//  décider d'investir son temps ailleurs.
+// ---------------------------------------------------------------------------
+export function icpMatches(deal, p, { ignoreDates = false } = {}) {
+  if (p.secteurs?.length && !p.secteurs.includes(deal.secteur)) return false
+  const eff = Number(deal.effectif) || 0
+  if (p.effMin != null && eff < p.effMin) return false
+  if (p.effMax != null && eff > p.effMax) return false
+  if (p.postes?.length) {
+    const postes = (deal.contacts || []).map(c => c.poste).filter(Boolean)
+    if (!postes.some(po => p.postes.includes(po))) return false
+  }
+  if (!ignoreDates && (p.dateStart || p.dateEnd)) {
+    const dd = deal.datePriseRdv || deal.dateRdv || deal.createdAt || ''
+    if (!dd) return false
+    if (p.dateStart && dd < p.dateStart) return false
+    if (p.dateEnd && dd > p.dateEnd) return false
+  }
+  return true
+}
+
+// Verdict affichable pendant la saisie d'un rendez-vous. Renvoie null quand il n'y a
+// rien d'utile à dire — aucun profil enregistré, ou pas encore assez de champs remplis
+// pour que l'avis veuille dire quelque chose.
+export function icpVerdict(deal, data) {
+  const profiles = (data?.icpProfiles || []).filter(p => p.secteurs?.length || p.effMin != null || p.effMax != null || p.postes?.length)
+  if (!profiles.length) return null
+  const eff = Number(deal.effectif) || 0
+  const postes = (deal.contacts || []).map(c => c.poste).filter(Boolean)
+  if (!deal.secteur && !eff && !postes.length) return null // rien à comparer encore
+
+  const hit = profiles.find(p => icpMatches(deal, p, { ignoreDates: true }))
+  if (hit) return { level: 'match', name: hit.name || 'votre profil idéal', gaps: [] }
+
+  // Profil le plus proche : celui dont le moins de critères s'écartent.
+  let best = null
+  profiles.forEach(p => {
+    const gaps = []
+    if (p.secteurs?.length && deal.secteur && !p.secteurs.includes(deal.secteur)) gaps.push(`secteur ${deal.secteur}`)
+    if (p.effMin != null && eff && eff < p.effMin) gaps.push(`effectif sous ${p.effMin}`)
+    if (p.effMax != null && eff && eff > p.effMax) gaps.push(`effectif au-dessus de ${p.effMax}`)
+    if (p.postes?.length && postes.length && !postes.some(po => p.postes.includes(po))) gaps.push(`interlocuteur ${postes[0]}`)
+    if (!best || gaps.length < best.gaps.length) best = { p, gaps }
+  })
+  if (!best || !best.gaps.length) return null // l'écart ne vient que de champs encore vides
+  return { level: 'off', name: best.p.name || 'votre profil idéal', gaps: best.gaps }
+}
+
 export const DEFAULT_WON_PHASES = ['Signée']
 export const DEFAULT_LOST_PHASES = ['KO']
 
