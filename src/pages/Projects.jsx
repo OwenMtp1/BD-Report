@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Network, Unlock, ShieldAlert, UserCheck, Hand } from 'lucide-react'
+import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Network, Unlock, ShieldAlert, UserCheck, Hand, Rocket, LogIn, Wrench } from 'lucide-react'
 import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, todayISO, ENV_MODULES } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 import ProjectOrgChart from './ProjectOrgChart.jsx'
@@ -94,6 +94,35 @@ function ProjectUsers({ project, store, onClose }) {
               <button className="btn-ghost !py-1.5 text-xs !text-red-600" onClick={() => setConfirm({ kind: 'delEnv' })}><Trash2 size={13} /> Supprimer l'environnement</button>
             </div>
             <p className="text-[11px] text-muted">Désactiver met tout l'environnement en lecture seule (ex. impayé) : le client garde ses données et son accès au support. Supprimer efface ses données et le classe en « Anciens clients ».</p>
+          </div>
+        )}
+
+        {/* Co-construction : le staff entre dans l'environnement, le règle avec le client, et
+            DÉCLARE ensuite qu'il est déployé. Deux gestes distincts, parce qu'ils ne disent pas
+            la même chose : l'un ouvre l'atelier, l'autre ferme le cadrage. */}
+        {env && (
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <div className="text-sm font-bold">Mise en place</div>
+            <p className="text-[11px] text-muted">
+              Entrez dans l'environnement pour le paramétrer avec le client, en voyant en direct
+              ce que cela donne. Quand il est prêt, déployez-le : le projet passe de Cadrage à Implémentation.
+            </p>
+            <div className="flex gap-1.5 flex-wrap">
+              <button className="btn-ghost !py-1.5 text-xs" onClick={() => { store.enterEnv(envId); onClose() }}>
+                <LogIn size={13} /> Entrer dans l'environnement
+              </button>
+              {project.deployedAt
+                ? <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 flex items-center gap-1">
+                    <Rocket size={11} /> déployé{project.deployedBy ? ` par ${project.deployedBy}` : ''}
+                  </span>
+                : <button className="btn-primary !py-1.5 text-xs" onClick={() => { store.deployEnvProject(envId); toast('Environnement déployé — le projet passe en Implémentation') }}>
+                    <Rocket size={13} /> Déployer cet environnement
+                  </button>}
+            </div>
+            <p className="text-[11px] text-muted">
+              Entrer chez un client fait passer son projet en <b>Maintenance</b> : le reste de l'équipe
+              voit qu'une intervention est en cours et n'y touche pas en même temps.
+            </p>
           </div>
         )}
 
@@ -543,6 +572,20 @@ export default function Projects() {
                     <div className="flex items-center justify-between text-[11px] text-muted mb-1"><span>Avancement</span><span>{pr}%</span></div>
                     <div className="h-2 rounded-full bg-surface overflow-hidden"><div className="h-full bg-brand rounded-full transition-all" style={{ width: `${pr}%` }} /></div>
                   </div>
+                  {/* État courant : ce que l'équipe doit lire en une seconde. */}
+                  {p.currentPhase === 'Maintenance' && (
+                    <div className="mt-2 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                      <Wrench size={12} className="shrink-0" />
+                      Intervention en cours{p.maintenanceBy ? ` — ${p.maintenanceBy}` : ''}
+                      {store.hasPerm('projects.manage') && (
+                        <button className="ml-auto underline" onClick={() => { store.endProjectMaintenance(p.envId || p.sourceEnvId); toast('Intervention terminée') }}>terminer</button>
+                      )}
+                    </div>
+                  )}
+                  {p.currentPhase && p.currentPhase !== 'Maintenance' && (
+                    <div className="mt-2 text-[11px] text-muted">Étape en cours : <b>{p.currentPhase}</b></div>
+                  )}
+
                   <div className="flex flex-wrap gap-1 mt-3">
                     {p.phases.map(ph => (
                       <span key={ph.id} className={`chip text-white ${ph.done ? 'opacity-50' : ''}`} style={{ background: ph.color }} title={`${fmtShort(ph.start)} → ${fmtShort(ph.end)}`}>{ph.done ? '✓ ' : ''}{ph.name}</span>

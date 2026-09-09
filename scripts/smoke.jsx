@@ -710,6 +710,18 @@ async function main() {
     await click(usersBtn)
     if (!text().includes("Accès de l'environnement")) throw new Error('Env access panel missing from project users')
     if (!find('button', "Supprimer l'environnement")) throw new Error("Delete-env button missing from project users")
+    // Déploiement : le geste ferme le cadrage et ouvre l'implémentation.
+    if (!find('button', 'Déployer cet environnement')) throw new Error('Deploy button missing from project users')
+    await click(find('button', 'Déployer cet environnement'))
+    win.__bdrFlushSave?.()
+    {
+      const st = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+      const proj = (st.projects || []).find(p => p.sourceEnvId === 'env-peoplespheres' || p.envId === 'env-peoplespheres')
+      if (!proj) throw new Error('Projet de l\'environnement introuvable')
+      if (proj.currentPhase !== 'Implémentation') throw new Error('Le déploiement doit faire passer le projet en Implémentation')
+      if (!proj.phases.find(ph => ph.name === 'Cadrage')?.done) throw new Error('Le déploiement doit clore le cadrage')
+      if (!(st.supportLogs || []).some(l => l.action === 'Environnement déployé')) throw new Error('Le déploiement doit être journalisé')
+    }
     await click(find('button', "Désactiver l'accès"))
     // La confirmation est imbriquée dans la fenêtre Utilisateurs, qui porte elle aussi des
     // boutons « Désactiver » (un par membre) : viser le dernier calque, pas le premier libellé.

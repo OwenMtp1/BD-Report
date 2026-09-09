@@ -718,8 +718,12 @@ export const CLIENT_STATUSES = [
 ]
 
 // Phases standard d'un projet d'implémentation (gestion de projet support).
-export const PROJECT_PHASES = ['Cadrage', 'Implémentation', 'Paramétrage', 'Formation', 'Recette', 'Go-live', 'Suivi']
-export const PROJECT_PHASE_COLORS = ['#3b5bdb', '#0ea5e9', '#8b5cf6', '#f59e0b', '#ec4899', '#10b981', '#64748b']
+// « Maintenance » n'est pas une étape du déroulé : c'est un ÉTAT, celui d'un environnement sur
+// lequel un membre de l'équipe est en train d'intervenir. Elle est en fin de liste pour cette
+// raison — le projet y passe et en revient, il ne la traverse pas une fois pour toutes.
+export const PROJECT_PHASES = ['Cadrage', 'Implémentation', 'Paramétrage', 'Formation', 'Recette', 'Go-live', 'Suivi', 'Maintenance']
+export const PROJECT_PHASE_COLORS = ['#3b5bdb', '#0ea5e9', '#8b5cf6', '#f59e0b', '#ec4899', '#10b981', '#64748b', '#e11d48']
+export const MAINTENANCE_PHASE = 'Maintenance'
 export const PROJECT_STATUSES = [
   { id: 'prevu', label: 'Prévu', color: 'bg-gray-200 text-gray-600' },
   { id: 'encours', label: 'En cours', color: 'bg-blue-100 text-blue-700' },
@@ -3226,7 +3230,17 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         setSession(null); localStorage.removeItem(REMEMBER_KEY)
         Promise.resolve(signOutSupabase()).catch(() => {})
       },
-      enterEnv(envId) { setSession(s => ({ ...s, envId, subEnvId: null })) },
+      enterEnv(envId) {
+        setSession(s => ({ ...s, envId, subEnvId: null }))
+        // Un membre de l'équipe BD Report qui entre chez un client y intervient : le projet
+        // passe en Maintenance pour que le reste de l'équipe le sache. Le créateur d'un
+        // environnement n'est pas concerné — c'est chez lui.
+        const env = db.environments.find(e => e.id === envId)
+        if (isSupportRole(account?.role) && env && env.createdBy !== account?.id) {
+          this.markProjectMaintenance(envId)
+          this.logStaff({ type: 'Navigation', cat: 'navigation', action: "Entrée dans l'environnement d'un client", envId })
+        }
+      },
       setCurrency(c) { if (roBlocked()) return; setDb(d => { if (session?.subEnvId && d.data[session.subEnvId]) d.data[session.subEnvId].currency = c; return d }); setCurrentCurrency(c) },
       enterSubEnv(subEnvId) {
         setSession(s => ({ ...s, subEnvId }))
@@ -4971,6 +4985,64 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           return d
         })
         this.logStaff({ type: 'Projet', cat: 'projet', action: 'Prise en charge relâchée', details: p.name || p.clientName || '', envId: p.envId || null })
+      },
+      // ----- Cycle de vie d'un projet d'implémentation
+      // Déployer, c'est déclarer que la phase de cadrage est finie et que l'environnement part
+      // entre les mains du client. Le geste est explicite : il ferme une étape et en ouvre une
+      // autre, plutôt que de laisser chacun deviner où en est la mise en place.
+      deployEnvProject(envId) {
+        if (!accountHasPerm(account, 'projects.manage', db)) return
+        const env = db.environments.find(e => e.id === envId)
+        setDb(d => {
+          const p = (d.projects || []).find(x => x.sourceEnvId === envId || x.envId === envId)
+          if (!p) return d
+          p.phases = p.phases || []
+          const cadrage = p.phases.find(ph => ph.name === 'Cadrage')
+          if (cadrage) cadrage.done = true
+          let impl = p.phases.find(ph => ph.name === 'Implémentation')
+          if (!impl) {
+            const start = todayISO()
+            impl = { id: uid(), name: 'Implémentation', start, end: addDaysISO(start, 13), done: false, color: PROJECT_PHASE_COLORS[1] }
+            p.phases.splice(Math.max(0, p.phases.findIndex(ph => ph.name === 'Cadrage') + 1), 0, impl)
+          }
+          p.currentPhase = 'Implémentation'
+          p.deployedAt = new Date().toISOString()
+          p.deployedBy = account?.pseudo || ''
+          if (p.status === 'prevu') { p.status = 'encours'; p.statusLocked = true }
+          return d
+        })
+        this.logStaff({ type: 'Projet', cat: 'projet', action: 'Environnement déployé', details: env?.name || '', envId })
+      },
+      // Un membre du staff vient d'entrer chez un client : le projet passe en Maintenance, le
+      // temps de l'intervention. Ce n'est pas de la surveillance — c'est ce qui évite que deux
+      // techniciens travaillent au même moment sur la même configuration sans le savoir.
+      markProjectMaintenance(envId) {
+        if (!isSupportRole(account?.role) || !envId) return
+        setDb(d => {
+          const p = (d.projects || []).find(x => x.sourceEnvId === envId || x.envId === envId)
+          if (!p) return d
+          p.phases = p.phases || []
+          if (!p.phases.some(ph => ph.name === MAINTENANCE_PHASE)) {
+            const start = todayISO()
+            p.phases.push({ id: uid(), name: MAINTENANCE_PHASE, start, end: start, done: false, color: PROJECT_PHASE_COLORS[7] })
+          }
+          p.currentPhase = MAINTENANCE_PHASE
+          p.maintenanceBy = account?.pseudo || ''
+          p.maintenanceAt = new Date().toISOString()
+          return d
+        })
+      },
+      // Fin d'intervention : le projet retrouve l'étape où il en était.
+      endProjectMaintenance(envId, backTo = '') {
+        if (!isSupportRole(account?.role) || !envId) return
+        setDb(d => {
+          const p = (d.projects || []).find(x => x.sourceEnvId === envId || x.envId === envId)
+          if (!p || p.currentPhase !== MAINTENANCE_PHASE) return d
+          const open = (p.phases || []).filter(ph => ph.name !== MAINTENANCE_PHASE && !ph.done)
+          p.currentPhase = backTo || open[0]?.name || ''
+          p.maintenanceBy = ''; p.maintenanceAt = ''
+          return d
+        })
       },
       // Qui peut modifier ce projet : personne ne l'a pris, c'est le mien, ou j'ai le droit
       // d'intervenir sur celui d'un autre.
