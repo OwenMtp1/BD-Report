@@ -30,7 +30,7 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate } = await import('../src/store.jsx')
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -74,6 +74,25 @@ async function main() {
     if (!STAFF_PERMISSION_IDS.includes('channels.manage')) throw new Error('Le droit sur les canaux manque au catalogue staff')
     if (!isClientManagerRole('Manager') || isClientManagerRole('Membre')) throw new Error('Repli historique fauss\u00e9')
     if (!isElevatedRole('Fondateur') || isElevatedRole('Manager')) throw new Error('Rôles élevés faussés')
+
+    // Chaque brique livrée doit être représentée dans un panneau de droits. Sans ce test, une
+    // feature ajoutée plus tard resterait invisible pour qui administre les accès — et
+    // s'appliquerait à tout le monde par défaut, ce qui est exactement l'inverse du but.
+    for (const p of ['pilot.targets', 'pilot.challenges', 'deals.close', 'primes.sign']) {
+      if (!CLIENT_PERMISSION_IDS.includes(p)) throw new Error('Droit client manquant au catalogue : ' + p)
+    }
+    for (const p of ['env.build', 'env.modules', 'projects.others']) {
+      if (!STAFF_PERMISSION_IDS.includes(p)) throw new Error('Droit staff manquant au catalogue : ' + p)
+    }
+    // Le rôle Manager intégré doit porter TOUS les droits client : c'est lui qui administre.
+    const mgr = defaultEnvRoles().find(r => r.id === 'erole-manager')
+    const missing = CLIENT_PERMISSION_IDS.filter(p => !(mgr.perms || []).includes(p))
+    if (missing.length) throw new Error("Le rôle Manager n'a pas les droits : " + missing.join(', '))
+    // Chaque module optionnel doit être décidable par le staff, sinon il s'impose au client.
+    const modules = ENV_MODULES.map(m => m.id)
+    for (const m of ['handoff', 'committee', 'quotas', 'oneToOne', 'challenges', 'statements']) {
+      if (!modules.includes(m)) throw new Error('Module absent du catalogue : ' + m)
+    }
   }
 
   // Entretiens 1:1 : un canal par binôme, créé automatiquement, et aussi privé qu'un message

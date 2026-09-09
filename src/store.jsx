@@ -433,6 +433,10 @@ export const STAFF_PERMISSION_GROUPS = [
       { id: 'clients.view', label: 'Voir les fiches clients' },
       { id: 'clients.manage', label: 'Modifier / bloquer / débloquer un client' },
       { id: 'clients.delete', label: 'Supprimer un client' },
+      // Composer un environnement, c'est décider de ce qu'un client reçoit : modules, offre,
+      // rôles, accès. Ce n'est pas la même chose que modifier une fiche client.
+      { id: 'env.build', label: "Composer et livrer un environnement (atelier)" },
+      { id: 'env.modules', label: "Installer ou retirer les modules d'un environnement" },
     ],
   },
   {
@@ -571,7 +575,7 @@ function defaultPermsFor(roleKey) {
   if (roleKey === 'Administrateur') return [
     'tickets.view', 'tickets.reply', 'tickets.assign', 'tickets.priority', 'tickets.status',
     'requests.view', 'requests.manage', 'kb.manage', 'canned.manage',
-    'clients.view', 'clients.manage', 'projects.view', 'projects.manage', 'projects.others',
+    'clients.view', 'clients.manage', 'clients.delete', 'env.build', 'env.modules', 'projects.view', 'projects.manage', 'projects.others',
     'accounts.view', 'accounts.create', 'accounts.role', 'accounts.offer', 'accounts.disable', 'accounts.remove',
     'passwords.view', 'passwords.reset', 'services.manage', 'channels.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access',
   ]
@@ -667,7 +671,11 @@ export const CLIENT_PERMISSION_GROUPS = [
       { id: 'pilot.kpi', label: "Consulter les KPI de l'entreprise" },
       { id: 'pilot.team', label: "Piloter l'activité de l'équipe" },
       { id: 'pilot.pipeline', label: "Voir le pipeline de toute l'équipe" },
-      { id: 'pilot.targets', label: 'Définir les objectifs' },
+      { id: 'pilot.targets', label: 'Définir les objectifs et les quotas' },
+      { id: 'pilot.challenges', label: "Lancer des challenges d'équipe" },
+      // Trancher une passation engage la rémunération de quelqu'un : c'est un droit à part,
+      // pas un effet de bord du droit d'encadrer.
+      { id: 'deals.close', label: 'Accepter ou refuser les leads transmis' },
     ],
   },
   {
@@ -675,6 +683,7 @@ export const CLIENT_PERMISSION_GROUPS = [
       { id: 'primes.rules', label: 'Définir les barèmes et les règles' },
       { id: 'primes.all', label: "Voir les primes de toute l'équipe" },
       { id: 'primes.validate', label: 'Valider ou corriger une prime' },
+      { id: 'primes.sign', label: 'Signer les relevés de primes' },
     ],
   },
   {
@@ -2842,6 +2851,37 @@ function migrate(db) {
     })
     db._autoSeed.envRoleTabs = [...db._autoSeed.envRoleTabs, ...ungranted]
   }
+  // Même principe pour les DROITS de management ajoutés après coup : le rôle Manager intégré
+  // les reçoit une fois. Sans cela, un manager déjà installé perdrait l'accès à une brique
+  // neuve sans que personne comprenne pourquoi — et ne pourrait pas se le rendre lui-même.
+  db._autoSeed.envRolePerms = Array.isArray(db._autoSeed.envRolePerms) ? db._autoSeed.envRolePerms : []
+  const newPerms = CLIENT_PERMISSION_IDS.filter(p => !db._autoSeed.envRolePerms.includes(p))
+  if (newPerms.length) {
+    ;(db.environments || []).forEach(e => {
+      ;(e.roles || []).forEach(r => {
+        if (r.id === 'erole-manager') r.perms = [...new Set([...(r.perms || []), ...newPerms])]
+      })
+    })
+    db._autoSeed.envRolePerms = [...db._autoSeed.envRolePerms, ...newPerms]
+  }
+  // Idem côté staff : un droit neuf va aux rôles intégrés qui portent déjà le droit voisin,
+  // sinon l'écran correspondant resterait invisible sur les bases existantes.
+  db._autoSeed.staffPerms = Array.isArray(db._autoSeed.staffPerms) ? db._autoSeed.staffPerms : []
+  const newStaffPerms = STAFF_PERMISSION_IDS.filter(p => !db._autoSeed.staffPerms.includes(p))
+  if (newStaffPerms.length) {
+    // Chaque droit neuf hérite du droit dont il est le prolongement naturel.
+    const PARENT = { 'env.build': 'clients.manage', 'env.modules': 'clients.manage', 'projects.others': 'projects.manage' }
+    ;(db.staffRoles || []).forEach(r => {
+      const perms = r.permissions || []
+      if (!perms.length) return // rôle sans droit : on ne lui en invente pas
+      newStaffPerms.forEach(p => {
+        const parent = PARENT[p]
+        if (parent && perms.includes(parent) && !perms.includes(p)) perms.push(p)
+      })
+      r.permissions = perms
+    })
+    db._autoSeed.staffPerms = [...db._autoSeed.staffPerms, ...newStaffPerms]
+  }
   seedAutoChannels(db)
   seedOneToOneChannels(db)
   reconcileReporting(db)
@@ -3350,7 +3390,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       },
       // ----- Objectifs & quotas (posés par le manager, portés par l'environnement)
       quotas() { return envQuotas(db.environments.find(e => e.id === session?.envId)) },
-      canSetQuotas() { return this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
+      canSetQuotas() { return this.hasClientPerm('pilot.targets') || this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
       setQuotas(patch) {
         if (readOnly || !this.canSetQuotas()) return
         setDb(d => {
@@ -3384,7 +3424,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (saved) return saved
         return { ...buildStatement(db.data[subId] || {}, env, subId, mKey), signature: null }
       },
-      canSignStatements() { return this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
+      canSignStatements() { return this.hasClientPerm('primes.sign') || this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
       signStatement(subId, mKey) {
         if (readOnly || !this.canSignStatements()) return
         const who = db.subenvs.find(s => s.id === session?.subEnvId)
@@ -3422,7 +3462,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // ----- Challenges d'équipe
       challenges() { return envChallenges(db.environments.find(e => e.id === session?.envId)) },
       activeChallenges() { return this.challenges().filter(c => challengeIsActive(c)) },
-      canRunChallenges() { return this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
+      canRunChallenges() { return this.hasClientPerm('pilot.challenges') || this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
       saveChallenge(ch) {
         if (readOnly || !this.canRunChallenges()) return
         setDb(d => {
@@ -3457,6 +3497,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       envCommitteeRoles(envId) { return committeeRoles(db.environments.find(e => e.id === envId)) },
       envCommitteeRelations(envId) { return committeeRelations(db.environments.find(e => e.id === envId)) },
       setCommittee(envId, patch) {
+        if (!accountHasPerm(account, 'clients.manage', db)) return
         setDb(d => {
           const env = d.environments.find(e => e.id === envId); if (!env) return d
           env.committee = { roles: committeeRoles(env), relations: committeeRelations(env), ...patch }
@@ -3468,6 +3509,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         return Object.fromEntries(ENV_MODULE_IDS.map(id => [id, envModuleOn(env, id)]))
       },
       setEnvModules(envId, patch) {
+        if (!accountHasPerm(account, 'env.modules', db) && !accountHasPerm(account, 'clients.manage', db)) return
         setDb(d => {
           const env = d.environments.find(e => e.id === envId); if (!env) return d
           env.modules = { ...defaultEnvModules(), ...(env.modules || {}), ...patch }
@@ -3499,7 +3541,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const env = db.environments.find(e => e.id === session?.envId)
         if (!env) return false
         if (isSupportRole(account?.role)) return true
-        if (this.hasClientPerm('team.manage') || isClientManagerRole(account?.role)) return true
+        if (this.hasClientPerm('deals.close') || this.hasClientPerm('team.manage') || isClientManagerRole(account?.role)) return true
         if (!envHasManager(db, env.id) && env.createdBy === account?.id) return true
         const c = envClosers(env)
         if (c.subIds.includes(session?.subEnvId)) return true
@@ -3508,6 +3550,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       },
       envClosers(envId) { return envClosers(db.environments.find(e => e.id === envId)) },
       setEnvClosers(envId, patch) {
+        if (!accountHasPerm(account, 'clients.manage', db)) return
         setDb(d => {
           const env = d.environments.find(e => e.id === envId); if (!env) return d
           env.closers = { ...envClosers(env), ...patch }

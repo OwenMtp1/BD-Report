@@ -32,7 +32,7 @@ const TABS = [
   { id: 'clients', label: 'Clients', icon: Users2, El: Clients, perm: 'clients.view' },
   { id: 'projects', label: 'Projets', icon: FolderKanban, El: Projects, perm: 'projects.view' },
   { id: 'agenda', label: 'Agenda', icon: CalendarDays, El: StaffAgenda, perm: 'projects.view' },
-  { id: 'workshop', label: 'Atelier', icon: Hammer, El: Workshop, perm: 'clients.manage' },
+  { id: 'workshop', label: 'Atelier', icon: Hammer, El: Workshop, perm: 'env.build' },
   // Vue globale des comptes et environnements : c'est du back-office éditeur, sa place est
   // ici et non côté client, où elle exposait les comptes des autres entreprises clientes.
   { id: 'accounts', label: 'Comptes & environnements', icon: Shield, El: () => <Admin mode="admin" />, perm: 'accounts.view' },
