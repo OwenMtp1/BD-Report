@@ -1498,6 +1498,9 @@ export function buildDemoDb(brand) {
     ['Solstice Énergie', 'Énergie', 380, 'Laura Pinto', 'Head of Talent'], ['Atelier Mobilier', 'Manufacture', 60, 'Hugo Lefort', 'DG'],
     ['Kairos Santé', 'Santé', 340, 'Nora Belkacem', 'DRH'], ['Vent du Nord', 'Énergie', 150, 'Antoine Lemoine', 'DG'],
     ['Papeterie Auber', 'Industrie', 95, 'Sylvie Marchand', 'Responsable RH'],
+    ['Orbe Digital', 'SaaS', 180, 'Marc Villard', 'COO'], ['Fonderie Berthin', 'Industrie', 640, 'Claire Nogent', 'DRH'],
+    ['Aubrac Distribution', 'Retail', 410, 'Yann Ferrand', 'Directeur régional'], ['Lumen Santé', 'Santé', 260, 'Sofia Ranieri', 'DRH'],
+    ['Cap Horizon', 'Conseil', 75, 'Bruno Kessler', 'Associé'],
   ], [
     { phase: 'SQL', opp: 'Gagnée', sql: 6, source: 'Outbound', prov: 'Cold Call' }, { phase: 'MQL', opp: 'En cours', source: 'Inbound', prov: 'Site Web' },
     { phase: 'R1', opp: 'No Show R1', motifNoShow: 'A annulé', source: 'Outbound', prov: 'LinkedIn' }, { phase: 'Signée', opp: 'Signée', sql: 20, source: 'Event', prov: 'Salon' },
@@ -1506,6 +1509,13 @@ export function buildDemoDb(brand) {
     { phase: 'R1', opp: 'No Show R1', motifNoShow: 'A oublié', source: 'Inbound', prise: 5, rdv: -4 },
     { phase: 'MQL', opp: 'En cours', source: 'Emailing', prov: 'Séquence email' },
     { phase: 'SQL', opp: 'Gagnée', sql: 9, source: 'Inbound', prov: 'Site Web' },
+    // Trois mois d'antériorité : un commercial en poste depuis un trimestre a un
+    // historique de primes, et le graphique de suivi doit le montrer.
+    { phase: 'Signée', opp: 'Signée', sql: 38, prise: 62, rdv: 44, source: 'Outbound', prov: 'Cold Call' },
+    { phase: 'SQL', opp: 'Gagnée', sql: 52, prise: 74, rdv: 58, source: 'Inbound', prov: 'Site Web' },
+    { phase: 'SQL', opp: 'Gagnée', sql: 66, prise: 88, rdv: 72, source: 'Event', prov: 'Salon' },
+    { phase: 'Signée', opp: 'Signée', sql: 81, prise: 104, rdv: 87, source: 'Outbound', prov: 'LinkedIn' },
+    { phase: 'SQL', opp: 'Gagnée', sql: 95, prise: 118, rdv: 101, source: 'Partner', prov: 'Référence client' },
   ], (d) => {
     // Une règle de prime par activité pour illustrer le simulateur RDV-based.
     d.activityRules = [{ id: uid(), label: 'Cadence R1/R2', period: 'mois', phases: ['R1', 'R2'], tiers: [{ id: uid(), min: 6, montant: 200 }, { id: uid(), min: 12, montant: 500 }, { id: uid(), min: 20, montant: 1000 }] }]

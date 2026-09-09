@@ -97,11 +97,16 @@ const run = async () => {
 
   // Le thème est mémorisé PAR ESPACE : chaque casquette a le sien, il faut donc
   // l'appliquer à nouveau après chaque bascule.
+  const THEME = process.env.SHOT_THEME === 'light' ? 'BD Report' : 'BD Report Studio'
+  const SUFFIX = process.env.SHOT_THEME === 'light' ? '-light' : ''
   const applyStudio = async () => {
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('demo-navigate', { detail: 'settings' })))
     await page.waitForTimeout(1100)
-    const btn = page.locator('button:has-text("BD Report Studio")').first()
-    if (!(await btn.count())) { console.warn('! thème Studio introuvable'); return }
+    // « BD Report » est un préfixe de « BD Report Studio », et le bouton porte AUSSI sa
+    // légende (« formes et reliefs revus ») : comparer le texte entier du bouton échouait
+    // pour les deux thèmes. On vise le libellé lui-même, qui lui est exact.
+    const btn = page.locator(`button:has(span:text-is(${JSON.stringify(THEME)}))`).first()
+    if (!(await btn.count())) { throw new Error('Thème « ' + THEME + ' » introuvable dans les réglages') }
     await btn.click()
     await clickText(page, 'Sauvegarder le thème')
     await page.waitForTimeout(800)
@@ -142,8 +147,9 @@ const run = async () => {
       await el.click()
       await page.waitForTimeout(1400)
     }
-    await page.screenshot({ path: path.join(OUT, shot.file), scale: 'css' })
-    console.log('✓', shot.file)
+    const outFile = shot.file.replace(/(\.[a-z]+)$/, SUFFIX + '$1')
+    await page.screenshot({ path: path.join(OUT, outFile), scale: 'css' })
+    console.log('✓', outFile)
     // Une capture qui ouvre un panneau doit le refermer : laissé ouvert, il recouvre la
     // page et intercepte les clics des prises de vue suivantes (le passage en casquette
     // manager échouait, et teamlead/orgchart n'étaient plus régénérés).

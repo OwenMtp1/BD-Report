@@ -47,9 +47,11 @@ const priorityOf = (rel) => {
 // dix-neuf pages — c'est de cette recopie que venaient les balises manquantes.
 const THEME_HEAD = `<script>(function(){try{var t=localStorage.getItem('bdr_site_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()<\/script>
 <style>
-.theme-btn{border:1px solid var(--line2);background:rgba(127,127,127,.06);color:var(--text);border-radius:10px;
-  padding:7px 10px;font-size:15px;line-height:1;cursor:pointer;transition:.2s}
-.theme-btn:hover{background:rgba(127,127,127,.14)}
+.theme-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line2);
+  background:var(--veil);color:var(--muted);border-radius:10px;width:34px;height:34px;padding:0;
+  cursor:pointer;transition:color .2s,background .2s,border-color .2s}
+.theme-btn:hover{color:var(--text);background:var(--veil2)}
+.theme-btn svg{width:17px;height:17px;display:block}
 </style>`
 
 const THEME_BODY = `<script>
@@ -58,17 +60,34 @@ const THEME_BODY = `<script>
   if (!host) return;
   var b = document.createElement('button');
   b.className = 'theme-btn'; b.type = 'button';
+  // Pictogrammes tracés au trait plutôt qu'émoji : un émoji est rendu différemment par
+  // chaque système, en couleur, et jure avec le reste d'une interface sobre.
+  var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.4M12 19.2v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
   var root = document.documentElement;
   function isLight(){
     var t = root.getAttribute('data-theme');
     if (t) return t === 'light';
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
   }
+  // Les captures du produit suivent le thème du site : montrer une interface sombre
+  // sur une page claire donne l'impression d'une image collée là par erreur.
+  function swapShots(light){
+    var imgs = document.querySelectorAll('img[src*="/assets/"], img[src^="assets/"], img[src^="../assets/"]');
+    for (var i = 0; i < imgs.length; i++) {
+      var el = imgs[i], src = el.getAttribute('src');
+      if (!src || src.indexOf('og.png') > -1 || src.indexOf('.svg') > -1) continue;
+      var isLightSrc = src.indexOf('-light.') > -1;
+      if (light && !isLightSrc) el.setAttribute('src', src.replace(/(\.[a-z]+)$/, '-light$1'));
+      else if (!light && isLightSrc) el.setAttribute('src', src.replace('-light.', '.'));
+    }
+  }
   function paint(){
     var light = isLight();
-    b.textContent = light ? '\u{1F319}' : '\u2600\uFE0F';
+    b.innerHTML = light ? MOON : SUN;
     b.title = light ? 'Passer en mode sombre' : 'Passer en mode clair';
     b.setAttribute('aria-label', b.title);
+    swapShots(light);
   }
   b.onclick = function(){
     var next = isLight() ? 'dark' : 'light';
