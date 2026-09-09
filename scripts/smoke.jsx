@@ -429,6 +429,24 @@ async function main() {
     const enText = text()
     if (enText.includes('Créer un RDV')) throw new Error("Le bouton principal n'a pas été traduit en anglais")
     if (!enText.includes('Create a meeting')) throw new Error('La traduction anglaise ne s\'applique pas au rendu')
+    // L'espagnol suit le même chemin : une seule langue branchée cacherait une clé
+    // de dictionnaire à deux colonnes au lieu de trois.
+    await act(async () => { win.__bdrStore.setUiLang('es') })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    if (!text().includes('Crear una cita')) throw new Error("La traduction espagnole ne s'applique pas au rendu")
+
+    // Rien de français ne doit subsister dans une phrase de l'INTERFACE. Le contenu SAISI
+    // (notes, noms d'entreprise, messages) reste dans sa langue, c'est une donnée : on le
+    // reconnaît en le retrouvant tel quel dans l'espace de travail, et on l'écarte.
+    const stop = / (de|des|du|le|la|les|un|une|vous|votre|pour|dans|avec|sur|par|est|aux) /
+    const stored = JSON.stringify(win.__bdrStore?.sub || {})
+    const untranslated = (win.__bdrI18nMissing?.() || [])
+      .filter(s => s.length > 25 && stop.test(` ${s} `))
+      .filter(s => !stored.includes(s))
+    if (untranslated.length) {
+      throw new Error(`Phrases restées en français hors dictionnaire (${untranslated.length}) : ${untranslated.slice(0, 5).join(' | ')}`)
+    }
+
     // Retour au français : les originaux doivent être restitués, pas retraduits.
     await act(async () => { win.__bdrStore.setUiLang('fr') })
     await act(async () => { await new Promise(r => setTimeout(r, 60)) })

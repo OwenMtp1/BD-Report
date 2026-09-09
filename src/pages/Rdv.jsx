@@ -268,7 +268,9 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
       {committee && committeeGaps(f, sub, committee.roles) && (
         <div className="mt-2 rounded-xl bg-amber-50 border border-amber-300 dark:bg-amber-500/10 dark:border-amber-500/30 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-          <span><b>Comité d'achat incomplet :</b> {committeeGaps(f, sub, committee.roles).join(', ')}.
+          {/* Chaque manque dans son propre nœud : une phrase recollée avant l'affichage
+              ne se traduit pas, la traduction travaillant sur le texte rendu. */}
+          <span><b>Comité d'achat incomplet :</b> {committeeGaps(f, sub, committee.roles).map((g, i) => <span key={g}>{i ? ', ' : ' '}<span>{g}</span></span>)}.
             Une affaire à ce stade qui ne tient qu'à une personne se perd souvent sans explication.</span>
         </div>
       )}
@@ -714,7 +716,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       )}
       {committee && committeeGaps(r, sub, committee.roles) && (
         <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
-          <AlertTriangle size={11} /> {committeeGaps(r, sub, committee.roles).join(' · ')}
+          <AlertTriangle size={11} /> {committeeGaps(r, sub, committee.roles).map((g, i) => <span key={g}>{i ? ' · ' : ''}<span>{g}</span></span>)}
         </p>
       )}
       {r.notes && <p className="text-xs text-muted mt-2.5 line-clamp-2" title={r.notes}>📝 {r.notes}</p>}

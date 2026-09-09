@@ -52,7 +52,30 @@ npm run dev        # serveur de dev
   session Supabase refermée (les accès restent délivrés par un manager, sinon les sièges d'une offre seraient contournés).
   `logout()` ferme aussi la session Supabase, sans quoi l'écran de connexion la retrouverait aussitôt. Côté Google Cloud :
   l'URI de redirection est celle de **Supabase** (`https://<ref>.supabase.co/auth/v1/callback`), pas celle du site.
-- **`src/i18n.jsx`** — dico FR/EN/ES (`useT()`), fallback FR.
+- **Traduction FR / EN / ES — TOUTE l'interface change de langue.** Deux étages :
+  - **`src/i18n.jsx`** — petit dico à clés (`useT()`, `tLang()`), fallback FR. Sert aux quelques
+    libellés construits hors rendu (navigation, écran de connexion).
+  - **`src/i18nAuto.js` + `src/i18nDict.js`** — le reste, c'est-à-dire l'essentiel. Les 54 écrans sont
+    écrits en français EN DUR : les envelopper un par un dans un `t('cle')` supposait ~1 500 modifications,
+    et surtout chaque phrase ajoutée ensuite serait restée en français sans que personne ne le voie. On
+    prend donc le problème par l'autre bout — **le texte français EST la clé**, et la traduction s'applique
+    au rendu. `installUITranslator(lang)` (appelé par `I18nProvider` à chaque changement de langue) parcourt
+    le DOM, traduit les nœuds de texte et 4 attributs visibles (`placeholder`, `title`, `aria-label`, `alt`),
+    puis suit les rendus suivants via un `MutationObserver` regroupé au cadre suivant.
+    ⚠️ Il ne touche **jamais** la `value` d'un champ (ce serait modifier une donnée), ni un sous-arbre
+    portant `data-no-i18n`, ni `SCRIPT/STYLE/TEXTAREA/CODE/PRE`. Le français d'origine est mémorisé
+    (`WeakMap`) : revenir au français **restitue** le texte au lieu de le retraduire.
+    ⚠️ **Une phrase recollée avant l'affichage ne se traduit pas** (`gaps.join(' · ')` produit un seul
+    nœud, absent du dictionnaire) : rendre chaque fragment dans son propre élément.
+  - **`src/i18nDict.js`** — `UI_DICT = [[fr, en, es], …]`, ~1 500 entrées. La clé doit correspondre
+    **au caractère près** au texte rendu (entités `&apos;` décodées comprises) ; une clé approximative ne
+    traduit rien, en silence.
+  - **Contrôle** : `npm run i18n:missing` (et la dernière ligne de `npm run audit`) extrait les chaînes
+    d'interface de `src/**/*.jsx` — texte JSX, props d'affichage, `toast(…)`, et libellés déclarés en objet
+    (`{ label: '…' }`) — et liste ce qui manque au dictionnaire. **Doit rester à 100 %.** Le smoke complète
+    par un contrôle À L'EXÉCUTION (`window.__bdrI18nMissing`) : il bascule en EN puis en ES et échoue si une
+    phrase française subsiste à l'écran ; le contenu SAISI (notes, messages) est écarté en le retrouvant
+    dans l'espace de travail — une donnée reste dans sa langue.
 - **`src/themes.js`** — **4 thèmes seulement** : `ocean-pro` (design BD Report d'origine, défaut), `sombre`,
   `nuit`, et **`bdr-studio`** (quasi-noir, **vert néon** en accent principal et cyan en second : cartes en verre,
   halos, chiffres lumineux, et **tableaux soignés** — en-tête tenu au défilement, lignes alternées, liseré vert sur

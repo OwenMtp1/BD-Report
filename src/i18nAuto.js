@@ -126,6 +126,9 @@ const flush = () => {
 export function installUITranslator(lang) {
   currentLang = lang || 'fr'
   if (typeof document === 'undefined') return
+  // Prise de test : le contrôle statique (`npm run audit`) ne voit que les chaînes écrites
+  // en dur. Celles composées à l'exécution n'apparaissent qu'ici, une fois l'écran rendu.
+  if (typeof window !== 'undefined') window.__bdrI18nMissing = missingStrings
   flush()
   if (observer) return
   // Environnement sans observateur de mutations (rendu serveur, jsdom minimal) : la
