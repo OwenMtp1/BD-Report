@@ -2649,10 +2649,39 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           return d
         })
       },
-      createEnv({ name, logo }) {
+      // Environnements dont la configuration peut servir de modèle : ceux que l'on gère.
+      templateEnvs() {
+        return db.environments
+          .filter(e => e.createdBy === account?.id || isSupportRole(account?.role))
+          .map(e => ({ id: e.id, name: e.name }))
+      },
+      // `templateOf` : reprend la CONFIGURATION d'un environnement existant — étapes du
+      // pipeline, issues, barèmes, règles de prime, services et rôles. Jamais les données
+      // du client d'origine : ouvrir un espace ne doit pas y recopier les rendez-vous,
+      // contacts ou notes de quelqu'un d'autre.
+      createEnv({ name, logo, templateOf }) {
         // L'environnement hérite de l'offre de son créateur (Starter reste limité).
         const plan = account?.plan || 'starter'
-        const env = { id: uid(), name, logo: logo || '', pin: '', plan, createdBy: session.accountId, departments: ['Marketing', 'Sales'] }
+        const src = templateOf ? db.environments.find(e => e.id === templateOf) : null
+        const env = {
+          id: uid(), name, logo: logo || '', pin: '', plan, createdBy: session.accountId,
+          departments: src ? [...(src.departments || [])] : ['Marketing', 'Sales'],
+          services: src ? (src.services || []).map(sv => ({ ...sv, id: uid() })) : undefined,
+          roles: src ? (src.roles || []).map(r => ({ ...r, id: uid() })) : undefined,
+        }
+        // La configuration de pipeline et de primes vit dans les ESPACES, pas dans
+        // l'environnement : on la reprend de l'espace du créateur du modèle.
+        const srcData = src ? db.data[db.subenvs.find(x => x.envId === src.id && x.ownerId === src.createdBy)?.id] : null
+        env._template = srcData ? {
+          phases: [...(srcData.phases || [])],
+          primePhases: [...(srcData.primePhases || [])],
+          wonPhases: [...(srcData.wonPhases || [])],
+          lostPhases: [...(srcData.lostPhases || [])],
+          primeCutoffDay: srcData.primeCutoffDay,
+          bareme: (srcData.bareme || []).map(b => ({ ...b, id: uid() })),
+          activityRules: (srcData.activityRules || []).map(r => ({ ...r, id: uid(), tiers: (r.tiers || []).map(t => ({ ...t, id: uid() })) })),
+          goals: { ...(srcData.goals || {}) },
+        } : null
         setDb(d => {
           d.environments.push(env)
           // Tout nouvel environnement devient un client avec son projet d'implémentation.
@@ -2667,7 +2696,14 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       createSubEnv(envId, { prenom, nom, poste, service, pin }) {
         if (roBlocked()) return null
         const sub = { id: uid(), envId, prenom, nom, poste, service, pin: pin || '0000', photo: '', ownerId: session.accountId }
-        setDb(d => { d.subenvs.push(sub); d.data[sub.id] = emptySubEnvData(); return d })
+        setDb(d => {
+          d.subenvs.push(sub)
+          // Un espace ouvert dans un environnement issu d'un modèle démarre avec la
+          // configuration de ce modèle — sinon le modèle ne servirait qu'une fois.
+          const tpl = d.environments.find(e => e.id === envId)?._template
+          d.data[sub.id] = tpl ? { ...emptySubEnvData(), ...structuredClone(tpl) } : emptySubEnvData()
+          return d
+        })
         return sub
       },
       updateEnv(envId, patch) { if (roBlocked()) return; setDb(d => { Object.assign(d.environments.find(e => e.id === envId), patch); return d }) },
@@ -3994,6 +4030,10 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
     }
   }, [db, session])
 
+  // Même rôle que __bdrFlushSave : une porte d'entrée pour le test de fumée et le
+  // diagnostic en console. La démo et la formation ne l'exposent pas, pour qu'un test
+  // ne puisse pas viser par erreur un provider isolé au lieu du provider réel.
+  if (!demo && typeof window !== 'undefined') window.__bdrStore = api
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>
 }
 

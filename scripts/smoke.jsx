@@ -716,6 +716,25 @@ async function main() {
 
   const realErrors = errors.filter(e => !e.includes('act(') && !e.includes('width(0) and height(0)') && !e.includes('Not implemented') && !e.includes('test-utils'))
   if (realErrors.length) throw new Error('Console errors:\n' + realErrors.join('\n---\n'))
+  // Modèles d'environnement : la CONFIGURATION se reprend, jamais les données du client
+  // d'origine — ouvrir un espace ne doit recopier ni rendez-vous, ni contacts, ni notes.
+  {
+    const st = win.__bdrStore
+    if (!st) throw new Error('Store non exposé pour le test des modèles')
+    const read = () => { win.__bdrFlushSave?.(); return JSON.parse(win.localStorage.getItem('bdrflow_db_v1')) }
+    const src = read().environments.find(e => e.id === 'env-peoplespheres')
+    if (!src) throw new Error('Environnement source introuvable')
+    const created = st.createEnv({ name: 'Modèle Test', templateOf: 'env-peoplespheres' })
+    await act(async () => {})
+    const env = read().environments.find(e => e.id === created.id)
+    if (!env) throw new Error('Environnement issu du modèle non créé')
+    if (!env._template || !env._template.phases?.length) throw new Error('La configuration du modèle n\'a pas été reprise')
+    if (!env._template.bareme) throw new Error('Le barème du modèle n\'a pas été repris')
+    if ('rdvs' in env._template || 'contacts' in env._template || 'notes' in env._template) {
+      throw new Error('Un modèle ne doit JAMAIS embarquer les données du client d\'origine')
+    }
+  }
+
   console.log('SMOKE OK — all screens rendered without errors')
 }
 

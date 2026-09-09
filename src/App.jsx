@@ -303,7 +303,21 @@ function EnvPicker() {
                 r.readAsDataURL(f)
               }} />
             </Field>
-            <p className="text-xs text-muted">Le nouvel environnement contient toutes les fonctionnalités de l'app, vide de données. Vous en devenez le Manager.</p>
+            {/* Repartir d'un environnement existant évite de recomposer à la main le
+                pipeline, le barème et les rôles à chaque nouveau client. */}
+            {store.templateEnvs().length > 0 && (
+              <Field label="Partir d'un modèle">
+                <select className="input" value={form.templateOf || ''} onChange={e => setForm(f => ({ ...f, templateOf: e.target.value || null }))}>
+                  <option value="">Configuration par défaut</option>
+                  {store.templateEnvs().map(e => <option key={e.id} value={e.id}>Reprendre la configuration de « {e.name} »</option>)}
+                </select>
+              </Field>
+            )}
+            <p className="text-xs text-muted">
+              {form.templateOf
+                ? "Étapes du pipeline, barèmes, règles de prime, services et rôles sont repris. Aucune donnée du client d'origine n'est copiée : ni rendez-vous, ni contacts, ni notes."
+                : "Le nouvel environnement contient toutes les fonctionnalités de l'app, vide de données. Vous en devenez le Manager."}
+            </p>
             <div className="flex justify-end gap-2">
               <button className="btn-ghost" onClick={() => setCreating(false)}>Annuler</button>
               <button className="btn-primary" onClick={() => {
