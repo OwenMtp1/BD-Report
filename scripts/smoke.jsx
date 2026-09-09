@@ -798,6 +798,37 @@ async function main() {
     }
   }
 
+  // Mentions sur une fiche entreprise : la personne CHOISIE dans l'autocomplétion est notifiée
+  // par son identifiant, et le texte seul reste reconnu pour qui tape la mention à la main.
+  // Le test se déroule dans l'environnement « Test » : celui de PeopleSpheres a été passé en
+  // résiliation par un test précédent, donc en lecture seule.
+  {
+    const read = () => { win.__bdrFlushSave?.(); return JSON.parse(win.localStorage.getItem('bdrflow_db_v1')) }
+    // `__bdrStore` est l'api du DERNIER rendu : on la relit après chaque action, sinon on
+    // travaillerait avec une session périmée.
+    const api = () => win.__bdrStore
+    api().enterEnv('env-test')
+    await act(async () => {})
+    api().enterSubEnv('tsub-julie')
+    await act(async () => {})
+    const mentionsOf = () => (read().data['tsub-thomas']?.mentions || []).length
+    const before = mentionsOf()
+    api().addCompanyComment('NovaCorp Industries', 'Je passe la main à @Thomas Moreau sur ce compte.', ['tsub-thomas'])
+    await act(async () => {})
+    if (mentionsOf() !== before + 1) throw new Error("La mention choisie n'a pas notifié la personne visée")
+    if (!(read().data['tsub-thomas']?.notifs || []).some(n => n.type === 'mention')) {
+      throw new Error('La mention doit aussi remonter dans la cloche de notifications')
+    }
+    // Mention tapée à la main, sans passer par la liste.
+    api().addCompanyComment('NovaCorp Industries', 'ping @Thomas pour la relance')
+    await act(async () => {})
+    if (mentionsOf() !== before + 2) throw new Error('Une mention tapée à la main doit rester reconnue')
+    // Un préfixe ne doit jamais déclencher de notification.
+    api().addCompanyComment('NovaCorp Industries', 'aucun @Thom ici')
+    await act(async () => {})
+    if (mentionsOf() !== before + 2) throw new Error('Un préfixe de prénom ne doit pas notifier')
+  }
+
   console.log('SMOKE OK — all screens rendered without errors')
 }
 

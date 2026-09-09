@@ -12,25 +12,68 @@ export function openCompany(name) {
 // Fil de commentaires partagé : stocké au niveau de l'environnement, visible par tous ses membres.
 function CommentThread({ name, store }) {
   const [text, setText] = useState('')
+  const [hits, setHits] = useState([])          // suggestions de mention ouvertes
+  const [hi, setHi] = useState(0)               // suggestion surlignée
+  const [mentioned, setMentioned] = useState([]) // subIds choisis dans la liste — cible exacte
+  const inputRef = useRef(null)
   const curSub = store.db.subenvs.find(s => s.id === store.session.subEnvId)
   const comments = store.companyComments(name)
   const teammates = store.db.subenvs.filter(s => s.envId === store.session.envId && s.id !== curSub?.id)
 
-  // Met en évidence les @mentions dans le texte affiché
+  // Met en évidence les @mentions dans le texte affiché. On teste le nom complet AVANT le
+  // prénom seul : sinon « @Lucas Fabre » ne serait surligné que sur la moitié du nom.
   const renderText = (t) => {
-    const names = store.db.subenvs.filter(s => s.envId === store.session.envId).map(s => s.prenom)
-    if (!names.length) return t
-    const re = new RegExp(`(@(?:${names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}))`, 'gi')
-    return t.split(re).map((part, i) => part.startsWith('@')
+    const people = store.db.subenvs.filter(s => s.envId === store.session.envId)
+    if (!people.length) return t
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const forms = [
+      ...people.map(s => esc(`${s.prenom} ${s.nom}`.trim())),
+      ...people.map(s => esc(s.prenom)),
+    ].filter(Boolean)
+    const re = new RegExp(`(@(?:${forms.join('|')}))`, 'gi')
+    return t.split(re).map((part, i) => (part || '').startsWith('@')
       ? <span key={i} className="text-brand font-bold">{part}</span>
       : part)
+  }
+
+  // Autocomplétion : dès deux lettres après un @, on propose les collègues. Le choix
+  // enregistre l'identifiant de la personne — c'est lui qui sert à notifier, jamais le
+  // texte : deux Lucas dans une équipe et la notification partirait aux deux.
+  const onType = (value, caret) => {
+    setText(value)
+    const before = value.slice(0, caret)
+    const m = before.match(/@([\p{L}\p{N}\-'’ ]*)$/u)
+    const token = m ? m[1] : null
+    if (token == null || token.trim().length < 2) { setHits([]); return }
+    const q = token.trim().toLowerCase()
+    const found = teammates.filter(s =>
+      `${s.prenom} ${s.nom}`.toLowerCase().includes(q) || (s.poste || '').toLowerCase().includes(q)).slice(0, 6)
+    setHits(found); setHi(0)
+  }
+  const pick = (s) => {
+    const el = inputRef.current
+    const caret = el ? el.selectionStart : text.length
+    const before = text.slice(0, caret).replace(/@([\p{L}\p{N}\-'’ ]*)$/u, '')
+    const full = `${s.prenom} ${s.nom}`.trim()
+    const next = `${before}@${full} ${text.slice(caret)}`
+    setText(next)
+    setMentioned(ids => (ids.includes(s.id) ? ids : [...ids, s.id]))
+    setHits([])
+    // Le curseur doit rester après la mention, sinon la frappe suivante repart du début.
+    setTimeout(() => { if (el) { el.focus(); const p = before.length + full.length + 2; el.setSelectionRange(p, p) } }, 0)
   }
   const fmtTs = (ts) => new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const send = () => {
     if (!text.trim()) return
-    store.addCompanyComment(name, text)
+    // On ne transmet que les personnes encore citées dans le texte : effacer une mention
+    // avant d'envoyer doit vraiment annuler la notification.
+    const still = mentioned.filter(id => {
+      const s = teammates.find(x => x.id === id)
+      return s && text.toLowerCase().includes('@' + `${s.prenom} ${s.nom}`.trim().toLowerCase())
+    })
+    store.addCompanyComment(name, text, still)
     store.logAction('Lead', 'Commentaire ajouté', name)
-    setText('')
+    setText(''); setMentioned([]); setHits([])
   }
   return (
     <div>
@@ -56,18 +99,41 @@ function CommentThread({ name, store }) {
           </div>
         ))}
       </div>
-      <div className="flex gap-2">
-        <input className="input !py-1.5 text-sm" placeholder="Ajouter un commentaire... (@Prénom pour notifier un collègue)" value={text}
-          onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
-        {teammates.length > 0 && (
-          <select className="input !w-auto !py-1.5 text-xs" value="" title="Mentionner un collègue"
-            onChange={e => { if (e.target.value) setText(t => `${t}${t && !t.endsWith(' ') ? ' ' : ''}@${e.target.value} `) }}>
-            <option value="">@</option>
-            {teammates.map(s => <option key={s.id} value={s.prenom}>@{s.prenom}</option>)}
-          </select>
-        )}
+      <div className="flex gap-2 relative">
+        <div className="flex-1 relative">
+          <input ref={inputRef} className="input !py-1.5 text-sm w-full"
+            placeholder="Ajouter un commentaire… (tapez @ puis deux lettres pour citer un collègue)" value={text}
+            onChange={e => onType(e.target.value, e.target.selectionStart)}
+            onBlur={() => setTimeout(() => setHits([]), 150)}
+            onKeyDown={e => {
+              if (hits.length) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setHi(i => (i + 1) % hits.length); return }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setHi(i => (i - 1 + hits.length) % hits.length); return }
+                if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(hits[hi]); return }
+                if (e.key === 'Escape') { setHits([]); return }
+              }
+              if (e.key === 'Enter') send()
+            }} />
+          {hits.length > 0 && (
+            <div className="absolute z-40 left-0 right-0 bottom-full mb-1 card p-1 shadow-xl max-h-52 overflow-y-auto">
+              {hits.map((s, i) => (
+                <button key={s.id} type="button"
+                  className={`w-full text-left p-2 rounded-lg ${i === hi ? 'bg-brand/10' : 'hover:bg-surface'}`}
+                  onMouseEnter={() => setHi(i)} onMouseDown={e => e.preventDefault()} onClick={() => pick(s)}>
+                  <div className="text-sm font-semibold">{s.prenom} {s.nom}</div>
+                  <div className="text-[11px] text-muted truncate">{[s.poste, s.service].filter(Boolean).join(' · ')}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button className="btn-primary !px-2.5" onClick={send}><Send size={14} /></button>
       </div>
+      {mentioned.length > 0 && (
+        <p className="text-[11px] text-muted mt-1">
+          Sera notifié : {mentioned.map(id => teammates.find(s => s.id === id)).filter(Boolean).map(s => `${s.prenom} ${s.nom}`).join(', ')}
+        </p>
+      )}
     </div>
   )
 }

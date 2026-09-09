@@ -3267,7 +3267,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         })
       },
       // ----- commentaires d'entreprise partagés au niveau de l'environnement
-      addCompanyComment(company, text) {
+      addCompanyComment(company, text, mentionIds = []) {
         if (roBlocked()) return
         const env = db.environments.find(e => e.id === session?.envId)
         const sub = db.subenvs.find(s => s.id === session?.subEnvId)
@@ -3282,16 +3282,29 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
             id: uid(), ts: new Date().toISOString(), text: text.trim(),
             author, authorSubId: sub?.id,
           })
-          // @mentions : notifie chaque membre cité par son prénom (mot entier, pas un préfixe — bug 6)
+          // @mentions. Deux sources, dans cet ordre :
+          //   · les personnes CHOISIES dans l'autocomplétion — identifiant exact, donc aucune
+          //     ambiguïté même quand deux collègues portent le même prénom ;
+          //   · à défaut, le texte : on reconnaît « @Prénom Nom » puis « @Prénom » seul, en
+          //     mot entier (sans quoi @Luc notifierait Lucas).
+          const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const chosen = new Set(mentionIds || [])
           d.subenvs.filter(s => s.envId === env.id && s.id !== sub?.id).forEach(s => {
-            const re = new RegExp('@' + s.prenom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iu')
-            if (re.test(text)) {
-              const data = d.data[s.id]
-              if (data) {
-                data.mentions = data.mentions || []
-                data.mentions.unshift({ id: uid(), ts: new Date().toISOString(), company: company.trim(), from: author, text: text.trim(), read: false })
-              }
-            }
+            const full = `${s.prenom} ${s.nom}`.trim()
+            const byText = new RegExp(`@(?:${esc(full)}|${esc(s.prenom)})(?![\\p{L}\\p{N}])`, 'iu').test(text)
+            if (!chosen.has(s.id) && !byText) return
+            const data = d.data[s.id]
+            if (!data) return
+            const ts = new Date().toISOString()
+            data.mentions = data.mentions || []
+            data.mentions.unshift({ id: uid(), ts, company: company.trim(), from: author, text: text.trim(), read: false })
+            // Doublée d'une notification d'événement : la mention doit remonter dans la
+            // cloche même si le fil des mentions a déjà été parcouru.
+            data.notifs = [{
+              id: uid(), ts, read: false, type: 'mention', page: 'leads',
+              title: `${author} vous a cité sur ${company.trim()}`,
+              text: text.trim().slice(0, 120),
+            }, ...(data.notifs || [])].slice(0, 100)
           })
           return d
         })
