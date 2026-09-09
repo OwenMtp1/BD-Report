@@ -3,7 +3,7 @@ import {
   MessagesSquare, Plus, Hash, Radio, Send, ImagePlus, Smile, Trash2, Settings2, Users2,
   Lock, Globe, X, ChevronLeft, Bell, BellOff, Paperclip, MoreVertical, Reply, Forward,
   Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft, User, LogOut, Search, CheckCheck,
-  ClipboardList, ChevronDown, ChevronRight, UserCheck,
+  ClipboardList, ChevronDown, ChevronRight, UserCheck, Archive,
 } from 'lucide-react'
 import { useStore, reportEventsFor, PRESENCE_META, QUOTA_METRICS, fmtMoney, fmtDate, todayISO, uid } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
@@ -59,7 +59,10 @@ export default function Conversations({ scope = 'team' }) {
   const ordered = [...channels].sort((a, b) => (store.isChannelPinned(b.id) ? 1 : 0) - (store.isChannelPinned(a.id) ? 1 : 0))
   // Les 1:1 se rangent dans leur propre dossier : un manager de six personnes en a six, et
   // noyés dans la liste ils repousseraient les canaux d'équipe hors de l'écran.
+  // Les binômes révolus passent en fin de liste : on les garde pour l'historique, pas pour
+  // laisser croire qu'on y écrit encore.
   const oneToOnes = ordered.filter(c => c.oneToOne)
+    .sort((a, b) => (a.archived ? 1 : 0) - (b.archived ? 1 : 0))
   const orderedChannels = ordered.filter(c => !c.oneToOne)
   const [o2oOpen, setO2oOpen] = useState(true)
 
@@ -124,8 +127,8 @@ export default function Conversations({ scope = 'team' }) {
                     return (
                       <button key={c.id} onClick={() => setSelId(c.id)}
                         className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-sm ${sel?.id === c.id ? 'bg-brand/10 text-brand font-bold' : 'hover:bg-surface'}`}>
-                        <UserCheck size={15} className="shrink-0 text-brand/70" />
-                        <span className="truncate flex-1">{label}</span>
+                        <UserCheck size={15} className={`shrink-0 ${c.archived ? 'opacity-40' : 'text-brand/70'}`} />
+                        <span className={`truncate flex-1 ${c.archived ? 'opacity-60 italic' : ''}`}>{label}</span>
                         {store.isChannelMuted(c.id) && <BellOff size={12} className="opacity-40 shrink-0" />}
                         {unread > 0 && <span className="shrink-0 text-[10px] font-extrabold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white">{unread > 9 ? '9+' : unread}</span>}
                       </button>
@@ -328,6 +331,13 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
           </div>
         </div>
       </div>
+
+      {channel.archived && (
+        <div className="px-4 py-2 border-b border-line bg-surface/60 text-[11px] text-muted flex items-center gap-1.5">
+          <Archive size={12} className="shrink-0" />
+          Binôme révolu — conservé pour l'historique des entretiens. Le 1:1 en cours est ailleurs.
+        </div>
+      )}
 
       {/* Recherche dans les messages */}
       {searchOpen && (

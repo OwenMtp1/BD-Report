@@ -12,7 +12,12 @@ import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 // sans rien ajouter à la motivation.
 
 const showScore = (metric, v, currency) => (metric === 'primes' ? fmtMoney(v, currency) : String(v))
-const metricLabel = (id) => (QUOTA_METRICS.find(m => m.id === id) || {}).label || id
+// Un challenge peut porter sur une semaine, où le « mois de versement » n'a aucun sens : les
+// primes s'y comptent donc à la date de DÉCLENCHEMENT. C'est une maille différente de celle du
+// quota et du relevé — on la nomme, plutôt que d'afficher deux fois « Primes » pour deux calculs.
+const metricLabel = (id) => (id === 'primes'
+  ? 'Primes déclenchées'
+  : ((QUOTA_METRICS.find(m => m.id === id) || {}).label || id))
 
 const emptyChallenge = () => {
   const end = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
@@ -168,7 +173,7 @@ export default function Challenges() {
             </div>
             <Field label="Ce qui est compté">
               <select className="input" value={editing.metric} onChange={e => setEditing(x => ({ ...x, metric: e.target.value }))}>
-                {QUOTA_METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                {QUOTA_METRICS.map(m => <option key={m.id} value={m.id}>{metricLabel(m.id)}</option>)}
               </select>
             </Field>
             <Field label="Règle">

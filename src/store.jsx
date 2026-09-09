@@ -995,9 +995,7 @@ export function quotaAchieved(data, metricId, period = 'mois', now = new Date(),
         return computePrimes(rdvs, data?.bareme || [], primeOpts(data))
           .filter(p => !p.invalidated && on(p.triggerDate)).reduce((a, p) => a + p.montant, 0)
       }
-      const raw = computePrimes(rdvs, data?.bareme || [], primeOpts(data))
-        .filter(p => !p.invalidated && p.payMonthKey === key).reduce((a, p) => a + p.montant, 0)
-      return applyPrimeRules(raw, { data, env: opts.env, subId: opts.subId, monthKey: key }).total
+      return monthlyPaidPrimes(data, opts.env, opts.subId, key)
     }
     default: return 0
   }
@@ -1100,6 +1098,17 @@ export function applyPrimeRules(rawTotal, { data, env, subId, monthKey }) {
     total = Number(rules.cap.amount)
   }
   return { total: Math.round(total), steps, reference }
+}
+
+// Primes RÉELLEMENT VERSÉES sur un mois : le barème, puis les modulateurs. C'est ce montant
+// que le collaborateur touche, donc celui qu'affichent son tableau de bord, son quota, le
+// classement et son relevé. Le brut du barème ne vaut que comme étape de calcul — l'afficher
+// à côté du net, sans le dire, revient à annoncer deux salaires différents.
+export function monthlyPaidPrimes(data, env, subId, mKey) {
+  const raw = computePrimes(data?.rdvs || [], data?.bareme || [], primeOpts(data))
+    .filter(p => !p.invalidated && p.payMonthKey === mKey)
+    .reduce((a, p) => a + p.montant, 0)
+  return applyPrimeRules(raw, { data, env, subId, monthKey: mKey }).total
 }
 
 // ---------------------------------------------------------------- Relevés de primes (module `statements`)
@@ -2622,6 +2631,16 @@ function seedOneToOneChannels(db) {
     if (!mgr || mgr.id === sub.id) return
     const key = `${env.id}:${mgr.id}>${sub.id}`
     if (db._autoSeed.oneToOne.includes(key)) return
+    // Changement de manager : l'ancien fil est ARCHIVÉ, jamais supprimé. Effacer détruirait
+    // l'historique des entretiens — engagements pris, axes de progrès — qui est précisément
+    // ce qui fait la valeur d'un 1:1. Le laisser passer pour un fil actif tromperait les deux
+    // interlocuteurs sur qui encadre qui aujourd'hui.
+    db.channels.forEach(c => {
+      if (c.oneToOne?.memberSubId === sub.id && c.oneToOne.managerSubId !== mgr.id && !c.archived) {
+        c.archived = true
+        if (!/ancien binôme/.test(c.name || '')) c.name = `${c.name} — ancien binôme`
+      }
+    })
     db.channels.push({
       id: uid(), scope: 'team', envId: env.id,
       name: `1:1 · ${`${sub.prenom} ${sub.nom}`.trim()}`,

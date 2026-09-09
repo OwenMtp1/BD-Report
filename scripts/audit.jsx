@@ -70,6 +70,19 @@ async function main() {
     }
   })
 
+  // 5 bis. Un seul montant de primes dans toute l'app : le versé.
+  {
+    const d = s.buildDemoDb({})
+    const e3 = d.environments.find(x => x.id === 'env-demo')
+    const mk = new Date().toISOString().slice(0, 7)
+    Object.keys(d.data).forEach(k => {
+      const paid = s.monthlyPaidPrimes(d.data[k], e3, k, mk)
+      const viaQuota = s.quotaAchieved(d.data[k], 'primes', 'mois', new Date(), { env: e3, subId: k })
+      ok(paid === viaQuota, `${k} : quota et tableau de bord annoncent des primes différentes (${viaQuota} vs ${paid})`)
+      ok(s.buildStatement(d.data[k], e3, k, mk).total === paid, `${k} : le relevé diverge du montant affiché`)
+    })
+  }
+
   // 6. Relevé de primes : chaque ligne doit être NOMMÉE, y compris les primes d'activité.
   {
     const d = s.buildDemoDb({})

@@ -168,6 +168,15 @@ export default function TeamLead() {
           {team.fOuvertes} opportunité{team.fOuvertes > 1 ? 's' : ''} encore ouverte{team.fOuvertes > 1 ? 's' : ''}.
           L'attendu pondère chaque affaire par sa probabilité d'atteindre {milestonePhase(store.sub)} ; le haut suppose qu'elles passent toutes.
         </p>
+        {/* Un prévisionnel ne peut pas appliquer un seuil ou un accélérateur : ils dépendent de
+            l'atteinte du quota en FIN de mois, qu'on ne connaît pas encore. On le dit plutôt
+            que de laisser croire que ces montants sont ceux qui seront versés. */}
+        {store.sub?.primeRules?.on && (
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 mb-3 -mt-2">
+            Montants au barème, avant seuils, accélérateurs et plafonds : ils dépendent de l'atteinte
+            du quota en fin de mois. Le net figure sur le relevé de chacun.
+          </p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             ['Acquis', team.fBasse, 'Déjà déclenché — plus rien à faire pour l\'obtenir.', 'text-emerald-600'],

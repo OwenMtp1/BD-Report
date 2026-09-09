@@ -31,7 +31,7 @@ async function main() {
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
           phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES,
-          handoffState, handoffStats, quotaAchieved, buildStatement } = await import('../src/store.jsx')
+          handoffState, handoffStats, quotaAchieved, buildStatement, monthlyPaidPrimes } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -194,6 +194,37 @@ async function main() {
     const plafonne = { ...d, primeRules: { on: true, refMetric: 'sql', threshold: { on: false }, accelerator: { on: false }, quality: { on: false }, cap: { on: true, amount: 100 } } }
     if (quotaAchieved(plafonne, 'primes', 'mois', new Date('2026-10-10T12:00:00Z')) !== 100) {
       throw new Error('Un plafond doit se voir dans le quota comme sur le relevé')
+    }
+  }
+
+  // Un seul montant : ce qui est VERSÉ. Le tableau de bord, le quota, le classement et le
+  // relevé doivent tous annoncer le même chiffre, modulateurs compris.
+  {
+    const d = {
+      phases: ['R1', 'SQL', 'KO', 'Signée'], primePhases: ['SQL'], wonPhases: ['Signée'], lostPhases: ['KO'],
+      primeCutoffDay: 15, bareme: [{ id: 'b', min: 1, max: 99999, montant: 500, leadSource: '' }],
+      rdvs: [{ id: 'a', phase: 'SQL', entreprise: 'A', effectif: 50, source: 'Outbound', datePassageSQL: '2026-09-02' },
+             { id: 'b', phase: 'SQL', entreprise: 'B', effectif: 50, source: 'Outbound', datePassageSQL: '2026-09-03' }],
+      primeRules: { on: true, refMetric: 'sql', threshold: { on: false }, accelerator: { on: false }, quality: { on: false }, cap: { on: true, amount: 600 } },
+    }
+    const paid = monthlyPaidPrimes(d, null, 'x', '2026-09')
+    if (paid !== 600) throw new Error('Le plafond doit s\'appliquer au montant annoncé partout')
+    if (quotaAchieved(d, 'primes', 'mois', new Date('2026-09-10T12:00:00Z')) !== paid) {
+      throw new Error('Le quota doit annoncer le montant versé, pas le brut du barème')
+    }
+    if (buildStatement(d, null, 'x', '2026-09').total !== paid) {
+      throw new Error('Le relevé doit annoncer le même montant que le tableau de bord')
+    }
+  }
+
+  // 1:1 : un changement de manager ARCHIVE l'ancien binôme, il ne le supprime pas —
+  // l'historique des entretiens est précisément ce qui fait la valeur de la brique.
+  {
+    const d = buildDemoDb({})
+    const sara = (d.channels || []).find(c => c.oneToOne?.memberSubId === 'dsub-b2')
+    if (!sara || sara.archived) throw new Error('Le 1:1 en cours ne doit pas être archivé')
+    if ((d.channels || []).filter(c => c.oneToOne?.memberSubId === 'dsub-b2').length !== 1) {
+      throw new Error("Un membre ne doit avoir qu'un seul 1:1 actif")
     }
   }
 

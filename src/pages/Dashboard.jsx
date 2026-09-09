@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Trophy, Pencil, EyeOff, Eye, MonitorPlay } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase, QUOTA_METRICS, ACTIVITY_PERIODS, quotaAchieved } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase, QUOTA_METRICS, ACTIVITY_PERIODS, quotaAchieved, monthlyPaidPrimes } from '../store.jsx'
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
 import { ChallengeBanner } from './Challenges.jsx'
 
@@ -248,7 +248,10 @@ export default function Dashboard() {
   const now = new Date()
   const curKey = monthKey(new Date(now.getFullYear(), now.getMonth(), 1))
   const nextKey = monthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1))
-  const primesCeMois = primes.filter(p => p.payMonthKey === curKey).reduce((a, p) => a + p.montant, 0)
+  // Ce que le collaborateur touchera, modulateurs compris — pas le brut du barème : afficher
+  // l'un ici et l'autre sur la page Primes reviendrait à annoncer deux montants différents.
+  const envNow = store.db.environments.find(e => e.id === store.session?.envId)
+  const primesCeMois = monthlyPaidPrimes(sub, envNow, store.session?.subEnvId, curKey)
   const primesMoisSuivant = primes.filter(p => p.payMonthKey === nextKey).reduce((a, p) => a + p.montant, 0)
   const primesTotal = primes.reduce((a, p) => a + p.montant, 0)
   // Primes déclenchées sur la période sélectionnée (suit la timeline des bulles — micro 9)

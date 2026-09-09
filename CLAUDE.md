@@ -152,7 +152,9 @@ npm run dev        # serveur de dev
     {period, metrics, ramp, defaults, byMember}. `memberQuota/rampFactor/quotaAchieved`. Le quota du
     manager REMPLACE la cible auto-fixée sur le Dashboard.
   - **Entretiens 1:1** (module `oneToOne`) — un canal par binôme (`channel.oneToOne`), semé par
-    `seedOneToOneChannels` d'après `account.teamOf`. ⚠️ Aussi privé qu'un DM : `canSeeChannel` le réserve
+    `seedOneToOneChannels` d'après `account.teamOf`. Un changement de manager **archive** l'ancien fil
+    (`channel.archived`, renommé « — ancien binôme », rangé en bas) au lieu de le supprimer : l'historique
+    des entretiens est ce qui fait la valeur de la brique. ⚠️ Aussi privé qu'un DM : `canSeeChannel` le réserve
     aux deux membres, même pour qui administre les canaux. Compte rendu = message porteur d'un `report`.
   - **Challenges** (`Challenges.jsx`, dans Classement, module `challenges`) — `env.challenges`,
     `challengeScore` (mêmes définitions que les quotas). Bandeau en tête du Dashboard, refermable
@@ -160,6 +162,13 @@ npm run dev        # serveur de dev
   - **Modulateurs de prime** — `data.primeRules` (seuil / accélérateur / qualité / plafond),
     `applyPrimeRules(total, {data, env, subId, monthKey})`. **Désactivés par défaut**, appliqués au TOTAL
     d'un mois, jamais à une prime isolée ; le détail du calcul s'affiche sur la page Primes.
+    ⚠️ **UN SEUL montant de primes dans l'app : le VERSÉ.** `monthlyPaidPrimes(data, env, subId, monthKey)`
+    est la source unique — tableau de bord, quota, classement et relevé passent tous par elle. Le brut du
+    barème n'est qu'une étape de calcul ; l'afficher à côté du net revient à annoncer deux salaires.
+    Seule exception assumée : la **fourchette prévisionnelle** de Pilotage équipe reste au brut (seuil et
+    accélérateur dépendent de l'atteinte du quota en FIN de mois, inconnue), et l'écran le dit.
+    Les primes d'un **challenge** se comptent à la date de DÉCLENCHEMENT (une fenêtre d'une semaine n'a pas
+    de mois de versement) — l'indicateur s'appelle donc « Primes déclenchées », pas « Primes ».
   - **Relevés de primes** (`Statements.jsx`, module `statements`) — `env.statements[subId|monthKey]`.
     ⚠️ **Gelé à la signature** ; retirer la signature efface le document plutôt que d'en changer le contenu.
   - **Objections** + **Modèles de messages** — catégories de « Mes notes » (`Objections.jsx`,

@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react'
 import { Trophy, Flame, Target, Coins, TrendingUp, Percent, CalendarCheck, Medal, Crown } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, primeOpts, monthKey, fmtMoney } from '../store.jsx'
+import { useStore, inTimeline, monthKey, fmtMoney, monthlyPaidPrimes } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 import Challenges from './Challenges.jsx'
 
 const dayISO = (o = 0) => { const d = new Date(); d.setDate(d.getDate() + o); return d.toISOString().slice(0, 10) }
 
-function memberRow(m, data) {
+function memberRow(m, data, env) {
   const rdvs = data.rdvs || []
   const now = new Date()
   const curK = monthKey(new Date(now.getFullYear(), now.getMonth(), 1))
@@ -14,9 +14,10 @@ function memberRow(m, data) {
   const rdvMois = rdvs.filter(r => inTimeline(r.datePriseRdv, 'month')).length
   const sqlMois = rdvs.filter(r => inTimeline(r.datePassageSQL, 'month')).length
   const sql7j = rdvs.filter(r => r.datePassageSQL && r.datePassageSQL >= dayISO(-7)).length
-  const primes = computePrimes(rdvs, data.bareme || [], primeOpts(data)).filter(p => !p.invalidated)
-  const primesMois = primes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)
-  const primesPrev = primes.filter(p => p.payMonthKey === prevK).reduce((a, p) => a + p.montant, 0)
+  // Le classement compare ce qui est PERÇU : sous un plafond ou un seuil, un montant brut
+  // désignerait un vainqueur qui ne touchera pas cette somme.
+  const primesMois = monthlyPaidPrimes(data, env, m.id, curK)
+  const primesPrev = monthlyPaidPrimes(data, env, m.id, prevK)
   const conv = rdvMois ? Math.round((sqlMois / rdvMois) * 100) : 0
   const goalPrimes = Number((data.goals || {}).primesMois) || 0
   const objPct = goalPrimes ? Math.round((primesMois / goalPrimes) * 100) : 0
@@ -46,7 +47,7 @@ export default function Classement() {
   const members = store.db.subenvs.filter(s => s.envId === envId)
   const [metric, setMetric] = useState('sql')
 
-  const rows = useMemo(() => members.map(m => memberRow(m, store.db.data[m.id] || { rdvs: [], bareme: [] })), [store.db, envId])
+  const rows = useMemo(() => members.map(m => memberRow(m, store.db.data[m.id] || { rdvs: [], bareme: [] }, env)), [store.db, envId]) // eslint-disable-line
   const M = METRICS.find(x => x.id === metric)
   const ranked = [...rows].sort((a, b) => M.get(b) - M.get(a))
   const meId = store.session.subEnvId
