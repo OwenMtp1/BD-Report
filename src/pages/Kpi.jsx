@@ -19,12 +19,13 @@ function metricValue(data, metric, tl, custom, source) {
   switch (metric) {
     case 'rdv': return rdvs.length
     case 'pris': return data.rdvs.filter(r => inTimeline(r.datePriseRdv, tl, custom) && (!source || r.source === source)).length
-    case 'mql': return rdvs.filter(r => ['MQL', 'SQL', 'Signée'].includes(r.phase)).length
-    case 'sql': return rdvs.filter(r => ['SQL', 'Signée'].includes(r.phase)).length
-    case 'sign': return rdvs.filter(r => r.phase === 'Signée').length
+    // Jalons lus dans les réglages de l'espace : une équipe qui renomme ses étapes garde ses chiffres.
+    case 'mql': return rdvs.filter(r => phaseAtLeast(data, r.phase, qualifyPhase(data))).length
+    case 'sql': return rdvs.filter(r => phaseAtLeast(data, r.phase, milestonePhase(data))).length
+    case 'sign': return rdvs.filter(r => isWonPhase(data, r.phase)).length
     case 'primes': return fmtMoney(computePrimes(rdvs, data.bareme, { triggerPhases: data.primePhases, cutoffDay: data.primeCutoffDay }).reduce((a, p) => a + p.montant, 0), data.currency || 'EUR')
     case 'conv': {
-      const sql = rdvs.filter(r => ['SQL', 'Signée'].includes(r.phase)).length
+      const sql = rdvs.filter(r => phaseAtLeast(data, r.phase, milestonePhase(data))).length
       return rdvs.length ? Math.round((sql / rdvs.length) * 100) + '%' : '—'
     }
     default: return '—'

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { CalendarClock, Flame, RotateCcw, Phone, Mail, ExternalLink, Building2 } from 'lucide-react'
-import { useStore, parseISO, fmtDate, applyRdvAutomations, PHASE_COLORS, phaseColor } from '../store.jsx'
+import { useStore, parseISO, fmtDate, applyRdvAutomations, PHASE_COLORS, phaseColor, firstPhase, nextPhase } from '../store.jsx'
 import { safeUrl } from '../security.js'
 import { Empty } from '../ui.jsx'
 
@@ -93,14 +93,14 @@ export default function Tasks() {
         title="No Show R1 à replanifier" desc="Rendez-vous manqués : reprogrammez un nouveau créneau." count={noShows.length}>
         {noShows.length === 0 ? <Empty text="Aucun no-show à replanifier." />
           : noShows.map(r => <TaskCard key={r.id} r={r} store={store} tone="bg-orange-500 text-white hover:bg-orange-600"
-            action={Object.assign(() => patch(r.id, { opportunite: 'En cours', phase: 'R1' }), { label: 'Replanifier' })} />)}
+            action={Object.assign(() => patch(r.id, { opportunite: 'En cours', phase: firstPhase(sub) }), { label: 'Replanifier' })} />)}
       </Section>
 
       <Section icon={<Flame size={18} className="text-amber-600" />} color="bg-amber-100"
         title="Opportunités en cours à traiter" desc="Les leads actifs, du plus ancien au plus récent." count={enCours.length}>
         {enCours.length === 0 ? <Empty text="Aucune opportunité en cours." />
           : enCours.map(r => <TaskCard key={r.id} r={r} store={store} tone="bg-amber-500 text-white hover:bg-amber-600"
-            action={Object.assign(() => patch(r.id, { phase: 'R2' }), { label: 'Faire avancer' })} />)}
+            action={Object.assign(() => patch(r.id, { phase: nextPhase(sub, r.phase) || r.phase }), { label: 'Faire avancer' })} />)}
       </Section>
 
       <Section icon={<RotateCcw size={18} className="text-gray-600" />} color="bg-gray-200"
@@ -124,7 +124,7 @@ export default function Tasks() {
           : lost.map(r => (
             <div key={r.id} className="space-y-0">
               <TaskCard r={r} store={store} tone="bg-gray-700 text-white hover:bg-gray-800"
-                action={Object.assign(() => patch(r.id, { opportunite: 'En cours', phase: 'R1' }), { label: 'Relancer' })} />
+                action={Object.assign(() => patch(r.id, { opportunite: 'En cours', phase: firstPhase(sub) }), { label: 'Relancer' })} />
               <div className="text-xs text-muted pl-3">Perdue le {fmtDate(lostDate(r))}</div>
             </div>
           ))}

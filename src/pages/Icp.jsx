@@ -1,15 +1,30 @@
 import React, { useMemo, useState } from 'react'
 import { Target, Plus, Trash2, Building2, Users2, Briefcase, Sparkles, Save, CalendarDays } from 'lucide-react'
-import { useStore, uid, todayISO, fmtDate } from '../store.jsx'
+import { useStore, uid, todayISO, fmtDate, phaseRank, isWonPhase, qualifyPhase, milestonePhase } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 
-// Rang de progression d'un deal dans le tunnel (R1/R2 = 1, MQL = 2, SQL = 3, Signée = 4, KO = perdu).
-const PHASE_RANK = { R1: 1, R2: 1, MQL: 2, SQL: 3, 'Signée': 4 }
-function maxRank(rdv) {
-  let r = rdv.phase === 'KO' ? 0 : (PHASE_RANK[rdv.phase] || 1)
-  ;(rdv.history || []).forEach(h => { if (h.type === 'phase' && PHASE_RANK[h.value]) r = Math.max(r, PHASE_RANK[h.value]) })
+// Rang de progression d'un deal : sa position dans le pipeline DE L'ÉQUIPE. Une table figée
+// (R1=1, MQL=2, SQL=3…) donnait le même rang à toutes les étapes d'un pipeline renommé,
+// et l'ICP notait alors tous les comptes à l'identique.
+function maxRank(rdv, data) {
+  let r = phaseRank(data, rdv.phase)
+  if (r < 0) r = 0 // étape d'échec : hors course, mais le compte a bien existé
+  ;(rdv.history || []).forEach(h => {
+    if (h.type !== 'phase') return
+    const v = phaseRank(data, h.value)
+    if (v > r) r = v
+  })
   return r
 }
+// « Ce deal a-t-il atteint au moins telle étape ? » — les seuils numériques d'origine
+// (>= 2, >= 3, >= 4) supposaient le pipeline par défaut et se décalaient dès qu'une
+// équipe ajoutait ou retirait une étape.
+const reached = (rdv, data, refPhase) => {
+  const ref = phaseRank(data, refPhase)
+  return ref >= 0 && maxRank(rdv, data) >= ref
+}
+const reachedWon = (rdv, data) =>
+  isWonPhase(data, rdv.phase) || (rdv.history || []).some(h => h.type === 'phase' && isWonPhase(data, h.value))
 const EFF_BANDS = [
   { id: '1-50', label: '1–50', min: 1, max: 50 },
   { id: '51-200', label: '51–200', min: 51, max: 200 },
@@ -19,11 +34,11 @@ const EFF_BANDS = [
 const bandOf = (eff) => EFF_BANDS.find(b => eff >= b.min && eff <= b.max)
 const pct = (n, d) => (d > 0 ? Math.round((n / d) * 100) : 0)
 
-function statsFor(deals) {
+function statsFor(deals, data) {
   const total = deals.length
-  const mql = deals.filter(d => maxRank(d) >= 2).length
-  const sql = deals.filter(d => maxRank(d) >= 3).length
-  const signed = deals.filter(d => maxRank(d) >= 4).length
+  const mql = deals.filter(d => reached(d, data, qualifyPhase(data))).length
+  const sql = deals.filter(d => reached(d, data, milestonePhase(data))).length
+  const signed = deals.filter(d => reachedWon(d, data)).length
   return { total, mql, sql, signed, r1ToMql: pct(mql, total), mqlToSql: pct(sql, mql), r1ToSql: pct(sql, total), signRate: pct(signed, total) }
 }
 // Date de référence d'un deal (ouverture) pour le filtrage par période.
@@ -58,9 +73,9 @@ const autoName = (p) => {
   return parts.join(' · ') || 'Tous les deals'
 }
 
-function ProfileCard({ profile, deals, global, onSave, onDelete }) {
+function ProfileCard({ profile, deals, global, data, onSave, onDelete }) {
   const matched = deals.filter(d => matchProfile(d, profile))
-  const s = statsFor(matched)
+  const s = statsFor(matched, data)
   const delta = s.r1ToSql - global.r1ToSql
   const share = pct(matched.length, global.total)
   const chips = []
@@ -124,7 +139,7 @@ export default function Icp() {
 
   // Un deal = un RDV racine (on évite de compter les sous-RDV de suivi en double).
   const deals = useMemo(() => (sub.rdvs || []).filter(r => !r.parentId), [sub.rdvs])
-  const global = useMemo(() => statsFor(deals), [deals])
+  const global = useMemo(() => statsFor(deals, sub), [deals, sub])
   const secteurs = useMemo(() => [...new Set(deals.map(d => d.secteur).filter(Boolean))].sort(), [deals])
   const postes = useMemo(() => [...new Set(deals.flatMap(d => (d.contacts || []).map(c => c.poste)).filter(Boolean))].sort(), [deals])
 
@@ -133,7 +148,8 @@ export default function Icp() {
     if (!deals.length) return []
     const out = []
     // 1) Profil idéal : traits dominants des deals ayant atteint SQL (sinon MQL).
-    const winners = deals.filter(d => maxRank(d) >= 3).length ? deals.filter(d => maxRank(d) >= 3) : deals.filter(d => maxRank(d) >= 2)
+    const atMilestone = deals.filter(d => reached(d, sub, milestonePhase(sub)))
+    const winners = atMilestone.length ? atMilestone : deals.filter(d => reached(d, sub, qualifyPhase(sub)))
     if (winners.length) {
       const sec = mode(winners.map(d => d.secteur))
       const bandId = mode(winners.map(d => bandOf(Number(d.effectif) || 0)?.id).filter(Boolean))
@@ -149,7 +165,7 @@ export default function Icp() {
       values.forEach(v => {
         const m = deals.filter(d => keyFn(d, v))
         if (!m.length) return
-        const st = statsFor(m)
+        const st = statsFor(m, sub)
         if (!best || st.r1ToSql > best.st.r1ToSql || (st.r1ToSql === best.st.r1ToSql && m.length > best.n)) best = { v, st, n: m.length }
       })
       if (best) { const p = toProfile(best.v); p.id = 'icp-' + label; p.proposed = true; p.name = label; out.push(p) }
@@ -192,7 +208,7 @@ export default function Icp() {
         <div>
           <h3 className="text-sm font-bold flex items-center gap-1.5 mb-2"><Sparkles size={15} className="text-amber-500" /> Profils proposés</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {proposed.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} onSave={saveProfile} />)}
+            {proposed.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={sub} onSave={saveProfile} />)}
           </div>
         </div>
       )}
@@ -201,7 +217,7 @@ export default function Icp() {
         <div>
           <h3 className="text-sm font-bold mb-2">Mes profils ICP</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {saved.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} onDelete={setConfirmDel} />)}
+            {saved.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={sub} onDelete={setConfirmDel} />)}
           </div>
         </div>
       )}

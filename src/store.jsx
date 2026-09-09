@@ -886,6 +886,8 @@ function emptySubEnvData() {
     taskTrash: [], // corbeille des tâches : restaurables 30 jours
     primeCutoffDay: DEFAULT_PRIME_CUTOFF, // jour de bascule du mois de paiement
     primePhases: [...DEFAULT_PRIME_PHASES], // phases qui déclenchent une prime
+    wonPhases: [...DEFAULT_WON_PHASES],     // phases signifiant « affaire gagnée »
+    lostPhases: [...DEFAULT_LOST_PHASES],   // phases signifiant « affaire perdue »
     icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
   }
 }
@@ -1084,6 +1086,55 @@ export function ensurePrimeSnapshot(data, rdv) {
 }
 
 export const DEFAULT_PRIME_PHASES = ['SQL', 'Signée']
+export const DEFAULT_WON_PHASES = ['Signée']
+export const DEFAULT_LOST_PHASES = ['KO']
+
+// ---------------------------------------------------------------------------
+//  Lecture SÉMANTIQUE du pipeline
+//  Les écrans ont besoin de raisonner en « affaire gagnée », « lead qualifié »,
+//  « étape suivante » — pas en noms d'étapes. Tant qu'ils comparaient à « SQL » ou
+//  « Signée » écrits en dur, renommer une étape dans « Créer votre écosystème »
+//  vidait les tableaux de bord et faisait écrire aux tâches une phase inexistante.
+//  Tout passe désormais par ces fonctions, qui lisent les réglages de l'espace.
+// ---------------------------------------------------------------------------
+export const phaseList = (data) => (data?.phases?.length ? data.phases : DEFAULT_PHASES)
+export const wonPhases = (data) => (data?.wonPhases?.length ? data.wonPhases : DEFAULT_WON_PHASES)
+export const lostPhases = (data) => (data?.lostPhases?.length ? data.lostPhases : DEFAULT_LOST_PHASES)
+export const primeTriggerPhases = (data) => (data?.primePhases?.length ? data.primePhases : DEFAULT_PRIME_PHASES)
+export const isWonPhase = (data, p) => wonPhases(data).includes(p)
+export const isLostPhase = (data, p) => lostPhases(data).includes(p)
+// Rang d'une étape dans le parcours. Les étapes d'échec sortent du classement (-1) :
+// elles ne sont pas « plus avancées », elles sont hors course.
+export const phaseRank = (data, p) => (isLostPhase(data, p) ? -1 : phaseList(data).indexOf(p))
+// « Au moins aussi avancé que » — le comparateur dont vivent tous les entonnoirs.
+export const phaseAtLeast = (data, p, ref) => {
+  const r = phaseRank(data, ref)
+  const v = phaseRank(data, p)
+  return r >= 0 && v >= r
+}
+// Première étape déclenchant une prime : le jalon commercial de l'espace (« SQL » par défaut).
+export const milestonePhase = (data) => {
+  const order = phaseList(data)
+  const triggers = primeTriggerPhases(data).filter(p => order.includes(p))
+  if (!triggers.length) return order[order.length - 1] || ''
+  return triggers.reduce((best, p) => (order.indexOf(p) < order.indexOf(best) ? p : best), triggers[0])
+}
+// Étape de qualification : celle qui précède le jalon, faute de quoi l'entonnoir n'aurait
+// qu'une marche entre le premier rendez-vous et la prime.
+export const qualifyPhase = (data) => {
+  const order = phaseList(data).filter(p => !isLostPhase(data, p))
+  const i = order.indexOf(milestonePhase(data))
+  return i > 0 ? order[i - 1] : order[0] || ''
+}
+export const firstPhase = (data) => phaseList(data).filter(p => !isLostPhase(data, p))[0] || ''
+// Étape suivante dans le parcours (bouton « Faire avancer »), sans jamais franchir le jalon
+// tout seul : passer une affaire en prime est une décision, pas un enchaînement.
+export const nextPhase = (data, p) => {
+  const order = phaseList(data).filter(x => !isLostPhase(data, x))
+  const i = order.indexOf(p)
+  if (i < 0 || i >= order.length - 1) return null
+  return order[i + 1]
+}
 export function computePrimes(rdvs, bareme, opts = {}) {
   const triggers = opts.triggerPhases?.length ? opts.triggerPhases : DEFAULT_PRIME_PHASES
   const cutoff = opts.cutoffDay || DEFAULT_PRIME_CUTOFF
@@ -2027,6 +2078,11 @@ function migrate(db) {
     data.taskTrash = data.taskTrash || []
     data.icpProfiles = data.icpProfiles || []
     data.activityRules = data.activityRules || [] // primes d'activité (volume de RDV)
+    // Sens commercial des étapes. Les espaces créés avant ce réglage héritent des valeurs
+    // d'origine, mais uniquement si l'étape existe encore chez eux : réintroduire « KO »
+    // dans un pipeline qui ne l'a plus ferait réapparaître une étape supprimée.
+    if (!Array.isArray(data.wonPhases)) data.wonPhases = DEFAULT_WON_PHASES.filter(p => phaseList(data).includes(p))
+    if (!Array.isArray(data.lostPhases)) data.lostPhases = DEFAULT_LOST_PHASES.filter(p => phaseList(data).includes(p))
     // Sécurité : l'ancien écran d'intégration stockait le jeton HubSpot dans l'état
     // SYNCHRONISÉ. On le purge — il vit désormais en localStorage, par appareil.
     if (data.integrations?.hubspot?.token) delete data.integrations.hubspot.token
@@ -2478,6 +2534,8 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
             phaseAliases: aliases,
             phases: (d.phases || []).map(p => (p === oldName ? to : p)),
             primePhases: (d.primePhases || []).map(p => (p === oldName ? to : p)),
+            wonPhases: (d.wonPhases || []).map(p => (p === oldName ? to : p)),
+            lostPhases: (d.lostPhases || []).map(p => (p === oldName ? to : p)),
             rdvs: (d.rdvs || []).map(r => (r.phase === oldName ? { ...r, phase: to } : r)),
           }
         })

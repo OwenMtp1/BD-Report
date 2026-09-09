@@ -13,6 +13,8 @@ import { Confirm, Field, Empty, toast } from '../ui.jsx'
 function Phases({ store, sub }) {
   const phases = sub.phases || DEFAULT_PHASES
   const primePhases = sub.primePhases || []
+  const wonPhases = sub.wonPhases || []
+  const lostPhases = sub.lostPhases || []
   const [adding, setAdding] = useState('')
   const [editing, setEditing] = useState(null)
   const [name, setName] = useState('')
@@ -60,13 +62,30 @@ function Phases({ store, sub }) {
                 <>
                   <span className="font-semibold text-sm flex-1">{p}</span>
                   <span className="text-[11px] text-muted">{count} RDV</span>
+                  {/* Issue commerciale de l'étape. Sans cette information, les tableaux de bord
+                      ne savent pas distinguer une affaire gagnée d'une affaire perdue : ils
+                      comparaient jusqu'ici aux noms d'origine, et se vidaient dès qu'on les
+                      renommait. Une étape ne peut pas être gagnée ET perdue. */}
+                  <select className="input !w-auto !py-1 !text-[11px]" title="Ce que cette étape signifie pour l'affaire"
+                    value={wonPhases.includes(p) ? 'won' : lostPhases.includes(p) ? 'lost' : 'open'}
+                    onChange={e => {
+                      const v = e.target.value
+                      store.setEcosystem({
+                        wonPhases: v === 'won' ? [...wonPhases.filter(x => x !== p), p] : wonPhases.filter(x => x !== p),
+                        lostPhases: v === 'lost' ? [...lostPhases.filter(x => x !== p), p] : lostPhases.filter(x => x !== p),
+                      })
+                    }}>
+                    <option value="open">en cours</option>
+                    <option value="won">affaire gagnée</option>
+                    <option value="lost">affaire perdue</option>
+                  </select>
                   <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" title="Un passage à cette étape déclenche le calcul d'une prime">
                     <input type="checkbox" checked={triggers}
                       onChange={e => {
                         const next = e.target.checked ? [...primePhases, p] : primePhases.filter(x => x !== p)
                         store.setEcosystem({ primePhases: next })
                       }} />
-                    déclenche une prime
+                    prime
                   </label>
                   <button className="btn-ghost !p-1" title="Renommer" onClick={() => { setEditing(p); setName(p) }}><Pencil size={13} /></button>
                   <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" onClick={() => setConfirmDel(p)}><Trash2 size={13} /></button>
@@ -109,6 +128,8 @@ function Phases({ store, sub }) {
             store.setEcosystem({
               phases: phases.filter(x => x !== confirmDel),
               primePhases: primePhases.filter(x => x !== confirmDel),
+              wonPhases: wonPhases.filter(x => x !== confirmDel),
+              lostPhases: lostPhases.filter(x => x !== confirmDel),
             })
             setConfirmDel(null); toast('Étape supprimée')
           }}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Gauge, Coins, TrendingUp, Sparkles, Target, MousePointer2 } from 'lucide-react'
-import { useStore, computePrimes, computeActivityPrimes, activityPeriodKey, monthKey, fmtMoney, baremeMatch, todayISO } from '../store.jsx'
+import { useStore, computePrimes, computeActivityPrimes, activityPeriodKey, monthKey, fmtMoney, baremeMatch, todayISO, milestonePhase } from '../store.jsx'
 
 const PROBA = { R1: 0.25, R2: 0.4, MQL: 0.6 }
 // Géométrie de la jauge : arc de 270° (ouverture en bas).
@@ -48,7 +48,7 @@ export default function Simulateur() {
     const montants = (sub.bareme || []).map(b => Number(b.montant) || 0).filter(Boolean)
     const avgBareme = montants.length ? montants.reduce((a, b) => a + b, 0) / montants.length : 200
     const avgPerUnit = primes.length ? Math.round(primes.reduce((a, p) => a + p.montant, 0) / primes.length) : Math.round(avgBareme)
-    return { acquise, probable, objectif, unit: 'SQL', avgPerUnit, unitHint: '' }
+    return { acquise, probable, objectif, unit: milestonePhase(sub), avgPerUnit, unitHint: '' }
   }, [sub.rdvs, sub.bareme, sub.activityRules, sub.goals])
 
   const potentielle = acquise + probable

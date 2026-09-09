@@ -29,7 +29,35 @@ async function main() {
   const { act } = await import('react')
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
-  const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate } = await import('../src/store.jsx')
+  const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase } = await import('../src/store.jsx')
+
+  // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
+  // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
+  // faussé, boutons de tâches écrivant une étape inexistante.
+  {
+    const def = { phases: ['R1', 'R2', 'MQL', 'SQL', 'KO', 'Signée'], primePhases: ['SQL', 'Signée'], wonPhases: ['Signée'], lostPhases: ['KO'] }
+    if (milestonePhase(def) !== 'SQL') throw new Error('Le jalon par défaut doit être SQL')
+    if (qualifyPhase(def) !== 'MQL') throw new Error('L\'étape de qualification par défaut doit être MQL')
+    // Comportement identique à l'ancien code figé, sur le pipeline d'origine.
+    if (!phaseAtLeast(def, 'Signée', 'MQL') || !phaseAtLeast(def, 'SQL', 'MQL') || !phaseAtLeast(def, 'MQL', 'MQL')) throw new Error('Entonnoir MQL faussé')
+    if (phaseAtLeast(def, 'R2', 'MQL')) throw new Error('Un R2 ne doit pas compter comme qualifié')
+    if (phaseAtLeast(def, 'KO', 'MQL')) throw new Error('Une étape perdue ne doit jamais compter comme avancée')
+    if (phaseRank(def, 'KO') !== -1) throw new Error('Une étape perdue est hors classement')
+
+    // Le même pipeline, entièrement renommé : tout doit suivre.
+    const perso = { phases: ['Découverte', 'Cadrage', 'Qualifié', 'Gagné', 'Perdu'], primePhases: ['Qualifié'], wonPhases: ['Gagné'], lostPhases: ['Perdu'] }
+    if (milestonePhase(perso) !== 'Qualifié') throw new Error('Le jalon doit suivre le pipeline personnalisé')
+    if (qualifyPhase(perso) !== 'Cadrage') throw new Error('La qualification doit précéder le jalon')
+    if (!phaseAtLeast(perso, 'Gagné', 'Qualifié')) throw new Error('Gagné doit compter comme ayant atteint le jalon')
+    if (phaseAtLeast(perso, 'Perdu', 'Cadrage')) throw new Error('Perdu ne doit jamais compter comme avancé')
+    if (!isWonPhase(perso, 'Gagné') || !isLostPhase(perso, 'Perdu')) throw new Error('Issue commerciale non reconnue')
+    if (firstPhase(perso) !== 'Découverte') throw new Error('« Replanifier » doit ramener à la première étape')
+    if (nextPhase(perso, 'Découverte') !== 'Cadrage') throw new Error('« Faire avancer » doit passer à l\'étape suivante')
+    if (nextPhase(perso, 'Gagné') !== null) throw new Error('La dernière étape n\'a pas de suivante')
+    // Un pipeline sans issue déclarée ne doit pas planter : repli sur les valeurs d'origine.
+    if (milestonePhase({}) !== 'SQL' || firstPhase({}) !== 'R1') throw new Error('Repli par défaut cassé')
+  }
 
   // fmtDate reçoit tantôt une date seule, tantôt un horodatage ISO complet (createdAt).
   // Concaténer l'heure à un horodatage donnait « Invalid Date », affiché tel quel sur la

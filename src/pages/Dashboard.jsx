@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Trophy, Pencil, EyeOff, Eye, MonitorPlay } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase } from '../store.jsx'
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
 
 const DEFAULT_WIDGETS = [
@@ -19,15 +19,15 @@ const DEFAULT_WIDGETS = [
 ]
 
 // ---- Vélocité : temps moyen passé dans chaque phase (d'après l'historique des RDV)
-function pipelineVelocity(rdvs) {
+function pipelineVelocity(rdvs, data) {
   // Temps moyen pour PASSER d'une phase à la suivante : on ne compte que les segments
   // terminés (avec une phase suivante), on ignore la phase KO (terminale, sans signification)
   // et on n'inclut pas le temps « en cours » qui gonflerait l'indicateur indéfiniment (micro 10).
   const durations = {}
   rdvs.forEach(r => {
-    const phases = (r.history || []).filter(h => h.type === 'phase' || ['R1', 'R2', 'MQL', 'SQL', 'Signée', 'KO'].includes(h.value))
+    const phases = (r.history || []).filter(h => h.type === 'phase' || phaseList(data).includes(h.value))
     for (let i = 0; i < phases.length - 1; i++) {
-      if (phases[i].value === 'KO') continue
+      if (isLostPhase(data, phases[i].value)) continue // étape d'échec : terminale, sans durée utile
       const d1 = parseISO(phases[i].date)
       const d2 = parseISO(phases[i + 1].date)
       if (!d1 || !d2) continue
@@ -61,7 +61,7 @@ function periodRange(mode) {
   return { start, end, prevStart, prevEnd }
 }
 
-function reportStats(rdvs, bareme, mode) {
+function reportStats(rdvs, bareme, mode, data) {
   const { start, end, prevStart, prevEnd } = periodRange(mode)
   const within = (dateStr, s, e) => { const d = parseISO(dateStr); return d && d >= s && d < e }
   const compute = (s, e) => {
@@ -69,16 +69,16 @@ function reportStats(rdvs, bareme, mode) {
     return {
       pris: rdvs.filter(r => within(r.datePriseRdv, s, e)).length,
       realises: real.length,
-      mql: real.filter(r => ['MQL', 'SQL', 'Signée'].includes(r.phase)).length,
+      mql: real.filter(r => phaseAtLeast(data, r.phase, qualifyPhase(data))).length,
       sql: rdvs.filter(r => within(r.datePassageSQL, s, e)).length,
-      signatures: real.filter(r => r.phase === 'Signée').length,
+      signatures: real.filter(r => isWonPhase(data, r.phase)).length,
       primes: computePrimes(rdvs.filter(r => within(r.datePassageSQL || r.datePriseRdv, s, e)), bareme).reduce((a, p) => a + p.montant, 0),
     }
   }
   return { cur: compute(start, end), prev: compute(prevStart, prevEnd), start, end }
 }
 
-function exportReportPDF(stats, modeLabel) {
+function exportReportPDF(stats, modeLabel, labels) {
   const row = (label, cur, prev, unit = '') => {
     const delta = cur - prev
     return `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee">${label}</td>
@@ -93,8 +93,8 @@ function exportReportPDF(stats, modeLabel) {
       <th style="padding:6px 12px">Indicateur</th><th style="padding:6px 12px">Période</th><th style="padding:6px 12px">Précédente</th><th style="padding:6px 12px">Variation</th></tr>
     ${row('RDV pris', stats.cur.pris, stats.prev.pris)}
     ${row('RDV réalisés', stats.cur.realises, stats.prev.realises)}
-    ${row('MQL', stats.cur.mql, stats.prev.mql)}
-    ${row('SQL', stats.cur.sql, stats.prev.sql)}
+    ${row(labels.qualif, stats.cur.mql, stats.prev.mql)}
+    ${row(labels.jalon, stats.cur.sql, stats.prev.sql)}
     ${row('Signatures', stats.cur.signatures, stats.prev.signatures)}
     ${row('Primes', stats.cur.primes, stats.prev.primes, ' €')}
     </table></body></html>`
@@ -234,9 +234,12 @@ export default function Dashboard() {
   // ---- Indicateurs clés (filtrés sur la timeline des bulles, par date de RDV)
   const inTl = (r) => inTimeline(r.dateRdv || r.datePriseRdv, bubbleTl, bubbleCustom)
   const filtered = rdvs.filter(inTl)
-  const mql = filtered.filter(r => ['MQL', 'SQL', 'Signée'].includes(r.phase))
-  const sql = filtered.filter(r => r.phase === 'SQL' || r.phase === 'Signée')
-  const signatures = filtered.filter(r => r.phase === 'Signée')
+  // Jalons lus dans « Créer votre écosystème » : l'entonnoir parle le vocabulaire de l'équipe.
+  const qualif = qualifyPhase(sub)
+  const jalon = milestonePhase(sub)
+  const mql = filtered.filter(r => phaseAtLeast(sub, r.phase, qualif))
+  const sql = filtered.filter(r => phaseAtLeast(sub, r.phase, jalon))
+  const signatures = filtered.filter(r => isWonPhase(sub, r.phase))
   const oppEnCours = filtered.filter(r => r.opportunite === 'En cours')
   const oppPerdues = filtered.filter(r => r.opportunite === 'Perdue')
 
@@ -407,7 +410,7 @@ export default function Dashboard() {
         )
       }
       case 'velocite': {
-        const velo = pipelineVelocity(rdvs)
+        const velo = pipelineVelocity(rdvs, sub)
         const maxAvg = Math.max(1, ...velo.map(v => v.avg))
         return (
           <div className="card p-4">
@@ -431,14 +434,14 @@ export default function Dashboard() {
       }
       case 'rapport': {
         const modeLabels = { week: 'Cette semaine', month: 'Ce mois-ci', quarter: 'Ce trimestre', year: 'Cette année' }
-        const stats = reportStats(rdvs, sub.bareme, reportMode)
+        const stats = reportStats(rdvs, sub.bareme, reportMode, sub)
         const Delta = ({ cur, prev }) => {
           const d = cur - prev
           return <span className={`text-xs font-bold ${d > 0 ? 'text-emerald-600' : d < 0 ? 'text-red-500' : 'text-muted'}`}>{d > 0 ? '▲' : d < 0 ? '▼' : '='} {d >= 0 ? '+' : ''}{d}</span>
         }
         const items = [
           ['RDV pris', stats.cur.pris, stats.prev.pris], ['RDV réalisés', stats.cur.realises, stats.prev.realises],
-          ['MQL', stats.cur.mql, stats.prev.mql], ['SQL', stats.cur.sql, stats.prev.sql],
+          [qualifyPhase(sub), stats.cur.mql, stats.prev.mql], [milestonePhase(sub), stats.cur.sql, stats.prev.sql],
           ['Signatures', stats.cur.signatures, stats.prev.signatures], [`Primes (${sub.currency === 'USD' ? '$' : '€'})`, stats.cur.primes, stats.prev.primes],
         ]
         return (
@@ -452,7 +455,7 @@ export default function Dashboard() {
                   <option value="quarter">Trimestriel</option>
                   <option value="year">Annuel</option>
                 </select>
-                <button className="btn-ghost !py-1.5 text-xs" onClick={() => exportReportPDF(stats, modeLabels[reportMode])}>Exporter en PDF</button>
+                <button className="btn-ghost !py-1.5 text-xs" onClick={() => exportReportPDF(stats, modeLabels[reportMode], { qualif: qualifyPhase(sub), jalon: milestonePhase(sub) })}>Exporter en PDF</button>
               </div>
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
@@ -472,7 +475,8 @@ export default function Dashboard() {
           <div className="card p-4">
             <h3 className="font-bold mb-3">Taux de conversion (période des indicateurs clés)</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-              {[['RDV → MQL', mql.length], ['MQL → SQL', sql.length], ['SQL → Signature', signatures.length], ['RDV → KO', filtered.filter(r => r.phase === 'KO').length]].map(([l, n]) => (
+              {[[`RDV → ${qualif}`, mql.length], [`${qualif} → ${jalon}`, sql.length],
+                [`${jalon} → gagné`, signatures.length], ['RDV → perdu', filtered.filter(r => isLostPhase(sub, r.phase)).length]].map(([l, n]) => (
                 <div key={l} className="rounded-xl bg-surface p-3">
                   <div className="text-2xl font-extrabold text-brand">{taux(n)}</div>
                   <div className="text-xs text-muted font-semibold mt-1">{l}</div>
