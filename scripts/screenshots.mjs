@@ -1,81 +1,141 @@
-// Capture des pages clés de l'app (dossier dist) via Chromium headless.
-// Démarre son propre serveur statique (vite preview) puis l'arrête à la fin.
-import puppeteer from 'puppeteer'
-import { fileURLToPath } from 'url'
-import path from 'path'
-import { mkdirSync } from 'fs'
-import { spawn } from 'child_process'
+// ---------------------------------------------------------------------------
+//  Regénère les captures du site vitrine depuis l'ESPACE DE DÉMONSTRATION.
+//  Les visuels vieillissaient à chaque évolution de l'interface : ils sont désormais
+//  reproductibles d'une commande, avec le thème « BD Report Studio ».
+//
+//  On passe par la démo (#/demo, société fictive « Atlas Revenue ») et JAMAIS par le
+//  compte réel : une capture prise sur celui-ci afficherait le nom de l'entreprise
+//  cliente et celui de l'utilisateur en haut de chaque écran, publiés sur le site.
+//
+//    npm run build && node scripts/screenshots.mjs
+//
+//  Le navigateur est celui préinstallé (PLAYWRIGHT_BROWSERS_PATH) : rien à télécharger.
+// ---------------------------------------------------------------------------
+import { chromium } from 'playwright-core'
+import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { existsSync, readdirSync } from 'node:fs'
+import path from 'node:path'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PORT = 4188
-const outDir = '/tmp/shots'
-mkdirSync(outDir, { recursive: true })
-
-const server = spawn('npx', ['vite', 'preview', '--port', String(PORT)], { cwd: path.resolve(__dirname, '..'), stdio: 'ignore' })
-const stopServer = () => { try { server.kill() } catch (e) { /* déjà arrêté */ } }
-process.on('exit', stopServer)
-await new Promise(r => setTimeout(r, 3500))
-
-const browser = await puppeteer.launch({
-  headless: 'new',
-  args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  defaultViewport: { width: 1440, height: 900 },
-})
-const page = await browser.newPage()
-const wait = (ms) => new Promise(r => setTimeout(r, ms))
-
-await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle0' })
-await wait(800)
-
-// Connexion
-async function typeInto(i, value) {
-  const inputs = await page.$$('input')
-  await inputs[i].click({ clickCount: 3 })
-  await inputs[i].type(value)
+// Le navigateur préinstallé porte un suffixe de version : on le retrouve plutôt que de
+// le figer, sinon une mise à jour de l'image casse la génération.
+function findChromium() {
+  const root = '/opt/pw-browsers'
+  if (!existsSync(root)) return undefined
+  const dir = readdirSync(root).find(d => /^chromium-\d+$/.test(d)) || 'chromium'
+  const bin = path.join(root, dir, 'chrome-linux', 'chrome')
+  return existsSync(bin) ? bin : undefined
 }
-const clickText = async (selector, text) => {
-  const handle = await page.evaluateHandle((sel, t) => {
-    return [...document.querySelectorAll(sel)].find(e => e.textContent.trim().includes(t))
-  }, selector, text)
-  const el = handle.asElement()
-  if (!el) throw new Error('not found: ' + text)
+
+const DIST = path.resolve('dist')
+const OUT = path.resolve('site/assets')
+const PORT = 4178
+
+// Pages à capturer : id d'onglet dans l'app → fichier attendu par le site.
+const SHOTS = [
+  { file: 'dashboard.png', page: 'dashboard', wait: 'RDV réalisés' },
+  { file: 'rdv.png', page: 'rdv', wait: 'Rendez-vous' },
+  { file: 'leads.png', page: 'leads', wait: 'Leads' },
+  { file: 'tasks.png', page: 'mytasks', wait: 'tâches' },
+  { file: 'contacts.png', page: 'contacts', wait: 'contacts' },
+  { file: 'primes.png', page: 'primes', wait: 'Primes' },
+  { file: 'calendar.png', page: 'rdv', wait: 'Rendez-vous' },
+  { file: 'logs.png', page: 'logs', wait: 'Logs' },
+  { file: 'company.png', page: 'leads', wait: 'Leads' },
+  { file: 'teamlead.png', page: 'teamlead', role: 'manager' },
+  { file: 'orgchart.png', page: 'manager', role: 'manager' },
+]
+
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.webmanifest': 'application/manifest+json' }
+
+function serveDist() {
+  return new Promise(resolve => {
+    const srv = createServer(async (req, res) => {
+      const url = (req.url || '/').split('?')[0]
+      let file = path.join(DIST, url === '/' ? 'index.html' : url)
+      if (!existsSync(file)) file = path.join(DIST, 'index.html') // SPA
+      try {
+        const body = await readFile(file)
+        res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' })
+        res.end(body)
+      } catch { res.writeHead(404); res.end('not found') }
+    })
+    srv.listen(PORT, () => resolve(srv))
+  })
+}
+
+const clickText = async (page, text, opts = {}) => {
+  const el = page.locator(`button:has-text("${text}")`).first()
+  await el.waitFor({ state: 'visible', timeout: opts.timeout || 8000 })
   await el.click()
 }
 
-await typeInto(0, 'OwenMtp')
-await typeInto(1, 'demo1234')
-await clickText('button', 'Se connecter')
-await wait(3000) // écran de bienvenue
-await clickText('button', 'PeopleSpheres')
-await wait(500)
-await clickText('button', 'Owen Mrani Bonnier')
-await wait(400)
-// PIN
-const pinInput = await page.$('input')
-await pinInput.type('1205')
-await wait(800)
+const run = async () => {
+  if (!existsSync(path.join(DIST, 'index.html'))) {
+    console.error('dist/ absent — lancez `npm run build` d\'abord.')
+    process.exit(1)
+  }
+  const srv = await serveDist()
+  const browser = await chromium.launch({ executablePath: findChromium(), args: ['--no-sandbox'] })
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, locale: 'fr-FR' })
+  const page = await ctx.newPage()
 
-const shoot = async (name) => { await wait(900); await page.screenshot({ path: `${outDir}/${name}.png` }) }
-const nav = async (label) => {
-  await page.evaluate((t) => {
-    const b = [...document.querySelectorAll('nav button')].find(x => x.textContent.trim() === t)
-    if (b) b.click()
-  }, label)
-  await wait(700)
+  await page.goto(`http://localhost:${PORT}/#/demo`, { waitUntil: 'networkidle' })
+  await page.waitForTimeout(1500)
+
+  // Parcours d'achat de la démo : le formulaire exige un mot de passe pour continuer.
+  const pw = page.locator('input[type="password"]').first()
+  await pw.waitFor({ state: 'visible', timeout: 10000 })
+  await pw.fill('demo1234')
+  await clickText(page, 'Créer mon espace')
+  await page.waitForTimeout(2600)
+
+  // Le thème est mémorisé PAR ESPACE : chaque casquette a le sien, il faut donc
+  // l'appliquer à nouveau après chaque bascule.
+  const applyStudio = async () => {
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('demo-navigate', { detail: 'settings' })))
+    await page.waitForTimeout(1100)
+    const btn = page.locator('button:has-text("BD Report Studio")').first()
+    if (!(await btn.count())) { console.warn('! thème Studio introuvable'); return }
+    await btn.click()
+    await clickText(page, 'Sauvegarder le thème')
+    await page.waitForTimeout(800)
+  }
+  // Le panneau de prise en main masque le contenu : on le referme s'il est là.
+  const dismissOnboarding = async () => {
+    const skip = page.locator('button:has-text("Passer")').first()
+    if (await skip.count() && await skip.isVisible()) { await skip.click(); await page.waitForTimeout(500) }
+  }
+  await applyStudio()
+  await dismissOnboarding()
+
+  // La barre de pilotage de la démo n'a rien à faire sur une capture marketing : on la
+  // masque le temps des prises de vue, sans la retirer du produit.
+  await page.addStyleTag({ content: '[data-demo-chrome]{display:none !important}' })
+  await page.waitForTimeout(300)
+
+  let role = 'employe'
+  for (const shot of SHOTS) {
+    if ((shot.role || 'employe') !== role) {
+      role = shot.role || 'employe'
+      await page.addStyleTag({ content: '[data-demo-chrome]{display:flex !important}' })
+      await page.waitForTimeout(200)
+      await clickText(page, role === 'manager' ? 'Manager' : 'Employé')
+      await page.waitForTimeout(1400)
+      await applyStudio()
+      await dismissOnboarding()
+      await page.addStyleTag({ content: '[data-demo-chrome]{display:none !important}' })
+      await page.waitForTimeout(200)
+    }
+    await page.evaluate((p) => window.dispatchEvent(new CustomEvent('demo-navigate', { detail: p })), shot.page)
+    await page.waitForTimeout(1600)
+    await dismissOnboarding()
+    await page.screenshot({ path: path.join(OUT, shot.file), scale: 'css' })
+    console.log('✓', shot.file)
+  }
+
+  await browser.close()
+  srv.close()
 }
 
-await shoot('1-dashboard')
-await nav('Leads'); await shoot('2-leads-par-entreprise')
-await nav('Tâches prioritaires'); await shoot('3-taches-prioritaires')
-await nav('Primes & Commissions'); await shoot('4-primes')
-// Paramètres → Intégrations puis Téléchargement
-await page.evaluate(() => document.querySelector('button[title="Paramètres"]')?.click())
-await wait(600)
-await page.evaluate(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('Intégrations')); b && b.click() })
-await shoot('5-integrations-hubspot')
-await page.evaluate(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes("Télécharger l'app")); b && b.click() })
-await shoot('6-telechargement')
-
-await browser.close()
-stopServer()
-console.log('SHOTS OK → ' + outDir)
+run().catch(e => { console.error('Échec des captures :', e.message); process.exit(1) })

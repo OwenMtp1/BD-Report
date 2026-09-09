@@ -149,7 +149,7 @@ export default function DemoJourney({ onClose }) {
   return (
     <div className="fixed inset-0 z-[200] bg-white flex flex-col" style={{ isolation: 'isolate' }}>
       {/* Barre de contrôle de la démo (hors app) */}
-      <div className="shrink-0 flex items-center gap-3 px-3 sm:px-4 h-12 text-white" style={{ background: 'linear-gradient(90deg,#0f1730,#1e2a52)' }}>
+      <div data-demo-chrome className="shrink-0 flex items-center gap-3 px-3 sm:px-4 h-12 text-white" style={{ background: 'linear-gradient(90deg,#0f1730,#1e2a52)' }}>
         <span className="inline-flex items-center gap-1.5 font-bold text-sm"><span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" /> Démo commerciale</span>
         <span className="hidden sm:inline text-white/40 text-xs">·</span>
         <span className="hidden sm:inline text-white/50 text-xs">environnement isolé</span>

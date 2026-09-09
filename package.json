@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "smoke": "vite build --ssr scripts/smoke.jsx --outDir .smoke --emptyOutDir && node .smoke/smoke.js",
-    "shots": "vite build && node scripts/screenshots.mjs",
+    "shots": "npm run build && node scripts/screenshots.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
     "jsdom": "^29.1.1",
+    "playwright-core": "^1.63.0",
     "postcss": "^8.4.47",
     "puppeteer": "^25.1.0",
     "tailwindcss": "^3.4.13",
