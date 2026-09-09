@@ -29,7 +29,23 @@ async function main() {
   const { act } = await import('react')
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
-  const { StoreProvider, buildDemoDb, demoSession } = await import('../src/store.jsx')
+  const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate } = await import('../src/store.jsx')
+
+  // Automatisations de statut vs pipeline personnalisé : une phase renommée dans
+  // « Créer votre écosystème » doit suivre, et une phase supprimée ne doit jamais être
+  // réécrite sur le RDV (l'étiquette posée n'existerait plus dans le kanban).
+  {
+    const rdv = { id: 'r', phase: 'R1', opportunite: 'En cours', history: [] }
+    const std = applyRdvAutomations(rdv, { opportunite: 'Gagnée' }, { phases: ['R1', 'R2', 'MQL', 'SQL', 'KO', 'Signée'] })
+    if (std.phase !== 'SQL') throw new Error('Default pipeline: Gagnée should move the RDV to SQL')
+    const renamed = { phases: ['R1', 'Qualifié', 'Perdu'], phaseAliases: { SQL: 'Qualifié', KO: 'Perdu' } }
+    if (applyRdvAutomations(rdv, { opportunite: 'Gagnée' }, renamed).phase !== 'Qualifié') throw new Error('Renamed phase not followed by the automation')
+    if (applyRdvAutomations(rdv, { opportunite: 'Perdue' }, renamed).phase !== 'Perdu') throw new Error('Renamed KO phase not followed')
+    const dropped = { phases: ['R1', 'R2'] }
+    if ('phase' in applyRdvAutomations(rdv, { opportunite: 'Gagnée' }, dropped)) throw new Error('A phase absent from the pipeline must never be written back')
+    // La date de passage SQL suit les phases qui déclenchent une prime, pas le mot « SQL ».
+    if (!rdvNeedsSqlDate(rdv, { phase: 'Qualifié' }, { primePhases: ['Qualifié'] })) throw new Error('SQL date prompt lost after renaming the prime phase')
+  }
   const { I18nProvider } = await import('../src/i18n.jsx')
 
   // Démo commerciale : base fabriquée de toutes pièces (société Atlas Revenue), sans lien

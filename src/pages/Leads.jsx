@@ -116,22 +116,28 @@ export default function Leads() {
     if (!dragKey) { setDragKey(null); return }
     // Glisser-déposer dans MON pipeline ou celui de l'entreprise (RDV d'un collègue).
     const group = groupByCompany(scope === 'me' ? sub.rdvs : orgRdvs).find(g => g.key === dragKey)
-    if (group && group.rep.opportunite !== opp) {
-      const repId = group.rep.id
-      const subId = scope === 'me' ? store.session.subEnvId : group.rep._subId
-      // applyRdvAutomations met aussi à jour la PHASE de transaction (Gagnée→SQL, Perdue→KO, Signée…).
-      store.setSubData(subId, d => {
-        const r = d.rdvs.find(x => x.id === repId)
-        if (r) Object.assign(r, applyRdvAutomations(r, { opportunite: opp }))
-        return d
-      })
-      store.logAction('Lead', 'Statut déplacé (kanban)', `${group.entreprise} → ${opp}`)
-      if (opp === 'Signée') { confetti(); toast(`🎉 Signature ! Bravo pour ${group.entreprise} 🏆`) }
-      else toast(opp === 'Perdue' ? `${group.entreprise} → Perdue — pensez à renseigner le motif (menu ⋯ dans Mes RDV)`
-        : opp.startsWith('No Show') ? `${group.entreprise} → ${opp} — pensez à renseigner la raison`
-        : `${group.entreprise} → ${opp}`)
-    }
     setDragKey(null)
+    if (!group) return
+    const already = group.rep.opportunite === opp
+    const repId = group.rep.id
+    const subId = scope === 'me' ? store.session.subEnvId : group.rep._subId
+    // L'écriture part TOUJOURS : `group` vient du rendu courant, donc de données qui
+    // peuvent dater d'un déplacement précédent non encore reflété. Filtrer ici sur cet
+    // état périmé faisait perdre le second déplacement d'une carte bougée deux fois de
+    // suite. C'est l'état frais, dans l'updater, qui décide — applyRdvAutomations
+    // n'inscrit rien si le statut est déjà le bon, et met à jour la PHASE au passage
+    // (Gagnée→SQL, Perdue→KO, Signée…), traduite dans le vocabulaire de l'équipe.
+    store.setSubData(subId, d => {
+      const r = d.rdvs.find(x => x.id === repId)
+      if (r) Object.assign(r, applyRdvAutomations(r, { opportunite: opp }, d))
+      return d
+    })
+    if (already) return // rien de neuf à annoncer : la carte était déjà dans cette colonne
+    store.logAction('Lead', 'Statut déplacé (kanban)', `${group.entreprise} → ${opp}`)
+    if (opp === 'Signée') { confetti(); toast(`🎉 Signature ! Bravo pour ${group.entreprise} 🏆`) }
+    else toast(opp === 'Perdue' ? `${group.entreprise} → Perdue — pensez à renseigner le motif (menu ⋯ dans Mes RDV)`
+      : opp.startsWith('No Show') ? `${group.entreprise} → ${opp} — pensez à renseigner la raison`
+      : `${group.entreprise} → ${opp}`)
   }
 
   // ----- Sélection multiple + actions groupées (souris + tactile via cases à cocher) -----
@@ -144,9 +150,10 @@ export default function Leads() {
   const bulkMove = (opp) => {
     if (!opp || !selGroups.length) return
     selGroups.forEach(g => {
-      if (g.rep.opportunite === opp) return
+      // Même raison que dans `drop` : c'est l'updater, sur des données fraîches, qui
+      // décide s'il y a quelque chose à changer — pas l'instantané du rendu.
       const subId = scope === 'me' ? store.session.subEnvId : g.rep._subId
-      store.setSubData(subId, d => { const r = d.rdvs.find(x => x.id === g.rep.id); if (r) Object.assign(r, applyRdvAutomations(r, { opportunite: opp })); return d })
+      store.setSubData(subId, d => { const r = d.rdvs.find(x => x.id === g.rep.id); if (r) Object.assign(r, applyRdvAutomations(r, { opportunite: opp }, d)); return d })
     })
     store.logAction('Lead', 'Déplacement en lot (kanban)', `${selGroups.length} lead(s) → ${opp}`)
     toast(`${selGroups.length} lead(s) → ${opp}`)

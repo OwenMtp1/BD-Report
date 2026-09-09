@@ -61,7 +61,7 @@ export default function Tasks() {
 
   const patch = (id, p) => store.setSub(d => {
     const r = d.rdvs.find(x => x.id === id)
-    if (r) Object.assign(r, applyRdvAutomations(r, p))
+    if (r) Object.assign(r, applyRdvAutomations(r, p, d))
     return d
   })
 

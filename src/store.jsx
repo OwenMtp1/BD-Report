@@ -2410,12 +2410,22 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       setEcosystem(patch) { setSub(d => ({ ...d, ...patch })) },
       renamePhase(oldName, newName) {
         const to = (newName || '').trim(); if (!to || to === oldName) return
-        setSub(d => ({
-          ...d,
-          phases: (d.phases || []).map(p => (p === oldName ? to : p)),
-          primePhases: (d.primePhases || []).map(p => (p === oldName ? to : p)),
-          rdvs: (d.rdvs || []).map(r => (r.phase === oldName ? { ...r, phase: to } : r)),
-        }))
+        setSub(d => {
+          // Trace du renommage : les automatisations (Perdue → KO, Gagnée → SQL, Signée)
+          // visent des noms par défaut. Sans cet alias, renommer « SQL » ferait poser aux
+          // RDV gagnés une étiquette qui n'existe plus dans le pipeline.
+          const aliases = { ...(d.phaseAliases || {}) }
+          const origin = Object.keys(aliases).find(k => aliases[k] === oldName)
+            || (DEFAULT_PHASES.includes(oldName) ? oldName : null)
+          if (origin) aliases[origin] = to
+          return {
+            ...d,
+            phaseAliases: aliases,
+            phases: (d.phases || []).map(p => (p === oldName ? to : p)),
+            primePhases: (d.primePhases || []).map(p => (p === oldName ? to : p)),
+            rdvs: (d.rdvs || []).map(r => (r.phase === oldName ? { ...r, phase: to } : r)),
+          }
+        })
       },
       getSavedCreds() { try { return JSON.parse(localStorage.getItem(CREDS_KEY)) } catch (e) { return null } },
       register({ email, pseudo, password }) {
@@ -3785,16 +3795,28 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
 export const useStore = () => useContext(Ctx)
 
 // ---------------------------------------------------------------- Mutations RDV avec automatisations
-export function applyRdvAutomations(rdv, patch) {
+// Résout une phase « par défaut » (KO / SQL / Signée) dans le vocabulaire de l'équipe :
+// une phase renommée dans « Créer votre écosystème » laisse un alias, et une phase
+// supprimée ne doit surtout pas être réécrite sur le RDV — c'est ce qui faisait qu'un
+// changement de statut posait une étiquette absente du pipeline, donc invisible au kanban.
+export function resolvePhase(name, data) {
+  const phases = data?.phases?.length ? data.phases : DEFAULT_PHASES
+  if (phases.includes(name)) return name
+  const alias = data?.phaseAliases?.[name]
+  return alias && phases.includes(alias) ? alias : null
+}
+
+export function applyRdvAutomations(rdv, patch, data) {
   // Retourne le patch enrichi par les règles d'automatisation + entrées d'historique.
   const out = { ...patch }
   const hist = []
   const day = todayISO()
   if ('opportunite' in patch && patch.opportunite !== rdv.opportunite) {
     hist.push({ type: 'opportunite', value: patch.opportunite, date: day })
-    if (patch.opportunite === 'Perdue') { out.phase = 'KO' }
-    if (patch.opportunite === 'Gagnée') { out.phase = 'SQL' }
-    if (patch.opportunite === 'Signée') { out.phase = 'Signée' }
+    const auto = { Perdue: 'KO', 'Gagnée': 'SQL', 'Signée': 'Signée' }[patch.opportunite]
+    // `data` absent = ancien appelant : on garde le comportement historique.
+    const target = auto ? (data === undefined ? auto : resolvePhase(auto, data)) : null
+    if (target) out.phase = target
   }
   if ('phase' in out && out.phase !== rdv.phase) {
     hist.push({ type: 'phase', value: out.phase, date: day })
@@ -3803,10 +3825,14 @@ export function applyRdvAutomations(rdv, patch) {
   return out
 }
 
-export function rdvNeedsSqlDate(rdv, patch) {
+export function rdvNeedsSqlDate(rdv, patch, data) {
   const newPhase = patch.phase ?? rdv.phase
   const newOpp = patch.opportunite ?? rdv.opportunite
-  const becomesSQL = (newPhase === 'SQL' || newPhase === 'Signée' || newOpp === 'Gagnée' || newOpp === 'Signée')
+  // Les phases qui déclenchent une prime sont celles choisies dans « Créer votre
+  // écosystème » : sans ça, renommer « SQL » faisait disparaître la demande de date
+  // de passage, et donc la prime avec elle.
+  const triggers = data?.primePhases?.length ? data.primePhases : ['SQL', 'Signée']
+  const becomesSQL = triggers.includes(newPhase) || newOpp === 'Gagnée' || newOpp === 'Signée'
   return becomesSQL && !rdv.datePassageSQL && !patch.datePassageSQL
 }
 

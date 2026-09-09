@@ -437,7 +437,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
         ensurePrimeSnapshot(d, rdv)
       } else {
         const r = d.rdvs.find(x => x.id === id)
-        Object.assign(r, applyRdvAutomations(r, data))
+        Object.assign(r, applyRdvAutomations(r, data, d))
         syncContacts(d, r)
         ensurePrimeSnapshot(d, r)
       }
@@ -451,13 +451,13 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   }
 
   const patchRdv = (rdv, patch) => {
-    if (rdvNeedsSqlDate(rdv, patch)) {
+    if (rdvNeedsSqlDate(rdv, patch, sub)) {
       setSqlAsk({ rdvId: rdv.id, patch, date: todayISO() })
       return
     }
     store.setSub(d => {
       const r = d.rdvs.find(x => x.id === rdv.id)
-      Object.assign(r, applyRdvAutomations(r, patch))
+      Object.assign(r, applyRdvAutomations(r, patch, d))
       ensurePrimeSnapshot(d, r)
       return d
     })
@@ -476,7 +476,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       const r = d.rdvs.find(x => x.id === rdvId)
       const extra = { ...patch, datePassageSQL: date }
       if (effectif) extra.effectif = effectif
-      Object.assign(r, applyRdvAutomations(r, extra))
+      Object.assign(r, applyRdvAutomations(r, extra, d))
       ensurePrimeSnapshot(d, r) // fige la prime au barème du jour (versionnage)
       return d
     })
