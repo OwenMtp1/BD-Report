@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { AlertTriangle, Activity, Settings2 } from 'lucide-react'
-import { useStore, computePrimes, primeOpts, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, DEFAULT_PRIME_PHASES, phaseProbability, milestonePhase } from '../store.jsx'
+import { AlertTriangle, Activity, Settings2, Gauge } from 'lucide-react'
+import { useStore, computePrimes, primeOpts, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, DEFAULT_PRIME_PHASES, phaseProbability, milestonePhase, applyPrimeRules } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 const SUIVI_TL = [
@@ -80,9 +80,55 @@ export default function Primes() {
   const srcCounts = Object.fromEntries(SOURCES.map(s => [s, sub.rdvs.filter(r => r.source === s).length]))
   const trancheCount = (t) => sub.rdvs.filter(r => { const e = Number(r.effectif) || 0; return e >= t.min && e <= t.max }).length
 
+  // ---- Modulateurs de prime (seuil / accélérateur / qualité / plafond) sur le mois en cours.
+  // Ils ne s'appliquent jamais à une prime isolée mais au TOTAL d'un mois de paiement : c'est
+  // à cette maille que se décide une politique de rémunération variable.
+  const curMonthKey = monthKey(new Date())
+  const rawMonth = primes.filter(p => p.payMonthKey === curMonthKey).reduce((a, p) => a + p.montant, 0)
+  const modulated = useMemo(
+    () => applyPrimeRules(rawMonth, {
+      data: sub,
+      env: store.db.environments.find(e => e.id === store.session?.envId),
+      subId: store.session?.subEnvId,
+      monthKey: curMonthKey,
+    }),
+    [rawMonth, sub.primeRules, sub.rdvs, curMonthKey], // eslint-disable-line
+  )
+
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-extrabold">Primes & Commissions</h2>
+
+      {/* Détail du calcul du mois. Affiché dès qu'une règle joue : un montant modifié sans
+          explication est un litige qui arrive. */}
+      {modulated.steps.length > 0 && (
+        <div className="card p-4">
+          <h3 className="font-bold flex items-center gap-2"><Gauge size={16} className="text-brand" /> Calcul de vos primes du mois</h3>
+          {modulated.reference && (
+            <p className="text-xs text-muted mt-0.5">
+              Référence : {modulated.reference.done} / {modulated.reference.target} sur votre quota, soit {modulated.reference.pct} %.
+            </p>
+          )}
+          <div className="mt-2.5 space-y-1.5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Total du barème</span>
+              <span className="font-semibold num">{fmtMoney(rawMonth, sub.currency)}</span>
+            </div>
+            {modulated.steps.map((s, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-muted min-w-0">{s.label}</span>
+                <span className={`num shrink-0 ${s.to < s.from ? 'text-red-500' : 'text-emerald-600'}`}>
+                  {fmtMoney(Math.round(s.to), sub.currency)}
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between text-sm pt-1.5 border-t border-line">
+              <span className="font-bold">Versé ce mois</span>
+              <span className="font-extrabold num text-brand">{fmtMoney(modulated.total, sub.currency)}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {invalidated.length > 0 && (
         <div className="card p-4 !border-amber-300 bg-amber-50/60">

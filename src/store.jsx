@@ -982,6 +982,79 @@ export function challengeScore(data, metric, start, end) {
   }
 }
 
+// ---------------------------------------------------------------- Modulation des primes
+// Le barème était strictement linéaire : tant de leads, tant d'euros. Les vraies politiques de
+// variable ont trois leviers de plus — un seuil de déclenchement, un accélérateur au-delà du
+// quota, un plafond — et parfois une pondération par la qualité des leads.
+// ⚠️ RIEN N'EST IMPOSÉ. L'ensemble est désactivé par défaut et le reste tant qu'un manager ne
+// l'active pas : ces règles changent des montants versés, ce n'est pas au produit d'en décider.
+export const DEFAULT_PRIME_RULES = () => ({
+  on: false,
+  refMetric: 'sql',                                   // sur quoi se mesure l'atteinte du quota
+  threshold: { on: false, pct: 70 },                  // rien avant N % du quota
+  accelerator: { on: false, fromPct: 100, factor: 1.5 }, // au-delà de N %, × facteur
+  cap: { on: false, amount: 0 },                      // plafond mensuel
+  quality: { on: false, minRate: 70, factor: 0.8 },   // sous N % d'acceptation, × facteur
+})
+export const primeRules = (data) => ({ ...DEFAULT_PRIME_RULES(), ...(data?.primeRules || {}) })
+
+// Bornes d'un mois de paiement (« 2026-09 » → 1er au 30 septembre).
+export function monthBounds(mKey) {
+  const [y, m] = String(mKey || '').split('-').map(Number)
+  if (!y || !m) return null
+  const last = new Date(y, m, 0).getDate()
+  return { start: `${mKey}-01`, end: `${mKey}-${String(last).padStart(2, '0')}`, mid: new Date(y, m - 1, 15) }
+}
+
+// Applique les modulateurs au total brut d'un mois. Renvoie le total ajusté ET le détail des
+// étapes : un montant modifié sans explication est un litige qui arrive.
+export function applyPrimeRules(rawTotal, { data, env, subId, monthKey }) {
+  const rules = primeRules(data)
+  if (!rules.on) return { total: rawTotal, steps: [], reference: null }
+  const b = monthBounds(monthKey)
+  const steps = []
+  let total = rawTotal
+
+  // Atteinte du quota sur le mois considéré. Sans quota posé, seuil et accélérateur n'ont
+  // aucune assise : on les laisse de côté plutôt que d'inventer une base de calcul.
+  let reference = null
+  if (b && env) {
+    const q = memberQuota(env, subId, rules.refMetric, b.mid)
+    if (q.target > 0) {
+      const done = challengeScore(data, rules.refMetric, b.start, b.end)
+      reference = { done, target: q.target, pct: Math.round((done / q.target) * 100), metric: rules.refMetric }
+    }
+  }
+
+  if (rules.threshold?.on && reference && reference.pct < Number(rules.threshold.pct || 0)) {
+    steps.push({ label: `Seuil non atteint (${reference.pct} % < ${rules.threshold.pct} % du quota)`, from: total, to: 0 })
+    total = 0
+  }
+  if (total > 0 && rules.accelerator?.on && reference && reference.pct >= Number(rules.accelerator.fromPct || 100)) {
+    const f = Number(rules.accelerator.factor) || 1
+    steps.push({ label: `Accélérateur × ${f} (${reference.pct} % du quota)`, from: total, to: total * f })
+    total *= f
+  }
+  if (total > 0 && rules.quality?.on && b) {
+    const rdvs = (data?.rdvs || []).filter(r => {
+      const d = r.datePassageSQL || r.datePriseRdv
+      return d && d >= b.start && d <= b.end
+    })
+    const st = handoffStats(rdvs, data)
+    // Sans dossier tranché, aucune qualité mesurée : on ne pénalise pas une absence de donnée.
+    if (st.rate !== null && st.rate < Number(rules.quality.minRate || 0)) {
+      const f = Number(rules.quality.factor) || 1
+      steps.push({ label: `Qualité des leads ${st.rate} % (< ${rules.quality.minRate} %) → × ${f}`, from: total, to: total * f })
+      total *= f
+    }
+  }
+  if (rules.cap?.on && Number(rules.cap.amount) > 0 && total > Number(rules.cap.amount)) {
+    steps.push({ label: `Plafond mensuel ${Number(rules.cap.amount)}`, from: total, to: Number(rules.cap.amount) })
+    total = Number(rules.cap.amount)
+  }
+  return { total: Math.round(total), steps, reference }
+}
+
 // ---------------------------------------------------------------- Comité d'achat (module `committee`)
 // En B2B, l'affaire ne se perd presque jamais faute d'arguments : elle se perd parce qu'une
 // seule personne portait le sujet en interne. On qualifie donc chaque interlocuteur — son rôle
@@ -1082,6 +1155,7 @@ function emptySubEnvData() {
     wonPhases: [...DEFAULT_WON_PHASES],     // phases signifiant « affaire gagnée »
     lostPhases: [...DEFAULT_LOST_PHASES],   // phases signifiant « affaire perdue »
     icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
+    primeRules: DEFAULT_PRIME_RULES(), // seuils / accélérateurs / plafonds — désactivés par défaut
     objections: defaultObjections(), // bibliothèque d'objections (onglet de « Mes notes »)
     objectionFamilies: [...OBJECTION_FAMILIES],
     handoffPhases: [],       // étapes déclenchant une passation ([] = le jalon de l'espace)
@@ -2557,6 +2631,8 @@ function migrate(db) {
     // la voir repousser au rechargement suivant.
     if (!Array.isArray(data.objections)) { data.objections = defaultObjections(); data._objectionsSeeded = true }
     if (!Array.isArray(data.objectionFamilies) || !data.objectionFamilies.length) data.objectionFamilies = [...OBJECTION_FAMILIES]
+    // Modulateurs de prime : toujours neutres tant qu'un manager ne les active pas.
+    data.primeRules = { ...DEFAULT_PRIME_RULES(), ...(data.primeRules || {}) }
     // Passation au closer (module `handoff`)
     if (!Array.isArray(data.handoffPhases)) data.handoffPhases = []
     if (!Array.isArray(data.handoffReasons)) data.handoffReasons = [...DEFAULT_HANDOFF_REASONS]

@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import {
   Workflow, Plus, Trash2, Pencil, Check, X, Coins, CalendarClock, AlertTriangle,
-  ChevronUp, ChevronDown, Save, Activity, CalendarRange, Layers, ArrowRightLeft,
+  ChevronUp, ChevronDown, Save, Activity, CalendarRange, Layers, ArrowRightLeft, Gauge,
 } from 'lucide-react'
-import { useStore, uid, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, fmtMoney, ACTIVITY_PERIODS, activityRuleTitle, computeActivityPrimes, handoffPhases, DEFAULT_HANDOFF_REASONS } from '../store.jsx'
+import { useStore, uid, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, fmtMoney, ACTIVITY_PERIODS, activityRuleTitle, computeActivityPrimes, handoffPhases, DEFAULT_HANDOFF_REASONS, primeRules, QUOTA_METRICS } from '../store.jsx'
 import { Confirm, Field, Empty, toast } from '../ui.jsx'
 
 // « Créer votre écosystème » : le manager compose ici le vocabulaire de son équipe —
@@ -333,6 +333,132 @@ function ActivityBaremeCard({ store, sub, phaseOptions }) {
   )
 }
 
+// -------------------------------------------------- Seuils, accélérateurs et plafonds
+// Trois leviers que toute politique de variable un peu sérieuse utilise, et qu'un barème
+// strictement linéaire ne sait pas exprimer. Tout est FACULTATIF et désactivé par défaut :
+// ces règles changent des montants versés, ce n'est pas au produit d'en décider.
+function PrimeRulesCard({ store, sub }) {
+  const r = primeRules(sub)
+  const set = (patch) => store.setEcosystem({ primeRules: { ...r, ...patch } })
+  const quotasOn = store.hasModule('quotas')
+  const hasQuota = !!store.myQuota?.(r.refMetric) || Object.keys(store.quotas?.()?.byMember || {}).length > 0
+
+  return (
+    <div className="card p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="font-bold flex items-center gap-2"><Gauge size={17} className="text-brand" /> Seuils, accélérateurs et plafonds</h3>
+          <p className="text-xs text-muted mt-0.5">
+            Facultatif. Sans ces règles, le barème reste strictement linéaire — c'est le
+            comportement d'origine, et il convient à beaucoup d'équipes.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer shrink-0">
+          <input type="checkbox" checked={!!r.on} onChange={e => { set({ on: e.target.checked }); toast(e.target.checked ? 'Règles activées' : 'Règles désactivées — barème linéaire') }} />
+          Activer
+        </label>
+      </div>
+
+      {r.on && (
+        <div className="space-y-3">
+          <Field label="Indicateur de référence (atteinte du quota)">
+            <select className="input !w-auto" value={r.refMetric} onChange={e => set({ refMetric: e.target.value })}>
+              {QUOTA_METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </Field>
+          {!quotasOn && (
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-2.5 flex gap-2">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800 dark:text-amber-300">
+                Le module « Objectifs & quotas » n'est pas installé : sans quota posé, le seuil et
+                l'accélérateur n'ont pas de base de calcul et resteront sans effet. Le plafond, lui, s'applique.
+              </p>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+              <input type="checkbox" checked={!!r.threshold?.on} onChange={e => set({ threshold: { ...r.threshold, on: e.target.checked } })} />
+              Seuil de déclenchement
+            </label>
+            <p className="text-[11px] text-muted">Aucune prime versée tant que ce pourcentage du quota n'est pas atteint sur le mois.</p>
+            {r.threshold?.on && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted">Rien avant</span>
+                <input type="number" min="0" max="200" className="input !w-20 !py-1 text-center" value={r.threshold.pct}
+                  onChange={e => set({ threshold: { ...r.threshold, pct: Number(e.target.value) || 0 } })} />
+                <span className="text-muted">% du quota</span>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+              <input type="checkbox" checked={!!r.accelerator?.on} onChange={e => set({ accelerator: { ...r.accelerator, on: e.target.checked } })} />
+              Accélérateur au-delà du quota
+            </label>
+            <p className="text-[11px] text-muted">Multiplie les primes du mois quand le quota est dépassé.</p>
+            {r.accelerator?.on && (
+              <div className="flex items-center gap-2 text-sm flex-wrap">
+                <span className="text-muted">À partir de</span>
+                <input type="number" min="0" className="input !w-20 !py-1 text-center" value={r.accelerator.fromPct}
+                  onChange={e => set({ accelerator: { ...r.accelerator, fromPct: Number(e.target.value) || 0 } })} />
+                <span className="text-muted">% du quota, multiplier par</span>
+                <input type="number" min="1" step="0.1" className="input !w-20 !py-1 text-center" value={r.accelerator.factor}
+                  onChange={e => set({ accelerator: { ...r.accelerator, factor: Number(e.target.value) || 1 } })} />
+              </div>
+            )}
+          </div>
+
+          {store.hasModule('handoff') && (
+            <div className="rounded-xl border border-line p-3 space-y-2">
+              <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                <input type="checkbox" checked={!!r.quality?.on} onChange={e => set({ quality: { ...r.quality, on: e.target.checked } })} />
+                Pondération par la qualité des leads
+              </label>
+              <p className="text-[11px] text-muted">
+                Sous ce taux d'acceptation par les closers, les primes du mois sont minorées.
+                Un mois sans dossier tranché n'est jamais pénalisé : une absence de donnée n'est pas un mauvais résultat.
+              </p>
+              {r.quality?.on && (
+                <div className="flex items-center gap-2 text-sm flex-wrap">
+                  <span className="text-muted">Sous</span>
+                  <input type="number" min="0" max="100" className="input !w-20 !py-1 text-center" value={r.quality.minRate}
+                    onChange={e => set({ quality: { ...r.quality, minRate: Number(e.target.value) || 0 } })} />
+                  <span className="text-muted">% d'acceptation, multiplier par</span>
+                  <input type="number" min="0" max="1" step="0.05" className="input !w-20 !py-1 text-center" value={r.quality.factor}
+                    onChange={e => set({ quality: { ...r.quality, factor: Number(e.target.value) || 1 } })} />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+              <input type="checkbox" checked={!!r.cap?.on} onChange={e => set({ cap: { ...r.cap, on: e.target.checked } })} />
+              Plafond mensuel
+            </label>
+            <p className="text-[11px] text-muted">Montant maximum versé à une personne sur un mois de paiement.</p>
+            {r.cap?.on && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted">Au maximum</span>
+                <input type="number" min="0" className="input !w-28 !py-1 text-center" value={r.cap.amount}
+                  onChange={e => set({ cap: { ...r.cap, amount: Number(e.target.value) || 0 } })} />
+                <span className="text-muted">par mois</span>
+              </div>
+            )}
+          </div>
+
+          <p className="text-[11px] text-muted">
+            Ces règles s'appliquent au total d'un mois, jamais à une prime prise isolément — et le
+            détail du calcul est affiché sur la page Primes : un montant modifié sans explication est un litige qui arrive.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // -------------------------------------------------- Passation au closer (module `handoff`)
 function HandoffCard({ store, sub }) {
   const phases = sub.phases?.length ? sub.phases : DEFAULT_PHASES
@@ -429,6 +555,7 @@ export default function Ecosystem() {
       {store.hasModule('handoff') && <HandoffCard store={store} sub={sub} />}
       <PayRule store={store} sub={sub} />
       <Bareme store={store} sub={sub} />
+      <PrimeRulesCard store={store} sub={sub} />
       <ActivityBaremeCard store={store} sub={sub}
         phaseOptions={(sub.phases && sub.phases.length ? sub.phases : DEFAULT_PHASES)} />
     </div>

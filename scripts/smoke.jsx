@@ -30,7 +30,7 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore } = await import('../src/store.jsx')
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -112,6 +112,28 @@ async function main() {
     if (challengeScore(d.data['dsub-b1'] || {}, 'sql', '2000-01-01', '2000-01-02') !== 0) {
       throw new Error('Un challenge hors fenêtre ne doit rien compter')
     }
+  }
+
+  // Modulateurs de prime : rien n'est imposé. Désactivés, ils ne touchent à aucun montant ;
+  // activés, chaque étape du calcul doit être nommée.
+  {
+    const base = { rdvs: [], bareme: [], primePhases: ['SQL'] }
+    if (applyPrimeRules(1000, { data: base, env: null, subId: 'x', monthKey: '2026-09' }).total !== 1000) {
+      throw new Error('Sans règle activée, le total du barème ne doit pas bouger')
+    }
+    // Plafond seul : il s'applique même sans quota posé (il n'en dépend pas).
+    const capped = applyPrimeRules(1000, {
+      data: { ...base, primeRules: { on: true, refMetric: 'sql', threshold: { on: false }, accelerator: { on: false }, quality: { on: false }, cap: { on: true, amount: 600 } } },
+      env: null, subId: 'x', monthKey: '2026-09',
+    })
+    if (capped.total !== 600) throw new Error('Le plafond mensuel ne s\'applique pas')
+    if (!capped.steps.length) throw new Error('Un montant modifié doit être expliqué étape par étape')
+    // Seuil et accélérateur sans quota : sans base de calcul, ils restent sans effet.
+    const noQuota = applyPrimeRules(1000, {
+      data: { ...base, primeRules: { on: true, refMetric: 'sql', threshold: { on: true, pct: 90 }, accelerator: { on: false }, quality: { on: false }, cap: { on: false } } },
+      env: null, subId: 'x', monthKey: '2026-09',
+    })
+    if (noQuota.total !== 1000) throw new Error('Sans quota posé, le seuil ne doit rien retirer')
   }
 
   // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue
