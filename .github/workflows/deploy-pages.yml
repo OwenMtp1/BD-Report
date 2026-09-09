@@ -55,6 +55,9 @@ jobs:
           # Balises de partage, canoniques, sitemap et robots.txt — posés sur les pages
           # PRODUITES, donc toute page ajoutée plus tard est couverte sans rien faire.
           node scripts/seo.mjs out https://owenmtp1.github.io/BD-Report
+          # Versions /en/ et /es/ produites depuis les MÊMES dictionnaires : aucune
+          # double maintenance, on continue d'écrire le français dans le HTML.
+          node scripts/i18n-pages.mjs out https://owenmtp1.github.io/BD-Report
           cp public/manifest.webmanifest out/app/manifest.webmanifest
           cp public/icon.svg out/app/icon.svg
           cp public/sw.js out/app/sw.js
