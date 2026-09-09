@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+<title>Prospection — le blog BD Report</title>
+<meta name="description" content="Cold call, ouvertures, objections : ce qui fait décrocher un rendez-vous quand personne ne vous attend.">
+<link rel="icon" type="image/svg+xml" href="../app/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  .posts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 6px 0 }
+  .post { display: flex; flex-direction: column; text-decoration: none }
+  .post .cover { height: 96px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 34px; margin-bottom: 12px }
+  .post .tag { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--violet2) }
+  .post h3 { font-size: 16.5px; margin: 7px 0 6px; line-height: 1.3 }
+  .post p { font-size: 14px; color: var(--muted); flex: 1 }
+  .post .more { margin-top: 12px; font-size: 13px; font-weight: 800; color: var(--violet2) }
+  .cats { display: flex; gap: 9px; flex-wrap: wrap; margin: 4px 0 22px }
+  .cats a { border: 1px solid var(--line); background: rgba(255,255,255,.03); color: var(--muted);
+            border-radius: 999px; padding: 8px 16px; font-weight: 700; font-size: 13.5px }
+  .cats a:hover { color: var(--text); border-color: var(--line2) }
+  .cats a.on { background: linear-gradient(180deg, var(--violet2), var(--violet)); border-color: transparent; color: #fff }
+</style>
+</head>
+<body>
+<div class="bg-layer"></div><div class="bg-grid"></div>
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="../index.html">
+      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9B84FF"/><stop offset="1" stop-color="#22D3A6"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#0B0F16" opacity=".85"/><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#0B0F16" opacity=".9"/><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#0B0F16"/></svg>
+      <span><b>BD</b> Report</span>
+    </a>
+    <div class="nav-right">
+      <a href="index.html" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.blog">Blog</a>
+      <a href="../modeles.html" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.templates">Modèles</a>
+      <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧 EN</button>
+      <a class="btn btn-primary" href="../app/" data-i18n="nav.login">Se connecter</a>
+    </div>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="chip" data-i18n="hero.chip">📞 Prospection</span>
+    <h1 data-i18n="hero.title">Prospection</h1>
+    <p data-i18n="hero.pitch">Décrocher un rendez-vous chez quelqu'un qui ne vous attend pas est un métier à part entière. Ce qu'on y apprend, appel après appel.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="cats">
+    <a href="index.html" data-i18n="cat.all">Tous les articles</a>
+    <a href="prospection.html" class="on" data-i18n="cat.prospection">Prospection</a>
+    <a href="remuneration.html" data-i18n="cat.remuneration">Rémunération</a>
+    <a href="management.html" data-i18n="cat.management">Management</a>
+  </div>
+  <div class="posts">
+      <a class="card post" href="cold-call-ouvertures.html">
+        <div class="cover" style="background:linear-gradient(135deg,#3B5BDB,#0EA5E9)">📞</div>
+        <span class="tag" data-i18n="a1.tag">Prospection</span>
+        <h3 data-i18n="a1.t">Cold call : 7 ouvertures qui obtiennent 30 secondes d'attention</h3>
+        <p data-i18n="a1.d">Les 10 premières secondes décident de l'appel. Deux familles d'ouvertures surperforment : 7 exemples prêts à l'emploi et 5 phrases à bannir.</p>
+        <span class="more" data-i18n="read">Lire l'article →</span>
+      </a>
+  </div>
+
+  <div class="cta">
+    <h2 data-i18n="cta.title">Les modèles qui vont avec</h2>
+    <p data-i18n="cta.sub">Barème de commissions, trame de cold call, format de daily — prêts à remplir.</p>
+    <a class="btn btn-primary" href="../modeles.html" data-i18n="cta.btn">Voir les modèles</a>
+  </div>
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2026 <b style="color:#7C9BFF">BD</b> Report — <span data-i18n="foot.tag">Pilotez votre prospection. Encaissez vos primes.</span></span>
+    <span style="display:flex;gap:18px;flex-wrap:wrap">
+      <a href="../securite.html" data-i18n="nav.security">Sécurité</a>
+      <a href="../cgv.html">CGV</a>
+      <a href="../confidentialite.html">Confidentialité</a>
+      <a href="../index.html" data-i18n="foot.back">← Retour au site</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+const DICTS = {
+  en: {"nav.blog": "Blog", "nav.templates": "Templates", "nav.login": "Log in", "nav.security": "Security", "foot.back": "← Back to the site", "foot.tag": "Run your pipeline. Cash your bonuses.", "read": "Read the article →", "cat.all": "All articles", "cat.prospection": "Prospecting", "cat.remuneration": "Compensation", "cat.management": "Management", "a1.tag": "Prospection", "a1.t": "Cold calling: 7 openers that earn you 30 seconds of attention", "a1.d": "The first 10 seconds decide the call. Two families of openers outperform: 7 ready-to-use examples and 5 lines to cut.", "hero.chip": "📞 Prospecting", "hero.title": "Prospecting", "hero.pitch": "Booking a meeting with someone who isn't expecting you is a craft of its own. What we learn from it, call after call.", "cta.title": "The templates that go with it", "cta.sub": "Commission grid, cold-call script, daily format — ready to fill in.", "cta.btn": "See the templates"},
+  es: {"nav.blog": "Blog", "nav.templates": "Plantillas", "nav.login": "Iniciar sesión", "nav.security": "Seguridad", "foot.back": "← Volver al sitio", "foot.tag": "Dirige tu pipeline. Cobra tus primas.", "read": "Leer el artículo →", "cat.all": "Todos los artículos", "cat.prospection": "Prospección", "cat.remuneration": "Remuneración", "cat.management": "Management", "a1.tag": "Prospección", "a1.t": "Cold call: 7 aperturas que ganan 30 segundos de atención", "a1.d": "Los 10 primeros segundos deciden la llamada. Dos familias de aperturas destacan: 7 ejemplos listos y 5 frases a eliminar.", "hero.chip": "📞 Prospección", "hero.title": "Prospección", "hero.pitch": "Conseguir una cita con quien no te espera es un oficio en sí mismo. Lo que se aprende, llamada tras llamada.", "cta.title": "Las plantillas que lo acompañan", "cta.sub": "Baremo de comisiones, guion de llamada, formato de daily — listos para rellenar.", "cta.btn": "Ver las plantillas"},
+}
+
+const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
+let lang = localStorage.getItem('bdr_site_lang') || 'fr'
+const FR = {}
+document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
+function applyLang(){
+  document.documentElement.lang = lang
+  const d = DICTS[lang]
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = lang === 'fr' ? FR[el.dataset.i18n] : ((d && d[el.dataset.i18n]) ?? FR[el.dataset.i18n]) })
+  document.getElementById('langBtn').textContent = BTN[lang]
+}
+function toggleLang(){ lang = SEQ[(SEQ.indexOf(lang) + 1) % SEQ.length]; localStorage.setItem('bdr_site_lang', lang); applyLang() }
+applyLang()
+</script>
+</body>
+</html>
