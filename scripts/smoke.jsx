@@ -659,6 +659,19 @@ async function main() {
   // 6c. Logs Support : la création de ticket a bien été journalisée.
   await click(hubTab('Logs'))
   if (!text().includes('Ticket créé')) throw new Error('Support log for ticket creation missing')
+  // Le journal doit être filtrable : c'est ce qu'on demande en revue de conformité.
+  for (const k of ['Accès & permissions', 'Clients & environnements', 'Navigation', 'Exporter en CSV']) {
+    if (!text().includes(k)) throw new Error('Log filter missing: ' + k)
+  }
+  {
+    // La navigation du staff est tracée : on vient de traverser la console, la ligne existe.
+    if (!text().includes('Écran consulté')) throw new Error("La navigation du staff doit être journalisée")
+    const search = [...container.querySelectorAll('input')].find(i => (i.getAttribute('placeholder') || '').includes("Mot-clé dans l'action"))
+    if (!search) throw new Error('Recherche plein texte absente du journal')
+    await type(search, 'zzzaucunechance')
+    if (!text().includes('Aucune entrée ne correspond')) throw new Error('La recherche du journal ne filtre pas')
+    await click(find('button', 'Réinitialiser'))
+  }
 
   // 6d. Désactiver / réactiver / supprimer l'accès d'un environnement client se fait
   // désormais dans Projets → Utilisateurs, et NON plus sur la fiche Clients.

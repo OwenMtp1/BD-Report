@@ -49,6 +49,15 @@ export default function SupportHub() {
   const tabs = TABS.filter(t => !t.perm || store.hasPerm(t.perm))
   const [tab, setTab] = useState(tabs[0]?.id || 'conversations')
 
+  // Journal : on trace l'écran sur lequel un membre du staff travaille. En revue, savoir
+  // « qui était où, et quand » vaut autant que la liste des modifications — c'est ce qui
+  // permet de rattacher une action à quelqu'un plutôt qu'à un rôle.
+  useEffect(() => {
+    const t = TABS.find(x => x.id === tab)
+    if (t) store.logStaffNav(`Console support · ${t.label}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+
   // Pilotage externe des onglets : utilisé par la formation guidée du staff.
   useEffect(() => {
     const h = (e) => { if (e.detail && TABS.some(t => t.id === e.detail)) setTab(e.detail) }

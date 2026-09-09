@@ -1362,10 +1362,37 @@ function makeTicket({ accountId, prenom, photo, clientName, envId, subEnvId, cat
 }
 
 // Journal d'audit du back-office support (visible dans « Logs Support »).
-function pushSupportLog(d, { type, action, details = '', actorId = null, actorName = 'Système' }) {
+// ---------------------------------------------------------------- Journal de l'équipe BD Report
+// Le journal ne servait qu'à retrouver « qui a répondu à ce ticket ». Une revue de conformité
+// pose d'autres questions : sur quel client cette personne travaillait-elle, à qui a-t-elle
+// donné un accès, quel utilisateur a été touché. Chaque entrée porte donc désormais une
+// CATÉGORIE, le client concerné et la personne concernée — sans quoi rien n'est filtrable.
+export const STAFF_LOG_CATEGORIES = [
+  { id: 'navigation', label: 'Navigation', cls: 'bg-slate-200 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300' },
+  { id: 'acces', label: 'Accès & permissions', cls: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300' },
+  { id: 'client', label: 'Clients & environnements', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' },
+  { id: 'support', label: 'Support & tickets', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300' },
+  { id: 'projet', label: 'Projets', cls: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300' },
+  { id: 'contenu', label: 'Contenu & base de connaissances', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
+  { id: 'donnees', label: 'Données', cls: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300' },
+]
+export const STAFF_LOG_CATEGORY_IDS = STAFF_LOG_CATEGORIES.map(c => c.id)
+// Rattachement par défaut d'un ancien `type` à une catégorie : les entrées déjà écrites
+// restent classables sans migration destructive.
+const LOG_TYPE_CAT = {
+  Ticket: 'support', Demande: 'support', Client: 'client', Abonnement: 'client',
+  Projet: 'projet', Permission: 'acces', Compte: 'acces', Navigation: 'navigation',
+  KB: 'contenu', Données: 'donnees', Module: 'client',
+}
+export const logCategoryOf = (l) => l?.cat || LOG_TYPE_CAT[l?.type] || 'support'
+
+function pushSupportLog(d, { type, action, details = '', actorId = null, actorName = 'Système', cat, envId = null, envName = '', targetId = null, targetName = '' }) {
   d.supportLogs = d.supportLogs || []
-  d.supportLogs.unshift({ id: uid(), ts: new Date().toISOString(), type, action, details, actorId, actorName })
-  if (d.supportLogs.length > 2000) d.supportLogs.length = 2000
+  d.supportLogs.unshift({
+    id: uid(), ts: new Date().toISOString(), type, action, details, actorId, actorName,
+    cat: cat || LOG_TYPE_CAT[type] || 'support', envId, envName, targetId, targetName,
+  })
+  if (d.supportLogs.length > 4000) d.supportLogs.length = 4000
 }
 
 function buildSeedDb() {
@@ -3023,6 +3050,8 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
   // ne redéclenche donc pas d'envoi. La toute première passe n'envoie rien (sinon
   // ouvrir l'app pousserait tout le pipeline d'un coup).
   const hsSeen = useRef(null)
+  // Dernière consultation journalisée, pour ne pas réécrire la même ligne à chaque rendu.
+  const lastNavLog = useRef({ sig: '', at: 0 })
   useEffect(() => {
     const subId = session?.subEnvId
     if (demo || !hsCfg.enabled || !hsCfg.autoPush || !subId) { hsSeen.current = null; return }
@@ -3411,6 +3440,9 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           env.modules = { ...defaultEnvModules(), ...(env.modules || {}), ...patch }
           return d
         })
+        const changed = Object.entries(patch || {})
+          .map(([k, v]) => `${(ENV_MODULES.find(m => m.id === k) || {}).label || k} ${v ? 'activé' : 'retiré'}`).join(', ')
+        this.logStaff({ type: 'Module', cat: 'client', action: 'Modules modifiés', details: changed, envId })
       },
       // ===================================================== Passation au closer
       // Renvoie toutes les passations de l'environnement, espace par espace. Le filtrage
@@ -3448,6 +3480,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           env.closers = { ...envClosers(env), ...patch }
           return d
         })
+        this.logStaff({ type: 'Permission', cat: 'acces', action: 'Droit de closing modifié', envId })
       },
       // Décision du closer : accepter ou refuser, avec un motif quand c'est un refus.
       decideHandoff(subId, rdvId, state, reason = '') {
@@ -3566,6 +3599,40 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         return { ok: true, removed }
       },
       // ----- journal d'audit (traçabilité)
+      // Journal de l'équipe BD Report. Une seule porte d'entrée : l'acteur, l'horodatage et
+      // le client concerné sont remplis ici, pour qu'aucun appelant ne puisse les oublier.
+      logStaff({ type, action, details = '', cat, envId = null, targetId = null, targetName = '' }) {
+        const env = db.environments.find(e => e.id === (envId || session?.envId))
+        const target = targetId ? db.accounts.find(a => a.id === targetId) : null
+        setDb(d => {
+          pushSupportLog(d, {
+            type, action, details, cat,
+            actorId: account?.id || null, actorName: account?.pseudo || 'Système',
+            envId: env?.id || null, envName: env?.name || '',
+            targetId: targetId || null, targetName: targetName || target?.pseudo || '',
+          })
+          return d
+        })
+      },
+      // Consultation d'un écran par un membre du staff. Dédupliquée : sans cela, chaque
+      // rendu de React remplirait le journal d'une même ligne et le rendrait illisible.
+      logStaffNav(page, envId = null) {
+        if (!isSupportRole(account?.role)) return
+        const env = db.environments.find(e => e.id === (envId || session?.envId))
+        const sig = `${account?.id}|${page}|${env?.id || ''}`
+        const now = Date.now()
+        if (lastNavLog.current.sig === sig && now - lastNavLog.current.at < 60000) return
+        lastNavLog.current = { sig, at: now }
+        setDb(d => {
+          pushSupportLog(d, {
+            type: 'Navigation', cat: 'navigation', action: `Écran consulté — ${page}`,
+            details: env ? `chez ${env.name}` : '',
+            actorId: account?.id || null, actorName: account?.pseudo || 'Système',
+            envId: env?.id || null, envName: env?.name || '',
+          })
+          return d
+        })
+      },
       logAction(type, action, details = '') {
         const subId = session?.subEnvId
         if (!subId || readOnly) return // en lecture seule aucune action n'est journalisée
@@ -4235,6 +4302,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       updateStaffRole(roleKey, patch) {
         if (!this.canManageRole(roleKey)) return
         const isFounderActor = account?.role === 'Fondateur'
+        const before = (db.staffRoles || []).find(x => (x.roleKey || x.name) === roleKey)
         setDb(d => {
           const r = (d.staffRoles || []).find(x => (x.roleKey || x.name) === roleKey); if (!r) return d
           const p = { ...patch }
@@ -4256,6 +4324,19 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           if ((r.roleKey || r.name) === 'Fondateur') { r.permissions = [...STAFF_PERMISSION_IDS]; delete r.suspended } // Fondateur toujours complet et jamais suspendu
           return d
         })
+        // Journal : ce qui compte en revue, ce n'est pas « un rôle a changé », c'est QUEL
+        // droit a été accordé ou retiré, et par qui.
+        const prev = new Set(before?.permissions || [])
+        const next = new Set(Array.isArray(patch?.permissions) ? patch.permissions : (before?.permissions || []))
+        const added = [...next].filter(x => !prev.has(x))
+        const removed = [...prev].filter(x => !next.has(x))
+        const label = (id) => (STAFF_PERMISSIONS.find(x => x.id === id) || {}).label || id
+        const bits = []
+        if (added.length) bits.push('+ ' + added.map(label).join(', '))
+        if (removed.length) bits.push('− ' + removed.map(label).join(', '))
+        if (patch?.suspended !== undefined) bits.push(patch.suspended ? 'rôle suspendu' : 'rôle réactivé')
+        if (typeof patch?.rank === 'number') bits.push(`rang → ${patch.rank}`)
+        if (bits.length) this.logStaff({ type: 'Permission', cat: 'acces', action: `Rôle « ${roleKey} »`, details: bits.join(' · ') })
       },
       toggleRolePerm(roleKey, permId, on) {
         if (!this.canManageRole(roleKey)) return
@@ -4322,7 +4403,9 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           // ne pas toucher quelqu'un de rang ≥ au sien (sauf soi-même)
           if (target && target.id !== account?.id && roleRankOf(target.role, db) >= roleRankOf(account?.role, db)) return
         }
+        const before = target?.role
         setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.role = role; return d })
+        this.logStaff({ type: 'Compte', cat: 'acces', action: 'Rôle modifié', details: `${before || '—'} → ${role}`, targetId: accId })
       },
       // Rôles attribuables côté staff : tout ce qui n'est pas un rôle client
       // (Manager et Membre appartiennent aux environnements, pas à l'équipe BD Report).
@@ -4449,11 +4532,15 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       disableAccount(accId, disabled) {
         if (!accountHasPerm(account, 'accounts.disable', db)) return
         setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.disabled = !!disabled; return d })
+        this.logStaff({ type: 'Compte', cat: 'acces', action: disabled ? 'Accès désactivé' : 'Accès réactivé', targetId: accId })
       },
       // Efface toutes les données d'un espace (remise à zéro complète).
       wipeSpaceData(subId) {
         if (!accountHasPerm(account, 'accounts.wipe', db)) return
+        const sub = db.subenvs.find(s => s.id === subId)
         setDb(d => { if (d.data[subId]) d.data[subId] = emptySubEnvData(); return d })
+        this.logStaff({ type: 'Données', cat: 'donnees', action: "Données d'un espace effacées",
+          envId: sub?.envId, targetId: sub?.ownerId, targetName: sub ? `${sub.prenom} ${sub.nom}`.trim() : '' })
       },
       // Retire un membre d'un environnement (accès + espaces + données de cet env).
       removeEnvMember(envId, accId) {
@@ -4464,6 +4551,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           d.subenvs = d.subenvs.filter(s => !(s.envId === envId && s.ownerId === accId))
           return d
         })
+        this.logStaff({ type: 'Compte', cat: 'acces', action: "Membre retiré de l'environnement", envId, targetId: accId })
       },
       // Membres (comptes) d'un environnement, pour le menu utilisateurs d'un projet.
       envMembers(envId) {
