@@ -3,7 +3,7 @@ import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
-  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Trophy, ShieldCheck, Star, GraduationCap,
+  AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Radio, Trophy, ShieldCheck, Star, GraduationCap,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER } from './store.jsx'
 import { NAV_GROUPS, NAV } from './nav.jsx'
@@ -975,11 +975,14 @@ function NotificationsBell() {
       if (store.isChannelMuted(ch.id)) return
       const last = me?.channelReads?.[ch.id]
       store.channelMessages(ch.id)
-        .filter(m => !m.system && m.authorId !== me?.id && (!last || m.ts > last))
+        .filter(m => m.authorId !== me?.id && (!last || m.ts > last))
+        // Les messages de reporting sont postés par BD Report, sans auteur : ils étaient
+        // écartés d'office, si bien qu'un canal de reporting ne prévenait jamais de rien.
         .forEach(m => items.push({
           id: 'chan-' + m.id, read: false, ts: m.ts,
-          icon: <MessagesSquare size={14} className="text-brand" />,
-          title: `Nouveau message · ${ch.name}`, text: `${m.authorName} : ${m.text || '📷 image'}`,
+          icon: m.system ? <Radio size={14} className="text-amber-500" /> : <MessagesSquare size={14} className="text-brand" />,
+          title: `${m.system ? 'Reporting' : 'Nouveau message'} · ${ch.name}`,
+          text: m.system ? (m.text || '') : `${m.authorName} : ${m.text || '📷 image'}`,
           onClick: () => { store.markChannelRead(ch.id); nav(scope === 'support' ? 'supporthub' : 'conversations', null, 'conversations') },
         }))
     }))

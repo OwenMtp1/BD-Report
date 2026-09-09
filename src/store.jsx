@@ -1911,7 +1911,10 @@ function migrate(db) {
     delete a.passwordPlain
     // Présence (en ligne / hors ligne / ne pas déranger) + préférences conversations
     if (!a.presence) a.presence = 'online'
-    if (!Array.isArray(a.mutedChannels)) a.mutedChannels = []
+    // Canaux mis en sourdine : { canalId: 'forever' | date ISO de fin }. L'ancien format
+    // (simple liste d'ids) valait « jusqu'à réactivation » et se convertit tel quel.
+    if (Array.isArray(a.mutedChannels)) a.mutedChannels = Object.fromEntries(a.mutedChannels.map(id => [id, 'forever']))
+    if (!a.mutedChannels || typeof a.mutedChannels !== 'object') a.mutedChannels = {}
     if (!a.channelReads || typeof a.channelReads !== 'object') a.channelReads = {}
     if (!Array.isArray(a.hiddenMessages)) a.hiddenMessages = [] // supprimés « pour moi »
     if (!Array.isArray(a.pinnedMessages)) a.pinnedMessages = [] // épinglés « pour moi »
@@ -2091,6 +2094,19 @@ function migrate(db) {
   })
   seedAutoChannels(db)
   reconcileReporting(db)
+  // Les canaux de reporting se sont mis à notifier : sans repère de lecture, tout leur
+  // historique compterait d'un coup comme non lu. On pose donc une fois la barre à
+  // maintenant — on prévient à partir des PROCHAINS événements, pas du passé.
+  db._autoSeed = db._autoSeed || {}
+  if (!db._autoSeed.reportingReadBaseline) {
+    const now = new Date().toISOString()
+    const reportingIds = (db.channels || []).filter(c => c.kind === 'reporting').map(c => c.id)
+    ;(db.accounts || []).forEach(a => {
+      a.channelReads = a.channelReads || {}
+      reportingIds.forEach(id => { if (!a.channelReads[id]) a.channelReads[id] = now })
+    })
+    db._autoSeed.reportingReadBaseline = true
+  }
   return db
 }
 
@@ -2887,22 +2903,37 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (!['online', 'offline', 'dnd'].includes(status)) return
         setDb(d => { const a = d.accounts.find(x => x.id === account?.id); if (a) a.presence = status; return d })
       },
-      isChannelMuted(channelId) { return (account?.mutedChannels || []).includes(channelId) },
-      toggleMuteChannel(channelId) {
+      // Sourdine d'un canal : 'forever' (jusqu'à réactivation) ou une date de fin.
+      // Une échéance passée ne coupe plus rien — inutile de la nettoyer pour que le canal
+      // se remette à notifier tout seul.
+      channelMuteUntil(channelId) {
+        const v = account?.mutedChannels?.[channelId]
+        if (!v) return null
+        if (v === 'forever') return 'forever'
+        return new Date(v) > new Date() ? v : null
+      },
+      isChannelMuted(channelId) { return !!this.channelMuteUntil(channelId) },
+      // `until` : 'forever', une durée en millisecondes, ou null pour réactiver.
+      muteChannel(channelId, until) {
         setDb(d => {
           const a = d.accounts.find(x => x.id === account?.id); if (!a) return d
-          a.mutedChannels = a.mutedChannels || []
-          a.mutedChannels = a.mutedChannels.includes(channelId) ? a.mutedChannels.filter(x => x !== channelId) : [...a.mutedChannels, channelId]
+          if (!a.mutedChannels || typeof a.mutedChannels !== 'object' || Array.isArray(a.mutedChannels)) a.mutedChannels = {}
+          if (until == null) delete a.mutedChannels[channelId]
+          else a.mutedChannels[channelId] = until === 'forever' ? 'forever' : new Date(Date.now() + Number(until)).toISOString()
           return d
         })
       },
+      toggleMuteChannel(channelId) { this.muteChannel(channelId, this.isChannelMuted(channelId) ? null : 'forever') },
       markChannelRead(channelId) {
         setDb(d => { const a = d.accounts.find(x => x.id === account?.id); if (a) { a.channelReads = a.channelReads || {}; a.channelReads[channelId] = new Date().toISOString() } return d })
       },
-      // Nombre de messages humains non lus (écrits par d'autres) d'un canal.
+      // Non-lus d'un canal : messages des autres ET messages postés par BD Report dans les
+      // canaux de reporting. Ces derniers étaient exclus, si bien qu'un canal de reporting
+      // ne prévenait jamais de rien — il fallait penser à aller le consulter.
       channelUnread(channelId) {
         const last = account?.channelReads?.[channelId]
-        return (db.channelMessages?.[channelId] || []).filter(m => !m.system && m.authorId !== account?.id && (!last || m.ts > last)).length
+        return (db.channelMessages?.[channelId] || [])
+          .filter(m => m.authorId !== account?.id && (!last || m.ts > last)).length
       },
       // Total des non-lus visibles (0 en mode « Ne pas déranger », canaux coupés ignorés).
       totalChannelUnread(scope) {

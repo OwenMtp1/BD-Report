@@ -148,6 +148,56 @@ export default function Conversations({ scope = 'team' }) {
   )
 }
 
+// -------------------------------------------------- Sourdine d'un canal, avec durée
+// Couper les notifications « pour toujours » est presque toujours de trop : on veut le
+// silence d'une réunion, d'une journée chargée, d'un congé. La durée évite d'oublier
+// un canal coupé et de rater ce qui s'y passe des mois durant.
+const MUTE_CHOICES = [
+  ['1 heure', 3600e3], ['1 jour', 86400e3], ['1 semaine', 7 * 86400e3],
+  ['1 mois', 30 * 86400e3], ["Jusqu'à réactivation", 'forever'],
+]
+const muteLabel = (until) => {
+  if (!until) return ''
+  if (until === 'forever') return "jusqu'à réactivation"
+  const d = new Date(until)
+  const sameDay = d.toDateString() === new Date().toDateString()
+  return sameDay
+    ? `jusqu'à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+    : `jusqu'au ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+}
+
+function MuteMenu({ channel, store, muted }) {
+  const [open, setOpen] = useState(false)
+  const until = store.channelMuteUntil(channel.id)
+  return (
+    <div className="relative">
+      <button className={`btn-ghost !p-1.5 ${muted ? 'text-red-500' : ''}`}
+        title={muted ? `Notifications coupées ${muteLabel(until)}` : 'Couper les notifications de ce canal'}
+        onClick={() => setOpen(v => !v)}>
+        {muted ? <BellOff size={16} /> : <Bell size={16} />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute z-30 top-9 right-0 card shadow-lg w-60 p-1 text-sm">
+            <div className="px-2.5 py-1.5 text-[11px] text-muted">
+              {muted ? `Coupé ${muteLabel(until)}` : 'Couper les notifications pendant…'}
+            </div>
+            {muted && (
+              <MenuItem icon={Bell} label="Réactiver les notifications"
+                onClick={() => { store.muteChannel(channel.id, null); setOpen(false); toast('Notifications réactivées') }} />
+            )}
+            {MUTE_CHOICES.map(([label, ms]) => (
+              <MenuItem key={label} icon={BellOff} label={label}
+                onClick={() => { store.muteChannel(channel.id, ms); setOpen(false); toast(`Notifications coupées — ${label.toLowerCase()}`) }} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // -------------------------------------------------- Fil de discussion d'un canal
 function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelete, onBack }) {
   const allMsgs = store.channelMessages(channel.id)
@@ -219,9 +269,7 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
         </div>
         <div className="ml-auto flex gap-1">
           <button className={`btn-ghost !p-1.5 ${searchOpen ? 'text-brand' : ''}`} title="Rechercher dans les messages" onClick={() => { setSearchOpen(v => !v); if (searchOpen) setQuery('') }}><Search size={16} /></button>
-          {!personal && <button className={`btn-ghost !p-1.5 ${muted ? 'text-red-500' : ''}`} title={muted ? 'Réactiver les notifications' : 'Couper les notifications de ce canal'} onClick={() => store.toggleMuteChannel(channel.id)}>
-            {muted ? <BellOff size={16} /> : <Bell size={16} />}
-          </button>}
+          {!personal && <MuteMenu channel={channel} store={store} muted={muted} />}
           {canManage && !personal && !channel._general && !channel.dm && (
             <button className="btn-ghost !p-1.5" title="Réglages du canal" onClick={onEdit}><Settings2 size={16} /></button>
           )}

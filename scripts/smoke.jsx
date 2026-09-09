@@ -196,6 +196,23 @@ async function main() {
   await type(composer, 'Bonjour equipe smoke')
   await act(async () => { Simulate.keyDown(composer, { key: 'Enter' }) })
   if (!text().includes('Bonjour equipe smoke')) throw new Error('Channel message not posted')
+  // Sourdine à durée : couper 1 heure pose une échéance, « Réactiver » l'efface.
+  {
+    const bell = container.querySelector('button[title^="Couper les notifications"]')
+    if (!bell) throw new Error('Mute button missing from the conversation header')
+    await click(bell)
+    if (!text().includes("Jusqu'à réactivation") || !text().includes('1 semaine')) throw new Error('Mute durations menu missing')
+    await click(find('button', '1 heure'))
+    const acct = () => { win.__bdrFlushSave?.(); return JSON.parse(win.localStorage.getItem('bdrflow_db_v1')).accounts.find(a => a.id === '01') }
+    const chanId = Object.keys(acct().mutedChannels || {})[0]
+    if (!chanId) throw new Error('Muting for 1 hour did not record an expiry')
+    const until = acct().mutedChannels[chanId]
+    if (until === 'forever' || !(new Date(until) > new Date())) throw new Error('1 hour mute should store a future expiry, not a permanent one')
+    await click(container.querySelector('button[title^="Notifications coupées"]'))
+    await click(find('button', 'Réactiver les notifications'))
+    if (Object.keys(acct().mutedChannels || {}).length) throw new Error('Unmute did not clear the entry')
+  }
+
   // Recherche dans les messages : filtre le fil.
   await click(container.querySelector('button[title="Rechercher dans les messages"]'))
   const msgSearch = container.querySelector('input[placeholder^="Rechercher dans cette"]')
