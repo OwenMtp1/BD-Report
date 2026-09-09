@@ -944,10 +944,15 @@ function NotificationsBell() {
     return n
   })
 
-  const nav = (page, company) => {
+  // `hub` cible un onglet interne de la console support : plusieurs écrans ont quitté la
+  // barre latérale pour cette console, et y arriver sans ouvrir le bon onglet laissait
+  // l'utilisateur devant un écran qui ne parlait pas de sa notification.
+  const nav = (page, company, hub) => {
     setOpen(false)
-    if (company) window.dispatchEvent(new CustomEvent('open-company', { detail: company }))
-    else if (page) window.dispatchEvent(new CustomEvent('app-navigate', { detail: page }))
+    if (company) { window.dispatchEvent(new CustomEvent('open-company', { detail: company })); return }
+    if (!page) return
+    window.dispatchEvent(new CustomEvent('app-navigate', { detail: page }))
+    if (hub) setTimeout(() => window.dispatchEvent(new CustomEvent('hub-tab', { detail: hub })), 260)
   }
 
   const items = []
@@ -975,7 +980,7 @@ function NotificationsBell() {
           id: 'chan-' + m.id, read: false, ts: m.ts,
           icon: <MessagesSquare size={14} className="text-brand" />,
           title: `Nouveau message · ${ch.name}`, text: `${m.authorName} : ${m.text || '📷 image'}`,
-          onClick: () => { store.markChannelRead(ch.id); nav(scope === 'support' ? 'supporthub' : 'conversations') },
+          onClick: () => { store.markChannelRead(ch.id); nav(scope === 'support' ? 'supporthub' : 'conversations', null, 'conversations') },
         }))
     }))
   }
@@ -1002,7 +1007,7 @@ function NotificationsBell() {
     items.push({ id, read: seen.has(id), ts: t.createdAt,
       icon: <Clock size={14} className={breached ? 'text-red-600' : 'text-amber-600'} />,
       title: breached ? 'SLA dépassé' : 'SLA bientôt dépassé', text: t.category || t.clientName || 'Ticket',
-      onClick: () => { markSeen(id); nav(isSupport ? 'tickets' : 'support') } })
+      onClick: () => { markSeen(id); nav(isSupport ? 'supporthub' : 'support', null, 'tickets') } })
   })
 
   items.sort((a, b) => new Date(b.ts) - new Date(a.ts))
