@@ -9,6 +9,14 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['Abonnement en cours de résiliation — accès en lecture seule.', 'Subscription being cancelled — read-only access.', 'Suscripción en proceso de baja — acceso de solo lectura.'],
+  ['Seule la rubrique Support reste accessible.', 'Only the Support section stays accessible.', 'Solo la sección de Soporte sigue accesible.'],
+  ['Connecter votre CRM et vos outils.', 'Connect your CRM and your tools.', 'Conecta tu CRM y tus herramientas.'],
+  ['Connexion, mots de passe, rôles et droits.', 'Sign-in, passwords, roles and rights.', 'Acceso, contraseñas, roles y permisos.'],
+  ['Créer un RDV, suivre les phases, conclure.', 'Create a meeting, follow the stages, close.', 'Crear una cita, seguir las etapas, cerrar.'],
+  ['Premiers pas, navigation et réglages de base.', 'First steps, navigation and basic settings.', 'Primeros pasos, navegación y ajustes básicos.'],
+  ['Excellente hygiène de données 🎉', 'Excellent data hygiene 🎉', 'Excelente higiene de datos 🎉'],
+  ['Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut — la phase de transaction est mise à jour automatiquement.', 'One card = one company (no duplicates). Drag and drop to change its status — the deal stage is updated automatically.', 'Una tarjeta = una empresa (sin duplicados). Arrastra y suelta para cambiar su estado — la etapa de la operación se actualiza automáticamente.'],
   ['un seul interlocuteur engagé', 'only one contact engaged', 'un solo interlocutor implicado'],
   ['aucun décideur identifié', 'no decision-maker identified', 'ningún responsable de decisión identificado'],
   ['— quelques étapes pour prendre en main votre espace.', '— a few steps to get your workspace going.', '— unos pasos para poner en marcha tu espacio.'],

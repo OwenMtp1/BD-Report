@@ -1186,6 +1186,34 @@ async function main() {
     if (mentionsOf() !== before + 2) throw new Error('Un préfixe de prénom ne doit pas notifier')
   }
 
+  // Balayage de TOUTE l'application en anglais. Le contrôle statique ne voit que les
+  // chaînes écrites en dur ; celui-ci voit ce qui arrive vraiment à l'écran, page par page.
+  // Sans lui, la garantie « tout change de langue » ne portait que sur l'écran des RDV.
+  {
+    const st = () => win.__bdrStore
+    st().setUiLang('en')
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    const tabs = [...c2.querySelectorAll('nav button')]
+    for (const btn of tabs) {
+      try {
+        await click(btn)
+        await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+      } catch (e) { /* un onglet qui refuse de s'ouvrir est déjà couvert plus haut */ }
+    }
+    // Le contenu SAISI (notes, messages, noms d'entreprise) reste dans sa langue : c'est une
+    // donnée, la traduire serait la réécrire. On le reconnaît en le retrouvant dans la base.
+    const stored = win.localStorage.getItem('bdrflow_db_v1') || ''
+    const stop = / (de|des|du|le|la|les|un|une|vous|votre|pour|dans|avec|sur|par|est|aux) /
+    const left = (win.__bdrI18nMissing?.() || [])
+      .filter(s => s.length > 25 && stop.test(` ${s} `))
+      .filter(s => !stored.includes(s))
+    if (left.length) {
+      throw new Error(`Écrans restés en français en anglais (${left.length}) : ${left.slice(0, 8).join(' | ')}`)
+    }
+    st().setUiLang('fr')
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+  }
+
   console.log('SMOKE OK — all screens rendered without errors')
 }
 
