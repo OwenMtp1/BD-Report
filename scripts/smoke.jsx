@@ -647,6 +647,18 @@ async function main() {
     if (!text().includes('Entrer dans cet espace')) throw new Error('Profile panel did not open')
     await click(find('button', 'Retour aux projets'))
   }
+  // Prise en charge : un projet sans preneur est à tout le monde, donc à personne.
+  if (!text().includes('non pris en charge')) throw new Error('Un projet sans preneur doit être signalé')
+  {
+    const take = find('button', 'Prendre en charge')
+    if (!take) throw new Error('Bouton de prise en charge absent')
+    await click(take)
+    win.__bdrFlushSave?.()
+    const st = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+    if (!(st.projects || []).some(p => p.ownerId)) throw new Error("La prise en charge n'a pas été enregistrée")
+    if (!(st.supportLogs || []).some(l => l.action === 'Projet pris en charge')) throw new Error('La prise en charge doit être journalisée')
+  }
+
   if (!text().includes('ACME Corp')) throw new Error('Auto-project from request not created')
   if (!text().includes('PeopleSpheres')) throw new Error('Environment project not created')
   // Création manuelle d'un projet : le formulaire + le planning Gantt doivent fonctionner.
@@ -655,6 +667,14 @@ async function main() {
   await type([...container.querySelectorAll('input')].find(i => (i.getAttribute('placeholder') || '').includes('Déploiement')), 'Projet manuel')
   await click(find('button', 'Enregistrer'))
   if (!text().includes('Avancement')) throw new Error('Project not created / Gantt did not render')
+
+  // Agenda staff : mon agenda ne montre que ce dont je réponds, l'agenda d'équipe montre tout.
+  await click(hubTab('Agenda'))
+  if (!text().includes('Mon agenda')) throw new Error("L'agenda staff ne s'affiche pas")
+  await click(find('button', "Agenda de l'équipe"))
+  if (!text().includes('À prendre en charge') && !text().includes('Aucune phase de projet')) {
+    throw new Error("L'agenda d'équipe doit montrer les projets à prendre ou dire qu'il n'y en a pas")
+  }
 
   // 6c. Logs Support : la création de ticket a bien été journalisée.
   await click(hubTab('Logs'))

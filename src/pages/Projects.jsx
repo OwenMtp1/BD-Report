@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Network, Unlock, ShieldAlert } from 'lucide-react'
+import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Network, Unlock, ShieldAlert, UserCheck, Hand } from 'lucide-react'
 import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, todayISO, ENV_MODULES } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 import ProjectOrgChart from './ProjectOrgChart.jsx'
@@ -509,9 +509,35 @@ export default function Projects() {
                       <span className={`chip ${st.color}`}>{st.label}</span>
                       {p.envId && <button className="p-1.5 rounded-lg hover:bg-surface" title="Utilisateurs du projet" onClick={() => setUsersFor(p)}><Users2 size={14} /></button>}
                       {p.envId && <button className="p-1.5 rounded-lg hover:bg-surface" title="Organigramme du projet" onClick={() => setOrgFor(p)}><Network size={14} /></button>}
-                      <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setForm({ mode: 'edit', data: structuredClone(p) })}><Pencil size={14} /></button>
+                      {/* Modifier n'est proposé qu'à qui en a le droit : un bouton inerte ne
+                          fait qu'expliquer trop tard. */}
+                      {store.canEditProject(p) && (
+                        <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setForm({ mode: 'edit', data: structuredClone(p) })}><Pencil size={14} /></button>
+                      )}
                       <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" onClick={() => setConfirmDel(p.id)}><Trash2 size={14} /></button>
                     </div>
+                  </div>
+
+                  {/* Prise en charge : qui répond de ce projet. Sans preneur, il est à tout
+                      le monde — donc à personne. */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap text-xs">
+                    {p.ownerId ? (
+                      <>
+                        <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 flex items-center gap-1">
+                          <UserCheck size={11} /> {store.db.accounts.find(a => a.id === p.ownerId)?.pseudo || 'pris en charge'}
+                        </span>
+                        {(p.ownerId === store.account?.id || store.hasPerm('projects.others')) && (
+                          <button className="btn-ghost !py-1 text-xs" onClick={() => { store.releaseProject(p.id); toast('Prise en charge relâchée') }}>Relâcher</button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">non pris en charge</span>
+                        <button className="btn-ghost !py-1 text-xs" onClick={() => { store.takeProject(p.id); toast('Projet pris en charge — il apparaît dans votre agenda') }}>
+                          <Hand size={12} /> Prendre en charge
+                        </button>
+                      </>
+                    )}
                   </div>
                   <div className="mt-3">
                     <div className="flex items-center justify-between text-[11px] text-muted mb-1"><span>Avancement</span><span>{pr}%</span></div>

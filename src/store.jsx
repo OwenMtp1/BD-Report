@@ -424,6 +424,9 @@ export const STAFF_PERMISSION_GROUPS = [
       { id: 'projects.view', label: 'Voir les projets d\'implémentation' },
       { id: 'projects.manage', label: 'Créer et piloter la mise en place des projets' },
       { id: 'projects.delete', label: 'Supprimer un projet' },
+      // Un projet pris en charge appartient à quelqu'un. Intervenir dessus sans le lui dire
+      // est un geste d'encadrement ou de dépannage : il se donne, il ne se suppose pas.
+      { id: 'projects.others', label: "Travailler sur les projets pris en charge par quelqu'un d'autre" },
     ],
   },
   {
@@ -552,7 +555,7 @@ function defaultPermsFor(roleKey) {
   if (roleKey === 'Administrateur') return [
     'tickets.view', 'tickets.reply', 'tickets.assign', 'tickets.priority', 'tickets.status',
     'requests.view', 'requests.manage', 'kb.manage', 'canned.manage',
-    'clients.view', 'clients.manage', 'projects.view', 'projects.manage',
+    'clients.view', 'clients.manage', 'projects.view', 'projects.manage', 'projects.others',
     'accounts.view', 'accounts.create', 'accounts.role', 'accounts.offer', 'accounts.disable', 'accounts.remove',
     'passwords.view', 'passwords.reset', 'services.manage', 'channels.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access',
   ]
@@ -4941,6 +4944,42 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         })
       },
       deleteProject(id) { setDb(d => { d.projects = (d.projects || []).filter(p => p.id !== id); return d }) },
+      // ----- Prise en charge d'un projet
+      // Un projet sans preneur est à tout le monde, c'est-à-dire à personne : les demandes
+      // s'accumulent et chacun suppose que le voisin s'en occupe. Le prendre en charge, c'est
+      // dire « je m'en occupe », et l'inscrire à son agenda.
+      takeProject(id) {
+        if (!accountHasPerm(account, 'projects.manage', db)) return
+        const p = (db.projects || []).find(x => x.id === id)
+        if (p?.ownerId && p.ownerId !== account?.id && !accountHasPerm(account, 'projects.others', db)) return
+        setDb(d => {
+          const pr = (d.projects || []).find(x => x.id === id); if (!pr) return d
+          pr.ownerId = account?.id || null
+          pr.owner = account?.pseudo || pr.owner || ''
+          pr.takenAt = new Date().toISOString()
+          return d
+        })
+        this.logStaff({ type: 'Projet', cat: 'projet', action: 'Projet pris en charge', details: p?.name || p?.clientName || '', envId: p?.envId || null })
+      },
+      releaseProject(id) {
+        const p = (db.projects || []).find(x => x.id === id)
+        if (!p) return
+        if (p.ownerId && p.ownerId !== account?.id && !accountHasPerm(account, 'projects.others', db)) return
+        setDb(d => {
+          const pr = (d.projects || []).find(x => x.id === id); if (!pr) return d
+          pr.ownerId = null; pr.takenAt = ''
+          return d
+        })
+        this.logStaff({ type: 'Projet', cat: 'projet', action: 'Prise en charge relâchée', details: p.name || p.clientName || '', envId: p.envId || null })
+      },
+      // Qui peut modifier ce projet : personne ne l'a pris, c'est le mien, ou j'ai le droit
+      // d'intervenir sur celui d'un autre.
+      canEditProject(p) {
+        if (!accountHasPerm(account, 'projects.manage', db)) return false
+        if (!p?.ownerId || p.ownerId === account?.id) return true
+        return accountHasPerm(account, 'projects.others', db)
+      },
+      myProjects() { return (db.projects || []).filter(p => p.ownerId === account?.id) },
       // ----- Réponses types (support)
       addCannedReply(r) { setDb(d => { d.cannedReplies = d.cannedReplies || []; d.cannedReplies.unshift({ id: uid(), title: r.title || 'Sans titre', text: r.text || '' }); return d }) },
       updateCannedReply(id, patch) { setDb(d => { const x = (d.cannedReplies || []).find(c => c.id === id); if (x) Object.assign(x, patch); return d }) },
