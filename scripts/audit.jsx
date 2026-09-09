@@ -104,6 +104,72 @@ async function main() {
     ok(st.lines.every(l => l.label && l.label !== 'undefined'), 'Relevé : une ligne sans intitulé')
   }
 
+  // 6 bis. Le texte affiché est TRADUIT ; il ne doit jamais servir de valeur enregistrée.
+  //   Un `<option>` sans attribut `value` prend son propre texte pour valeur : en anglais,
+  //   choisir « Signed » écrirait « Signed » dans les données d'un client francophone.
+  //   Aucun aujourd'hui — la règle est là pour que ça le reste.
+  {
+    const files = fs.default.readdirSync(dir).filter(f => /\.jsx$/.test(f))
+      .map(f => ['pages/' + f, path.default.join(dir, f)])
+      .concat(['App.jsx', 'ui.jsx'].map(f => [f, path.default.join(process.cwd(), 'src', f)]))
+    files.forEach(([name, full]) => {
+      const txt = fs.default.readFileSync(full, 'utf8')
+      for (const m of txt.matchAll(/<option\b[^>]*>/g)) {
+        if (!/\bvalue=/.test(m[0])) problems.push(`${name} : <option> sans value — son texte traduit deviendrait la donnée`)
+      }
+    })
+  }
+
+  // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
+  //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
+  //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.
+  {
+    // Ce qu'on appelle, module par module, pour s'assurer que les calculs voisins tiennent
+    // debout une fois la brique retirée.
+    const probes = {
+      handoff: (d, e, k) => [s.handoffStats(d.data[k].rdvs, d.data[k]), s.handoffState({}, d.data[k])],
+      closing: (d, e, k) => [s.closingStats(d.data[k].rdvs, d.data[k]), s.closingState({}, d.data[k])],
+      dealValue: (d, e, k) => [s.pipelineValue(d.data[k].rdvs), s.wonValue(d.data[k].rdvs, d.data[k]), s.valueBySource(d.data[k].rdvs, d.data[k])],
+      committee: (d, e, k) => [s.committeeGaps(d.data[k].rdvs[0], d.data[k])],
+      quotas: (d, e, k) => [s.memberQuota(e, k, 'primes'), s.quotaAchieved(d.data[k], 'primes', 'mois', new Date(), { env: e, subId: k })],
+      oneToOne: (d) => [(d.channels || []).filter(c => c.oneToOne).length],
+      challenges: (d, e, k) => [(e.challenges || []).map(c => s.challengeScore(c, d.data[k], k))],
+      statements: (d, e, k) => [s.buildStatement(d.data[k], e, k, new Date().toISOString().slice(0, 7))],
+    }
+    const allItems = nav.NAV_GROUPS.flatMap(g => g.items)
+    for (const mod of s.ENV_MODULES) {
+      const d = s.buildDemoDb({})
+      const e = d.environments.find(x => x.id === 'env-demo')
+      const k = Object.keys(d.data)[0]
+      const dataBefore = JSON.stringify(d.data)
+      const envBefore = JSON.stringify({ q: e.quotas, c: e.challenges, st: e.statements })
+      e.modules = { ...(e.modules || {}), [mod.id]: false }
+      ok(!s.envModuleOn(e, mod.id), `Module ${mod.id} : le retrait n'est pas pris en compte`)
+      // a. Rien n'est effacé : retirer une brique masque des écrans, elle ne détruit pas.
+      ok(JSON.stringify(d.data) === dataBefore, `Module ${mod.id} : des données d'espace ont disparu au retrait`)
+      ok(JSON.stringify({ q: e.quotas, c: e.challenges, st: e.statements }) === envBefore,
+        `Module ${mod.id} : des réglages d'environnement ont disparu au retrait`)
+      // b. Les calculs voisins tiennent sans lui.
+      try { probes[mod.id]?.(d, e, k) } catch (err) {
+        problems.push(`Module ${mod.id} retiré : un calcul lève une erreur — ${err.message}`)
+      }
+      // c. Ses onglets ne sont plus proposés, et ceux des autres restent là.
+      const tabs = s.previewTabs(e, offers, null).map(t => t.id)
+      nav.GRANTABLE_TABS
+        .filter(t => (allItems.find(i => i.id === t.id) || {}).module === mod.id)
+        .forEach(t => ok(!tabs.includes(t.id), `Module ${mod.id} retiré : l'onglet « ${t.id} » reste proposé`))
+      ok(tabs.length > 0, `Module ${mod.id} retiré : plus aucun onglet, le retrait emporte trop`)
+      // d. Le montant VERSÉ ne bouge pas : aucune brique optionnelle n'est censée changer
+      //    ce que touche un commercial.
+      const mkNow = new Date().toISOString().slice(0, 7)
+      const full = s.buildDemoDb({})
+      const eFull = full.environments.find(x => x.id === 'env-demo')
+      const paidWith = s.monthlyPaidPrimes(full.data[k], eFull, k, mkNow)
+      const paidWithout = s.monthlyPaidPrimes(d.data[k], e, k, mkNow)
+      ok(paidWith === paidWithout, `Module ${mod.id} retiré : les primes versées changent (${paidWith} → ${paidWithout})`)
+    }
+  }
+
   process.stdout.write((problems.length ? 'PROBLÈMES:\n- ' + problems.join('\n- ') : 'AUDIT OK') + '\n')
 
 }

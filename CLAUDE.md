@@ -9,7 +9,8 @@ UI **en français**. Repo GitHub : `OwenMtp1/BD-Report` (anciennement `OwenMtp1/
 npm install
 npm run build      # build Vite -> dist/
 npm run smoke      # test de fumée jsdom (rend l'app, traverse les écrans) — DOIT passer avant tout commit
-npm run audit      # audit structurel : démo complète, catalogues de droits, contraste sombre
+npm run audit      # audit structurel : démo complète, catalogues de droits, contraste sombre,
+                   # RETRAIT de chaque module (rien ne s'efface, rien ne casse), couverture i18n
 npm run dev        # serveur de dev
 ```
 `scripts/smoke.jsx` se connecte en OwenMtp / demo1234 → PeopleSpheres → Owen Mrani Bonnier → PIN 1205, puis traverse les pages. **Mets-le à jour quand tu ajoutes une page/feature.**
@@ -65,6 +66,22 @@ npm run dev        # serveur de dev
     ⚠️ Il ne touche **jamais** la `value` d'un champ (ce serait modifier une donnée), ni un sous-arbre
     portant `data-no-i18n`, ni `SCRIPT/STYLE/TEXTAREA/CODE/PRE`. Le français d'origine est mémorisé
     (`WeakMap`) : revenir au français **restitue** le texte au lieu de le retraduire.
+    ⚠️ **On mémorise aussi le texte POSÉ** : React réécrit le contenu d'un nœud existant chaque fois
+    qu'une valeur interpolée change (compteur, montant, statut). Sans ce repère, la passe suivante
+    repartait du français mémorisé et réécrivait l'ANCIENNE valeur par-dessus la nouvelle — hors
+    français, tout ce qui se met à jour en place cessait de se mettre à jour. Si le texte présent
+    n'est plus celui qu'on a posé, c'est React qui a parlé : son texte devient le nouvel original.
+    ⚠️ **Coût** : l'observateur ne fait visiter QUE les sous-arbres qu'il signale (une passe complète
+    du document coûtait ~8 000 nœuds pour une ligne modifiée, à chaque frappe), et **en français
+    rien n'est surveillé du tout** — la langue par défaut ne paie pas pour le reste.
+    ⚠️ **Le texte affiché est traduit : il ne doit jamais servir de VALEUR.** Un `<option>` sans
+    attribut `value` prend son texte pour valeur — en anglais, choisir « Signed » écrirait « Signed »
+    dans les données. `npm run audit` refuse tout `<option>` sans `value`.
+    ⚠️ Un attribut ne se découpe pas en nœuds : un libellé composé (`${label} — lecture seule`) doit
+    traduire ses morceaux avec `trUI(fr, lang)` **avant** de les assembler.
+    Effet de bord assumé : une valeur saisie par le client qui coïncide mot pour mot avec une entrée
+    du dictionnaire est traduite à l'affichage (aujourd'hui : l'étape « Signée », le rôle « Manager »,
+    le rôle d'achat « Utilisateur »). La donnée stockée, elle, reste le français.
     ⚠️ **Une phrase recollée avant l'affichage ne se traduit pas** (`gaps.join(' · ')` produit un seul
     nœud, absent du dictionnaire) : rendre chaque fragment dans son propre élément.
   - **`src/i18nDict.js`** — `UI_DICT = [[fr, en, es], …]`, ~1 500 entrées. La clé doit correspondre
