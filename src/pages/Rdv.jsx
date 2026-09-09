@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList, Search, Target } from 'lucide-react'
 import { googleCalUrl, downloadIcs } from '../calendar.js'
-import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey, icpVerdict, committeeGaps, DECIDING_ROLES } from '../store.jsx'
+import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey, icpVerdict, committeeGaps, DECIDING_ROLES, DEAL_RECURRENCE, dealAnnualValue, dealValueLabel, fmtMoney } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 import { HubspotPushButton } from './Hubspot.jsx'
@@ -72,7 +72,7 @@ function ContactSearch({ onPick }) {
   )
 }
 
-function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners, committee }) {
+function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners, committee, dealValue }) {
   const [f, setF] = useState(initial)
   const icp = useMemo(() => icpVerdict(f, sub), [f.secteur, f.effectif, f.contacts, sub.icpProfiles]) // eslint-disable-line
   const [err, setErr] = useState('')
@@ -138,6 +138,20 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
           <EditableSelect value={f.provenance} onChange={v => set('provenance', v)} options={sub.provenances}
             onOptionsChange={o => setSubList('provenances', o)} label="provenances" />
         </Field>}
+        {dealValue && visible('montant') && (
+          <Field label="Montant de l'affaire">
+            <div className="flex gap-2">
+              <input type="number" min="0" className="input" placeholder="0" value={f.montant ?? ''}
+                onChange={e => set('montant', e.target.value === '' ? '' : Number(e.target.value))} />
+              <select className="input !w-auto" value={f.recurrence || 'oneshot'} onChange={e => set('recurrence', e.target.value)}>
+                {DEAL_RECURRENCE.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+              </select>
+            </div>
+            {Number(f.montant) > 0 && f.recurrence === 'mensuel' && (
+              <p className="text-[11px] text-muted mt-1">Soit {fmtMoney(dealAnnualValue(f), sub.currency)} sur douze mois.</p>
+            )}
+          </Field>
+        )}
         {visible('linkedin') && <Field label="Profil LinkedIn">
           <input className="input" placeholder="https://linkedin.com/in/..." value={f.linkedin} onChange={e => set('linkedin', e.target.value)} />
         </Field>}
@@ -433,6 +447,8 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   const [view, setView] = useState('cards') // 'cards' | 'table' | 'calendar'
   // Vocabulaire du comité d'achat : réglé par le staff sur l'environnement, absent si le
   // module n'est pas installé (l'écran redevient alors exactement celui d'avant).
+  // Module retirable : sans lui, le champ n'existe nulle part et l'écran redevient celui d'avant.
+  const dealValue = store.hasModule('dealValue')
   const committee = store.hasModule('committee')
     ? { roles: store.committeeRoles(), relations: store.committeeRelations() }
     : null
@@ -582,7 +598,8 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
 
   const allPostes = [...new Set(sub.rdvs.flatMap(r => (r.contacts || []).map(c => c.poste)).filter(Boolean))]
 
-  const colCount = ['source', 'phase', 'opportunite', 'effectif', 'contact', 'poste', 'email', 'tel', 'dateRdv', 'datePriseRdv', 'provenance', 'notes'].filter(visible).length + 2
+  const colCount = ['source', 'phase', 'opportunite', 'effectif', 'contact', 'poste', 'email', 'tel', 'dateRdv', 'datePriseRdv', 'provenance', 'notes']
+    .filter(visible).length + 2 + (dealValue && visible('montant') ? 1 : 0)
 
   const Row = ({ r, isChild, childCount }) => (
     <tr className={`border-t border-line hover:bg-surface/60 ${isChild ? 'bg-surface/40' : ''}`}>
@@ -619,6 +636,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       {visible('dateRdv') && <td>{fmtDate(r.dateRdv)}</td>}
       {visible('datePriseRdv') && <td className="text-muted">{fmtDate(r.datePriseRdv)}</td>}
       {visible('provenance') && <td>{r.provenance}</td>}
+      {dealValue && visible('montant') && <td className="num">{Number(r.montant) ? `${fmtMoney(Number(r.montant), sub.currency)}${dealValueLabel(r)}` : '—'}</td>}
       {visible('notes') && <td className="max-w-[10rem] truncate text-muted text-xs" title={r.notes}>{r.notes || '—'}</td>}
       <td className="relative pr-2">
         <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setMenuFor(menuFor === r.id ? null : r.id)}>
@@ -674,6 +692,11 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
         <div className="min-w-0"><div className="text-muted">Poste</div><div className="truncate">{(r.contacts || []).map(c => c.poste).filter(Boolean).join(', ') || '—'}</div></div>
         <div><div className="text-muted">Date du RDV</div><div className="font-semibold">{fmtDate(r.dateRdv) || '—'}</div></div>
         <div><div className="text-muted">Effectif</div><div>{r.effectif || '—'}</div></div>
+        {dealValue && (
+          <div><div className="text-muted">Montant</div>
+            <div className="font-semibold">{Number(r.montant) ? `${fmtMoney(Number(r.montant), sub.currency)}${dealValueLabel(r)}` : '—'}</div>
+          </div>
+        )}
       </div>
       {/* Cartographie du comité, lisible d'un coup d'œil : qui décide, et si personne ne décide. */}
       {committee && (r.contacts || []).some(c => c.role) && (
@@ -783,6 +806,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
               {visible('dateRdv') && <th>Date RDV</th>}
               {visible('datePriseRdv') && <th>Prise de RDV</th>}
               {visible('provenance') && <th>Provenance</th>}
+              {dealValue && visible('montant') && <th>Montant</th>}
               {visible('notes') && <th>Notes</th>}
               <th className="w-10"></th>
             </tr>
@@ -806,7 +830,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       {form && (
         <RdvForm
           title={form.mode === 'create' ? 'Créer un RDV' : form.mode === 'sub' ? 'Créer le rendez-vous suivant' : 'Modifier le RDV'}
-          initial={form.data} sub={sub} setSubList={setSubList} isCreate={form.mode === 'create'} committee={committee}
+          initial={form.data} sub={sub} setSubList={setSubList} isCreate={form.mode === 'create'} committee={committee} dealValue={dealValue}
           findOrgOwners={(name) => {
             const k = companyKey(name)
             return store.db.subenvs

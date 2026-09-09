@@ -288,6 +288,7 @@ export const RDV_FIELDS = [
   { key: 'datePriseRdv', label: 'Date de prise de RDV' },
   { key: 'dateRdv', label: 'Date du RDV' },
   { key: 'provenance', label: 'Provenance du lead' },
+  { key: 'montant', label: "Montant de l'affaire" },
   { key: 'notes', label: 'Notes' },
 ]
 
@@ -330,6 +331,8 @@ export const ENV_MODULES = [
     desc: "Un fil de discussion dédié entre chaque membre et son manager, rangé dans un dossier « 1:1 » des Conversations." },
   { id: 'challenges', label: "Challenges d'équipe",
     desc: "Concours à durée limitée annoncés sur le tableau de bord de chaque commercial pendant l'événement." },
+  { id: 'dealValue', label: "Montant des affaires",
+    desc: "Le montant du contrat sur chaque affaire (ponctuel ou récurrent) : valeur du pipeline, chiffre d'affaires signé, et ce que rapporte réellement chaque provenance." },
   { id: 'statements', label: 'Relevés de primes',
     desc: 'Relevé mensuel par personne, signé par le manager avant de devenir téléchargeable par le collaborateur.' },
 ]
@@ -999,6 +1002,49 @@ export function quotaAchieved(data, metricId, period = 'mois', now = new Date(),
     }
     default: return 0
   }
+}
+
+// ---------------------------------------------------------------- Montant des affaires (module `dealValue`)
+// Le produit savait tout d'une affaire sauf ce qu'elle rapporte : effectif, secteur, source,
+// prime — jamais le montant du contrat. Sans lui, pas de valeur de pipeline, pas de chiffre
+// d'affaires, et impossible de dire quelle provenance rapporte plutôt que quelle provenance
+// occupe. C'est un champ, et il ouvre trois lectures.
+// ⚠️ Module RETIRABLE : tout ce qui suit renvoie 0 ou une liste vide sur une affaire sans
+// montant. Aucun calcul existant n'en dépend — retirer le module ne peut donc rien casser,
+// il ne fait que cesser d'afficher.
+export const DEAL_RECURRENCE = [
+  { id: 'oneshot', label: 'Montant ponctuel', short: 'ponctuel' },
+  { id: 'mensuel', label: 'Récurrent mensuel', short: '/mois' },
+]
+// Valeur ANNUELLE d'une affaire : c'est la seule maille qui permet de comparer un contrat
+// ponctuel à un abonnement mensuel sans mentir sur l'un des deux.
+export function dealAnnualValue(rdv) {
+  const v = Number(rdv?.montant) || 0
+  if (!v) return 0
+  return rdv?.recurrence === 'mensuel' ? v * 12 : v
+}
+export const dealValueLabel = (rdv) => (rdv?.recurrence === 'mensuel' ? '/mois' : '')
+// Valeur du pipeline OUVERT : ce qui reste à jouer, hors affaires perdues ou déjà gagnées.
+export function pipelineValue(rdvs, data) {
+  return (rdvs || [])
+    .filter(r => !isLostPhase(data, r.phase) && !isWonPhase(data, r.phase) && r.opportunite !== 'Perdue')
+    .reduce((a, r) => a + dealAnnualValue(r), 0)
+}
+export function wonValue(rdvs, data) {
+  return (rdvs || []).filter(r => isWonPhase(data, r.phase)).reduce((a, r) => a + dealAnnualValue(r), 0)
+}
+// Ce que rapporte chaque provenance, à côté de ce qu'elle occupe : « l'outbound fait 60 % du
+// volume et 25 % du chiffre » est un arbitrage, pas un tableau.
+export function valueBySource(rdvs, data) {
+  const m = {}
+  ;(rdvs || []).forEach(r => {
+    const k = r.provenance || r.source || '—'
+    m[k] = m[k] || { source: k, count: 0, value: 0, won: 0 }
+    m[k].count++
+    m[k].value += dealAnnualValue(r)
+    if (isWonPhase(data, r.phase)) m[k].won += dealAnnualValue(r)
+  })
+  return Object.values(m).sort((a, b) => b.value - a.value)
 }
 
 // ---------------------------------------------------------------- Challenges (module `challenges`)
@@ -1942,6 +1988,20 @@ function seedDemoWorkspace(d, who = '') {
 // `brand.company` remplace le nom de l'environnement fictif : en rendez-vous, la démo
 // porte le nom de l'entreprise du prospect, qui se voit chez lui plutôt que chez « Atlas
 // Revenue ». Rien d'autre n'est touché — les données restent entièrement inventées.
+// Montants de démonstration. Un mélange de contrats ponctuels et d'abonnements mensuels, et
+// quelques affaires sans montant : le champ est facultatif, l'écran doit le montrer.
+function seedDemoValues(d) {
+  const grid = [12000, 4500, 28000, 900, 36000, 7500, 15000, 2400]
+  let i = 0
+  ;(d.rdvs || []).forEach(r => {
+    const n = i++
+    if (n % 6 === 5) return // une affaire sur six reste sans montant chiffré
+    const monthly = n % 3 === 1
+    r.montant = monthly ? Math.round(grid[n % grid.length] / 12 / 50) * 50 : grid[n % grid.length]
+    r.recurrence = monthly ? 'mensuel' : 'oneshot'
+  })
+}
+
 // Comités d'achat de démonstration. Les affaires avancées sont cartographiées à plusieurs
 // personnes ; deux dossiers restent volontairement mono-interlocuteur pour que l'alerte de
 // multithreading soit visible — c'est elle qu'on veut montrer, pas un tableau parfait.
@@ -2050,6 +2110,7 @@ export function buildDemoDb(brand) {
     d.contacts = []; d.rdvs.forEach(r => syncContacts(d, r))
     d.goals = { rdvSemaine: 12, sqlMois: 8, primesMois: 2000 }
     seedDemoWorkspace(d)
+    seedDemoValues(d)
     seedDemoCommittee(d)
     seedDemoHandoffs(d)
     if (extra) extra(d)

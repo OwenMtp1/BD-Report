@@ -31,7 +31,8 @@ async function main() {
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
           phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES,
-          handoffState, handoffStats, quotaAchieved, buildStatement, monthlyPaidPrimes } = await import('../src/store.jsx')
+          handoffState, handoffStats, quotaAchieved, buildStatement, monthlyPaidPrimes,
+          dealAnnualValue, pipelineValue, wonValue, valueBySource } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -228,6 +229,30 @@ async function main() {
     }
   }
 
+  // Montant de l'affaire : la valeur annuelle compare un contrat ponctuel à un abonnement
+  // sans mentir sur l'un des deux. Et surtout, RETIRER le module ne doit rien casser.
+  {
+    const data = { phases: ['R1', 'SQL', 'KO', 'Signée'], wonPhases: ['Signée'], lostPhases: ['KO'] }
+    if (dealAnnualValue({ montant: 1000, recurrence: 'oneshot' }) !== 1000) throw new Error('Un contrat ponctuel vaut son montant')
+    if (dealAnnualValue({ montant: 1000, recurrence: 'mensuel' }) !== 12000) throw new Error('Un abonnement mensuel vaut douze mois')
+    if (dealAnnualValue({}) !== 0) throw new Error('Une affaire sans montant ne doit rien valoir, pas planter')
+    const rdvs = [
+      { id: '1', phase: 'R1', provenance: 'Cold Call', montant: 1000, recurrence: 'oneshot' },
+      { id: '2', phase: 'Signée', provenance: 'Cold Call', montant: 500, recurrence: 'mensuel' },
+      { id: '3', phase: 'KO', provenance: 'Salon', montant: 9999 },
+      { id: '4', phase: 'R1', provenance: 'Salon' }, // sans montant : le champ est facultatif
+    ]
+    if (pipelineValue(rdvs, data) !== 1000) throw new Error('Le pipeline ne compte ni le perdu ni le gagné')
+    if (wonValue(rdvs, data) !== 6000) throw new Error('Le signé se compte en valeur annuelle')
+    const bySrc = valueBySource(rdvs, data)
+    if (bySrc[0].source !== 'Salon' || bySrc[0].value !== 9999) throw new Error('La valeur par provenance est faussée')
+    if (!bySrc.some(v => v.source === 'Cold Call' && v.won === 6000)) throw new Error('Le signé par provenance est faussé')
+    // Sans le moindre montant saisi — c'est-à-dire module retiré — tout vaut zéro, rien ne casse.
+    const naked = rdvs.map(({ montant, recurrence, ...r }) => r)
+    if (pipelineValue(naked, data) !== 0 || wonValue(naked, data) !== 0) throw new Error('Sans montant, les valeurs doivent être nulles')
+    if (valueBySource(naked, data).some(v => v.value !== 0)) throw new Error('Sans montant, aucune provenance ne doit valoir quoi que ce soit')
+  }
+
   // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue
   // le lead qui ressemble aux comptes qui signent de celui qui s'en écarte.
   {
@@ -372,6 +397,7 @@ async function main() {
     if (!create) throw new Error('Create RDV button missing')
     await click(create)
     if (!text().includes('Rôle dans la décision')) throw new Error('Buying committee fields missing from the RDV form')
+    if (!text().includes("Montant de l'affaire")) throw new Error("Le montant de l'affaire manque au formulaire")
     const roleSel = [...container.querySelectorAll('select')].find(s => [...s.options].some(o => o.textContent === 'Prescripteur'))
     if (!roleSel) throw new Error('Buying committee roles not offered')
     await click(find('button', 'Annuler'))

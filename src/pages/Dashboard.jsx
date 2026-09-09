@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Trophy, Pencil, EyeOff, Eye, MonitorPlay } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase, QUOTA_METRICS, ACTIVITY_PERIODS, quotaAchieved, monthlyPaidPrimes } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase, QUOTA_METRICS, ACTIVITY_PERIODS, quotaAchieved, monthlyPaidPrimes, pipelineValue, wonValue, valueBySource, dealAnnualValue } from '../store.jsx'
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
 import { ChallengeBanner } from './Challenges.jsx'
 
@@ -300,6 +300,16 @@ export default function Dashboard() {
               <StatBubble title={`Primes ${periodeLabel.toLowerCase()}`} value={fmtMoney(primesPeriode)} tone="green" sub={`Ce mois : ${fmtMoney(primesCeMois)} · suivant : ${fmtMoney(primesMoisSuivant)}`} />
               <StatBubble title="Revenu primes total" value={fmtMoney(primesTotal)} tone="yellow" />
             </div>
+            {/* Ce que vaut le pipeline, à côté de ce qu'il rapporte en primes. Le module est
+                retirable : sans lui, la ligne n'apparaît pas et rien d'autre ne change. */}
+            {store.hasModule('dealValue') && (
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <StatBubble title="Valeur du pipeline" value={fmtMoney(pipelineValue(rdvs, sub), sub.currency)} tone="blue"
+                  sub="Affaires ouvertes, en valeur annuelle" />
+                <StatBubble title="Chiffre d'affaires signé" value={fmtMoney(wonValue(rdvs, sub), sub.currency)} tone="green"
+                  sub="Affaires gagnées, en valeur annuelle" />
+              </div>
+            )}
           </div>
         )
       case 'signatures':
@@ -354,6 +364,24 @@ export default function Dashboard() {
                     <span className="text-xs text-muted w-16 text-right">{n} ({Math.round((n / provRdvs.length) * 100)}%)</span>
                   </div>
                 ))}
+              </div>
+            )}
+            {/* Ce qu'une provenance OCCUPE n'est pas ce qu'elle RAPPORTE : « 60 % du volume,
+                25 % du chiffre » est un arbitrage de temps, pas une statistique. */}
+            {store.hasModule('dealValue') && provRdvs.some(r => Number(r.montant)) && (
+              <div className="mt-3 pt-3 border-t border-line">
+                <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">Ce que chaque provenance rapporte</div>
+                <div className="space-y-1">
+                  {valueBySource(provRdvs, sub).filter(v => v.value > 0).slice(0, 5).map(v => (
+                    <div key={v.source} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate">{v.source}</span>
+                      <span className="text-muted shrink-0">
+                        {v.count} affaire{v.count > 1 ? 's' : ''} · <b className="text-ink">{fmtMoney(v.value, sub.currency)}</b>
+                        {v.won > 0 ? ` · ${fmtMoney(v.won, sub.currency)} signés` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
