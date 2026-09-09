@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { Plus, Pin, PinOff, Archive, CalendarPlus, FileDown, Trash2, FolderPlus, Pencil } from 'lucide-react'
+import { Plus, Pin, PinOff, Archive, CalendarPlus, FileDown, Trash2, FolderPlus, Pencil, StickyNote, MessagesSquare } from 'lucide-react'
 import { useStore, uid, todayISO, fmtDate } from '../store.jsx'
 import { Modal, Field, Select, Empty, Confirm, toast, DictateButton } from '../ui.jsx'
+import Objections from './Objections.jsx'
 
 const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 function exportNote(note, format) {
@@ -28,7 +29,36 @@ function exportNote(note, format) {
   }
 }
 
+// « Mes notes » réunit ce qu'un commercial écrit et ce qu'il ré-emploie. Les catégories
+// évitent d'ouvrir un onglet de plus dans la barre latérale pour chaque nature de contenu :
+// c'est le même geste — chercher un texte qu'on a déjà écrit — au même endroit.
+const NOTE_TABS = [
+  { id: 'notes', label: 'Notes', icon: StickyNote },
+  { id: 'objections', label: 'Objections', icon: MessagesSquare },
+]
+
 export default function Notes({ onCreateRdvFromNote }) {
+  const [tab, setTab] = useState('notes')
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-extrabold">Mes notes</h2>
+        <div className="flex rounded-lg border border-line overflow-hidden">
+          {NOTE_TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${tab === t.id ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}>
+              <t.icon size={13} /> {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === 'notes' && <NotesTab onCreateRdvFromNote={onCreateRdvFromNote} />}
+      {tab === 'objections' && <Objections />}
+    </div>
+  )
+}
+
+function NotesTab({ onCreateRdvFromNote }) {
   const store = useStore()
   const sub = store.sub
   const [editing, setEditing] = useState(null) // note en édition
@@ -69,12 +99,9 @@ export default function Notes({ onCreateRdvFromNote }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-xl font-extrabold">Mes notes</h2>
-        <div className="flex items-center gap-2">
-          <button className="btn-ghost text-xs" onClick={() => setTplModal(true)}>Templates</button>
-          <button className="btn-primary !px-2.5" title="Nouvelle note" onClick={() => newNote()}><Plus size={18} /></button>
-        </div>
+      <div className="card p-3 flex items-center gap-2 flex-wrap text-xs">
+        <button className="btn-ghost !py-1.5 text-xs" onClick={() => setTplModal(true)}>Templates</button>
+        <button className="btn-primary !py-1.5 text-xs" onClick={() => newNote()}><Plus size={14} /> Nouvelle note</button>
       </div>
 
       <div className="card p-3 flex items-center gap-2 flex-wrap text-xs">

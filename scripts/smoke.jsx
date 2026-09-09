@@ -207,6 +207,24 @@ async function main() {
     await type(search, '')
   }
 
+  // 5a. Mes notes : la bibliothèque d'objections vit dans une catégorie de la même page.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes notes'))
+  {
+    const objTab = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Objections')
+    if (!objTab) throw new Error('Objections category missing from Mes notes')
+    await click(objTab)
+    if (!text().includes('On a déjà un outil')) throw new Error('Objection library should ship with a starter set: ' + text().slice(0, 300))
+    const copyBtn = find('button', 'Copier la réponse')
+    if (!copyBtn) throw new Error('Objection copy button missing')
+    await click(copyBtn)
+    win.__bdrFlushSave?.()
+    const state = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+    if (!Object.values(state.data).some(d => (d.objections || []).some(o => (o.used || 0) > 0))) {
+      throw new Error('Objection usage counter was not persisted')
+    }
+    await click([...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Notes'))
+  }
+
   // 5a bis. Passation au closer : le lead qualifié attend un verdict, et le verdict se pose.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Passation au closer'))
   for (const k of ['Mon taux d\'acceptation', 'Mes leads']) {

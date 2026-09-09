@@ -886,6 +886,38 @@ function defaultKbArticles() {
 }
 
 // ---------------------------------------------------------------- Seed
+// ---------------------------------------------------------------- Objections (onglet de « Mes notes »)
+// Les objections d'un marché se répètent : une équipe qui les affronte pour la première fois
+// à chaque appel réinvente une réponse moyenne. On les range donc par famille, avec la réponse
+// que le manager valide. L'espace démarre avec les six objections que tout le monde entend —
+// mieux vaut un socle discutable qu'une page vide que personne ne remplira.
+export const OBJECTION_FAMILIES = ['Prix', 'Timing', 'Concurrent', 'Statu quo', 'Besoin', 'Autorité']
+export function defaultObjections() {
+  const mk = (family, objection, response, example) => ({
+    id: uid(), family, objection, response, example, validated: false, used: 0, lastUsed: '', createdAt: todayISO(),
+  })
+  return [
+    mk('Concurrent', 'On a déjà un outil',
+      "Demander lequel, puis creuser ce qui manque plutôt que de comparer les fonctionnalités. Un outil en place ne veut pas dire un besoin couvert.",
+      "« Vous êtes sur quoi aujourd'hui ? … Et sur la partie primes, comment vous faites ? »"),
+    mk('Timing', 'Pas le budget cette année',
+      "Viser une mise en place au prochain exercice et garder le contact tiède. Un budget refusé n'est pas un besoin refusé.",
+      "« Le budget se cale quand chez vous ? On peut préparer maintenant pour démarrer en janvier. »"),
+    mk('Timing', 'Rappelez-moi dans six mois',
+      "Proposer une date précise, sinon la relance se perd. Et demander ce qui aura changé d'ici là : la réponse dit si l'affaire existe.",
+      "« Le 12 mars, 9 h ? Et qu'est-ce qui sera différent à ce moment-là ? »"),
+    mk('Prix', "C'est trop cher",
+      "Ramener le prix à ce qu'il remplace ou à ce qu'il fait gagner, jamais au tarif d'un concurrent. Chercher d'abord ce que « cher » compare.",
+      "« Cher par rapport à quoi ? … Un litige de prime par mois coûte combien en temps de management ? »"),
+    mk('Statu quo', 'On fonctionne bien comme ça',
+      "Ne pas attaquer l'existant. Faire décrire une journée type et laisser la friction apparaître d'elle-même.",
+      "« Concrètement, le calcul des primes du mois, ça vous prend combien de temps ? »"),
+    mk('Autorité', 'Je ne décide pas seul',
+      "Bonne nouvelle : identifier qui décide et proposer de préparer l'argumentaire avec l'interlocuteur, plutôt que de le contourner.",
+      "« Qui d'autre est concerné ? On peut préparer ensemble ce que vous lui présenterez. »"),
+  ]
+}
+
 function emptySubEnvData() {
   return {
     rdvs: [],
@@ -928,6 +960,8 @@ function emptySubEnvData() {
     wonPhases: [...DEFAULT_WON_PHASES],     // phases signifiant « affaire gagnée »
     lostPhases: [...DEFAULT_LOST_PHASES],   // phases signifiant « affaire perdue »
     icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
+    objections: defaultObjections(), // bibliothèque d'objections (onglet de « Mes notes »)
+    objectionFamilies: [...OBJECTION_FAMILIES],
     handoffPhases: [],       // étapes déclenchant une passation ([] = le jalon de l'espace)
     handoffReasons: [...DEFAULT_HANDOFF_REASONS], // motifs de refus proposés au closer
     primeOnAccept: false,    // ne payer la prime qu'une fois le dossier accepté (facultatif)
@@ -2274,6 +2308,10 @@ function migrate(db) {
     data.taskTrash = data.taskTrash || []
     data.icpProfiles = data.icpProfiles || []
     data.activityRules = data.activityRules || [] // primes d'activité (volume de RDV)
+    // Bibliothèque d'objections. Semée une seule fois : une équipe qui l'a vidée ne doit pas
+    // la voir repousser au rechargement suivant.
+    if (!Array.isArray(data.objections)) { data.objections = defaultObjections(); data._objectionsSeeded = true }
+    if (!Array.isArray(data.objectionFamilies) || !data.objectionFamilies.length) data.objectionFamilies = [...OBJECTION_FAMILIES]
     // Passation au closer (module `handoff`)
     if (!Array.isArray(data.handoffPhases)) data.handoffPhases = []
     if (!Array.isArray(data.handoffReasons)) data.handoffReasons = [...DEFAULT_HANDOFF_REASONS]
