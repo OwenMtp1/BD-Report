@@ -1,8 +1,7 @@
-import { deob } from '../obf.js'
 import React, { useEffect, useRef, useState } from 'react'
 import {
   X, Play, Pause, ChevronLeft, ChevronRight, Sparkles, Lock, Mail, Building2, User,
-  UserCog, MousePointerClick, ShieldCheck, ArrowRight,
+  UserCog, MousePointerClick, ShieldCheck, ArrowRight, RotateCcw,
 } from 'lucide-react'
 import { StoreProvider, useStore, demoSession } from '../store.jsx'
 import { I18nProvider } from '../i18n.jsx'
@@ -57,17 +56,20 @@ function DemoController({ role, navSeq }) {
   return null
 }
 
-// Écran de création de compte (parcours d’achat). Purement visuel : rien n’est enregistré.
+// Écran de création de compte (parcours d’achat). Purement visuel : rien n’est enregistré,
+// et RIEN n’est vérifié — n’importe quelle saisie ouvre la démo. Les champs partent vides
+// pour qu’on y tape en rendez-vous le nom du prospect : l’entreprise saisie devient le nom
+// de l’espace, si bien que le prospect se voit chez lui et non chez une société inventée.
 function Signup({ onDone }) {
   const [pw, setPw] = useState('')
-  const [email, setEmail] = useState('camille.rivet@peoplespheres.io')
-  const [name, setName] = useState('Camille Rivet')
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
+  const [company, setCompany] = useState('')
   const [busy, setBusy] = useState(false)
   const submit = (e) => {
     e.preventDefault()
-    if (!pw) return
     setBusy(true)
-    setTimeout(onDone, 850) // petite animation « création de l’espace »
+    setTimeout(() => onDone({ name, email, company }), 850) // petite animation « création de l’espace »
   }
   return (
     <div className="min-h-full flex items-center justify-center p-6" style={{ background: 'radial-gradient(1200px 600px at 20% -10%, #1e2a52, #0b1020 60%)' }}>
@@ -77,17 +79,17 @@ function Signup({ onDone }) {
           <p className="text-white/50 text-sm mt-2">Créez votre espace commercial en 30 secondes</p>
         </div>
         <form onSubmit={submit} className="rounded-2xl p-6 space-y-3" style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)' }}>
+          <Labeled icon={Building2} label="Entreprise">
+            <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Le nom de votre entreprise" className="demo-inp" autoFocus />
+          </Labeled>
           <Labeled icon={User} label="Votre nom">
-            <input value={name} onChange={e => setName(e.target.value)} className="demo-inp" />
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Prénom et nom" className="demo-inp" />
           </Labeled>
           <Labeled icon={Mail} label="Email professionnel">
-            <input value={email} onChange={e => setEmail(e.target.value)} className="demo-inp" />
-          </Labeled>
-          <Labeled icon={Building2} label="Entreprise">
-            <input defaultValue={deob('MgEdFRwKIQRFChADXg==')} className="demo-inp" />
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@votre-entreprise.com" className="demo-inp" />
           </Labeled>
           <Labeled icon={Lock} label="Mot de passe">
-            <input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="Choisissez un mot de passe" className="demo-inp" autoFocus />
+            <input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="Choisissez un mot de passe" className="demo-inp" />
           </Labeled>
           <button disabled={busy} className="w-full rounded-xl py-2.5 font-bold text-white flex items-center justify-center gap-2 disabled:opacity-70" style={{ background: 'linear-gradient(135deg,#3b82f6,#5EDCFF)' }}>
             {busy ? <>Création de votre espace…</> : <>Créer mon espace <ArrowRight size={16} /></>}
@@ -110,6 +112,7 @@ function Labeled({ icon: Ic, label, children }) {
 
 export default function DemoJourney({ onClose }) {
   const [phase, setPhase] = useState('signup') // 'signup' | 'app'
+  const [brand, setBrand] = useState(null)     // saisie du formulaire → nom de l'espace
   const [role, setRole] = useState('employe')
   const [tourIdx, setTourIdx] = useState(-1) // -1 = visite inactive
   const [autoplay, setAutoplay] = useState(false)
@@ -140,6 +143,10 @@ export default function DemoJourney({ onClose }) {
 
   const switchRole = (r) => { if (touring) stopTour(); setRole(r); setNavSeq({ page: 'dashboard', role: r, n: Date.now() }) }
 
+  // Rendez-vous suivant : on revient au formulaire vide pour saisir un autre prospect.
+  // Le provider de démo est démonté au passage, donc l'espace repart intégralement à neuf.
+  const restart = () => { stopTour(); setRole('employe'); setNavSeq(null); setBrand(null); setPhase('signup') }
+
   const close = () => {
     // Ramène l’app RÉELLE (derrière l’overlay) sur la console support.
     window.dispatchEvent(new CustomEvent('app-navigate', { detail: 'supporthub' }))
@@ -165,6 +172,9 @@ export default function DemoJourney({ onClose }) {
               ? <button onClick={stopTour} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/15 hover:bg-white/25 flex items-center gap-1.5"><X size={13} /> Arrêter la visite</button>
               : <button onClick={startTour} className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5" style={{ background: 'linear-gradient(135deg,#5EDCFF,#3b82f6)' }}><MousePointerClick size={13} /> Visite guidée</button>
           )}
+          {phase === 'app' && (
+            <button onClick={restart} title="Repartir du formulaire pour un autre prospect" className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 flex items-center gap-1.5"><RotateCcw size={13} /> Nouveau prospect</button>
+          )}
           <button onClick={close} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 flex items-center gap-1.5"><X size={14} /> Quitter</button>
         </div>
       </div>
@@ -172,9 +182,11 @@ export default function DemoJourney({ onClose }) {
       {/* Scène : soit la création de compte, soit la VRAIE app isolée */}
       <div className="flex-1 min-h-0 relative overflow-auto bg-app">
         {phase === 'signup'
-          ? <Signup onDone={() => setPhase('app')} />
+          ? <Signup onDone={(b) => { setBrand(b); setPhase('app') }} />
           : (
-            <StoreProvider demo>
+            // La marque est lue à la création du provider : le nom de l'espace est donc
+            // celui saisi juste avant, et repartir de zéro passe par « Quitter ».
+            <StoreProvider demo datasetBrand={brand}>
               <I18nProvider>
                 <DemoController role={role} navSeq={navSeq} />
                 <App />

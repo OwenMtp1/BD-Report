@@ -1310,7 +1310,10 @@ function seedDemoWorkspace(d, who = '') {
   return d
 }
 
-export function buildDemoDb() {
+// `brand.company` remplace le nom de l'environnement fictif : en rendez-vous, la démo
+// porte le nom de l'entreprise du prospect, qui se voit chez lui plutôt que chez « Atlas
+// Revenue ». Rien d'autre n'est touché — les données restent entièrement inventées.
+export function buildDemoDb(brand) {
   const db = {
     accounts: [], environments: [], subenvs: [], data: {},
     supportRequests: [], tickets: [], clients: [], projects: [],
@@ -1326,7 +1329,7 @@ export function buildDemoDb() {
   )
   const svcSales = uid(), svcSdr = uid()
   db.environments.push({
-    id: 'env-demo', name: 'Atlas Revenue', logo: '', pin: '', plan: 'beta', createdBy: 'demo-mgr', subState: 'active',
+    id: 'env-demo', name: String(brand?.company || '').trim() || 'Atlas Revenue', logo: '', pin: '', plan: 'beta', createdBy: 'demo-mgr', subState: 'active',
     departments: ['Sales', 'SDR'], services: [{ id: svcSales, name: 'Sales' }, { id: svcSdr, name: 'SDR' }],
     members: ['demo-mgr', 'demo-b1', 'demo-b2', 'demo-b3', 'demo-b4'],
     comments: {
@@ -2099,9 +2102,9 @@ function load() {
   return migrate(buildSeedDb())
 }
 
-export function StoreProvider({ children, demo = false, dataset = 'sales', datasetRole, datasetRoles }) {
+export function StoreProvider({ children, demo = false, dataset = 'sales', datasetRole, datasetRoles, datasetBrand }) {
   const [db, setDbState] = useState(() => demo
-    ? (dataset === 'training' ? buildTrainingDb(datasetRole, datasetRoles) : buildDemoDb())
+    ? (dataset === 'training' ? buildTrainingDb(datasetRole, datasetRoles) : buildDemoDb(datasetBrand))
     : load())
   const [session, setSession] = useState(() => {
     // Mode démo : session isolée en mémoire, jamais lue ni écrite dans sessionStorage.

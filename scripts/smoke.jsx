@@ -39,6 +39,11 @@ async function main() {
   if (demoDb.environments.some(e => e.id === 'env-peoplespheres' || e.id === 'env-test')) throw new Error('Demo db must not include real/seed envs')
   if (!demoDb.accounts.some(a => a.id === 'demo-mgr') || (demoDb.data['dsub-b1']?.rdvs || []).length < 5) throw new Error('Demo db not richly populated')
   if (demoSession('manager').subEnvId !== 'dsub-mgr') throw new Error('demoSession(manager) wrong')
+  // Le nom saisi au formulaire de démo devient celui de l'espace : en rendez-vous, le
+  // prospect se voit chez lui. Sans saisie, la société fictive reprend la main.
+  if (demoDb.environments.find(e => e.id === 'env-demo').name !== 'Atlas Revenue') throw new Error('Demo env should default to the fictional company')
+  if (buildDemoDb({ company: 'Vertigo Studio' }).environments.find(e => e.id === 'env-demo').name !== 'Vertigo Studio') throw new Error('Prospect company did not become the demo space name')
+  if (buildDemoDb({ company: '   ' }).environments.find(e => e.id === 'env-demo').name !== 'Atlas Revenue') throw new Error('Blank company should fall back to the fictional name')
   const { default: App } = await import('../src/App.jsx')
   const Root = (children) => React.createElement(StoreProvider, null, React.createElement(I18nProvider, null, children))
 
@@ -508,13 +513,23 @@ async function main() {
     const btnd = (label) => [...cd.querySelectorAll('button')].find(b => b.textContent.trim().includes(label))
     const clickd = async (el) => act(async () => { el.dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true })) })
 
-    // Parcours d'achat : le formulaire exige un mot de passe avant de créer l'espace.
-    const pwField = [...cd.querySelectorAll('input[type="password"]')][0]
-    if (!pwField) throw new Error('Demo signup password field missing')
-    await type(pwField, 'demo1234')
+    // Parcours d'achat : formulaire VIDE au départ, et rien n'est vérifié — la démo
+    // s'ouvre quelle que soit la saisie, y compris aucune.
+    if ([...cd.querySelectorAll('input')].some(i => i.value)) throw new Error('Demo signup fields should start empty')
     const create = btnd('Créer mon espace')
     if (!create) throw new Error('Demo signup step missing')
     await clickd(create)
+    await act(async () => { await new Promise(r => setTimeout(r, 1500)) })
+    if (!btnd('Visite guidée')) throw new Error('Demo did not reach the isolated app with empty credentials')
+
+    // « Nouveau prospect » ramène au formulaire, vide, pour enchaîner un autre rendez-vous.
+    await clickd(btnd('Nouveau prospect'))
+    const compField = [...cd.querySelectorAll('input')].find(i => (i.getAttribute('placeholder') || '').includes('nom de votre entreprise'))
+    if (!compField) throw new Error('Demo signup company field missing')
+    if ([...cd.querySelectorAll('input')].some(i => i.value)) throw new Error('Restarted demo signup should be empty again')
+    await type(compField, 'Vertigo Studio')
+    await type([...cd.querySelectorAll('input[type="password"]')][0], 'nimporte-quoi')
+    await clickd(btnd('Créer mon espace'))
     await act(async () => { await new Promise(r => setTimeout(r, 1500)) })
     if (!btnd('Visite guidée')) throw new Error('Demo did not reach the isolated app after signup')
 
