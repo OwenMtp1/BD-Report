@@ -30,7 +30,7 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules } = await import('../src/store.jsx')
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -134,6 +134,16 @@ async function main() {
       env: null, subId: 'x', monthKey: '2026-09',
     })
     if (noQuota.total !== 1000) throw new Error('Sans quota posé, le seuil ne doit rien retirer')
+  }
+
+  // Variables d'un modèle : une valeur manquante reste VISIBLE. Un message qui commence par
+  // « Bonjour , » est pire que pas de message du tout.
+  {
+    if (fillTemplate('Bonjour {prenom} de {entreprise}', { prenom: 'Claire', entreprise: 'NovaTech' }) !== 'Bonjour Claire de NovaTech') {
+      throw new Error('Le remplissage des variables est cassé')
+    }
+    if (fillTemplate('Bonjour {prenom},', {}) !== 'Bonjour [prenom],') throw new Error('Une variable sans valeur doit rester visible')
+    if (fillTemplate('Bonjour {prenom},', { prenom: '' }) !== 'Bonjour [prenom],') throw new Error('Une valeur vide ne doit pas produire un trou silencieux')
   }
 
   // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue
@@ -300,6 +310,12 @@ async function main() {
     if (!Object.values(state.data).some(d => (d.objections || []).some(o => (o.used || 0) > 0))) {
       throw new Error('Objection usage counter was not persisted')
     }
+    // Modèles de messages : la troisième catégorie de « Mes notes ».
+    const tplTab = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Modèles de messages')
+    if (!tplTab) throw new Error('Message templates category missing from Mes notes')
+    await click(tplTab)
+    if (!text().includes('Relance après silence')) throw new Error('Le socle de modèles doit être livré: ' + text().slice(0, 300))
+    if (!find('button', 'Personnaliser')) throw new Error('Un modèle doit pouvoir être personnalisé')
     await click([...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Notes'))
   }
 

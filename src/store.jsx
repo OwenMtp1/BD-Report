@@ -1103,6 +1103,43 @@ export function committeeGaps(rdv, data, roles = DEFAULT_COMMITTEE_ROLES) {
   return gaps.length ? gaps : null
 }
 
+// ---------------------------------------------------------------- Modèles de messages
+// Les BDR réécrivent chaque jour les mêmes quatre messages, un peu moins bien à chaque fois.
+// La bibliothèque les range avec leurs variables ; l'envoi reste manuel — on donne le texte,
+// pas un automate, et rien ne dépend d'un connecteur externe.
+export const MESSAGE_VARS = [
+  { key: 'prenom', label: 'Prénom du contact' },
+  { key: 'nom', label: 'Nom du contact' },
+  { key: 'entreprise', label: "Nom de l'entreprise" },
+  { key: 'poste', label: 'Poste du contact' },
+  { key: 'secteur', label: "Secteur d'activité" },
+  { key: 'moi', label: 'Votre nom' },
+]
+// Remplace {prenom}, {entreprise}… par les valeurs du contexte. Une variable sans valeur est
+// laissée EN ÉVIDENCE plutôt que vidée : mieux vaut un trou visible qu'un message qui commence
+// par « Bonjour , ».
+export function fillTemplate(text, ctx = {}) {
+  return String(text || '').replace(/\{(\w+)\}/g, (m, k) => {
+    const v = ctx[k]
+    return v === undefined || v === null || v === '' ? `[${k}]` : String(v)
+  })
+}
+export function defaultMessageTemplates() {
+  const mk = (name, family, content) => ({ id: uid(), name, family, content, used: 0, lastUsed: '', createdAt: todayISO() })
+  return [
+    mk('Premier contact — froid', 'Prise de contact',
+      "Bonjour {prenom},\n\nJe travaille avec des équipes {secteur} qui perdent un temps fou à recalculer les primes de leurs commerciaux à la main.\n\nChez {entreprise}, c'est un sujet ou c'est déjà réglé ?\n\n{moi}"),
+    mk('Relance après silence', 'Relance',
+      "Bonjour {prenom},\n\nJe reviens vers vous une dernière fois : si le sujet n'est pas d'actualité chez {entreprise}, dites-le moi simplement, je cesserai de vous solliciter.\n\nSinon, une conversation de quinze minutes suffit à voir si ça vaut le coup.\n\n{moi}"),
+    mk('Après un no-show', 'Relance',
+      "Bonjour {prenom},\n\nOn devait se parler aujourd'hui — je suppose que la journée a été plus chargée que prévu.\n\nJe vous propose deux créneaux : … ou … . Dites-moi ce qui vous arrange.\n\n{moi}"),
+    mk('Confirmation la veille', 'Organisation',
+      "Bonjour {prenom},\n\nJe confirme notre échange de demain. Vingt minutes, pour comprendre comment {entreprise} pilote le sujet aujourd'hui.\n\nÀ demain,\n{moi}"),
+    mk('Réveil d\'un compte en sommeil', 'Réactivation',
+      "Bonjour {prenom},\n\nOn s'était parlé il y a quelques mois : le timing n'était pas le bon chez {entreprise}. Je me permets de revenir maintenant que l'exercice a changé.\n\nToujours d'actualité de votre côté ?\n\n{moi}"),
+  ]
+}
+
 // ---------------------------------------------------------------- Objections (onglet de « Mes notes »)
 // Les objections d'un marché se répètent : une équipe qui les affronte pour la première fois
 // à chaque appel réinvente une réponse moyenne. On les range donc par famille, avec la réponse
@@ -1179,6 +1216,7 @@ function emptySubEnvData() {
     icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
     primeRules: DEFAULT_PRIME_RULES(), // seuils / accélérateurs / plafonds — désactivés par défaut
     objections: defaultObjections(), // bibliothèque d'objections (onglet de « Mes notes »)
+    messageTemplates: defaultMessageTemplates(), // modèles de messages (onglet de « Mes notes »)
     objectionFamilies: [...OBJECTION_FAMILIES],
     handoffPhases: [],       // étapes déclenchant une passation ([] = le jalon de l'espace)
     handoffReasons: [...DEFAULT_HANDOFF_REASONS], // motifs de refus proposés au closer
@@ -2653,6 +2691,8 @@ function migrate(db) {
     // la voir repousser au rechargement suivant.
     if (!Array.isArray(data.objections)) { data.objections = defaultObjections(); data._objectionsSeeded = true }
     if (!Array.isArray(data.objectionFamilies) || !data.objectionFamilies.length) data.objectionFamilies = [...OBJECTION_FAMILIES]
+    // Modèles de messages : semés une seule fois, comme les objections.
+    if (!Array.isArray(data.messageTemplates)) data.messageTemplates = defaultMessageTemplates()
     // Modulateurs de prime : toujours neutres tant qu'un manager ne les active pas.
     data.primeRules = { ...DEFAULT_PRIME_RULES(), ...(data.primeRules || {}) }
     // Passation au closer (module `handoff`)

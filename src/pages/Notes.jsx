@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
-import { Plus, Pin, PinOff, Archive, CalendarPlus, FileDown, Trash2, FolderPlus, Pencil, StickyNote, MessagesSquare } from 'lucide-react'
+import { Plus, Pin, PinOff, Archive, CalendarPlus, FileDown, Trash2, FolderPlus, Pencil, StickyNote, MessagesSquare, Mail } from 'lucide-react'
 import { useStore, uid, todayISO, fmtDate } from '../store.jsx'
 import { Modal, Field, Select, Empty, Confirm, toast, DictateButton } from '../ui.jsx'
 import Objections from './Objections.jsx'
+import MessageTemplates from './MessageTemplates.jsx'
 
 const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 function exportNote(note, format) {
@@ -35,6 +36,7 @@ function exportNote(note, format) {
 const NOTE_TABS = [
   { id: 'notes', label: 'Notes', icon: StickyNote },
   { id: 'objections', label: 'Objections', icon: MessagesSquare },
+  { id: 'modeles', label: 'Modèles de messages', icon: Mail },
 ]
 
 export default function Notes({ onCreateRdvFromNote }) {
@@ -54,6 +56,7 @@ export default function Notes({ onCreateRdvFromNote }) {
       </div>
       {tab === 'notes' && <NotesTab onCreateRdvFromNote={onCreateRdvFromNote} />}
       {tab === 'objections' && <Objections />}
+      {tab === 'modeles' && <MessageTemplates />}
     </div>
   )
 }
