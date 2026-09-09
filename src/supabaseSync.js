@@ -21,6 +21,9 @@ async function getClient() {
   }
   return clientPromise
 }
+// Le client est partagé avec le module des pièces jointes : ouvrir une seconde
+// connexion doublerait les abonnements temps réel.
+export const getSupabaseClient = getClient
 
 // ----- État applicatif partagé (toute l'app) ------------------------------
 export async function fetchRemoteState() {

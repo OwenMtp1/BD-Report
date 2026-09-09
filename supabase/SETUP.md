@@ -31,6 +31,21 @@ Deux endroits (les mêmes valeurs) :
 
 > Ou bien colle-les moi dans le chat : je les commit et je déploie.
 
+## 4 bis. Créer le bucket des pièces jointes (≈ 2 min)
+
+Les images et fichiers des conversations vont dans **Supabase Storage**, pas dans l'état
+de l'application. Sans ce bucket, l'app reste fonctionnelle mais refuse les pièces jointes
+de plus de 400 Ko : les enfermer dans l'état saturait le stockage du navigateur et
+bloquait alors TOUTE sauvegarde de l'espace.
+
+1. Dans Supabase → **Storage** → **New bucket**
+2. Nom : `attachments` — cocher **Public bucket** (les URL sont devinables mais longues ;
+   pour du privé il faudrait des URL signées, donc un backend)
+3. Créer. Rien d'autre : l'application détecte le bucket toute seule.
+
+Limites appliquées côté application : 20 Mo par fichier avec le bucket, 400 Ko sans lui.
+Les images sont réduites à 1400 px et recompressées avant tout envoi.
+
 ## 5. Déployer
 Rebuild + redeploy (je m'en charge). Au prochain chargement, l'app pousse son
 état courant dans Supabase puis se synchronise en continu.

@@ -6,38 +6,11 @@ import {
 } from 'lucide-react'
 import { useStore, reportEventsFor, PRESENCE_META } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
+import { uploadAttachment, attachmentUrl, humanSize } from '../attachments.js'
 
-const MAX_FILE = 4 * 1024 * 1024 // 4 Mo (stockage local)
-// Lit un fichier quelconque en dataURL (nom/type/taille conservés).
-function readAnyFile(file, cb) {
-  if (file.size > MAX_FILE) { toast('Fichier trop volumineux (max 4 Mo)'); return }
-  const reader = new FileReader()
-  reader.onload = () => cb({ name: file.name, type: file.type || 'application/octet-stream', size: file.size, dataUrl: reader.result })
-  reader.readAsDataURL(file)
-}
-const humanSize = (n) => n > 1e6 ? (n / 1e6).toFixed(1) + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' Ko'
 
 const EMOJIS = ['👍', '🎉', '🔥', '❤️', '😂', '👏', '🚀', '✅', '👀', '🙌']
 
-// Redimensionne une image en dataURL compacte (max 1024px, JPEG) pour ne pas gonfler le stockage.
-function fileToDataUrl(file, cb) {
-  const reader = new FileReader()
-  reader.onload = () => {
-    const img = new Image()
-    img.onload = () => {
-      const max = 1024
-      let { width, height } = img
-      if (width > max || height > max) { const r = Math.min(max / width, max / height); width = Math.round(width * r); height = Math.round(height * r) }
-      const canvas = document.createElement('canvas')
-      canvas.width = width; canvas.height = height
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height)
-      try { cb(canvas.toDataURL('image/jpeg', 0.82)) } catch (e) { cb(reader.result) }
-    }
-    img.onerror = () => cb(reader.result)
-    img.src = reader.result
-  }
-  reader.readAsDataURL(file)
-}
 
 const timeStr = (iso) => { try { return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) } catch (e) { return '' } }
 const initials = (n) => (n || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -245,8 +218,19 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
     store.postChannelMessage(channel.id, { text, image, file, replyTo: rt })
     setText(''); setImage(''); setFile(null); setReplyTo(null); typingRef.current = 0
   }
-  const onImg = (e) => { const f = e.target.files?.[0]; if (!f) return; if (!f.type.startsWith('image/')) { toast('Choisissez une image'); return } fileToDataUrl(f, setImage); e.target.value = '' }
-  const onFile = (e) => { const f = e.target.files?.[0]; if (!f) return; readAnyFile(f, setFile); e.target.value = '' }
+  // Les pièces jointes partent vers le stockage : l'état ne garde qu'une URL. Les
+  // enfermer dans l'état saturait le navigateur et bloquait toute sauvegarde.
+  const [busy, setBusy] = useState(false)
+  const attach = async (f, kind) => {
+    setBusy(true)
+    const res = await uploadAttachment(f, { envId: store.session?.envId || 'local' })
+    setBusy(false)
+    if (res.error) { toast(res.error); return }
+    if (kind === 'image') setImage(res.url)
+    else setFile({ name: res.name, type: res.type, size: res.size, url: res.url, path: res.path, inline: res.inline })
+  }
+  const onImg = (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; if (!f.type.startsWith('image/')) { toast('Choisissez une image'); return } attach(f, 'image') }
+  const onFile = (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; attach(f, 'file') }
   const doDelete = (msg, all) => { all ? store.deleteMessageForAll(channel.id, msg.id) : store.deleteMessageForMe(msg.id); setConfirm(null) }
   const doPin = (msg, all) => { all ? store.pinMessageForAll(channel.id, msg.id, !msg.pinned) : store.pinMessageForMe(msg.id); setConfirm(null) }
 
@@ -365,8 +349,8 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
           </div>
         )}
         <div className="flex items-end gap-2">
-          <button className="btn-ghost !p-2 shrink-0" title="Joindre une image" onClick={() => imgRef.current?.click()}><ImagePlus size={18} /></button>
-          <button className="btn-ghost !p-2 shrink-0" title="Joindre un fichier" onClick={() => fileRef.current?.click()}><Paperclip size={18} /></button>
+          <button className="btn-ghost !p-2 shrink-0" disabled={busy} title={busy ? 'Envoi en cours…' : 'Joindre une image'} onClick={() => imgRef.current?.click()}><ImagePlus size={18} className={busy ? 'opacity-40' : ''} /></button>
+          <button className="btn-ghost !p-2 shrink-0" disabled={busy} title={busy ? 'Envoi en cours…' : 'Joindre un fichier'} onClick={() => fileRef.current?.click()}><Paperclip size={18} className={busy ? 'opacity-40' : ''} /></button>
           <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={onImg} />
           <input ref={fileRef} type="file" className="hidden" onChange={onFile} />
           <textarea rows={1} className="input flex-1 resize-none max-h-32" placeholder={personal ? 'Écrivez une note…' : 'Écrivez un message…'} value={text}
@@ -414,7 +398,7 @@ function MessageRow({ m, channel, store, meId, canManage, pickerFor, setPickerFo
             {m.forwardedFrom && <div className="text-[10px] text-muted italic mb-1 flex items-center gap-1"><Forward size={10} /> Transféré de {m.forwardedFrom}</div>}
             {m.replyTo && <div className="text-xs border-l-2 border-brand/50 pl-2 mb-1 text-muted"><b>{m.replyTo.authorName}</b><div className="truncate max-w-[220px]">{m.replyTo.text}</div></div>}
             {m.image && <img src={m.image} alt="" className="rounded-lg max-h-64 mb-1.5" />}
-            {m.file && <a href={m.file.dataUrl} download={m.file.name} className="flex items-center gap-2 bg-app rounded-lg px-2.5 py-1.5 mb-1.5 hover:bg-brand/5 no-underline"><FileText size={16} className="text-brand shrink-0" /><span className="text-xs max-w-[160px] truncate">{m.file.name}</span><span className="text-[10px] text-muted shrink-0">{humanSize(m.file.size || 0)}</span><Download size={13} className="text-muted shrink-0" /></a>}
+            {m.file && <a href={attachmentUrl(m.file)} download={m.file.name} className="flex items-center gap-2 bg-app rounded-lg px-2.5 py-1.5 mb-1.5 hover:bg-brand/5 no-underline"><FileText size={16} className="text-brand shrink-0" /><span className="text-xs max-w-[160px] truncate">{m.file.name}</span><span className="text-[10px] text-muted shrink-0">{humanSize(m.file.size || 0)}</span><Download size={13} className="text-muted shrink-0" /></a>}
             {m.text && <div className="text-sm whitespace-pre-wrap break-words"><MsgText text={m.text} /></div>}
           </div>
           <button className={`absolute top-0 opacity-0 group-hover:opacity-100 transition p-1 text-muted hover:text-brand ${mine ? '-left-6' : '-right-6'}`} onClick={() => setMenuFor(open ? null : m.id)}><MoreVertical size={15} /></button>
