@@ -1396,6 +1396,21 @@ export const rdvNeedsHandoff = (rdv, data) => {
 // Un dossier arrivé au jalon sans enregistrement de passation est « en attente » : c'est
 // bien ce qu'il est, et cela peuple la file dès l'activation du module.
 export const handoffState = (rdv, data) => (rdvNeedsHandoff(rdv, data) ? (rdv?.handoff?.state || 'pending') : null)
+// Qui a le droit de trancher. L'ordre compte, il décrit une chaîne de responsabilité :
+//   1. le manager de l'environnement — sur tous les dossiers, Y COMPRIS LES SIENS. Refuser
+//      qu'il close ses propres affaires bloquerait une équipe où il vend aussi ;
+//   2. faute de manager, le propriétaire de l'environnement : quelqu'un doit pouvoir trancher ;
+//   3. à défaut, les personnes ou les services à qui le staff a délégué ce droit.
+export const envClosers = (env) => ({
+  subIds: [...(env?.closers?.subIds || [])],
+  serviceIds: [...(env?.closers?.serviceIds || [])],
+})
+export function envHasManager(db, envId) {
+  return db.subenvs.filter(s => s.envId === envId).some(s => {
+    const a = db.accounts.find(x => x.id === s.ownerId)
+    return a && (a.role === 'Manager' || a.role === 'Administrateur')
+  })
+}
 export const HANDOFF_STATES = {
   pending: { label: 'En attente', chip: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
   accepted: { label: 'Accepté', chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' },
@@ -2966,7 +2981,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // pipeline, issues, barèmes, règles de prime, services et rôles. Jamais les données
       // du client d'origine : ouvrir un espace ne doit pas y recopier les rendez-vous,
       // contacts ou notes de quelqu'un d'autre.
-      createEnv({ name, logo, templateOf, modules }) {
+      createEnv({ name, logo, templateOf, modules, closerServices }) {
         // L'environnement hérite de l'offre de son créateur (Starter reste limité).
         const plan = account?.plan || 'starter'
         const src = templateOf ? db.environments.find(e => e.id === templateOf) : null
@@ -2978,6 +2993,15 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           departments: src ? [...(src.departments || [])] : ['Marketing', 'Sales'],
           services: src ? (src.services || []).map(sv => ({ ...sv, id: uid() })) : undefined,
           roles: src ? (src.roles || []).map(r => ({ ...r, id: uid() })) : undefined,
+        }
+        // Droit de closer délégué à des services. On le reçoit en NOMS de service : les
+        // identifiants ne sont créés qu'ici, l'appelant ne peut pas les connaître.
+        if (closerServices?.length) {
+          const svcs = env.services || (env.departments || []).map(n => ({ id: uid(), name: n }))
+          env.services = svcs
+          env.closers = { subIds: [], serviceIds: svcs.filter(s => closerServices.includes(s.name)).map(s => s.id) }
+        } else if (src?.closers) {
+          env.closers = { subIds: [], serviceIds: [] } // un modèle ne transmet pas des personnes nommées
         }
         // La configuration de pipeline et de primes vit dans les ESPACES, pas dans
         // l'environnement : on la reprend de l'espace du créateur du modèle.
@@ -3092,9 +3116,30 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         })
         return out.sort((a, b) => (b.rdv.datePassageSQL || b.rdv.datePriseRdv || '').localeCompare(a.rdv.datePassageSQL || a.rdv.datePriseRdv || ''))
       },
+      // Le droit de trancher une passation. Sans argument : « puis-je closer, en général ».
+      // Voir la chaîne de responsabilité commentée près de `envClosers`.
+      canClose() {
+        const env = db.environments.find(e => e.id === session?.envId)
+        if (!env) return false
+        if (isSupportRole(account?.role)) return true
+        if (this.hasClientPerm('team.manage') || isClientManagerRole(account?.role)) return true
+        if (!envHasManager(db, env.id) && env.createdBy === account?.id) return true
+        const c = envClosers(env)
+        if (c.subIds.includes(session?.subEnvId)) return true
+        const mySub = db.subenvs.find(s => s.id === session?.subEnvId)
+        return !!(mySub?.serviceId && c.serviceIds.includes(mySub.serviceId))
+      },
+      envClosers(envId) { return envClosers(db.environments.find(e => e.id === envId)) },
+      setEnvClosers(envId, patch) {
+        setDb(d => {
+          const env = d.environments.find(e => e.id === envId); if (!env) return d
+          env.closers = { ...envClosers(env), ...patch }
+          return d
+        })
+      },
       // Décision du closer : accepter ou refuser, avec un motif quand c'est un refus.
       decideHandoff(subId, rdvId, state, reason = '') {
-        if (readOnly) return
+        if (readOnly || !this.canClose()) return
         const who = session?.subEnvId ? db.subenvs.find(s => s.id === session.subEnvId) : null
         const by = who ? `${who.prenom} ${who.nom}`.trim() : (account?.pseudo || 'Inconnu')
         setDb(d => {

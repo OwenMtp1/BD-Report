@@ -339,6 +339,36 @@ function EnvPicker() {
                 ))}
               </div>
             </div>
+
+            {/* Qui tranchera les passations. Le manager de l'environnement et, à défaut de
+                manager, son propriétaire, l'ont d'office : on ne délègue ici qu'en plus.
+                Les personnes se désignent nommément depuis la fiche du projet, une fois
+                les comptes créés — elles n'existent pas encore à cet instant. */}
+            {form.modules?.handoff !== false && (
+              <div className="rounded-xl border border-line p-3">
+                <div className="font-bold text-sm mb-1">Qui pourra closer les deals</div>
+                <p className="text-[11px] text-muted mb-2">
+                  Le manager de l'environnement peut toujours trancher, y compris sur ses propres
+                  affaires ; s'il n'y a pas de manager, le propriétaire prend le relais. Cochez ici les
+                  services à qui vous accordez ce droit en plus.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Marketing', 'Sales'].map(svc => {
+                    const on = (form.closerServices || []).includes(svc)
+                    return (
+                      <button key={svc} type="button"
+                        className={`chip cursor-pointer ${on ? 'bg-brand text-white' : 'bg-card border border-line text-muted'}`}
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          closerServices: on ? (f.closerServices || []).filter(x => x !== svc) : [...(f.closerServices || []), svc],
+                        }))}>
+                        {svc}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <button className="btn-ghost" onClick={() => setCreating(false)}>Annuler</button>
               <button className="btn-primary" onClick={() => {

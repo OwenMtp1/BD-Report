@@ -112,13 +112,18 @@ export default function Handoff() {
   const [refuseFor, setRefuseFor] = useState(null)
   if (!sub) return null
 
-  // Encadrer donne la vue d'ensemble ; sans ce droit on ne voit que ses propres dossiers et
-  // ceux qui nous sont explicitement attribués.
+  // Encadrer donne la vue d'ensemble. Trancher est un autre droit : le manager close tout,
+  // y compris ses propres dossiers — refuser cela bloquerait une équipe où il vend aussi.
   const supervises = store.hasClientPerm('team.view') || store.hasClientPerm('team.manage')
+  const canClose = store.canClose()
   const all = useMemo(() => store.envHandoffs(), [store.db, store.session?.envId]) // eslint-disable-line
   const mine = all.filter(e => e.subId === mySubId)
-  const todo = all.filter(e => e.subId !== mySubId && (supervises || e.handoff?.to === mySubId))
-  const closers = store.db.subenvs.filter(s => s.envId === store.session?.envId && s.id !== mySubId)
+  // File de traitement : tout ce qui attend un verdict quand on a le droit de le rendre.
+  // Les dossiers qui nous sont nommément attribués passent devant.
+  const todo = canClose
+    ? [...all].sort((a, b) => (b.handoff?.to === mySubId ? 1 : 0) - (a.handoff?.to === mySubId ? 1 : 0))
+    : all.filter(e => e.subId !== mySubId && e.handoff?.to === mySubId)
+  const closers = store.db.subenvs.filter(s => s.envId === store.session?.envId)
 
   const stats = handoffStats(sub.rdvs || [], sub)
   const teamStats = handoffStats(all.map(e => e.rdv), sub)
@@ -167,6 +172,13 @@ export default function Handoff() {
         </div>
       )}
 
+      {!canClose && (
+        <p className="text-[11px] text-muted">
+          Vous ne tranchez pas les passations : ce droit revient au manager de l'environnement, à
+          son propriétaire s'il n'y a pas de manager, ou aux personnes que l'équipe BD Report a désignées.
+        </p>
+      )}
+
       <div className="flex rounded-lg border border-line overflow-hidden w-fit">
         {[['todo', `À traiter (${todo.filter(e => e.state === 'pending').length})`], ['mine', `Mes leads (${mine.length})`]].map(([id, label]) => (
           <button key={id} className={`px-3 py-1.5 text-xs font-semibold ${tab === id ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
@@ -177,12 +189,12 @@ export default function Handoff() {
       <div className="space-y-2">
         {list.length === 0 && (
           <Empty text={tab === 'todo'
-            ? "Aucun dossier ne vous est remis pour l'instant."
+            ? (canClose ? "Aucun dossier n'attend de verdict." : "Aucun dossier ne vous est remis pour l'instant.")
             : "Aucun de vos leads n'a encore atteint l'étape de passation."} />
         )}
         {list.map(e => (
-          <Line key={e.subId + e.rdv.id} e={e} store={store} mine={tab === 'mine'}
-            canDecide={tab === 'todo'} closers={closers} onRefuse={setRefuseFor} />
+          <Line key={e.subId + e.rdv.id} e={e} store={store} mine={tab === 'mine' && e.subId === mySubId}
+            canDecide={canClose} closers={closers} onRefuse={setRefuseFor} />
         ))}
       </div>
 

@@ -122,6 +122,55 @@ function ProjectUsers({ project, store, onClose }) {
           </div>
         )}
 
+        {/* Droit de closer. Le manager (et à défaut le propriétaire) l'a d'office : ce panneau
+            ne sert qu'à l'étendre, jamais à le retirer — une entreprise doit toujours avoir
+            quelqu'un capable de trancher. */}
+        {env && store.envModules(envId).handoff && (
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <div>
+              <div className="text-sm font-bold">Qui peut closer les deals</div>
+              <p className="text-[11px] text-muted">
+                Le manager de l'environnement tranche sur tous les dossiers, y compris les siens.
+                Sans manager, c'est le propriétaire. Vous pouvez étendre ce droit ci-dessous.
+              </p>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-muted mb-1.5">Services</div>
+              <div className="flex flex-wrap gap-1.5">
+                {(env.services || []).map(sv => {
+                  const on = store.envClosers(envId).serviceIds.includes(sv.id)
+                  return (
+                    <button key={sv.id} className={`chip cursor-pointer ${on ? 'bg-brand text-white' : 'bg-card border border-line text-muted'}`}
+                      onClick={() => {
+                        const cur = store.envClosers(envId).serviceIds
+                        store.setEnvClosers(envId, { serviceIds: on ? cur.filter(x => x !== sv.id) : [...cur, sv.id] })
+                        toast(on ? `« ${sv.name} » ne close plus` : `« ${sv.name} » peut closer`)
+                      }}>{sv.name}</button>
+                  )
+                })}
+                {(env.services || []).length === 0 && <span className="text-[11px] text-muted italic">Aucun service défini.</span>}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-muted mb-1.5">Personnes</div>
+              <div className="flex flex-wrap gap-1.5">
+                {store.db.subenvs.filter(s => s.envId === envId).map(s => {
+                  const on = store.envClosers(envId).subIds.includes(s.id)
+                  return (
+                    <button key={s.id} className={`chip cursor-pointer ${on ? 'bg-brand text-white' : 'bg-card border border-line text-muted'}`}
+                      onClick={() => {
+                        const cur = store.envClosers(envId).subIds
+                        store.setEnvClosers(envId, { subIds: on ? cur.filter(x => x !== s.id) : [...cur, s.id] })
+                        toast(on ? 'Droit de closing retiré' : 'Droit de closing accordé')
+                      }}>{s.prenom} {s.nom}</button>
+                  )
+                })}
+                {store.db.subenvs.filter(s => s.envId === envId).length === 0 && <span className="text-[11px] text-muted italic">Aucun espace collaborateur.</span>}
+              </div>
+            </div>
+          </div>
+        )}
+
         {env && store.envModules(envId).committee && (
           <div className="rounded-xl border border-line p-3 space-y-3">
             <div>
