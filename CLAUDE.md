@@ -97,6 +97,17 @@ npm run dev        # serveur de dev
   appliqué en une fois après confirmation. ⚠️ Les `tabs` d'un rôle **restreignent EN PLUS de l'offre** dans
   `canSee` (`store.myEnvRole()`), et `store.hasClientPerm(id)` lit ses `perms` (repli sur `account.role` sans rôle
   attribué) : un sous-espace sans `roleId` n'est pas restreint, et le staff n'est jamais filtré.
+- **`src/pages/Ecosystem.jsx`** — onglet **« Créer votre écosystème »** de `ManagerHub` (brick `Écosystème`) : le
+  manager compose ses **étapes de pipeline** (`data.phases`, ordonnables, renommables), coche celles qui
+  **déclenchent une prime** (`data.primePhases`), fixe le **jour de bascule** du mois de paiement
+  (`data.primeCutoffDay`, ex-« règle du 15 » écrite en dur) et règle son **barème**. ⚠️ `computePrimes(rdvs, bareme,
+  {triggerPhases, cutoffDay})` et `primePaymentMonth(date, cutoff)` lisent ces réglages — **tous les appelants doivent
+  les passer**, sinon le paramétrage reste décoratif. `store.renamePhase` reporte un renommage sur les RDV ET sur
+  `primePhases`, faute de quoi les primes cesseraient d'être calculées sans explication.
+- **Contacts communs** — `store.envContacts()` agrège les contacts de TOUS les espaces de l'environnement
+  (dédoublonnés par e-mail, `owners[]` = qui les a déjà travaillés) ; `store.importEnvContacts()` reprend dans son
+  espace ceux qu'on n'a pas. Le formulaire de RDV (`ContactSearch` dans `Rdv.jsx`) cherche dans cette base : choisir
+  un contact connu remplit nom/poste/e-mail/téléphone et signale s'il est déjà travaillé par un collègue.
 - **`src/pages/ManagerHub.jsx`** — console **« Gestion Manager »** (nav Administration, brick homonyme, perm `manager.view`
   accordée à tout le staff) : réunit ce qu'un manager est seul à voir — Utilisateurs (`Admin` en périmètre d'équipe),
   Organigramme, Pilotage équipe, KPI Entreprise, Intégration HubSpot. Les onglets viennent de `MANAGER_TABS`, filtrés par les

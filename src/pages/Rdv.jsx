@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList } from 'lucide-react'
+import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList, Search } from 'lucide-react'
 import { googleCalUrl, downloadIcs } from '../calendar.js'
 import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
@@ -26,6 +26,52 @@ function emptyForm() {
 }
 
 // ---------------------------------------------------------------- Formulaire RDV
+// Recherche dans la base de contacts de TOUTE l'équipe. Choisir un contact connu remplit
+// la ligne : c'est ce qui évite qu'un même interlocuteur existe en trois exemplaires
+// légèrement différents, et qu'on rappelle quelqu'un déjà travaillé par un collègue.
+function ContactSearch({ onPick }) {
+  const store = useStore()
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const ql = q.trim().toLowerCase()
+  const all = ql.length >= 2 ? (store.envContacts ? store.envContacts() : []) : []
+  const hits = all.filter(c =>
+    (c.nom || '').toLowerCase().includes(ql) ||
+    (c.email || '').toLowerCase().includes(ql) ||
+    (c.entreprise || '').toLowerCase().includes(ql)).slice(0, 6)
+
+  return (
+    <div className="relative mb-2">
+      <div className="flex items-center gap-2 rounded-lg bg-card border border-line px-2">
+        <Search size={14} className="text-muted shrink-0" />
+        <input className="input !py-1.5 border-0 !bg-transparent text-sm"
+          placeholder="Rechercher un contact déjà connu de l'équipe…"
+          value={q} onChange={e => { setQ(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} />
+        {q && <button type="button" className="btn-ghost !p-1 shrink-0" onClick={() => { setQ(''); setOpen(false) }}>×</button>}
+      </div>
+      {open && ql.length >= 2 && (
+        <div className="absolute z-30 left-0 right-0 mt-1 card p-1 shadow-xl max-h-56 overflow-y-auto">
+          {hits.length === 0 && (
+            <p className="text-xs text-muted p-2">Aucun contact connu — remplissez les champs, il sera créé.</p>
+          )}
+          {hits.map((c, i) => (
+            <button key={i} type="button" className="w-full text-left p-2 rounded-lg hover:bg-surface"
+              onClick={() => { onPick(c); setQ(''); setOpen(false); toast('Contact repris de la base') }}>
+              <div className="text-sm font-semibold">{c.nom || c.email}</div>
+              <div className="text-[11px] text-muted truncate">
+                {[c.poste, c.entreprise, c.email].filter(Boolean).join(' · ')}
+              </div>
+              {!c.mine && c.owners?.length > 0 && (
+                <div className="text-[10px] text-amber-600">déjà travaillé par {c.owners.join(', ')}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners }) {
   const [f, setF] = useState(initial)
   const [err, setErr] = useState('')
@@ -118,11 +164,24 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
             </button>
           </div>
           {f.contacts.map((c, i) => (
-            <div key={c.id} className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-2 p-3 rounded-xl bg-surface relative">
+            <div key={c.id} className="mb-2 p-3 rounded-xl bg-surface relative">
+            <ContactSearch onPick={(picked) => {
+              setF(x => ({
+                ...x,
+                // L'entreprise ne s'écrase que si elle est vide : on ne veut pas
+                // qu'un choix de contact réécrive une saisie déjà faite.
+                entreprise: x.entreprise || picked.entreprise || '',
+                contacts: x.contacts.map((cc, j) => j === i
+                  ? { ...cc, nom: picked.nom || '', poste: picked.poste || '', email: picked.email || '', tel: picked.tel || '' }
+                  : cc),
+              }))
+            }} />
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
               {visible('contact') && <input className="input" placeholder="Nom & Prénom" value={c.nom} onChange={e => setContact(i, 'nom', e.target.value)} />}
               {visible('poste') && <input className="input" placeholder="Poste" value={c.poste} onChange={e => setContact(i, 'poste', e.target.value)} />}
               {visible('email') && <input className="input" placeholder="Email" value={c.email} onChange={e => setContact(i, 'email', e.target.value)} />}
               {visible('tel') && <input className="input" placeholder="Téléphone" value={c.tel} onChange={e => setContact(i, 'tel', e.target.value)} />}
+              </div>
               {f.contacts.length > 1 && (
                 <button type="button" className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs"
                   onClick={() => setF(x => ({ ...x, contacts: x.contacts.filter((_, j) => j !== i) }))}>×</button>

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Download, Upload, Trash2, Search, FileSpreadsheet, Plus } from 'lucide-react'
+import { Download, Upload, Trash2, Search, FileSpreadsheet, Plus, Users2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { useStore, uid, todayISO, fmtDate, SOURCES } from '../store.jsx'
 import { safeUrl } from '../security.js'
@@ -154,6 +154,14 @@ export default function Contacts() {
           <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={e => { if (e.target.files[0]) importCSV(e.target.files[0]); e.target.value = '' }} />
           {store.hasClientPerm('data.import') && (
             <button className="btn-ghost text-xs" onClick={() => fileRef.current.click()}><Upload size={14} /> Importer CSV</button>
+          )}
+          {/* Reprise du pipeline de l'équipe : les contacts travaillés par les collègues
+              rejoignent la base commune plutôt que d'être ressaisis. */}
+          {store.hasClientPerm('data.import') && (
+            <button className="btn-ghost text-xs" onClick={() => {
+              const n = store.importEnvContacts()
+              toast(n ? `${n} contact${n > 1 ? 's' : ''} repris du pipeline de l'équipe` : 'Aucun nouveau contact à reprendre')
+            }}><Users2 size={14} /> Importer depuis l'équipe</button>
           )}
           <button className="btn-ghost text-xs" onClick={() => exportCSV(false)}>
             <Download size={14} /> {hasFilters ? `CSV filtré (${contacts.length})` : 'Exporter CSV'}

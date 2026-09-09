@@ -2360,6 +2360,46 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return acc
       },
+      // Base de contacts COMMUNE à l'environnement. Chaque commercial garde la sienne, mais
+      // la recherche porte sur celle de toute l'équipe : sans cela deux personnes recréent
+      // le même interlocuteur, et nul ne voit qu'il a déjà été appelé la semaine passée.
+      envContacts() {
+        const subs = db.subenvs.filter(s => s.envId === session?.envId)
+        const byKey = new Map()
+        subs.forEach(s => {
+          const owner = `${s.prenom || ''} ${s.nom || ''}`.trim()
+          ;(db.data[s.id]?.contacts || []).forEach(c => {
+            const key = (c.email || '').trim().toLowerCase() || (c.nom || '').trim().toLowerCase()
+            if (!key) return
+            const prev = byKey.get(key)
+            if (!prev) byKey.set(key, { ...c, owners: owner ? [owner] : [], mine: s.id === session?.subEnvId })
+            else {
+              if (owner && !prev.owners.includes(owner)) prev.owners.push(owner)
+              prev.mine = prev.mine || s.id === session?.subEnvId
+              // On complète sans écraser : la fiche la plus renseignée gagne.
+              ;['poste', 'email', 'tel', 'entreprise'].forEach(k => { if (!prev[k] && c[k]) prev[k] = c[k] })
+            }
+          })
+        })
+        return [...byKey.values()]
+      },
+      // Reprend dans MON espace les contacts de l'équipe que je n'ai pas encore.
+      importEnvContacts() {
+        const mine = new Set((this.sub?.contacts || []).map(c => (c.email || c.nom || '').trim().toLowerCase()))
+        const add = this.envContacts().filter(c => {
+          const key = (c.email || c.nom || '').trim().toLowerCase()
+          return key && !mine.has(key)
+        })
+        if (!add.length) return 0
+        setSub(d => ({
+          ...d,
+          contacts: [...(d.contacts || []), ...add.map(c => {
+            const { owners, mine: _m, ...rest } = c
+            return { ...rest, id: uid(), importedFrom: (owners || []).join(', ') }
+          })],
+        }))
+        return add.length
+      },
       // Écosystème de l'espace : phases du pipeline, phases qui déclenchent une prime et
       // jour de bascule du mois de paiement. Renommer une phase reporte le nouveau nom sur
       // les rendez-vous qui la portent ET sur les phases déclencheuses, faute de quoi les

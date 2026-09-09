@@ -373,6 +373,8 @@ async function main() {
 
   // 8b. Mes contacts : création manuelle d'un contact
   await click(navBtn('Mes contacts'))
+  // Base de contacts commune : reprise du pipeline de l'équipe.
+  if (!find('button', "Importer depuis l'équipe")) throw new Error('Team contact import missing')
   await click(find('button', 'Nouveau contact'))
   await type(labelOf('Nom & Prénom').parentElement.querySelector('input'), 'Jean Test Manuel')
   await click(find('button', 'Créer le contact'))
