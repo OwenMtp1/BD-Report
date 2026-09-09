@@ -668,6 +668,22 @@ async function main() {
   await click(find('button', 'Enregistrer'))
   if (!text().includes('Avancement')) throw new Error('Project not created / Gantt did not render')
 
+  // Atelier : l'assistant compose un environnement et montre ce que chaque rôle verra.
+  await click(hubTab('Atelier'))
+  if (!text().includes('Atelier d\'environnement')) throw new Error("L'atelier ne s'affiche pas")
+  if (!text().includes('Voir comme')) throw new Error("L'aperçu par rôle manque à l'explorateur")
+  {
+    await click(find('button', 'Nouvel environnement'))
+    for (const k of ['Identité & modèle', 'Modules', 'Rôles & onglets', 'Équipe', 'Récapitulatif']) {
+      if (!text().includes(k)) throw new Error("Étape manquante dans l'assistant : " + k)
+    }
+    if (!text().includes('Configuration par défaut')) throw new Error('La bibliothèque de modèles ne montre rien')
+    // Un rôle doit afficher ce qu'il ouvre AVANT toute création.
+    await click([...container.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('3.')))
+    if (!text().includes('Ce que voit')) throw new Error("L'aperçu du rôle doit être visible dès la composition")
+    await click(find('button', 'Annuler'))
+  }
+
   // Agenda staff : mon agenda ne montre que ce dont je réponds, l'agenda d'équipe montre tout.
   await click(hubTab('Agenda'))
   if (!text().includes('Mon agenda')) throw new Error("L'agenda staff ne s'affiche pas")

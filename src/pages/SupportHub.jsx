@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network, GraduationCap, CalendarDays } from 'lucide-react'
+import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network, GraduationCap, CalendarDays, Hammer } from 'lucide-react'
 import { useStore, slaInfo, ticketHasUnread } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
@@ -17,6 +17,7 @@ import Admin from './Admin.jsx'
 import StaffOrgChart from './StaffOrgChart.jsx'
 import StaffTraining from './StaffTraining.jsx'
 import StaffAgenda from './StaffAgenda.jsx'
+import Workshop from './Workshop.jsx'
 
 const SupportConversations = () => <Conversations scope="support" />
 
@@ -31,6 +32,7 @@ const TABS = [
   { id: 'clients', label: 'Clients', icon: Users2, El: Clients, perm: 'clients.view' },
   { id: 'projects', label: 'Projets', icon: FolderKanban, El: Projects, perm: 'projects.view' },
   { id: 'agenda', label: 'Agenda', icon: CalendarDays, El: StaffAgenda, perm: 'projects.view' },
+  { id: 'workshop', label: 'Atelier', icon: Hammer, El: Workshop, perm: 'clients.manage' },
   // Vue globale des comptes et environnements : c'est du back-office éditeur, sa place est
   // ici et non côté client, où elle exposait les comptes des autres entreprises clientes.
   { id: 'accounts', label: 'Comptes & environnements', icon: Shield, El: () => <Admin mode="admin" />, perm: 'accounts.view' },

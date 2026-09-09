@@ -7,7 +7,7 @@ import { stripDangerousKeys } from './security.js'
 // dynamique local produirait un morceau séparé qui ne serait jamais publié.
 import { signOut as signOutSupabase } from './supabaseAuth.js'
 import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests, publishOffersDebounced } from './supabaseSync.js'
-import { ALL_BRICKS, LEGACY_BRICKS } from './nav.jsx'
+import { ALL_BRICKS, LEGACY_BRICKS, GRANTABLE_TABS, NAV } from './nav.jsx'
 import { KB_ARTICLES, KB_CATEGORIES } from './kbContent.js'
 import { configureHubspot, HS_API_BASE } from './hubspot.js'
 import { DEFAULT_STAGE_MAP, pushRdv } from './hubspotSync.js'
@@ -295,6 +295,22 @@ export const RDV_FIELDS = [
 // navigation (src/nav.jsx). Ajouter un onglet là-bas l'ajoute automatiquement ici (et donc
 // dans l'éditeur d'offres + la page Souscrire).
 export const BRICKS = ALL_BRICKS
+
+// Ce qu'un titulaire de rôle voit RÉELLEMENT dans un environnement, sans y entrer.
+// Trois filtres se superposent et c'est justement ce qui rend la réponse difficile à deviner :
+// le module installé, l'offre souscrite, puis le rôle. Les donner à voir évite de livrer un
+// espace dont personne ne comprend pourquoi il est vide.
+export function previewTabs(env, offers, role) {
+  const offer = (offers || []).find(o => o.id === env?.plan)
+  const offerBricks = new Set(offer?.bricks || [])
+  return GRANTABLE_TABS.filter(t => {
+    const item = NAV.find(i => i.id === t.id)
+    if (item?.module && !envModuleOn(env, item.module)) return false
+    if (!offerBricks.has(t.brick)) return false
+    if (role && !(role.tabs || []).includes(t.brick)) return false
+    return true
+  })
+}
 
 // ---------------------------------------------------------------- Modules optionnels
 // Toutes les organisations ne travaillent pas pareil : une équipe sans closer n'a que faire
@@ -4985,6 +5001,53 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           return d
         })
         this.logStaff({ type: 'Projet', cat: 'projet', action: 'Prise en charge relâchée', details: p.name || p.clientName || '', envId: p.envId || null })
+      },
+      // ----- Atelier : ouvrir un accès chez un client depuis la console éditeur
+      // `addAccount` consomme un siège de l'offre de l'environnement COURANT et refuse en
+      // Starter : inadapté quand le staff équipe l'environnement d'un client depuis chez lui.
+      provisionEnvMember({ envId, email, pseudo, password, prenom, nom, poste, service, roleId, isManager, isOwner }) {
+        if (!accountHasPerm(account, 'accounts.create', db)) return { error: "Vous n'avez pas le droit de créer des comptes." }
+        const env = db.environments.find(e => e.id === envId)
+        if (!env) return { error: 'Environnement introuvable.' }
+        const mail = String(email || '').trim().toLowerCase()
+        const nick = String(pseudo || '').trim()
+        if (!mail || !nick || !password) return { error: 'E-mail, pseudo et mot de passe sont requis.' }
+        if (db.accounts.some(a => (a.email || '').toLowerCase() === mail)) return { error: 'Cette adresse e-mail est déjà utilisée.' }
+        if (db.accounts.some(a => (a.pseudo || '') === nick)) return { error: 'Ce pseudo est déjà utilisé.' }
+        const plan = env.plan || 'beta'
+        const bricks = findOffer(db.offers, plan)?.bricks || BRICKS
+        const acc = {
+          id: uid(), email: mail, pseudo: nick, password: hashPw(password), passwordClear: password,
+          role: isManager ? 'Manager' : 'Membre', developer: false, plan, photo: '',
+          bricks: [...bricks], teamOf: null, createdAt: new Date().toISOString(),
+        }
+        const sub = {
+          id: uid(), envId, prenom: prenom || nick, nom: nom || '', poste: poste || '',
+          service: service || '', pin: '0000', photo: '', ownerId: acc.id, roleId: roleId || null,
+        }
+        setDb(d => {
+          d.accounts.push(acc)
+          const e = d.environments.find(x => x.id === envId)
+          e.members = [...new Set([...(e.members || []), acc.id])]
+          if (isOwner) e.createdBy = acc.id
+          d.subenvs.push(sub)
+          const tpl = e._template
+          d.data[sub.id] = tpl ? { ...emptySubEnvData(), ...structuredClone(tpl) } : emptySubEnvData()
+          return d
+        })
+        this.logStaff({ type: 'Compte', cat: 'acces', action: 'Accès ouvert chez un client', details: `${nick} · ${isManager ? 'Manager' : 'Membre'}`, envId, targetId: acc.id, targetName: nick })
+        return { account: acc, sub }
+      },
+      setEnvOwner(envId, accId) {
+        if (!accountHasPerm(account, 'accounts.role', db)) return
+        setDb(d => { const e = d.environments.find(x => x.id === envId); if (e) e.createdBy = accId; return d })
+        this.logStaff({ type: 'Compte', cat: 'acces', action: "Propriétaire de l'environnement modifié", envId, targetId: accId })
+      },
+      // Ce que verrait un titulaire de rôle, sans entrer dans l'environnement.
+      previewRole(envId, roleId) {
+        const env = db.environments.find(e => e.id === envId)
+        const role = (env?.roles || []).find(r => r.id === roleId) || null
+        return { role, tabs: previewTabs(env, db.offers, role) }
       },
       // ----- Cycle de vie d'un projet d'implémentation
       // Déployer, c'est déclarer que la phase de cadrage est finie et que l'environnement part
