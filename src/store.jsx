@@ -35,7 +35,15 @@ export function fmtMoney(n, currency = CURRENT_CURRENCY) {
 // ---------------------------------------------------------------- Helpers dates
 export const todayISO = () => new Date().toISOString().slice(0, 10)
 export const parseISO = (s) => (s ? new Date(s + 'T00:00:00') : null)
-export const fmtDate = (s) => (s ? new Date(s + 'T00:00:00').toLocaleDateString('fr-FR') : '—')
+// Accepte aussi bien 'AAAA-MM-JJ' qu'un horodatage ISO complet : concaténer 'T00:00:00'
+// à un horodatage donnait une date invalide, affichée telle quelle à l'écran
+// (« Invalid Date » sur la fiche entreprise). Le midi local reste imposé pour que la
+// date affichée soit celle saisie, quel que soit le fuseau du navigateur.
+export const fmtDate = (s) => {
+  if (!s) return '—'
+  const d = new Date(String(s).slice(0, 10) + 'T00:00:00')
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR')
+}
 export const uid = () => Math.random().toString(36).slice(2, 10)
 // Ajout de jours en UTC (stable quel que soit le fuseau du navigateur)
 const addDaysISO = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }

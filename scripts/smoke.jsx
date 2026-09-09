@@ -29,7 +29,14 @@ async function main() {
   const { act } = await import('react')
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
-  const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate } = await import('../src/store.jsx')
+  const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate } = await import('../src/store.jsx')
+
+  // fmtDate reçoit tantôt une date seule, tantôt un horodatage ISO complet (createdAt).
+  // Concaténer l'heure à un horodatage donnait « Invalid Date », affiché tel quel sur la
+  // fiche entreprise — et publié sur une capture du site.
+  if (fmtDate('2026-09-09') !== '09/09/2026') throw new Error('fmtDate broke on a plain date')
+  if (fmtDate('2026-09-09T08:30:00.000Z') !== '09/09/2026') throw new Error('fmtDate must accept a full ISO timestamp')
+  if (fmtDate('') !== '—' || fmtDate('n\'importe quoi') !== '—') throw new Error('fmtDate must never render "Invalid Date"')
 
   // Automatisations de statut vs pipeline personnalisé : une phase renommée dans
   // « Créer votre écosystème » doit suivre, et une phase supprimée ne doit jamais être

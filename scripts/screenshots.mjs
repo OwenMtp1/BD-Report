@@ -144,6 +144,15 @@ const run = async () => {
     }
     await page.screenshot({ path: path.join(OUT, shot.file), scale: 'css' })
     console.log('✓', shot.file)
+    // Une capture qui ouvre un panneau doit le refermer : laissé ouvert, il recouvre la
+    // page et intercepte les clics des prises de vue suivantes (le passage en casquette
+    // manager échouait, et teamlead/orgchart n'étaient plus régénérés).
+    if (shot.clickTitle) {
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(300)
+      const overlay = page.locator('.fixed.inset-0.z-50').first()
+      if (await overlay.count()) { await overlay.locator('button').first().click({ force: true }); await page.waitForTimeout(500) }
+    }
   }
 
   await browser.close()
