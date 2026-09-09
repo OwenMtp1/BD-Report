@@ -1,5 +1,6 @@
-import React, { createContext, useContext } from 'react'
+import React, { createContext, useContext, useEffect } from 'react'
 import { useStore } from './store.jsx'
+import { installUITranslator } from './i18nAuto.js'
 
 // ---------------------------------------------------------------- i18n FR / EN / ES
 export const LANGS = [
@@ -103,6 +104,13 @@ export function I18nProvider({ children }) {
     if (!entry) return fallback ?? key
     return entry[lang] || entry.fr || fallback || key
   }
+  // Traduction de TOUT le reste. Les 54 écrans sont écrits en français en dur : plutôt
+  // que d'y insérer 1 300 appels à `t()` — et d'en oublier à chaque écran ajouté — on
+  // traduit le rendu, avec le texte français pour clé (voir i18nAuto.js).
+  useEffect(() => {
+    installUITranslator(lang)
+    return () => { /* l'observateur vit aussi longtemps que l'application */ }
+  }, [lang])
   return <I18nContext.Provider value={{ lang, t }}>{children}</I18nContext.Provider>
 }
 

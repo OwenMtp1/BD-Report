@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "smoke": "vite build --ssr scripts/smoke.jsx --outDir .smoke --emptyOutDir && node .smoke/smoke.js",
-    "audit": "vite build --ssr scripts/audit.jsx --outDir .audit --emptyOutDir && node .audit/audit.js",
+    "audit": "vite build --ssr scripts/audit.jsx --outDir .audit --emptyOutDir && node .audit/audit.js && node scripts/i18n-coverage.mjs",
+    "i18n:missing": "node scripts/i18n-coverage.mjs --list",
     "shots": "npm run build && node scripts/screenshots.mjs && SHOT_THEME=light node scripts/screenshots.mjs",
     "tauri": "tauri"
   },

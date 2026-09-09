@@ -418,6 +418,23 @@ async function main() {
   // 5. Comité d'achat : le formulaire de RDV qualifie chaque interlocuteur, et alerte quand
   // l'affaire ne tient qu'à une personne.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes Rendez-vous'))
+
+  // Changement de langue : TOUT l'écran suit, pas seulement les libellés de navigation.
+  // C'est le contrat de la fonctionnalité — une page à moitié traduite est pire que rien.
+  {
+    const frText = text()
+    if (!frText.includes('Créer un RDV')) throw new Error('Point de départ français introuvable')
+    await act(async () => { win.__bdrStore.setUiLang('en') })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    const enText = text()
+    if (enText.includes('Créer un RDV')) throw new Error("Le bouton principal n'a pas été traduit en anglais")
+    if (!enText.includes('Create a meeting')) throw new Error('La traduction anglaise ne s\'applique pas au rendu')
+    // Retour au français : les originaux doivent être restitués, pas retraduits.
+    await act(async () => { win.__bdrStore.setUiLang('fr') })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    if (!text().includes('Créer un RDV')) throw new Error('Le retour au français ne restitue pas le texte d\'origine')
+  }
+
   {
     const create = find('button', 'Créer un RDV')
     if (!create) throw new Error('Create RDV button missing')
