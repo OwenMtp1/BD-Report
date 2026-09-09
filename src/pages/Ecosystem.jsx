@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import {
   Workflow, Plus, Trash2, Pencil, Check, X, Coins, CalendarClock, AlertTriangle,
-  ChevronUp, ChevronDown, Save, Activity, CalendarRange, Layers, ArrowRightLeft, Gauge,
+  ChevronUp, ChevronDown, Save, Activity, CalendarRange, Layers, ArrowRightLeft, Gauge, Handshake,
 } from 'lucide-react'
-import { useStore, uid, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, fmtMoney, ACTIVITY_PERIODS, activityRuleTitle, computeActivityPrimes, handoffPhases, DEFAULT_HANDOFF_REASONS, primeRules, QUOTA_METRICS } from '../store.jsx'
+import { useStore, uid, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, fmtMoney, ACTIVITY_PERIODS, activityRuleTitle, computeActivityPrimes, handoffPhases, DEFAULT_HANDOFF_REASONS, primeRules, QUOTA_METRICS, closingPhases, DEFAULT_CLOSING_LOST_REASONS } from '../store.jsx'
 import { Confirm, Field, Empty, toast } from '../ui.jsx'
 
 // « Créer votre écosystème » : le manager compose ici le vocabulaire de son équipe —
@@ -459,6 +459,84 @@ function PrimeRulesCard({ store, sub }) {
   )
 }
 
+// -------------------------------------------------- Pipeline de closing (module `closing`)
+// Un SECOND pipeline, celui du closer. Séparé du premier, et volontairement : fusionner les
+// deux obligerait chaque BDR à faire vivre les étapes d'un métier qui n'est pas le sien.
+function ClosingCard({ store, sub }) {
+  const phases = closingPhases(sub)
+  const reasons = sub.closingLostReasons?.length ? sub.closingLostReasons : DEFAULT_CLOSING_LOST_REASONS
+  const [adding, setAdding] = useState('')
+  const [addingReason, setAddingReason] = useState('')
+  const move = (i, dir) => {
+    const next = [...phases]; const j = i + dir
+    if (j < 0 || j >= next.length) return
+    ;[next[i], next[j]] = [next[j], next[i]]
+    store.setEcosystem({ closingPhases: next })
+  }
+  return (
+    <div className="card p-4 space-y-3">
+      <div>
+        <h3 className="font-bold flex items-center gap-2"><Handshake size={17} className="text-brand" /> Pipeline de closing</h3>
+        <p className="text-xs text-muted mt-0.5">
+          Les étapes du closer, en aval de la passation. L'issue — gagnée ou perdue — reste celle
+          de votre pipeline principal : une affaire signée ici compte partout ailleurs.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        {phases.map((p, i) => (
+          <div key={p} className="flex items-center gap-2 p-2 rounded-xl border border-line">
+            <div className="flex flex-col">
+              <button className="btn-ghost !p-0.5" disabled={i === 0} onClick={() => move(i, -1)}><ChevronUp size={13} /></button>
+              <button className="btn-ghost !p-0.5" disabled={i === phases.length - 1} onClick={() => move(i, 1)}><ChevronDown size={13} /></button>
+            </div>
+            <span className="font-semibold text-sm flex-1">{p}</span>
+            <button className="btn-ghost !p-1 !text-red-500" title="Supprimer l'étape"
+              disabled={phases.length <= 1}
+              onClick={() => { store.setEcosystem({ closingPhases: phases.filter(x => x !== p) }); toast('Étape supprimée') }}>
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input className="input !py-1.5 text-sm" placeholder="Nouvelle étape… (ex. Pilote, Juridique)"
+          value={adding} onChange={e => setAdding(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && adding.trim()) { store.setEcosystem({ closingPhases: [...phases, adding.trim()] }); setAdding('') } }} />
+        <button className="btn-ghost !py-1.5 text-sm shrink-0" disabled={!adding.trim() || phases.includes(adding.trim())}
+          onClick={() => { store.setEcosystem({ closingPhases: [...phases, adding.trim()] }); setAdding('') }}>
+          <Plus size={14} /> Ajouter
+        </button>
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-muted mb-1.5">Motifs de perte au closing</div>
+        <p className="text-[11px] text-muted mb-2">
+          Distincts des motifs de refus d'un lead : ici le lead était bon, l'affaire s'est perdue plus tard.
+        </p>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {reasons.map(r => (
+            <span key={r} className="chip bg-surface text-muted flex items-center gap-1">
+              {r}
+              <button className="text-red-400 hover:text-red-600" title="Retirer"
+                onClick={() => store.setEcosystem({ closingLostReasons: reasons.filter(x => x !== r) })}>×</button>
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input className="input !py-1.5 text-sm" placeholder="Nouveau motif…" value={addingReason}
+            onChange={e => setAddingReason(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && addingReason.trim()) { store.setEcosystem({ closingLostReasons: [...reasons, addingReason.trim()] }); setAddingReason('') } }} />
+          <button className="btn-ghost !py-1.5 text-sm shrink-0" disabled={!addingReason.trim() || reasons.includes(addingReason.trim())}
+            onClick={() => { store.setEcosystem({ closingLostReasons: [...reasons, addingReason.trim()] }); setAddingReason('') }}>
+            <Plus size={14} /> Ajouter
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // -------------------------------------------------- Passation au closer (module `handoff`)
 function HandoffCard({ store, sub }) {
   const phases = sub.phases?.length ? sub.phases : DEFAULT_PHASES
@@ -553,6 +631,7 @@ export default function Ecosystem() {
       </div>
       <Phases store={store} sub={sub} />
       {store.hasModule('handoff') && <HandoffCard store={store} sub={sub} />}
+      {store.hasModule('closing') && <ClosingCard store={store} sub={sub} />}
       <PayRule store={store} sub={sub} />
       <Bareme store={store} sub={sub} />
       <PrimeRulesCard store={store} sub={sub} />

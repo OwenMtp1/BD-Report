@@ -83,6 +83,19 @@ async function main() {
     })
   }
 
+  // 5 ter. Le closing doit être peuplé dans la démo, dans ses trois états.
+  {
+    const d = s.buildDemoDb({})
+    let open = 0, won = 0, lost = 0
+    Object.values(d.data).forEach(data => (data.rdvs || []).forEach(r => {
+      const st = s.closingState(r, data)
+      if (st === 'won') won++; else if (st === 'lost') lost++; else if (st) open++
+    }))
+    ok(open > 0, 'Démo : aucune affaire en cours de closing')
+    ok(won > 0, 'Démo : aucune affaire signée au closing')
+    ok(lost > 0, 'Démo : aucune affaire perdue au closing')
+  }
+
   // 6. Relevé de primes : chaque ligne doit être NOMMÉE, y compris les primes d'activité.
   {
     const d = s.buildDemoDb({})

@@ -23,6 +23,7 @@ import Contacts from './pages/Contacts.jsx'
 import Notes from './pages/Notes.jsx'
 import Primes from './pages/Primes.jsx'
 import Handoff from './pages/Handoff.jsx'
+import Closing from './pages/Closing.jsx'
 import Admin from './pages/Admin.jsx'
 import Kpi from './pages/Kpi.jsx'
 import Icp from './pages/Icp.jsx'
@@ -652,6 +653,7 @@ function MainApp() {
     notes: <Notes onCreateRdvFromNote={goCreateRdvFromNote} />,
     primes: <Primes />,
     handoff: <Handoff />,
+    closing: <Closing />,
     supporthub: <SupportHub />,
     manager: <ManagerHub />,
     conversations: <Conversations scope="team" />,

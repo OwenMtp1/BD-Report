@@ -32,7 +32,8 @@ async function main() {
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
           phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES,
           handoffState, handoffStats, quotaAchieved, buildStatement, monthlyPaidPrimes,
-          dealAnnualValue, pipelineValue, wonValue, valueBySource } = await import('../src/store.jsx')
+          dealAnnualValue, pipelineValue, wonValue, valueBySource,
+          closingState, closingStats, closingPhases } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -253,6 +254,31 @@ async function main() {
     if (valueBySource(naked, data).some(v => v.value !== 0)) throw new Error('Sans montant, aucune provenance ne doit valoir quoi que ce soit')
   }
 
+  // Closing : un pipeline SÉPARÉ de celui de la prospection, et une issue qui se reporte sur
+  // la phase principale — sans ce report, une affaire signée par le closer resterait invisible
+  // dans les entonnoirs et les primes.
+  {
+    const data = { phases: ['R1', 'SQL', 'KO', 'Signée'], primePhases: ['SQL'], wonPhases: ['Signée'], lostPhases: ['KO'] }
+    const attente = { id: 'a', phase: 'SQL', handoff: { state: 'pending' } }
+    if (closingState(attente, data) !== null) throw new Error("Une affaire non acceptée n'entre pas en closing")
+    const accepte = { id: 'b', phase: 'SQL', handoff: { state: 'accepted' } }
+    if (closingState(accepte, data) !== closingPhases(data)[0]) throw new Error('Une affaire acceptée démarre à la première étape de closing')
+    const avancee = { ...accepte, closing: { phase: 'Négociation' } }
+    if (closingState(avancee, data) !== 'Négociation') throw new Error("L'étape de closing doit être indépendante de la phase du pipeline")
+    if (closingState({ ...avancee, phase: 'Signée' }, data) !== 'won') throw new Error("L'issue gagnée prime sur l'étape de closing")
+    if (closingState({ ...avancee, phase: 'KO' }, data) !== 'lost') throw new Error("L'issue perdue prime sur l'étape de closing")
+    const st = closingStats([attente, accepte, { ...avancee, phase: 'Signée' }, { ...avancee, phase: 'KO' }], data)
+    if (st.open !== 1 || st.won !== 1 || st.lost !== 1) throw new Error('Le décompte du closing est faussé : ' + JSON.stringify(st))
+    if (st.rate !== 50) throw new Error("Le taux de closing ignore les affaires encore en cours")
+
+    // Le rôle Closer existe par défaut, avec le droit qui va avec — pas une faveur d'encadrement.
+    const closer = defaultEnvRoles().find(r => r.name === 'Closer')
+    if (!closer) throw new Error('Le rôle Closer manque aux rôles intégrés')
+    if (!(closer.perms || []).includes('deals.close')) throw new Error('Le rôle Closer doit porter le droit de trancher')
+    if (!(closer.tabs || []).includes('Closing')) throw new Error('Le rôle Closer doit ouvrir son pipeline')
+    if ((closer.tabs || []).includes('Primes & Commissions')) throw new Error("Le closer n'a que faire du barème de prospection")
+  }
+
   // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue
   // le lead qui ressemble aux comptes qui signent de celui qui s'en écarte.
   {
@@ -363,7 +389,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Main app / Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Passation au closer', 'Primes & Commissions', 'Simulateur de primes', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Manager', 'Équipe support']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Passation au closer', 'Closing', 'Primes & Commissions', 'Simulateur de primes', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Manager', 'Équipe support']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
@@ -425,6 +451,12 @@ async function main() {
     if (!text().includes('Relance après silence')) throw new Error('Le socle de modèles doit être livré: ' + text().slice(0, 300))
     if (!find('button', 'Personnaliser')) throw new Error('Un modèle doit pouvoir être personnalisé')
     await click([...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Notes'))
+  }
+
+  // 5a ter. Closing : le pipeline aval du closer.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Closing'))
+  for (const k of ['Affaires en cours', 'Taux de closing']) {
+    if (!text().includes(k)) throw new Error('Closing page section missing: ' + k)
   }
 
   // 5a bis. Passation au closer : le lead qualifié attend un verdict, et le verdict se pose.

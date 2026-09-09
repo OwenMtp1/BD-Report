@@ -331,6 +331,8 @@ export const ENV_MODULES = [
     desc: "Un fil de discussion dédié entre chaque membre et son manager, rangé dans un dossier « 1:1 » des Conversations." },
   { id: 'challenges', label: "Challenges d'équipe",
     desc: "Concours à durée limitée annoncés sur le tableau de bord de chaque commercial pendant l'événement." },
+  { id: 'closing', label: 'Closer & pipeline de closing', tab: 'Closing',
+    desc: "Un rôle Closer avec son propre pipeline en aval de la passation : proposition, négociation, signature. Sans ce module, l'affaire s'arrête au lead qualifié." },
   { id: 'dealValue', label: "Montant des affaires",
     desc: "Le montant du contrat sur chaque affaire (ponctuel ou récurrent) : valeur du pipeline, chiffre d'affaires signé, et ce que rapporte réellement chaque provenance." },
   { id: 'statements', label: 'Relevés de primes',
@@ -708,12 +710,19 @@ export const CLIENT_PERMISSION_IDS = CLIENT_PERMISSIONS.map(p => p.id)
 // Onglets ouverts au Membre par défaut : son activité, pas le pilotage de l'équipe.
 const MEMBER_TABS = ['Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches',
   'Mes contacts', 'Mes notes', 'Primes & Commissions', 'Simulateur de primes', 'Conversations',
-  'Qualité des données', 'ICP', 'Classement', 'Corbeille', 'Passation au closer']
+  'Qualité des données', 'ICP', 'Classement', 'Corbeille', 'Passation au closer', 'Closing']
+
+// Onglets d'un closer : son pipeline, la file qu'il tranche, et de quoi préparer un rendez-vous.
+// Volontairement court — un closer n'a que faire du barème de prospection ni du classement BDR.
+const CLOSER_TABS = ['Dashboard', 'Closing', 'Passation au closer', 'Mes Rendez-vous',
+  'Mes contacts', 'Mes notes', 'Mes tâches', 'Conversations', 'ICP']
 
 export function defaultEnvRoles() {
   return [
     { id: 'erole-manager', name: 'Manager', builtin: true, color: 'amber', tabs: [...ALL_BRICKS], perms: [...CLIENT_PERMISSION_IDS] },
     { id: 'erole-membre', name: 'Membre', builtin: true, color: 'emerald', tabs: [...MEMBER_TABS], perms: [] },
+    // Le closer porte `deals.close` : c'est son métier, pas une faveur d'encadrement.
+    { id: CLOSING_ROLE_ID, name: 'Closer', builtin: true, color: 'sky', tabs: [...CLOSER_TABS], perms: ['deals.close'] },
   ]
 }
 // Complète une liste de rôles d'environnement sans écraser ce qui a été personnalisé :
@@ -1002,6 +1011,40 @@ export function quotaAchieved(data, metricId, period = 'mois', now = new Date(),
     }
     default: return 0
   }
+}
+
+// ---------------------------------------------------------------- Closing (module `closing`)
+// BD Report s'arrêtait là où le closer commence : une fois le lead accepté, l'affaire n'avait
+// plus de vie. Le closer disposait d'une file d'attente, pas d'un métier. Le module lui donne
+// un PIPELINE AVAL — proposition, négociation, signature — et un rôle qui ne voit que cela.
+// ⚠️ Un axe SÉPARÉ, pas une extension du pipeline BDR. Fusionner les deux obligerait chaque
+// équipe à faire vivre les étapes de l'autre métier, et fausserait tous les entonnoirs
+// existants. `rdv.closing.phase` est indépendante de `rdv.phase` ; seules l'issue gagnée et
+// l'issue perdue sont reportées sur `rdv.phase`, pour que les écrans déjà en place suivent.
+export const DEFAULT_CLOSING_PHASES = ['Découverte', 'Proposition', 'Négociation']
+export const CLOSING_ROLE_ID = 'erole-closer'
+export const closingPhases = (data) => (data?.closingPhases?.length ? data.closingPhases : DEFAULT_CLOSING_PHASES)
+export const DEFAULT_CLOSING_LOST_REASONS = ['Prix', 'Concurrent retenu', 'Pas de décision', 'Budget annulé', 'Besoin disparu']
+
+// Une affaire entre en closing quand le closer l'a ACCEPTÉE : avant, elle ne lui appartient pas.
+export const inClosing = (rdv) => rdv?.handoff?.state === 'accepted'
+export const closingState = (rdv, data) => {
+  if (!inClosing(rdv)) return null
+  if (isWonPhase(data, rdv.phase)) return 'won'
+  if (isLostPhase(data, rdv.phase) || rdv.opportunite === 'Perdue') return 'lost'
+  return rdv.closing?.phase || closingPhases(data)[0]
+}
+export function closingStats(rdvs, data) {
+  let open = 0, won = 0, lost = 0, openValue = 0, wonValue2 = 0
+  ;(rdvs || []).forEach(r => {
+    const st = closingState(r, data)
+    if (!st) return
+    if (st === 'won') { won++; wonValue2 += dealAnnualValue(r) }
+    else if (st === 'lost') lost++
+    else { open++; openValue += dealAnnualValue(r) }
+  })
+  const decided = won + lost
+  return { open, won, lost, decided, openValue, wonValue: wonValue2, rate: decided ? Math.round((won / decided) * 100) : null }
 }
 
 // ---------------------------------------------------------------- Montant des affaires (module `dealValue`)
@@ -1322,6 +1365,8 @@ function emptySubEnvData() {
     objections: defaultObjections(), // bibliothèque d'objections (onglet de « Mes notes »)
     messageTemplates: defaultMessageTemplates(), // modèles de messages (onglet de « Mes notes »)
     objectionFamilies: [...OBJECTION_FAMILIES],
+    closingPhases: [...DEFAULT_CLOSING_PHASES],           // pipeline aval du closer (module `closing`)
+    closingLostReasons: [...DEFAULT_CLOSING_LOST_REASONS], // pourquoi une affaire se perd APRÈS acceptation
     handoffPhases: [],       // étapes déclenchant une passation ([] = le jalon de l'espace)
     handoffReasons: [...DEFAULT_HANDOFF_REASONS], // motifs de refus proposés au closer
     primeOnAccept: false,    // ne payer la prime qu'une fois le dossier accepté (facultatif)
@@ -1990,6 +2035,34 @@ function seedDemoWorkspace(d, who = '') {
 // Revenue ». Rien d'autre n'est touché — les données restent entièrement inventées.
 // Montants de démonstration. Un mélange de contrats ponctuels et d'abonnements mensuels, et
 // quelques affaires sans montant : le champ est facultatif, l'écran doit le montrer.
+// Affaires en closing : le pipeline aval doit être peuplé, avec des signées et des perdues,
+// sinon l'écran ne montre qu'un kanban vide.
+function seedDemoClosing(d) {
+  const phases = DEFAULT_CLOSING_PHASES
+  const reasons = ['Prix', 'Concurrent retenu', 'Pas de décision']
+  let i = 0
+  ;(d.rdvs || []).forEach(r => {
+    if (r.handoff?.state !== 'accepted') return
+    const n = i++
+    if (isWonPhase(d, r.phase)) { r.closing = { phase: phases[phases.length - 1], wonAt: new Date(Date.now() - n * 86400000).toISOString(), by: 'Chloé Nguyen' }; return }
+    if (isLostPhase(d, r.phase)) { r.closing = { phase: phases[1], lostAt: new Date(Date.now() - n * 86400000).toISOString(), lostReason: reasons[n % reasons.length], by: 'Chloé Nguyen' }; return }
+    r.closing = { phase: phases[n % phases.length], by: 'Chloé Nguyen', at: new Date(Date.now() - n * 86400000).toISOString() }
+  })
+  // Une affaire perdue APRÈS acceptation : le lead était bon, l'affaire s'est jouée au closing.
+  // Ce cas ne peut pas naître tout seul du semis — un KO n'atteint jamais le closer — et c'est
+  // pourtant celui qui distingue un mauvais lead d'une négociation ratée.
+  const open = (d.rdvs || []).find(r => r.handoff?.state === 'accepted' && !isWonPhase(d, r.phase) && !isLostPhase(d, r.phase))
+  if (open) {
+    const lostPhase = lostPhases(d)[0]
+    if (lostPhase) {
+      open.phase = lostPhase
+      open.opportunite = 'Perdue'
+      open.motifKo = 'Concurrent retenu'
+      open.closing = { phase: phases[1], lostAt: new Date(Date.now() - 6 * 86400000).toISOString(), lostReason: 'Concurrent retenu', by: 'Chloé Nguyen' }
+    }
+  }
+}
+
 function seedDemoValues(d) {
   const grid = [12000, 4500, 28000, 900, 36000, 7500, 15000, 2400]
   let i = 0
@@ -2113,6 +2186,7 @@ export function buildDemoDb(brand) {
     seedDemoValues(d)
     seedDemoCommittee(d)
     seedDemoHandoffs(d)
+    seedDemoClosing(d)
     if (extra) extra(d)
     return d
   }
@@ -2867,6 +2941,9 @@ function migrate(db) {
     if (!Array.isArray(data.messageTemplates)) data.messageTemplates = defaultMessageTemplates()
     // Modulateurs de prime : toujours neutres tant qu'un manager ne les active pas.
     data.primeRules = { ...DEFAULT_PRIME_RULES(), ...(data.primeRules || {}) }
+    // Pipeline de closing (module `closing`)
+    if (!Array.isArray(data.closingPhases) || !data.closingPhases.length) data.closingPhases = [...DEFAULT_CLOSING_PHASES]
+    if (!Array.isArray(data.closingLostReasons)) data.closingLostReasons = [...DEFAULT_CLOSING_LOST_REASONS]
     // Passation au closer (module `handoff`)
     if (!Array.isArray(data.handoffPhases)) data.handoffPhases = []
     if (!Array.isArray(data.handoffReasons)) data.handoffReasons = [...DEFAULT_HANDOFF_REASONS]
@@ -2947,7 +3024,15 @@ function migrate(db) {
   Object.values(db.data || {}).forEach(d => { if (d && d.theme && !isKnownTheme(d.theme)) d.theme = 'ocean-pro' })
   ;(db.environments || []).forEach(e => {
     if (!Array.isArray(e.services)) e.services = (e.departments && e.departments.length ? e.departments : ['Sales', 'Marketing']).map(n => ({ id: uid(), name: n }))
-    e.roles = seedEnvRoles(e.roles) // Manager et Membre partout, le reste créé par le staff
+    e.roles = seedEnvRoles(e.roles) // Manager, Membre et Closer partout, le reste créé par le staff
+    // Le rôle Closer n'a de sens qu'avec son pipeline : sans le module, il est retiré — mais
+    // seulement s'il est resté INTACT. Un rôle retouché par le client est un choix, pas un
+    // résidu : on ne supprime pas le travail de quelqu'un parce qu'un module est décoché.
+    if (!envModuleOn(e, 'closing')) {
+      const closer = (e.roles || []).find(r => r.id === CLOSING_ROLE_ID)
+      const pristine = closer && closer.builtin && !db.subenvs.some(s => s.envId === e.id && s.roleId === CLOSING_ROLE_ID)
+      if (pristine) e.roles = e.roles.filter(r => r.id !== CLOSING_ROLE_ID)
+    }
   })
   // Onglets livrés après coup : les rôles d'environnement INTÉGRÉS les reçoivent une seule fois
   // (suivi par brique dans `_autoSeed.envRoleTabs`), sinon un nouveau module resterait invisible
@@ -3693,6 +3778,60 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
               text: state === 'accepted'
                 ? `${r.entreprise || 'Votre lead'} — accepté par ${by}`
                 : `${r.entreprise || 'Votre lead'} — refusé par ${by}${reason ? ' (' + reason + ')' : ''}`,
+            }, ...(data.notifs || [])].slice(0, 100)
+          }
+          return d
+        })
+      },
+      // ----- Pipeline de closing
+      // Toutes les affaires acceptées de l'environnement, quel que soit l'espace d'origine :
+      // un closer travaille les leads des AUTRES, il ne verrait rien dans le sien.
+      envClosingDeals(envId = session?.envId) {
+        const out = []
+        db.subenvs.filter(s => s.envId === envId).forEach(s => {
+          const data = db.data[s.id]; if (!data) return
+          ;(data.rdvs || []).forEach(r => {
+            const state = closingState(r, data)
+            if (!state) return
+            out.push({ subId: s.id, sub: s, rdv: r, state, data })
+          })
+        })
+        return out.sort((a, b) => dealAnnualValue(b.rdv) - dealAnnualValue(a.rdv))
+      },
+      setClosingPhase(subId, rdvId, phase) {
+        if (readOnly || !this.canClose()) return
+        const who = db.subenvs.find(s => s.id === session?.subEnvId)
+        setDb(d => {
+          const r = (d.data[subId]?.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          r.closing = { ...(r.closing || {}), phase, by: who ? `${who.prenom} ${who.nom}`.trim() : (account?.pseudo || ''), at: new Date().toISOString() }
+          return d
+        })
+      },
+      // Gagner ou perdre reporte l'issue sur `rdv.phase` : les entonnoirs, les primes et les
+      // tableaux de bord déjà en place lisent cette phase-là. Sans ce report, une affaire
+      // signée par le closer resterait invisible partout ailleurs.
+      settleClosing(subId, rdvId, outcome, reason = '') {
+        if (readOnly || !this.canClose()) return
+        const who = db.subenvs.find(s => s.id === session?.subEnvId)
+        const by = who ? `${who.prenom} ${who.nom}`.trim() : (account?.pseudo || '')
+        setDb(d => {
+          const data = d.data[subId]; if (!data) return d
+          const r = (data.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          const ts = new Date().toISOString()
+          const target = outcome === 'won' ? wonPhases(data)[0] : lostPhases(data)[0]
+          if (target) {
+            r.phase = target
+            r.history = [...(r.history || []), { type: 'phase', value: target, date: todayISO() }]
+          }
+          if (outcome === 'won') { r.opportunite = 'Signée'; r.closing = { ...(r.closing || {}), wonAt: ts, by } }
+          else { r.opportunite = 'Perdue'; r.motifKo = reason || r.motifKo || ''; r.closing = { ...(r.closing || {}), lostAt: ts, lostReason: reason, by } }
+          ensurePrimeSnapshot(data, r)
+          // Le commercial qui a transmis l'affaire doit apprendre son sort : c'est SA prime.
+          if (subId !== session?.subEnvId) {
+            data.notifs = [{
+              id: uid(), ts, read: false, type: 'closing', page: 'leads',
+              title: outcome === 'won' ? 'Affaire signée' : 'Affaire perdue',
+              text: `${r.entreprise || 'Votre lead'} — ${outcome === 'won' ? 'signée' : 'perdue'} par ${by}${reason ? ' (' + reason + ')' : ''}`,
             }, ...(data.notifs || [])].slice(0, 100)
           }
           return d

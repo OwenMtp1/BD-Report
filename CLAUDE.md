@@ -131,8 +131,8 @@ npm run dev        # serveur de dev
   briques de l'offre. La **vue globale** (tous les comptes, tous les environnements) a quitté le client pour l'onglet
   « Comptes & environnements » de `SupportHub` (perm `accounts.view`) : côté client elle exposait les comptes des autres
   entreprises clientes (`Admin.jsx`, mode `admin`, ne filtrait sur aucun environnement).
-- **Modules optionnels par environnement** — `ENV_MODULES` (store.jsx) : `handoff`, `committee`, `quotas`,
-  `oneToOne`, `challenges`, `statements`. Le staff coche ce qu'il installe **à la création** de
+- **Modules optionnels par environnement** — `ENV_MODULES` (store.jsx) : `handoff`, `closing`, `dealValue`,
+  `committee`, `quotas`, `oneToOne`, `challenges`, `statements`. Le staff coche ce qu'il installe **à la création** de
   l'environnement (App.jsx) et peut y revenir depuis la fiche du projet (`ProjectUsers`).
   ⚠️ **Un module absent du réglage est ACTIF** (`envModuleOn`) : un environnement créé avant ces
   modules ne doit rien perdre. `store.hasModule(id)` répond pour l'env courant (toujours vrai en démo) ;
@@ -144,6 +144,21 @@ npm run dev        # serveur de dev
     **Qui close** : manager de l'env (y compris ses propres dossiers) → à défaut le propriétaire →
     à défaut les services/personnes désignés (`env.closers`), voir `store.canClose()`.
     Option `data.primeOnAccept` : ne payer qu'à l'acceptation (désactivée par défaut).
+  - **Montant de l'affaire** (module `dealValue`) — `rdv.montant` + `rdv.recurrence` ('oneshot'|'mensuel').
+    `dealAnnualValue` ramène tout à une VALEUR ANNUELLE (seule maille comparable entre un contrat
+    ponctuel et un abonnement). `pipelineValue` / `wonValue` / `valueBySource`.
+    ⚠️ **Sûr à retirer** : le champ est facultatif, chaque helper renvoie 0 sans montant, et aucun
+    calcul existant (primes, quotas, entonnoirs) n'en dépend.
+  - **Closing** (`Closing.jsx`, onglet, module `closing`) — pipeline AVAL du closer,
+    `data.closingPhases` + `data.closingLostReasons`, `rdv.closing = {phase, by, at, wonAt, lostAt, lostReason}`.
+    ⚠️ **Axe SÉPARÉ de `rdv.phase`** : fusionner les deux obligerait chaque équipe à faire vivre les
+    étapes de l'autre métier et fausserait les entonnoirs existants. Seules l'issue gagnée et l'issue
+    perdue sont reportées sur `rdv.phase` par `settleClosing()`, sans quoi une affaire signée par le
+    closer resterait invisible dans les primes et les tableaux de bord.
+    Une affaire n'entre en closing qu'une fois `handoff.state === 'accepted'` (`inClosing`).
+    **Rôle `Closer`** (`CLOSING_ROLE_ID`, rôle d'environnement intégré) : onglets courts (`CLOSER_TABS`)
+    et droit `deals.close`. Module retiré → le rôle est supprimé **seulement s'il est resté intact et
+    non attribué** : un rôle retouché par le client est un choix, pas un résidu.
   - **Comité d'achat** (module `committee`) — `contact.role` / `contact.relation`, vocabulaire porté par
     l'ENV (`env.committee`, réglé par le staff). `committeeGaps()` alerte au-delà de la qualification.
     HubSpot : propriétés de contact `bdr_role_achat` / `bdr_relation` (jamais des libellés d'association,
