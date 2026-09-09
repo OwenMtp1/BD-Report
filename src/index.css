@@ -113,10 +113,13 @@ body.animated-bg { animation: bgshift 18s ease infinite; }
   background-attachment: fixed;
 }
 
-/* Cartes en verre très sombre, liseré qui s'allume en vert au survol. */
+/* Cartes en verre très sombre, liseré qui s'allume en vert au survol.
+   Le voile clair est posé SUR la couleur de carte, pas à sa place : sans ce fond
+   opaque, tout ce qui flotte au-dessus de la page — menus déroulants, fenêtres,
+   panneaux latéraux — laissait voir le contenu derrière et devenait illisible. */
 .skin-studio .card {
   border-radius: 20px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .015));
+  background: linear-gradient(160deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .015)), rgb(var(--card));
   border-color: rgba(255, 255, 255, .08);
   box-shadow: 0 20px 44px rgba(0, 0, 0, .55);
   backdrop-filter: blur(7px);
