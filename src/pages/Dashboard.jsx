@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Trophy, Pencil, EyeOff, Eye, MonitorPlay } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase, QUOTA_METRICS, ACTIVITY_PERIODS, quotaAchieved } from '../store.jsx'
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
 
 const DEFAULT_WIDGETS = [
@@ -374,6 +374,46 @@ export default function Dashboard() {
           </div>
         )
       case 'objectifs': {
+        // Un quota posé par le manager fait autorité : on n'affiche pas à côté une cible que
+        // l'intéressé se serait fixée lui-même, sinon deux chiffres différents se disputent
+        // la même case et plus personne ne sait lequel compte.
+        const quotaMetrics = store.hasModule('quotas')
+          ? QUOTA_METRICS.map(m => ({ m, q: store.myQuota(m.id) })).filter(x => x.q)
+          : []
+        if (quotaMetrics.length) {
+          const period = quotaMetrics[0].q.period
+          const periodLabel = ACTIVITY_PERIODS.find(p => p.id === period)?.label.toLowerCase() || 'période'
+          return (
+            <div className="card p-4">
+              <h3 className="font-bold mb-1">Mon quota <span className="text-xs text-muted font-semibold">(posé par votre manager · {periodLabel} en cours)</span></h3>
+              {quotaMetrics.some(x => x.q.ramping) && (
+                <p className="text-[11px] text-amber-600 mb-2">
+                  Montée en charge en cours : {Math.round(quotaMetrics[0].q.factor * 100)} % du quota de l'équipe vous est demandé pour l'instant.
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
+                {quotaMetrics.map(({ m, q }) => {
+                  const cur = quotaAchieved(sub, m.id, q.period)
+                  const pct = q.target ? Math.min(100, Math.round((cur / q.target) * 100)) : 0
+                  const ok = pct >= 100
+                  const show = (v) => (m.id === 'primes' ? fmtMoney(v, sub.currency) : v)
+                  return (
+                    <div key={m.id}>
+                      <div className="flex items-center justify-between text-xs font-semibold mb-1">
+                        <span>{m.label}</span>
+                        <span className={ok ? 'text-emerald-600' : 'text-muted'}>{show(cur)} / {show(q.target)}</span>
+                      </div>
+                      <div className="h-2.5 bg-surface rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${ok ? 'bg-emerald-500' : pct >= 60 ? 'bg-brand' : 'bg-amber-500'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className={`text-[11px] mt-0.5 font-semibold ${ok ? 'text-emerald-600' : 'text-muted'}`}>{ok ? '🎉 Quota atteint !' : `${pct} %`}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        }
         const goals = sub.goals || { rdvSemaine: 10, sqlMois: 5, primesMois: 1000 }
         const setGoal = (k, v) => store.setSub(d => ({ ...d, goals: { ...(d.goals || {}), [k]: Number(v) || 0 } }))
         const rdvSem = rdvs.filter(r => inTimeline(r.datePriseRdv, 'week')).length

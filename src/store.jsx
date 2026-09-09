@@ -886,6 +886,76 @@ function defaultKbArticles() {
 }
 
 // ---------------------------------------------------------------- Seed
+// ---------------------------------------------------------------- Objectifs & quotas (module `quotas`)
+// Jusqu'ici l'objectif était une cible que chacun se fixait sur son tableau de bord : utile
+// pour se situer, sans valeur pour piloter une équipe. Le quota, lui, est posé par le manager,
+// par personne et par période.
+// La montée en charge n'est pas un détail de confort : sans elle, un arrivant est rouge partout
+// pendant son premier trimestre, le classement l'enfonce, et le quota devient un objet de
+// découragement au lieu d'un repère.
+export const QUOTA_METRICS = [
+  { id: 'rdvPris', label: 'RDV pris', hint: 'Rendez-vous décrochés sur la période' },
+  { id: 'rdvTenus', label: 'RDV tenus', hint: 'Rendez-vous réellement réalisés (no-shows exclus)' },
+  { id: 'sql', label: 'Leads qualifiés', hint: 'Passages au jalon commercial' },
+  { id: 'signatures', label: 'Signatures', hint: 'Affaires gagnées' },
+  { id: 'primes', label: 'Primes', hint: 'Montant de primes rattaché à la période' },
+]
+export const QUOTA_METRIC_IDS = QUOTA_METRICS.map(m => m.id)
+export function defaultQuotas() {
+  return {
+    period: 'mois',                                   // période de référence (voir ACTIVITY_PERIODS)
+    metrics: ['rdvPris', 'sql', 'primes'],            // ce que l'on suit — le reste n'est pas affiché
+    ramp: [40, 70, 100],                              // % du quota aux 1er, 2e, 3e mois d'ancienneté
+    defaults: { rdvPris: 40, rdvTenus: 30, sql: 8, signatures: 3, primes: 2000 },
+    byMember: {},                                     // { subId: { targets{}, startDate, period } }
+  }
+}
+export const envQuotas = (env) => ({ ...defaultQuotas(), ...(env?.quotas || {}) })
+// Part du quota attendue d'une personne selon son ancienneté. Une liste de paliers vide (ou
+// aucune date d'arrivée) vaut « plein quota » : on n'invente pas une indulgence non demandée.
+export function rampFactor(quotas, startDate, now = new Date()) {
+  const ramp = (quotas?.ramp || []).filter(v => v !== '' && v != null)
+  if (!ramp.length || !startDate) return 1
+  const d = parseISO(startDate)
+  if (!d || isNaN(d.getTime())) return 1
+  const months = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth())
+  if (months < 0) return Math.min(1, (Number(ramp[0]) || 100) / 100)
+  if (months >= ramp.length) return 1
+  return Math.min(1, (Number(ramp[months]) || 100) / 100)
+}
+// Quota effectif d'une personne sur une métrique : la cible qui lui est propre, à défaut celle
+// de l'équipe, pondérée par sa montée en charge.
+export function memberQuota(env, subId, metricId, now = new Date()) {
+  const q = envQuotas(env)
+  const m = q.byMember?.[subId] || {}
+  const raw = m.targets?.[metricId]
+  const base = Number(raw === '' || raw == null ? (q.defaults?.[metricId] ?? 0) : raw) || 0
+  const factor = rampFactor(q, m.startDate, now)
+  return {
+    base, factor, target: Math.round(base * factor), ramping: factor < 1 && base > 0,
+    period: m.period || q.period, custom: raw !== '' && raw != null, startDate: m.startDate || '',
+  }
+}
+// Réalisé d'une personne sur une métrique, dans la période EN COURS. On réutilise le découpage
+// des primes d'activité (semaine/mois/trimestre/année) plutôt que d'en inventer un second.
+export function quotaAchieved(data, metricId, period = 'mois', now = new Date()) {
+  const here = activityPeriodKey(period, now.toISOString().slice(0, 10))
+  const on = (dateStr) => !!dateStr && activityPeriodKey(period, dateStr) === here
+  const rdvs = data?.rdvs || []
+  switch (metricId) {
+    case 'rdvPris': return rdvs.filter(r => on(r.datePriseRdv)).length
+    case 'rdvTenus': return rdvs.filter(r => on(r.dateRdv) && !String(r.opportunite || '').startsWith('No Show')).length
+    case 'sql': return rdvs.filter(r => on(r.datePassageSQL)).length
+    // Une signature n'a pas de date propre : on retient celle de la qualification, sinon
+    // celle du rendez-vous. Inventer une troisième date serait pire qu'approximer.
+    case 'signatures': return rdvs.filter(r => isWonPhase(data, r.phase) && on(r.datePassageSQL || r.dateRdv)).length
+    case 'primes': return computePrimes(rdvs, data?.bareme || [], primeOpts(data))
+      .filter(p => !p.invalidated && on(p.triggerDate))
+      .reduce((a, p) => a + p.montant, 0)
+    default: return 0
+  }
+}
+
 // ---------------------------------------------------------------- Comité d'achat (module `committee`)
 // En B2B, l'affaire ne se perd presque jamais faute d'arguments : elle se perd parce qu'une
 // seule personne portait le sujet en interne. On qualifie donc chaque interlocuteur — son rôle
@@ -1659,6 +1729,16 @@ export function buildDemoDb(brand) {
   db.environments.push({
     id: 'env-demo', name: String(brand?.company || '').trim() || 'Atlas Revenue', logo: '', pin: '', plan: 'beta', createdBy: 'demo-mgr', subState: 'active',
     departments: ['Sales', 'SDR'], services: [{ id: svcSales, name: 'Sales' }, { id: svcSdr, name: 'SDR' }],
+    // Quotas de démonstration : une équipe au régime commun, et une arrivée récente en
+    // montée en charge — c'est ce cas-là qu'il faut montrer, pas un tableau uniforme.
+    quotas: {
+      period: 'mois', metrics: ['rdvPris', 'sql', 'primes'], ramp: [40, 70, 100],
+      defaults: { rdvPris: 40, rdvTenus: 30, sql: 8, signatures: 3, primes: 2000 },
+      byMember: {
+        'dsub-b1': { targets: { sql: 12, primes: 3000 }, startDate: '' },
+        'dsub-b4': { targets: {}, startDate: new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10) },
+      },
+    },
     members: ['demo-mgr', 'demo-b1', 'demo-b2', 'demo-b3', 'demo-b4'],
     comments: {
       'novacorp industries': [
@@ -2943,6 +3023,33 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       hasModule(id) {
         if (demo) return true
         return envModuleOn(db.environments.find(e => e.id === session?.envId), id)
+      },
+      // ----- Objectifs & quotas (posés par le manager, portés par l'environnement)
+      quotas() { return envQuotas(db.environments.find(e => e.id === session?.envId)) },
+      canSetQuotas() { return this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
+      setQuotas(patch) {
+        if (readOnly || !this.canSetQuotas()) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === session?.envId); if (!env) return d
+          env.quotas = { ...envQuotas(env), ...patch }
+          return d
+        })
+      },
+      setMemberQuota(subId, patch) {
+        if (readOnly || !this.canSetQuotas()) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === session?.envId); if (!env) return d
+          const q = envQuotas(env)
+          env.quotas = { ...q, byMember: { ...q.byMember, [subId]: { ...(q.byMember?.[subId] || {}), ...patch } } }
+          return d
+        })
+      },
+      // Quota effectif de la personne connectée : ce que le tableau de bord affiche en regard
+      // du réalisé. Renvoie null si aucun quota n'est posé — mieux vaut ne rien montrer qu'un zéro.
+      myQuota(metricId) {
+        const env = db.environments.find(e => e.id === session?.envId)
+        const q = memberQuota(env, session?.subEnvId, metricId)
+        return q.target > 0 ? q : null
       },
       // ----- Comité d'achat : vocabulaire de l'environnement (staff)
       committeeRoles() { return committeeRoles(db.environments.find(e => e.id === session?.envId)) },

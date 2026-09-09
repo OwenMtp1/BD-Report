@@ -8,6 +8,7 @@ import Kpi from './Kpi.jsx'
 import TeamLead from './TeamLead.jsx'
 import Hubspot from './Hubspot.jsx'
 import Ecosystem from './Ecosystem.jsx'
+import Quotas from './Quotas.jsx'
 import { Empty } from '../ui.jsx'
 
 // Console « Gestion Manager » : regroupe en un seul écran tout ce qu'un manager est seul
@@ -26,9 +27,10 @@ const RENDERERS = {
   teamlead: () => <TeamLead />,
   hubspot: () => <Hubspot />,
   ecosystem: () => <Ecosystem />,
+  quotas: () => <Quotas />,
 }
 // Ordre d'affichage : la gestion des personnes d'abord, le pilotage ensuite, l'outillage après.
-const ORDER = ['admin', 'teams', 'orgchart', 'ecosystem', 'teamlead', 'kpi', 'hubspot']
+const ORDER = ['admin', 'teams', 'orgchart', 'ecosystem', 'quotas', 'teamlead', 'kpi', 'hubspot']
 
 export default function ManagerHub() {
   const store = useStore()
@@ -42,6 +44,8 @@ export default function ManagerHub() {
   const envRole = store.myEnvRole ? store.myEnvRole() : null
   const visible = MANAGER_TABS
     .filter(t => RENDERERS[t.id])
+    // Module non installé sur cet environnement : l'onglet n'existe pas ici non plus.
+    .filter(t => !t.module || store.hasModule(t.module))
     .filter(t => envRole || !t.roles || t.roles.includes(me?.role) || byPerm)
     .filter(t => !envRole || !t.brick || (envRole.tabs || []).includes(t.brick))
     .filter(t => !t.brick || bricks.includes(t.brick) || byPerm)

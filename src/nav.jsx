@@ -64,6 +64,7 @@ export const NAV_GROUPS = [
       { id: 'teams', label: 'Mon équipe', icon: Users, brick: 'Gérez mes équipes', roles: ['Manager'], inManagerHub: true },
       { id: 'orgchart', label: 'Organigramme', icon: Network, brick: 'Organigramme', roles: MANAGER_ROLES, inManagerHub: true },
       { id: 'ecosystem', label: 'Créer votre écosystème', icon: Workflow, brick: 'Écosystème', roles: MANAGER_ROLES, inManagerHub: true },
+      { id: 'quotas', label: 'Objectifs & quotas', icon: Target, brick: 'Objectifs & quotas', roles: MANAGER_ROLES, inManagerHub: true, module: 'quotas' },
       { id: 'hubspot', label: 'Intégration HubSpot', icon: Link2, brick: 'Intégration HubSpot', roles: MANAGER_ROLES, inManagerHub: true },
     ],
   },

@@ -273,8 +273,13 @@ async function main() {
 
   // 5b bis. Console « Gestion Manager » : tout le réservé manager tient en un seul écran.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Gestion Manager'))
-  for (const t of ['Utilisateurs', 'Organigramme', 'Créer votre écosystème', 'Pilotage équipe', 'KPI Entreprise', 'Intégration HubSpot']) {
+  for (const t of ['Utilisateurs', 'Organigramme', 'Créer votre écosystème', 'Objectifs & quotas', 'Pilotage équipe', 'KPI Entreprise', 'Intégration HubSpot']) {
     if (!find('button', t)) throw new Error('Manager hub tab missing: ' + t)
+  }
+  // Objectifs & quotas : règles communes, montée en charge, cible par personne.
+  await click(find('button', 'Objectifs & quotas'))
+  for (const k of ['Règles communes', 'Montée en charge', 'Quota par défaut', 'Où en est l\'équipe']) {
+    if (!text().includes(k)) throw new Error('Quota section missing: ' + k)
   }
   // Pilotage équipe : la fourchette de primes, telle qu'on la présente en comité.
   await click(find('button', 'Pilotage équipe'))
