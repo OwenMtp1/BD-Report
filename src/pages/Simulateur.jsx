@@ -24,7 +24,7 @@ export default function Simulateur() {
     const now = new Date()
     const curK = monthKey(new Date(now.getFullYear(), now.getMonth(), 1))
     const rdvs = sub.rdvs || []
-    const primes = computePrimes(rdvs, sub.bareme || []).filter(p => !p.invalidated)
+    const primes = computePrimes(rdvs, sub.bareme || [], { triggerPhases: sub.primePhases, cutoffDay: sub.primeCutoffDay }).filter(p => !p.invalidated)
     const acquiseLead = primes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)
     const actPrimes = computeActivityPrimes(rdvs, sub.activityRules || [])
     const acquiseAct = actPrimes.filter(p => p.payMonthKey === curK).reduce((a, p) => a + p.montant, 0)

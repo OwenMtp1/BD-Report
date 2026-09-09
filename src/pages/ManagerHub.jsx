@@ -7,6 +7,7 @@ import OrgChart from './OrgChart.jsx'
 import Kpi from './Kpi.jsx'
 import TeamLead from './TeamLead.jsx'
 import Hubspot from './Hubspot.jsx'
+import Ecosystem from './Ecosystem.jsx'
 import { Empty } from '../ui.jsx'
 
 // Console « Gestion Manager » : regroupe en un seul écran tout ce qu'un manager est seul
@@ -24,9 +25,10 @@ const RENDERERS = {
   kpi: () => <Kpi />,
   teamlead: () => <TeamLead />,
   hubspot: () => <Hubspot />,
+  ecosystem: () => <Ecosystem />,
 }
 // Ordre d'affichage : la gestion des personnes d'abord, le pilotage ensuite, l'outillage après.
-const ORDER = ['admin', 'teams', 'orgchart', 'teamlead', 'kpi', 'hubspot']
+const ORDER = ['admin', 'teams', 'orgchart', 'ecosystem', 'teamlead', 'kpi', 'hubspot']
 
 export default function ManagerHub() {
   const store = useStore()

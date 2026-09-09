@@ -43,7 +43,7 @@ export default function Primes() {
   const sub = store.sub
   // Deux types de barème : par lead (effectif × source) + par activité (volume de RDV × phases).
   const allPrimes = useMemo(() => [
-    ...computePrimes(sub.rdvs, sub.bareme),
+    ...computePrimes(sub.rdvs, sub.bareme, { triggerPhases: sub.primePhases, cutoffDay: sub.primeCutoffDay }),
     ...computeActivityPrimes(sub.rdvs, sub.activityRules),
   ], [sub.rdvs, sub.bareme, sub.activityRules])
   const primes = allPrimes.filter(p => !p.invalidated)   // stats & sommes : primes valides uniquement

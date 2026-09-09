@@ -59,7 +59,7 @@ function widgetData(w, sub) {
     }
     case 'primesMois': {
       const m = {}
-      computePrimes(sub.rdvs, sub.bareme).forEach(p => { m[p.payMonthLabel] = (m[p.payMonthLabel] || 0) + p.montant })
+      computePrimes(sub.rdvs, sub.bareme, { triggerPhases: sub.primePhases, cutoffDay: sub.primeCutoffDay }).forEach(p => { m[p.payMonthLabel] = (m[p.payMonthLabel] || 0) + p.montant })
       return Object.entries(m).map(([name, value]) => ({ name, value }))
     }
     default: return []

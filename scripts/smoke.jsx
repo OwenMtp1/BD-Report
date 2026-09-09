@@ -117,8 +117,13 @@ async function main() {
 
   // 5b bis. Console « Gestion Manager » : tout le réservé manager tient en un seul écran.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Gestion Manager'))
-  for (const t of ['Utilisateurs', 'Organigramme', 'Pilotage équipe', 'KPI Entreprise', 'Intégration HubSpot']) {
+  for (const t of ['Utilisateurs', 'Organigramme', 'Créer votre écosystème', 'Pilotage équipe', 'KPI Entreprise', 'Intégration HubSpot']) {
     if (!find('button', t)) throw new Error('Manager hub tab missing: ' + t)
+  }
+  // Écosystème : étapes du pipeline, règle de rattachement et barème au même endroit.
+  await click(find('button', 'Créer votre écosystème'))
+  for (const k of ['Étapes de votre pipeline', 'Règle de rattachement au mois', 'Barème des primes', 'déclenche une prime']) {
+    if (!text().includes(k)) throw new Error('Ecosystem section missing: ' + k)
   }
   // Les onglets regroupés ne doivent plus encombrer la barre latérale.
   if ([...container.querySelectorAll('nav button')].some(b => b.textContent.trim() === 'Intégration HubSpot')) {

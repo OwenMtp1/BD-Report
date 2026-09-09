@@ -8,7 +8,7 @@
 import {
   LayoutDashboard, Table2, Target, Trophy, Gauge, CalendarDays, KanbanSquare, ListChecks,
   CheckSquare, Coins, MessagesSquare, BookUser, ShieldCheck, StickyNote, ScrollText, Trash2,
-  LifeBuoy, Gift, Shield, Users, Link2, Network,
+  LifeBuoy, Gift, Shield, Users, Link2, Network, Workflow,
 } from 'lucide-react'
 
 const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
@@ -60,6 +60,7 @@ export const NAV_GROUPS = [
       { id: 'admin', label: 'Utilisateurs', icon: Shield, brick: 'Gestion Administration', roles: ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'], inManagerHub: true },
       { id: 'teams', label: 'Mon équipe', icon: Users, brick: 'Gérez mes équipes', roles: ['Manager'], inManagerHub: true },
       { id: 'orgchart', label: 'Organigramme', icon: Network, brick: 'Organigramme', roles: MANAGER_ROLES, inManagerHub: true },
+      { id: 'ecosystem', label: 'Créer votre écosystème', icon: Workflow, brick: 'Écosystème', roles: MANAGER_ROLES, inManagerHub: true },
       { id: 'hubspot', label: 'Intégration HubSpot', icon: Link2, brick: 'Intégration HubSpot', roles: MANAGER_ROLES, inManagerHub: true },
     ],
   },

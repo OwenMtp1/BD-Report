@@ -105,7 +105,7 @@ function runCommand(text, store) {
     return `📊 Vous avez ${sub.rdvs.filter(r => ['MQL', 'SQL', 'Signée'].includes(r.phase)).length} MQL au total.`
   }
   if (t.includes('prime')) {
-    const primes = computePrimes(sub.rdvs, sub.bareme)
+    const primes = computePrimes(sub.rdvs, sub.bareme, { triggerPhases: sub.primePhases, cutoffDay: sub.primeCutoffDay })
     const cur = monthKey(new Date())
     const mois = primes.filter(p => p.payMonthKey === cur).reduce((a, p) => a + p.montant, 0)
     return `💶 Primes : ${mois} € payées ce mois-ci, ${primes.reduce((a, p) => a + p.montant, 0)} € au total.`

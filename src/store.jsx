@@ -213,13 +213,16 @@ export const TIMELINES = [
   { id: 'custom', label: 'Date personnalisée' },
 ]
 
-// Mois de paiement d'une prime : déclenchée par la date de passage en SQL.
-// Payée au 15 max du mois en cours ; après le 15, elle passe au mois suivant.
-export function primePaymentMonth(dateStr) {
+// Mois de paiement d'une prime, déclenchée par la date de passage en phase qualifiante.
+// Le jour de bascule est un RÉGLAGE (`data.primeCutoffDay`, 15 par défaut) : toutes les
+// entreprises n'arrêtent pas leur mois de paie au même jour.
+export const DEFAULT_PRIME_CUTOFF = 15
+export function primePaymentMonth(dateStr, cutoffDay = DEFAULT_PRIME_CUTOFF) {
   const d = parseISO(dateStr)
   if (!d) return null
+  const cut = Math.min(28, Math.max(1, Number(cutoffDay) || DEFAULT_PRIME_CUTOFF))
   const m = new Date(d.getFullYear(), d.getMonth(), 1)
-  if (d.getDate() > 15) m.setMonth(m.getMonth() + 1)
+  if (d.getDate() > cut) m.setMonth(m.getMonth() + 1)
   return m // Date au 1er du mois de paiement
 }
 
@@ -873,6 +876,8 @@ function emptySubEnvData() {
     currency: 'EUR', // devise des primes (EUR ou USD)
     tasks: [], // Mes tâches : { id, title, description, dueDate, assignee, company, contact, rdvId, done, archived, pinned, createdAt }
     taskTrash: [], // corbeille des tâches : restaurables 30 jours
+    primeCutoffDay: DEFAULT_PRIME_CUTOFF, // jour de bascule du mois de paiement
+    primePhases: [...DEFAULT_PRIME_PHASES], // phases qui déclenchent une prime
     icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
   }
 }
@@ -1070,18 +1075,21 @@ export function ensurePrimeSnapshot(data, rdv) {
   }
 }
 
-export function computePrimes(rdvs, bareme) {
-  // Une prime par RDV (racine ou sous-RDV) dont la phase est SQL ou Signée,
+export const DEFAULT_PRIME_PHASES = ['SQL', 'Signée']
+export function computePrimes(rdvs, bareme, opts = {}) {
+  const triggers = opts.triggerPhases?.length ? opts.triggerPhases : DEFAULT_PRIME_PHASES
+  const cutoff = opts.cutoffDay || DEFAULT_PRIME_CUTOFF
+  // Une prime par RDV (racine ou sous-RDV) dont la phase déclenche le calcul,
   // déclenchée à la date de passage en SQL (fallback : date de prise de RDV).
   // Si une prime a été figée au passage en SQL (snapshot), c'est elle qui fait foi.
   const primes = []
   rdvs.forEach(r => {
-    if (!(r.phase === 'SQL' || r.phase === 'Signée')) return
+    if (!triggers.includes(r.phase)) return
     const trigger = r.datePassageSQL || r.datePriseRdv || r.dateRdv || r.createdAt
     const snap = r.primeSnapshot
     const row = snap ? null : baremeMatch(bareme, r.effectif, r.source)
     if (!snap && !row) return
-    const payMonth = primePaymentMonth(trigger)
+    const payMonth = primePaymentMonth(trigger, cutoff)
     primes.push({
       rdvId: r.id, entreprise: r.entreprise, effectif: Number(r.effectif) || 0, source: r.source,
       montant: snap ? snap.montant : (Number(row.montant) || 0),
@@ -2351,6 +2359,20 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (acc.disabled) return { error: 'disabled' }
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return acc
+      },
+      // Écosystème de l'espace : phases du pipeline, phases qui déclenchent une prime et
+      // jour de bascule du mois de paiement. Renommer une phase reporte le nouveau nom sur
+      // les rendez-vous qui la portent ET sur les phases déclencheuses, faute de quoi les
+      // primes cesseraient d'être calculées sans que personne ne comprenne pourquoi.
+      setEcosystem(patch) { setSub(d => ({ ...d, ...patch })) },
+      renamePhase(oldName, newName) {
+        const to = (newName || '').trim(); if (!to || to === oldName) return
+        setSub(d => ({
+          ...d,
+          phases: (d.phases || []).map(p => (p === oldName ? to : p)),
+          primePhases: (d.primePhases || []).map(p => (p === oldName ? to : p)),
+          rdvs: (d.rdvs || []).map(r => (r.phase === oldName ? { ...r, phase: to } : r)),
+        }))
       },
       getSavedCreds() { try { return JSON.parse(localStorage.getItem(CREDS_KEY)) } catch (e) { return null } },
       register({ email, pseudo, password }) {
