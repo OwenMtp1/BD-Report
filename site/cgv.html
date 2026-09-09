@@ -9,50 +9,10 @@
 <link rel="icon" type="image/svg+xml" href="app/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>
-:root{--brand:#3B5BDB;--cyan:#0EA5E9;--ink:#172033;--night:#10162E;--muted:#647085;--line:#E2E6EE;--surface:#F4F6FA;--mint:#10B981}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:#fff;line-height:1.65}
-a{color:inherit;text-decoration:none}
-.wrap{max-width:920px;margin:0 auto;padding:0 24px}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;border:none;transition:.2s}
-.btn-primary{background:linear-gradient(135deg,var(--brand),var(--cyan));color:#fff;box-shadow:0 6px 20px rgba(59,91,219,.35)}
-.btn-primary:hover{transform:translateY(-2px)}
-nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.nav-in{display:flex;align-items:center;gap:24px;height:64px;max-width:1080px;margin:0 auto;padding:0 24px}
-.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.5px}
-.logo b{color:var(--brand)}
-.nav-right{margin-left:auto;display:flex;align-items:center;gap:14px}
-.hero{background:linear-gradient(135deg,var(--night),#1E2A52 60%,#14346B);color:#fff;padding:60px 0}
-.hero .chip{display:inline-block;padding:5px 14px;border-radius:999px;font-size:13px;font-weight:700;background:rgba(94,220,255,.15);color:#5EDCFF}
-.hero h1{font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1.15;margin:14px 0 10px}
-.hero p{color:rgba(255,255,255,.72);font-size:17px;max-width:680px}
-section.sec{padding:24px 0}
-.intro{color:var(--muted);font-size:16px;margin:34px 0 6px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:26px;margin:16px 0}
-.card h2{font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px;margin-bottom:10px;scroll-margin-top:80px}
-.card h3{font-size:16px;font-weight:800;margin:16px 0 6px}
-.card .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:#fff;border:1px solid var(--line);flex:none}
-.card p{color:var(--muted);font-size:15.5px;margin-bottom:8px}
-.card ul,.card ol{color:var(--muted);font-size:15.5px;padding-left:20px;margin:6px 0}
-.card li{margin:4px 0}
-.card strong{color:var(--ink)}
-table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14.5px;background:#fff;border-radius:12px;overflow:hidden}
-th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;color:var(--muted)}
-th{background:#fff;color:var(--ink);font-weight:700}
-.toc{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;margin:16px 0}
-.toc h2{font-size:17px;font-weight:800;margin-bottom:10px}
-.toc ol{columns:2;column-gap:26px;padding-left:20px;font-size:14.5px;color:var(--muted)}
-.toc a:hover{color:var(--brand);text-decoration:underline}
-.note{background:#fff;border:1px dashed var(--brand);border-radius:14px;padding:16px 18px;margin:14px 0;font-size:14.5px;color:var(--muted)}
-.muted{color:var(--muted);font-size:13.5px}
-footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid rgba(255,255,255,.1);padding:28px 0;font-size:13.5px;margin-top:30px}
-.foot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;max-width:1080px;margin:0 auto;padding:0 24px}
-.foot a{color:#7C9BFF;font-weight:700}
-@media(max-width:640px){.hero h1{font-size:28px}.card{padding:20px}.toc ol{columns:1}.nav-right a:not(.btn){display:none}}
-</style>
+<link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
+<div class="bg-layer"></div><div class="bg-grid"></div>
 <nav>
   <div class="nav-in">
     <a class="logo" href="index.html">
@@ -234,7 +194,7 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
     <div class="card">
       <h2 id="a14"><span class="ic">14</span> Données à caractère personnel</h2>
       <p>Dans le cadre du Service, le Client agit en qualité de <strong>responsable de traitement</strong> pour les données qu'il y héberge, et l'Éditeur en qualité de <strong>sous-traitant</strong> au sens du règlement (UE) 2016/679.</p>
-      <p>Les catégories de données, finalités, durées de conservation, sous-traitants ultérieurs et mesures de sécurité sont décrits dans la <a href="confidentialite.html" style="color:var(--brand);font-weight:700">politique de confidentialité</a>, qui fait partie intégrante du Contrat et vaut accord de sous-traitance.</p>
+      <p>Les catégories de données, finalités, durées de conservation, sous-traitants ultérieurs et mesures de sécurité sont décrits dans la <a href="confidentialite.html" style="color:var(--violet2);font-weight:700">politique de confidentialité</a>, qui fait partie intégrante du Contrat et vaut accord de sous-traitance.</p>
       <p>L'Éditeur ne traite les données que sur instruction documentée du Client, veille à la confidentialité des personnes autorisées à les traiter, et assiste le Client dans la réponse aux demandes d'exercice de droits et en cas de violation de données.</p>
     </div>
 

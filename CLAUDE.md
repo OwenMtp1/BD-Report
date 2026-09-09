@@ -141,7 +141,13 @@ npm run dev        # serveur de dev
   Administration, Support Client BD Report).
 - **`src/ui.jsx`** — Modal, Confirm (prop `yesLabel`), Field, Select, CommitInput/CommitTextarea (commit au blur = perf),
   toast/Toasts, confetti, DictateButton, etc.
-- **`site/`** — site vitrine statique (index.html monofichier i18n FR/EN/ES, `securite.html`, `produit/*.html`, `assets/`).
+- **`site/`** — site vitrine statique (index.html monofichier i18n FR/EN/ES, `securite.html`, `cgv.html`,
+  `confidentialite.html`, `produit/*.html`, `blog/*.html`, `assets/`). **`site/assets/site.css`** porte l'identité
+  sombre commune (halos violet/vert, grille fine, cartes en verre, tableaux sobres) : toutes les pages secondaires
+  la partagent, seule `index.html` garde son style propre (animations spécifiques). Une teinte ou un espacement se
+  change donc à un seul endroit. **Captures** : `npm run shots` (`scripts/screenshots.mjs`) les regénère depuis
+  l'app réelle au thème Studio, en passant par la **démo fictive** — jamais par le compte réel, dont le nom
+  d'entreprise et d'utilisateur s'afficherait en haut de chaque écran publié.
   Le formulaire de contact écrit dans Supabase (`contact_requests`) sinon repli `localStorage` (clé `bdrflow_contact_inbox_v1`),
   ingéré par l'app dans « Nouvelles demandes ».
 

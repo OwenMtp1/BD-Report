@@ -1,0 +1,143 @@
+/* ===========================================================================
+   Feuille commune du site BD Report.
+   Reprend l'identité de la page d'accueil — fond sombre, halos violets et verts,
+   grille fine — pour que les pages produit, blog, sécurité et légales cessent de
+   vivre sur un design clair hérité. Une seule feuille : un changement de teinte
+   ou d'espacement vaut désormais pour tout le site.
+   =========================================================================== */
+:root {
+  --bg: #070A0F; --bg2: #0B0F16; --surface: #101620; --surface2: #151C27;
+  --line: rgba(255, 255, 255, .08); --line2: rgba(255, 255, 255, .14);
+  --text: #F8FAFC; --muted: #94A3B8; --muted2: #6B7688;
+  --violet: #7C5CFF; --violet2: #9B84FF; --green: #22D3A6; --amber: #FFB547;
+  --maxw: 1140px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box }
+html { scroll-behavior: smooth }
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.65;
+  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+a { color: inherit; text-decoration: none }
+img { max-width: 100%; display: block }
+::selection { background: rgba(124, 92, 255, .35) }
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px }
+
+/* Fond vivant : halos + grille fine + grain, très discrets. */
+.bg-layer {
+  position: fixed; inset: -10% -10% 0 -10%; z-index: -3; pointer-events: none;
+  background:
+    radial-gradient(620px 520px at 12% -6%, rgba(124, 92, 255, .18), transparent 60%),
+    radial-gradient(760px 620px at 102% 6%, rgba(34, 211, 166, .08), transparent 55%),
+    radial-gradient(900px 760px at 50% 116%, rgba(124, 92, 255, .12), transparent 62%);
+}
+.bg-grid {
+  position: fixed; inset: 0; z-index: -3; pointer-events: none; opacity: .6;
+  background-image: linear-gradient(rgba(255, 255, 255, .028) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255, 255, 255, .028) 1px, transparent 1px);
+  background-size: 62px 62px;
+  -webkit-mask-image: radial-gradient(circle at 50% 22%, #000, transparent 78%);
+  mask-image: radial-gradient(circle at 50% 22%, #000, transparent 78%);
+}
+
+/* Typographie */
+h1, h2, h3, h4 { letter-spacing: -.02em; font-weight: 800; line-height: 1.15 }
+.eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; color: var(--violet2) }
+.grad { background: linear-gradient(90deg, #B9A6FF, #7C5CFF 55%, #22D3A6); -webkit-background-clip: text; background-clip: text; color: transparent }
+
+/* Puces */
+.chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 700; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); color: var(--muted) }
+.chip-v { border-color: rgba(124, 92, 255, .3); background: rgba(124, 92, 255, .08); color: #C4B5FD }
+.chip-g { border-color: rgba(34, 211, 166, .28); background: rgba(34, 211, 166, .08); color: #6EE7C4 }
+.badge { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 700; color: var(--text); background: rgba(255, 255, 255, .03) }
+.badge.green { color: #6EE7C4; border-color: rgba(34, 211, 166, .35) }
+
+/* Boutons */
+.btn { display: inline-flex; align-items: center; gap: 9px; padding: 12px 22px; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer; border: 1px solid transparent; transition: transform .18s cubic-bezier(.2, .7, .2, 1), box-shadow .3s, background .2s, border-color .2s }
+.btn-primary { background: linear-gradient(180deg, var(--violet2), var(--violet)); color: #fff; box-shadow: 0 8px 26px rgba(124, 92, 255, .34), inset 0 1px 0 rgba(255, 255, 255, .22) }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 44px rgba(124, 92, 255, .55) }
+.btn-ghost { background: rgba(255, 255, 255, .03); border-color: var(--line2); color: var(--text) }
+.btn-ghost:hover { background: rgba(255, 255, 255, .08); transform: translateY(-1px) }
+
+/* Barre de navigation */
+nav { position: sticky; top: 0; z-index: 50; background: rgba(8, 11, 17, .72); backdrop-filter: blur(16px) saturate(150%); border-bottom: 1px solid var(--line) }
+.nav-in { display: flex; align-items: center; gap: 26px; height: 66px; max-width: var(--maxw); margin: 0 auto; padding: 0 24px }
+.logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -.5px; color: var(--text) }
+.logo b { color: var(--violet2) }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 14px; font-weight: 600; color: var(--muted) }
+.nav-right a:hover { color: var(--text) }
+.lang-btn, .cur { border: 1px solid var(--line); background: rgba(255, 255, 255, .03); color: var(--muted); border-radius: 999px; padding: 4px 10px; font-size: 13px; font-weight: 700; cursor: pointer }
+
+/* En-tête de page */
+.hero { padding: 64px 0 44px; position: relative }
+.hero h1 { font-size: clamp(30px, 4.4vw, 46px); letter-spacing: -.03em; margin: 14px 0 12px }
+.hero p { color: var(--muted); font-size: 17px; max-width: 680px }
+
+/* Sections et cartes */
+section.sec, .sec { padding: 26px 0 }
+.card {
+  background: linear-gradient(160deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .015));
+  border: 1px solid var(--line); border-radius: 20px; padding: 26px; margin: 16px 0;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .35);
+}
+.card h2 { font-size: 20px; display: flex; align-items: center; gap: 10px; margin-bottom: 10px }
+.card h3 { font-size: 16px; margin: 16px 0 6px }
+.card p, .card li { color: var(--muted); font-size: 15.5px }
+.card p { margin-bottom: 8px }
+.card ul, .card ol { padding-left: 20px; margin: 6px 0 }
+.card li { margin: 4px 0 }
+.card strong { color: var(--text) }
+.card .ic { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; background: rgba(124, 92, 255, .12); border: 1px solid rgba(124, 92, 255, .25); flex: none }
+.intro { color: var(--muted); font-size: 16px; margin: 30px 0 6px }
+.muted { color: var(--muted2); font-size: 13.5px }
+
+/* Captures d'écran du produit */
+.shot { margin: 18px 0; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(0, 0, 0, .5) }
+.shot img { width: 100%; display: block }
+.shot figcaption, .shot .cap { color: var(--muted2); font-size: 13px; padding: 10px 14px; background: rgba(255, 255, 255, .02) }
+
+/* Listes de points et de fonctionnalités */
+.points, .featlist { display: grid; gap: 10px; margin: 14px 0; list-style: none; padding: 0 }
+.point, .featlist li { background: rgba(255, 255, 255, .03); border: 1px solid var(--line); border-radius: 14px; padding: 12px 15px; color: var(--muted); font-size: 15px }
+.point strong, .featlist li strong { color: var(--text) }
+
+/* Onglets de catégorie */
+.cat-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 }
+.cat-tabs a { border: 1px solid var(--line); border-radius: 999px; padding: 7px 15px; font-size: 13.5px; font-weight: 700; color: var(--muted); transition: .2s }
+.cat-tabs a:hover, .cat-tabs a.on { color: var(--text); border-color: rgba(124, 92, 255, .45); background: rgba(124, 92, 255, .1) }
+
+/* Appel à l'action de fin de page */
+.cta, .contact-cta {
+  background: linear-gradient(135deg, rgba(124, 92, 255, .22), rgba(34, 211, 166, .14));
+  border: 1px solid rgba(124, 92, 255, .3); border-radius: 20px; padding: 30px; text-align: center; margin: 28px 0;
+}
+.cta h2, .contact-cta h2 { justify-content: center; color: var(--text) }
+.cta a, .contact-cta a { color: #C4B5FD; font-weight: 800 }
+
+/* Tableaux : lisibles et sobres, pensés pour des chiffres. */
+.tw { overflow-x: auto }
+table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 12px 0; font-size: 14.5px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden }
+th, td { padding: 10px 12px; text-align: left; vertical-align: top; color: var(--muted); border-bottom: 1px solid var(--line) }
+th { background: rgba(255, 255, 255, .04); color: var(--text); font-weight: 800; font-size: 11px; letter-spacing: .06em; text-transform: uppercase }
+tr:last-child td { border-bottom: none }
+tbody tr:hover td { background: rgba(124, 92, 255, .06) }
+
+/* Sommaire et encadrés */
+.toc { background: rgba(255, 255, 255, .03); border: 1px solid var(--line); border-radius: 18px; padding: 22px; margin: 16px 0 }
+.toc h2 { font-size: 17px; margin-bottom: 10px }
+.toc ol { columns: 2; column-gap: 26px; padding-left: 20px; font-size: 14.5px; color: var(--muted) }
+.toc a:hover { color: var(--violet2); text-decoration: underline }
+.note { background: rgba(124, 92, 255, .08); border: 1px dashed rgba(124, 92, 255, .4); border-radius: 14px; padding: 16px 18px; margin: 14px 0; font-size: 14.5px; color: var(--muted) }
+
+/* Pied de page */
+footer { border-top: 1px solid var(--line); background: rgba(8, 11, 17, .6); padding: 28px 0; font-size: 13.5px; color: var(--muted2); margin-top: 40px }
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; max-width: var(--maxw); margin: 0 auto; padding: 0 24px }
+.foot a { color: var(--violet2); font-weight: 700 }
+
+@media (max-width: 640px) {
+  .hero h1 { font-size: 28px }
+  .card { padding: 20px }
+  .toc ol { columns: 1 }
+  .nav-right a:not(.btn) { display: none }
+}
