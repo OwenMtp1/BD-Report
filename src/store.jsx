@@ -1102,7 +1102,9 @@ export function buildStatement(data, env, subId, mKey) {
     .map(p => ({ label: p.entreprise || 'Lead', detail: [p.source, p.effectif ? `${p.effectif} salariés` : ''].filter(Boolean).join(' · '), montant: p.montant, date: p.triggerDate }))
   const perActivity = computeActivityPrimes(data?.rdvs || [], data?.activityRules || [])
     .filter(p => !p.invalidated && p.payMonthKey === mKey)
-    .map(p => ({ label: p.label || 'Prime d\'activité', detail: p.periodLabel || '', montant: p.montant, date: p.triggerDate }))
+    // `ruleLabel` et non `label` : c'est le nom que porte une prime d'activité. Une ligne
+    // intitulée « Prime d'activité » sur un relevé signé n'apprend rien à qui le relit.
+    .map(p => ({ label: p.ruleLabel || "Prime d'activité", detail: p.periodLabel || '', montant: p.montant, date: p.triggerDate }))
   const lines = [...perLead, ...perActivity].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
   const raw = lines.reduce((a, l) => a + l.montant, 0)
   const mod = applyPrimeRules(raw, { data, env, subId, monthKey: mKey })

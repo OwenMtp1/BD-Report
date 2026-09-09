@@ -135,8 +135,8 @@ export default function Primes() {
       {store.hasModule('statements') && <MyStatement />}
 
       {invalidated.length > 0 && (
-        <div className="card p-4 !border-amber-300 bg-amber-50/60">
-          <h3 className="font-bold flex items-center gap-2 text-amber-700"><AlertTriangle size={16} /> Primes invalidées ({invalidated.length})</h3>
+        <div className="card p-4 !border-amber-300 dark:!border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5">
+          <h3 className="font-bold flex items-center gap-2 text-amber-700 dark:text-amber-300"><AlertTriangle size={16} /> Primes invalidées ({invalidated.length})</h3>
           <p className="text-xs text-muted mb-2">Invalidées par un manager — elles ne comptent pas dans vos statistiques.</p>
           <div className="space-y-1">
             {invalidated.map(p => (

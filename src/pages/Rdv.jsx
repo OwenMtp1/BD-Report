@@ -237,14 +237,14 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
       )}
 
       {dupRdvs.length > 0 && (
-        <div className="mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3 text-xs text-amber-800 flex gap-2">
+        <div className="mt-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
           <span><b>Doublon possible :</b> « {f.entreprise} » a déjà {dupRdvs.length} rendez-vous ({dupRdvs.map(r => r.phase).join(', ')}).
             Si c'est une suite, préférez « Créer le rendez-vous suivant » depuis le menu ⋯ du RDV existant.</span>
         </div>
       )}
       {dupEmails.length > 0 && (
-        <div className="mt-2 rounded-xl bg-sky-50 border border-sky-300 p-3 text-xs text-sky-800 flex gap-2">
+        <div className="mt-2 rounded-xl bg-sky-50 dark:bg-sky-500/10 border border-sky-300 dark:border-sky-500/30 p-3 text-xs text-sky-800 dark:text-sky-300 flex gap-2">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
           <span>Contact déjà connu ({dupEmails.join(', ')}) : il ne sera pas dupliqué dans Mes contacts.</span>
         </div>
@@ -259,7 +259,7 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
         </div>
       )}
       {orgOwners.length > 0 && (
-        <div className="mt-2 rounded-xl bg-purple-50 border border-purple-300 p-3 text-xs text-purple-800 flex gap-2">
+        <div className="mt-2 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-300 dark:border-purple-500/30 p-3 text-xs text-purple-800 dark:text-purple-300 flex gap-2">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
           <span><b>Conflit de compte possible :</b> « {f.entreprise} » est déjà travaillée par <b>{orgOwners.join(', ')}</b> dans votre organisation.
             Vérifiez les commentaires d'équipe sur la fiche entreprise avant de prospecter.</span>
@@ -832,8 +832,8 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
             <p className="text-sm text-muted mb-3">Ce rendez-vous passe en SQL. Renseignez la date de passage en SQL — c'est elle qui déclenche la prime.</p>
             <input type="date" className="input" value={sqlAsk.date} onChange={e => setSqlAsk(s => ({ ...s, date: e.target.value }))} />
             {missingEff && (
-              <div className="mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3">
-                <p className="text-xs text-amber-800 font-semibold mb-2">⚠️ Effectif non renseigné : sans lui, aucune prime ne sera calculée pour ce SQL. Ajoutez-le maintenant :</p>
+              <div className="mt-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 p-3">
+                <p className="text-xs text-amber-800 dark:text-amber-300 font-semibold mb-2">⚠️ Effectif non renseigné : sans lui, aucune prime ne sera calculée pour ce SQL. Ajoutez-le maintenant :</p>
                 <input type="number" className="input" placeholder="Nombre de collaborateurs"
                   value={sqlAsk.effectif || ''} onChange={e => setSqlAsk(s => ({ ...s, effectif: e.target.value }))} />
               </div>

@@ -142,8 +142,8 @@ function NotesTab({ onCreateRdvFromNote }) {
                 <div className="flex items-center gap-2">
                   <span className="font-bold">{n.title}</span>
                   <span className="chip bg-surface text-muted">{n.folder}</span>
-                  {n.phase && <span className="chip bg-blue-100 text-blue-700">{n.phase}</span>}
-                  {n.opportunite && <span className="chip bg-amber-100 text-amber-700">{n.opportunite}</span>}
+                  {n.phase && <span className="chip bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">{n.phase}</span>}
+                  {n.opportunite && <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{n.opportunite}</span>}
                   <span className="text-xs text-muted ml-auto">{fmtDate(n.createdAt)}</span>
                 </div>
                 <p className="text-sm text-muted line-clamp-2 mt-1 whitespace-pre-wrap">{n.content}</p>

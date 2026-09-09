@@ -9,6 +9,7 @@ UI **en français**. Repo GitHub : `OwenMtp1/BD-Report` (anciennement `OwenMtp1/
 npm install
 npm run build      # build Vite -> dist/
 npm run smoke      # test de fumée jsdom (rend l'app, traverse les écrans) — DOIT passer avant tout commit
+npm run audit      # audit structurel : démo complète, catalogues de droits, contraste sombre
 npm run dev        # serveur de dev
 ```
 `scripts/smoke.jsx` se connecte en OwenMtp / demo1234 → PeopleSpheres → Owen Mrani Bonnier → PIN 1205, puis traverse les pages. **Mets-le à jour quand tu ajoutes une page/feature.**
@@ -130,6 +131,49 @@ npm run dev        # serveur de dev
   briques de l'offre. La **vue globale** (tous les comptes, tous les environnements) a quitté le client pour l'onglet
   « Comptes & environnements » de `SupportHub` (perm `accounts.view`) : côté client elle exposait les comptes des autres
   entreprises clientes (`Admin.jsx`, mode `admin`, ne filtrait sur aucun environnement).
+- **Modules optionnels par environnement** — `ENV_MODULES` (store.jsx) : `handoff`, `committee`, `quotas`,
+  `oneToOne`, `challenges`, `statements`. Le staff coche ce qu'il installe **à la création** de
+  l'environnement (App.jsx) et peut y revenir depuis la fiche du projet (`ProjectUsers`).
+  ⚠️ **Un module absent du réglage est ACTIF** (`envModuleOn`) : un environnement créé avant ces
+  modules ne doit rien perdre. `store.hasModule(id)` répond pour l'env courant (toujours vrai en démo) ;
+  un item de `nav.jsx` peut porter `module: '<id>'` — `canSee` (App.jsx) et `ManagerHub` le filtrent.
+  Retirer un module masque ses écrans **sans rien effacer**.
+- **Nouvelles briques métier** (toutes livrées cette série) :
+  - **Passation au closer** (`Handoff.jsx`, onglet, module `handoff`) — `rdv.handoff = {state,to,at,decidedAt,decidedBy,reason}`,
+    ouvert par `applyRdvAutomations` au franchissement du jalon. `handoffState/handoffStats/handoffPhases`.
+    **Qui close** : manager de l'env (y compris ses propres dossiers) → à défaut le propriétaire →
+    à défaut les services/personnes désignés (`env.closers`), voir `store.canClose()`.
+    Option `data.primeOnAccept` : ne payer qu'à l'acceptation (désactivée par défaut).
+  - **Comité d'achat** (module `committee`) — `contact.role` / `contact.relation`, vocabulaire porté par
+    l'ENV (`env.committee`, réglé par le staff). `committeeGaps()` alerte au-delà de la qualification.
+    HubSpot : propriétés de contact `bdr_role_achat` / `bdr_relation` (jamais des libellés d'association,
+    absents de certaines offres de portail).
+  - **Objectifs & quotas** (`Quotas.jsx`, onglet ManagerHub, module `quotas`) — `env.quotas`
+    {period, metrics, ramp, defaults, byMember}. `memberQuota/rampFactor/quotaAchieved`. Le quota du
+    manager REMPLACE la cible auto-fixée sur le Dashboard.
+  - **Entretiens 1:1** (module `oneToOne`) — un canal par binôme (`channel.oneToOne`), semé par
+    `seedOneToOneChannels` d'après `account.teamOf`. ⚠️ Aussi privé qu'un DM : `canSeeChannel` le réserve
+    aux deux membres, même pour qui administre les canaux. Compte rendu = message porteur d'un `report`.
+  - **Challenges** (`Challenges.jsx`, dans Classement, module `challenges`) — `env.challenges`,
+    `challengeScore` (mêmes définitions que les quotas). Bandeau en tête du Dashboard, refermable
+    pour la session (sessionStorage) donc rappelé à chaque connexion.
+  - **Modulateurs de prime** — `data.primeRules` (seuil / accélérateur / qualité / plafond),
+    `applyPrimeRules(total, {data, env, subId, monthKey})`. **Désactivés par défaut**, appliqués au TOTAL
+    d'un mois, jamais à une prime isolée ; le détail du calcul s'affiche sur la page Primes.
+  - **Relevés de primes** (`Statements.jsx`, module `statements`) — `env.statements[subId|monthKey]`.
+    ⚠️ **Gelé à la signature** ; retirer la signature efface le document plutôt que d'en changer le contenu.
+  - **Objections** + **Modèles de messages** — catégories de « Mes notes » (`Objections.jsx`,
+    `MessageTemplates.jsx`), `data.objections` / `data.messageTemplates`, semés une seule fois.
+    `fillTemplate` laisse une variable sans valeur VISIBLE entre crochets.
+- **Console éditeur** — **`Workshop.jsx`** (onglet « Atelier », perm `env.build`) : assistant en 5 étapes
+  (identité & modèle, modules, rôles & onglets, équipe, récapitulatif) + explorateur avec « Voir comme… »
+  par rôle/service, sans entrer dans l'environnement (`previewTabs(env, offers, role)` = module ∩ offre ∩ rôle).
+  `store.provisionEnvMember()` ouvre un accès chez un client (`addAccount` consomme un siège de l'env COURANT).
+  **`StaffAgenda.jsx`** (onglet « Agenda ») : phases de projet, « mon agenda » vs « agenda d'équipe ».
+  **Projets** : `takeProject/releaseProject` (+ perm `projects.others`), `deployEnvProject` (Cadrage →
+  Implémentation) et phase **Maintenance** posée automatiquement quand un staff entre chez un client.
+  **Journal** (`SupportLogs.jsx`) : `logStaff()`/`logStaffNav()`, catégories `STAFF_LOG_CATEGORIES`,
+  filtres membre / client impacté / utilisateur impacté / mots-clés / dates / **plage horaire**, export CSV.
 - **`src/pages/*`** — Dashboard, Rdv, Leads (kanban + pipeline entreprise), Tasks, MyTasks, Contacts, Notes, Primes,
   Kpi, TeamLead, Trash, Settings, Admin, OrgChart, Company, **Conversations**, **DataQuality** (Qualité des données :
   score /100 + checks téléphone/email/doublons/prochaine action/inactivité), **Classement** (gamification équipe :
@@ -310,7 +354,10 @@ Le **proxy git de l'environnement de dev bloque la branche `gh-pages`** (seul le
 
 ## Conventions
 - Travailler/commiter sur la branche **`claude/adoring-tesla-t0fwpc`** (le push y est autorisé).
-- Finir chaque lot par `npm run build` + `npm run smoke` (doit être vert).
+- Finir chaque lot par `npm run build` + `npm run smoke` + `npm run audit` (doivent être verts).
+- ⚠️ **Tous les hooks React AVANT le moindre `return` conditionnel** : un espace qui se charge en
+  différé ferait sinon varier l'ordre des hooks d'un rendu à l'autre (bug corrigé sur Handoff,
+  Objections et MessageTemplates).
 - Messages de commit en français, terminer par la ligne de session https://claude.ai/code/session_01TQYeMHDBAhMgz1SYCBwizb
 - Ne pas mettre l'identifiant de modèle dans le code/commits.
 

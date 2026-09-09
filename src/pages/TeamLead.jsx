@@ -153,8 +153,8 @@ export default function TeamLead() {
 
       {/* Alertes de dérive */}
       {alerts.length > 0 && (
-        <div className="card p-4 border-amber-300 bg-amber-50/50">
-          <h3 className="font-bold mb-2 flex items-center gap-2 text-amber-700"><AlertTriangle size={17} /> Points d'attention</h3>
+        <div className="card p-4 border-amber-300 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/5">
+          <h3 className="font-bold mb-2 flex items-center gap-2 text-amber-700 dark:text-amber-300"><AlertTriangle size={17} /> Points d'attention</h3>
           <ul className="space-y-1 text-sm">
             {alerts.map((a, i) => <li key={i}><b>{a.name}</b> — {a.text}</li>)}
           </ul>

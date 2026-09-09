@@ -21,9 +21,7 @@ export default function MessageTemplates() {
   const [confirmDel, setConfirmDel] = useState(null)
   const [useFor, setUseFor] = useState(null)   // modèle en cours de personnalisation
   const [target, setTarget] = useState('')     // rdvId choisi pour remplir les variables
-  if (!sub) return null
-
-  const list = sub.messageTemplates || []
+  const list = sub?.messageTemplates || []
   const families = [...new Set(list.map(t => t.family).filter(Boolean))]
   const me = store.db.subenvs.find(s => s.id === store.session?.subEnvId)
   const myName = me ? `${me.prenom} ${me.nom}`.trim() : (store.account?.pseudo || '')
@@ -36,6 +34,9 @@ export default function MessageTemplates() {
       .filter(t => !ql || [t.name, t.content, t.family].some(v => (v || '').toLowerCase().includes(ql)))
       .sort((a, b) => (b.used || 0) - (a.used || 0) || (a.name || '').localeCompare(b.name || ''))
   }, [list, q])
+
+  // ⚠️ Le retour conditionnel vient APRÈS tous les hooks (voir Objections.jsx).
+  if (!sub) return null
 
   // Contexte de remplissage : un rendez-vous du pipeline, donc un contact réel.
   const rdvs = (sub.rdvs || []).filter(r => r.entreprise).slice(0, 200)

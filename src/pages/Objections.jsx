@@ -34,10 +34,8 @@ export default function Objections() {
   const [fFamily, setFFamily] = useState('')
   const [editing, setEditing] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
-  if (!sub) return null
-
-  const list = sub.objections || []
-  const families = sub.objectionFamilies?.length ? sub.objectionFamilies : OBJECTION_FAMILIES
+  const list = sub?.objections || []
+  const families = sub?.objectionFamilies?.length ? sub.objectionFamilies : OBJECTION_FAMILIES
   // Valider une réponse est un geste d'encadrement : c'est dire « c'est celle-ci qu'on utilise ».
   const canValidate = store.hasClientPerm('team.manage') || store.hasClientPerm('team.view')
 
@@ -54,9 +52,13 @@ export default function Objections() {
   // Motifs de perte les plus fréquents : de quoi savoir quelles objections armer en priorité.
   const lostTop = useMemo(() => {
     const m = {}
-    ;(sub.rdvs || []).forEach(r => { if (r.motifKo) m[r.motifKo] = (m[r.motifKo] || 0) + 1 })
+    ;(sub?.rdvs || []).forEach(r => { if (r.motifKo) m[r.motifKo] = (m[r.motifKo] || 0) + 1 })
     return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 5)
-  }, [sub.rdvs])
+  }, [sub?.rdvs])
+
+  // ⚠️ Le retour conditionnel vient APRÈS tous les hooks : sinon leur ordre change d'un
+  // rendu à l'autre dès que l'espace se charge en différé.
+  if (!sub) return null
 
   const copy = (o) => {
     const txt = [o.response, o.example].filter(Boolean).join('\n\n')

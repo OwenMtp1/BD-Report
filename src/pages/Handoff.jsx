@@ -110,13 +110,15 @@ export default function Handoff() {
   const mySubId = store.session?.subEnvId
   const [tab, setTab] = useState('todo')
   const [refuseFor, setRefuseFor] = useState(null)
+  // ⚠️ Tous les hooks AVANT le moindre retour conditionnel : un espace qui se charge après
+  // coup ferait sinon varier l'ordre des hooks d'un rendu à l'autre, et React casse.
+  const all = useMemo(() => store.envHandoffs(), [store.db, store.session?.envId]) // eslint-disable-line
   if (!sub) return null
 
   // Encadrer donne la vue d'ensemble. Trancher est un autre droit : le manager close tout,
   // y compris ses propres dossiers — refuser cela bloquerait une équipe où il vend aussi.
   const supervises = store.hasClientPerm('team.view') || store.hasClientPerm('team.manage')
   const canClose = store.canClose()
-  const all = useMemo(() => store.envHandoffs(), [store.db, store.session?.envId]) // eslint-disable-line
   const mine = all.filter(e => e.subId === mySubId)
   // File de traitement : tout ce qui attend un verdict quand on a le droit de le rendre.
   // Les dossiers qui nous sont nommément attribués passent devant.
