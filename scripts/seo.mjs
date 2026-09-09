@@ -41,6 +41,47 @@ const priorityOf = (rel) => {
   return '0.3'
 }
 
+// ----- Mode clair -----------------------------------------------------------
+// Le choix est appliqué AVANT le premier rendu : posé après, la page clignoterait
+// en sombre à chaque chargement. Le bouton est injecté ici plutôt que recopié dans
+// dix-neuf pages — c'est de cette recopie que venaient les balises manquantes.
+const THEME_HEAD = `<script>(function(){try{var t=localStorage.getItem('bdr_site_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()<\/script>
+<style>
+.theme-btn{border:1px solid var(--line2);background:rgba(127,127,127,.06);color:var(--text);border-radius:10px;
+  padding:7px 10px;font-size:15px;line-height:1;cursor:pointer;transition:.2s}
+.theme-btn:hover{background:rgba(127,127,127,.14)}
+</style>`
+
+const THEME_BODY = `<script>
+(function(){
+  var host = document.querySelector('.nav-right') || document.querySelector('.nav-links');
+  if (!host) return;
+  var b = document.createElement('button');
+  b.className = 'theme-btn'; b.type = 'button';
+  var root = document.documentElement;
+  function isLight(){
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'light';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+  function paint(){
+    var light = isLight();
+    b.textContent = light ? '\u{1F319}' : '\u2600\uFE0F';
+    b.title = light ? 'Passer en mode sombre' : 'Passer en mode clair';
+    b.setAttribute('aria-label', b.title);
+  }
+  b.onclick = function(){
+    var next = isLight() ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('bdr_site_theme', next); } catch (e) {}
+    paint();
+  };
+  paint();
+  var lang = host.querySelector('#langBtn');
+  if (lang) host.insertBefore(b, lang); else host.appendChild(b);
+})();
+<\/script>`
+
 const files = htmlFiles(OUT).sort()
 const urls = []
 
@@ -128,7 +169,8 @@ for (const file of files) {
 
   const ldTags = ld.map(o => `<script type="application/ld+json">${JSON.stringify(o)}<\/script>`).join('\n')
 
-  html = html.replace(/<\/head>/i, `${tags}${ldTags ? '\n' + ldTags : ''}\n</head>`)
+  html = html.replace(/<\/head>/i, `${tags}${ldTags ? '\n' + ldTags : ''}\n${THEME_HEAD}\n</head>`)
+  html = html.replace(/<\/body>/i, `${THEME_BODY}\n</body>`)
   writeFileSync(file, html)
   urls.push({ loc: canonical, priority: priorityOf(rel) })
 }

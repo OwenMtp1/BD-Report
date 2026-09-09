@@ -184,3 +184,45 @@ footer { border-top: 1px solid var(--line); background: rgba(8, 11, 17, .6); pad
   .hero > *, .card, .toc, .note, .grad, .btn-primary::after { animation: none !important }
   .card:hover { transform: none }
 }
+
+/* ---------------------------------------------------------------------------
+   Mode clair. Le site n'existait qu'en sombre : une partie des lecteurs s'en
+   détourne, et l'impression d'une page produit ou des CGV en devient illisible.
+   Tout passe par les mêmes jetons, donc aucune page n'a été retouchée.
+
+   Trois états, comme partout : le choix explicite marque <html data-theme>, et
+   sans marquage c'est la préférence du système qui tranche.
+   --------------------------------------------------------------------------- */
+:root[data-theme="light"] {
+  --bg: #FAFAFC; --bg2: #FFFFFF; --surface: #FFFFFF; --surface2: #F4F3F8;
+  --line: rgba(20, 18, 27, .10); --line2: rgba(20, 18, 27, .18);
+  --text: #14121B; --muted: #58546A; --muted2: #7C7890;
+  --violet: #5B3FE0; --violet2: #6D4AFF; --green: #0F9D77; --amber: #B4690E;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #FAFAFC; --bg2: #FFFFFF; --surface: #FFFFFF; --surface2: #F4F3F8;
+    --line: rgba(20, 18, 27, .10); --line2: rgba(20, 18, 27, .18);
+    --text: #14121B; --muted: #58546A; --muted2: #7C7890;
+    --violet: #5B3FE0; --violet2: #6D4AFF; --green: #0F9D77; --amber: #B4690E;
+  }
+}
+
+/* Les halos et la grille sont pensés pour du blanc sur du noir : sur fond clair
+   ils sont trop lourds, et le grain rend un aspect sale. On les allège. */
+:root[data-theme="light"] .bg-layer,
+:root[data-theme="light"] .bg-grid { opacity: .5 }
+:root[data-theme="light"] .bg-grain { display: none }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .bg-layer,
+  :root:not([data-theme="dark"]) .bg-grid { opacity: .5 }
+  :root:not([data-theme="dark"]) .bg-grain { display: none }
+}
+
+/* Deux éléments portent une couleur en dur, héritée du fond sombre. */
+:root[data-theme="light"] nav.scrolled,
+:root[data-theme="light"] footer { background: rgba(255, 255, 255, .82) }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) nav.scrolled,
+  :root:not([data-theme="dark"]) footer { background: rgba(255, 255, 255, .82) }
+}
