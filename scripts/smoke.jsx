@@ -194,6 +194,19 @@ async function main() {
     if (!text().includes(label)) throw new Error(`Page ${label} did not render`)
   }
 
+  // Journal d'audit : recherche plein texte + export. C'est ce qu'on demande en revue
+  // de conformité — « qui a touché à quoi, entre telle et telle date ».
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Logs'))
+  if (!find('button', 'Exporter en CSV')) throw new Error('Audit log export button missing')
+  {
+    const search = [...container.querySelectorAll('input')].find(i => (i.getAttribute('placeholder') || '').includes('Rechercher dans les actions'))
+    if (!search) throw new Error('Audit log search missing')
+    const before = text()
+    await type(search, 'zzzaucunechance')
+    if (text() === before) throw new Error('Audit log search did not filter')
+    await type(search, '')
+  }
+
   // 5b. Primes : ajout d'une règle de barème par activité (volume de RDV).
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Primes & Commissions'))
   // Les règles ne se règlent plus ici : la page suit, rapporte et prévoit.
