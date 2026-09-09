@@ -296,6 +296,35 @@ async function main() {
   await click(hubTab('Organigramme staff'))
   if (!text().includes('Services du staff')) throw new Error('Staff org chart did not render')
   if (!text().includes('Permissions staff')) throw new Error('Org chart should point permissions elsewhere')
+  // Recruter : reprendre quelqu'un chez un client, ou créer un profil de toutes pièces.
+  {
+    if (!text().includes("Ajouter quelqu'un à l'équipe")) throw new Error('Recruit panel missing from staff org chart')
+    const pick = async (el, v) => act(async () => { el.value = v; Simulate.change(el) })
+    // a) reprendre un utilisateur d'un environnement client : son rôle bascule côté staff.
+    await click(find('button', 'Depuis un environnement'))
+    const envSel = [...container.querySelectorAll('main select')].find(s => [...s.options].some(o => o.textContent.includes('Test')))
+    if (!envSel) throw new Error('Environment picker missing from staff recruit')
+    await pick(envSel, 'env-test')
+    const who = [...container.querySelectorAll('main select')].find(s => [...s.options].some(o => o.textContent.includes('Sarah')))
+    if (!who) throw new Error('Member picker did not follow the environment')
+    await pick(who, 'test-sarah')
+    await click(find('button', "Intégrer à l'équipe staff"))
+    if (dbNow().accounts.find(a => a.id === 'test-sarah').role !== 'Développeur') throw new Error('Client member not promoted to staff')
+    if (!text().includes('SarahC')) throw new Error('Promoted member absent from the staff org chart')
+    const before = dbNow().accounts.filter(a => a.role === 'Développeur').length
+    // b) créer un profil staff de toutes pièces.
+    await click(find('button', 'Créer un profil'))
+    const byPlaceholder = (p) => [...container.querySelectorAll('main input')].find(i => (i.getAttribute('placeholder') || '').includes(p))
+    await type(byPlaceholder('ex : camille'), 'camille')
+    await type(byPlaceholder('camille@'), 'camille@bdreport.fr')
+    await type(byPlaceholder('Mot de passe provisoire'), 'motdepasse1')
+    await click(find('button', 'Créer le profil'))
+    const made = dbNow().accounts.find(a => a.email === 'camille@bdreport.fr')
+    if (!made) throw new Error('Staff profile not created')
+    if (made.passwordClear !== 'motdepasse1' || !String(made.password).startsWith('sha256:')) throw new Error('Staff password not hashed')
+    if (dbNow().accounts.filter(a => a.role === 'Développeur').length !== before + 1) throw new Error('New staff did not take the chosen role')
+    if (!text().includes('camille')) throw new Error('New staff member absent from the org chart')
+  }
 
   // Tableau de bord support : portefeuille, churn et traitement des tickets.
   await click(hubTab('Tableau de bord'))
@@ -345,15 +374,33 @@ async function main() {
   await click(hubTab('Logs'))
   if (!text().includes('Ticket créé')) throw new Error('Support log for ticket creation missing')
 
-  // 6d. Le support peut bloquer puis débloquer un environnement client.
+  // 6d. Désactiver / réactiver / supprimer l'accès d'un environnement client se fait
+  // désormais dans Projets → Utilisateurs, et NON plus sur la fiche Clients.
   await click(hubTab('Clients'))
   await click(find('button', 'PeopleSpheres'))
-  await click(find('button', 'Bloquer le client'))
-  await click(findExact('Bloquer')) // confirmation
-  if (dbNow().environments.find(e => e.id === 'env-peoplespheres').subState !== 'blocked') throw new Error('Env not blocked')
-  await click(find('button', 'Débloquer'))
-  if (dbNow().environments.find(e => e.id === 'env-peoplespheres').subState !== 'active') throw new Error('Env not unblocked')
+  if (find('button', "Bloquer le client") || find('button', "Supprimer l'environnement")) {
+    throw new Error('Env controls should have left the client card')
+  }
   await click(find('button', 'Fermer'))
+  await click(hubTab('Projets'))
+  {
+    const usersBtn = [...container.querySelectorAll('main .card')]
+      .find(c => c.textContent.includes('PeopleSpheres') && c.querySelector('button[title="Utilisateurs du projet"]'))
+      ?.querySelector('button[title="Utilisateurs du projet"]')
+    if (!usersBtn) throw new Error('PeopleSpheres project users button missing')
+    await click(usersBtn)
+    if (!text().includes("Accès de l'environnement")) throw new Error('Env access panel missing from project users')
+    if (!find('button', "Supprimer l'environnement")) throw new Error("Delete-env button missing from project users")
+    await click(find('button', "Désactiver l'accès"))
+    // La confirmation est imbriquée dans la fenêtre Utilisateurs, qui porte elle aussi des
+    // boutons « Désactiver » (un par membre) : viser le dernier calque, pas le premier libellé.
+    const confirmBtn = () => [...container.querySelectorAll('.fixed.z-50')].pop()?.querySelector('.btn-danger')
+    await click(confirmBtn())
+    if (dbNow().environments.find(e => e.id === 'env-peoplespheres').subState !== 'blocked') throw new Error('Env not blocked')
+    await click(find('button', "Réactiver l'accès"))
+    if (dbNow().environments.find(e => e.id === 'env-peoplespheres').subState !== 'active') throw new Error('Env not unblocked')
+    await click(container.querySelector('.fixed.z-50 button')) // ferme la fenêtre Utilisateurs
+  }
 
   // 7. Créer un RDV via le formulaire : validation des champs obligatoires puis création réelle
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes Rendez-vous'))

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Building2, Users2, MessageSquare, Clock, Trash2, X, Ban, Unlock, ShieldAlert } from 'lucide-react'
+import { Building2, Users2, MessageSquare, Clock, Trash2, X, ShieldAlert } from 'lucide-react'
 import { useStore, CLIENT_STATUSES, fmtDate } from '../store.jsx'
 import { Empty, Confirm, toast, CommitTextarea } from '../ui.jsx'
 
@@ -12,7 +12,6 @@ export default function Clients() {
   const [dragId, setDragId] = useState(null)
   const [detail, setDetail] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
-  const [confirmEnv, setConfirmEnv] = useState(null) // { action:'block'|'delEnv', envId, name }
 
   const ticketsOf = (c) => tickets.filter(t => c.envId ? t.envId === c.envId : t.userAccountId === c.accountId)
   const stats = (c) => {
@@ -146,8 +145,11 @@ export default function Clients() {
                     </div>
                   )}
                 </div>
+                {/* Bloquer un accès ou supprimer un environnement se fait désormais dans
+                    Projets → Utilisateurs : les gestes qui touchent l'accès du client vivent
+                    au même endroit que le reste de son administration, pas éparpillés. */}
                 {env ? (
-                  <div className="rounded-xl border border-line p-3 space-y-2">
+                  <div className="rounded-xl border border-line p-3 space-y-1.5">
                     <div className="flex items-center gap-2">
                       <span className="label !mb-0">Environnement :</span>
                       {env.subState === 'blocked'
@@ -156,13 +158,10 @@ export default function Clients() {
                           ? <span className="chip bg-amber-100 text-amber-700">Résiliation en cours</span>
                           : <span className="chip bg-emerald-100 text-emerald-700">Actif</span>}
                     </div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {env.subState === 'active'
-                        ? <button className="btn-ghost !py-1.5 text-xs" onClick={() => setConfirmEnv({ action: 'block', envId: env.id, name: env.name })}><Ban size={13} /> Bloquer le client</button>
-                        : <button className="btn-ghost !py-1.5 text-xs text-emerald-600" onClick={() => { store.unblockEnv(env.id); toast('Environnement débloqué') }}><Unlock size={13} /> Débloquer</button>}
-                      <button className="btn-danger !py-1.5 text-xs" onClick={() => setConfirmEnv({ action: 'delEnv', envId: env.id, name: env.name })}><Trash2 size={13} /> Supprimer l'environnement</button>
-                    </div>
-                    <p className="text-[11px] text-muted">Bloquer met l'accès du client en lecture seule (ex. impayé). Supprimer l'environnement efface ses données et le classe en « Anciens clients ».</p>
+                    <p className="text-[11px] text-muted">
+                      Bloquer l'accès ou supprimer cet environnement se fait dans l'onglet
+                      <b className="text-ink"> Projets </b>, bouton <b className="text-ink">Utilisateurs</b> du projet du client.
+                    </p>
                   </div>
                 ) : (
                   <p className="text-[11px] text-muted">Aucun environnement lié (client issu d'une demande directe).</p>
@@ -178,19 +177,6 @@ export default function Clients() {
       })()}
 
       {confirmDel && <Confirm yesLabel="Retirer" message="Retirer ce client de la liste ? (ses tickets ne sont pas supprimés)" onYes={() => remove(confirmDel)} onNo={() => setConfirmDel(null)} />}
-      {confirmEnv && (
-        <Confirm
-          yesLabel={confirmEnv.action === 'block' ? 'Bloquer' : 'Supprimer'}
-          message={confirmEnv.action === 'block'
-            ? `Bloquer l'environnement « ${confirmEnv.name} » ? Son accès passera en lecture seule.`
-            : `Supprimer définitivement l'environnement « ${confirmEnv.name} » et toutes ses données ? Le client sera classé en « Anciens clients ».`}
-          onYes={() => {
-            if (confirmEnv.action === 'block') { store.blockEnv(confirmEnv.envId); toast('Client bloqué') }
-            else { store.deleteClientEnv(confirmEnv.envId); toast('Environnement supprimé'); setDetail(null) }
-            setConfirmEnv(null)
-          }}
-          onNo={() => setConfirmEnv(null)} />
-      )}
     </div>
   )
 }

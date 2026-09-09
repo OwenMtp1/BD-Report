@@ -85,7 +85,16 @@ npm run dev        # serveur de dev
   l'état vit le temps de la session, volontairement.
 - **Organigrammes** — **`StaffOrgChart`** (onglet « Organigramme staff » de `SupportHub`, perm `services.manage`) :
   arbre de l'équipe BD Report par `account.teamOf`, glisser-déposer (`store.setStaffManager`, anti-cycle), services
-  staff. **Aucun droit ici** : ils restent dans « Permissions staff », un seul endroit pour donner ou retirer un accès.
+  staff, **rôle staff modifiable sur chaque carte** (liste bornée par `canManageRole`). Le **contenu** d'un rôle
+  (ce qu'il a le droit de faire) reste dans « Permissions staff », un seul endroit pour donner ou retirer un accès.
+  Panneau **« Ajouter quelqu'un à l'équipe »** (composant `Recruit`), deux entrées : *Depuis un environnement*
+  (`store.clientAccountsByEnv()` → `store.joinStaff(accId, role, teamOf)` : le compte garde son espace client, seul
+  son rôle bascule) et *Créer un profil* (`store.createStaffAccount({email, pseudo, password, role, teamOf,
+  staffServiceId})` → renvoie `{account}` ou `{error}`). `createStaffAccount` **ne passe pas par `addAccount`** :
+  celui-ci consomme un siège de l'offre du client courant, ce qui n'a pas de sens pour un collègue de l'éditeur.
+  Gardes : `accounts.create` / `accounts.role` (les boutons hors de portée sont absents, pas inertes),
+  `canManageRole` sur le rôle visé, e-mail et pseudo uniques, mot de passe hashé (+ `passwordClear`).
+  `store.staffRoleKeys()` = rôles attribuables côté staff (tout sauf `CLIENT_ROLE_KEYS`).
   **`OrgChart`** accepte un `envId` : sans lui il montre l'environnement courant (vue client), avec lui celui d'un
   client (vue staff). **`ProjectOrgChart`** n'est plus qu'un habillage — barre de retour + panneau « Rôles et accès »
   — autour de ce même composant : **une seule implémentation de l'arbre**, donc une correction vaut pour les deux.
@@ -192,8 +201,11 @@ npm run dev        # serveur de dev
   + Supabase `app_state.id='offers'` (`publishOffersDebounced`) ; le site (`#plansHost`) régénère ses cartes de prix
   depuis ces offres (repli : cartes statiques trilingues). La **démo** (`buildDemoDb`) est une société fictive « Atlas
   Revenue » fabriquée de toutes pièces (aucun lien avec le compte réel).
-  Staff : Projets → bouton **Utilisateurs** (env) = offre de l'env, rôle manager, désactiver l'accès
-  (`account.disabled`, login refusé), voir/changer mot de passe, effacer les données, retirer un membre.
+  Staff : Projets → bouton **Utilisateurs** (env) = offre de l'env, **accès de l'environnement entier**
+  (désactiver/réactiver via `blockEnv`/`unblockEnv`, supprimer via `deleteClientEnv`) puis, par membre : rôle manager,
+  désactiver l'accès (`account.disabled`, login refusé), voir/changer mot de passe, effacer les données, retirer.
+  Ces deux gestes sur l'environnement **ont quitté la fiche Clients** (qui n'affiche plus que l'état et y renvoie) :
+  toute l'administration d'un client tient au même endroit plutôt qu'à deux.
   Manager (Gestion Administration mode `teams`) : périmètre strict (son équipe, jamais le staff).
 - Catégorie menu **« Support Client BD Report »** réservée à `SUPPORT_ROLES`. Onglet **Support** ouvert à tous.
 - Tickets : priorité, assignation, SLA (1re réponse cible par priorité), CSAT à la clôture. Réponses types + base de connaissances.

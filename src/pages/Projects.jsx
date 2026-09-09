@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, Eye, EyeOff, KeyRound, Eraser, UserMinus, Network } from 'lucide-react'
+import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Network, Unlock, ShieldAlert } from 'lucide-react'
 import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, todayISO } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 import ProjectOrgChart from './ProjectOrgChart.jsx'
@@ -20,7 +20,16 @@ function ProjectUsers({ project, store, onClose }) {
     const { kind, m } = confirm
     if (kind === 'wipe') { store.wipeSpaceData(m.sub.id); toast('Données de l\'espace effacées') }
     if (kind === 'remove') { store.removeEnvMember(envId, m.account.id); toast('Membre retiré de l\'environnement') }
+    if (kind === 'block') { store.blockEnv(envId); toast('Accès du client bloqué') }
+    if (kind === 'delEnv') { store.deleteClientEnv(envId); toast('Environnement supprimé'); onClose() }
     setConfirm(null)
+  }
+  const confirmText = () => {
+    const { kind, m } = confirm
+    if (kind === 'wipe') return `Effacer TOUTES les données de l'espace de ${m.sub?.prenom} ? Action irréversible.`
+    if (kind === 'remove') return `Retirer ${m.account.pseudo} de l'environnement (avec ses espaces et données) ?`
+    if (kind === 'block') return `Bloquer l'environnement « ${env?.name} » ? Son accès passera en lecture seule.`
+    return `Supprimer définitivement l'environnement « ${env?.name} » et toutes ses données ? Le client sera classé en « Anciens clients ».`
   }
 
   return (
@@ -34,6 +43,29 @@ function ProjectUsers({ project, store, onClose }) {
           </select>
           <span className="text-xs text-muted">Applique l'offre au créateur et à tous les membres.</span>
         </div>
+
+        {/* Accès de l'environnement entier : bloquer (lecture seule, ex. impayé) ou supprimer.
+            Ces deux gestes vivaient sur la fiche Clients ; ils sont ici, avec le reste de
+            l'administration du client, plutôt que dans un second endroit à connaître. */}
+        {env && (
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-bold">Accès de l'environnement</span>
+              {env.subState === 'blocked'
+                ? <span className="chip bg-red-100 text-red-700 dark:bg-red-500/15 flex items-center gap-1"><ShieldAlert size={11} /> Bloqué</span>
+                : env.subState === 'cancelling'
+                  ? <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-500/15">Résiliation en cours</span>
+                  : <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15">Actif</span>}
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {env.subState === 'blocked'
+                ? <button className="btn-ghost !py-1.5 text-xs !text-emerald-600" onClick={() => { store.unblockEnv(envId); toast('Environnement débloqué') }}><Unlock size={13} /> Réactiver l'accès</button>
+                : <button className="btn-ghost !py-1.5 text-xs" onClick={() => setConfirm({ kind: 'block' })}><Ban size={13} /> Désactiver l'accès</button>}
+              <button className="btn-ghost !py-1.5 text-xs !text-red-600" onClick={() => setConfirm({ kind: 'delEnv' })}><Trash2 size={13} /> Supprimer l'environnement</button>
+            </div>
+            <p className="text-[11px] text-muted">Désactiver met tout l'environnement en lecture seule (ex. impayé) : le client garde ses données et son accès au support. Supprimer efface ses données et le classe en « Anciens clients ».</p>
+          </div>
+        )}
 
         <div className="space-y-2 max-h-[52vh] overflow-y-auto">
           {members.length === 0 && <Empty text="Aucun utilisateur rattaché à cet environnement." />}
@@ -76,8 +108,8 @@ function ProjectUsers({ project, store, onClose }) {
       </div>
       {confirm && (
         <Confirm
-          message={confirm.kind === 'wipe' ? `Effacer TOUTES les données de l'espace de ${confirm.m.sub?.prenom} ? Action irréversible.` : `Retirer ${confirm.m.account.pseudo} de l'environnement (avec ses espaces et données) ?`}
-          onYes={doConfirm} onNo={() => setConfirm(null)} />
+          yesLabel={confirm.kind === 'block' ? 'Désactiver' : confirm.kind === 'delEnv' ? 'Supprimer' : undefined}
+          message={confirmText()} onYes={doConfirm} onNo={() => setConfirm(null)} />
       )}
     </Modal>
   )

@@ -3228,6 +3228,63 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         }
         setDb(d => { const a = d.accounts.find(x => x.id === accId); if (a) a.role = role; return d })
       },
+      // Rôles attribuables côté staff : tout ce qui n'est pas un rôle client
+      // (Manager et Membre appartiennent aux environnements, pas à l'équipe BD Report).
+      staffRoleKeys() { return this.allRoles().filter(r => !isClientRole(r)) },
+      // Comptes clients regroupés par environnement, pour aller chercher quelqu'un
+      // dans une entreprise cliente et le faire entrer dans l'équipe BD Report.
+      clientAccountsByEnv() {
+        return db.environments.map(env => {
+          const people = this.envMembers(env.id)
+            .filter(m => isClientRole(m.account.role))
+            .map(m => ({
+              account: m.account,
+              name: m.sub ? `${m.sub.prenom} ${m.sub.nom}`.trim() : (m.account.pseudo || m.account.email),
+            }))
+          return { env, people }
+        }).filter(g => g.people.length)
+      },
+      // Fait entrer un compte existant dans l'équipe BD Report. Le compte garde son
+      // accès client (ses espaces ne sont pas touchés) : seul son rôle change, ce qui
+      // le fait apparaître dans l'organigramme et la matrice des droits staff.
+      joinStaff(accId, role = 'Développeur', teamOf = null) {
+        const target = db.accounts.find(a => a.id === accId)
+        if (!target || !isClientRole(target.role)) return null
+        if (isClientRole(role)) return null
+        this.setAccountRole(accId, role)
+        // setAccountRole refuse silencieusement si l'acteur n'a pas la main : le rattachement
+        // ne suit que si le rôle a effectivement basculé, sinon on laisserait un lien orphelin
+        // vers un responsable staff sur un compte resté client.
+        setDb(d => {
+          const a = d.accounts.find(x => x.id === accId)
+          if (a && !isClientRole(a.role) && teamOf) a.teamOf = teamOf
+          return d
+        })
+        return accId
+      },
+      // Crée un compte de l'équipe BD Report de toutes pièces. Ne passe pas par
+      // `addAccount` : celui-ci consomme un siège de l'offre du client courant, ce qui
+      // n'a pas de sens pour un collègue de l'éditeur.
+      createStaffAccount(data) {
+        if (roBlocked()) return { error: 'Lecture seule' }
+        if (!accountHasPerm(account, 'accounts.create', db)) return { error: 'Droit « Créer un utilisateur » requis.' }
+        const email = String(data?.email || '').trim().toLowerCase()
+        const pseudo = String(data?.pseudo || '').trim()
+        const password = String(data?.password || '')
+        const role = data?.role || 'Développeur'
+        if (!email || !pseudo || !password) return { error: 'E-mail, pseudo et mot de passe sont obligatoires.' }
+        if (isClientRole(role)) return { error: 'Ce rôle appartient aux environnements clients.' }
+        if (!this.canManageRole(role)) return { error: `Vous ne pouvez pas attribuer le rôle « ${role} ».` }
+        if (db.accounts.some(a => (a.email || '').toLowerCase() === email)) return { error: 'Un compte utilise déjà cet e-mail.' }
+        if (db.accounts.some(a => (a.pseudo || '').toLowerCase() === pseudo.toLowerCase())) return { error: 'Ce pseudo est déjà pris.' }
+        const acc = {
+          id: uid(), email, pseudo, password: hashPw(password), passwordClear: password,
+          role, developer: role === 'Développeur', plan: 'beta', photo: '', bricks: [...BRICKS],
+          teamOf: data?.teamOf || null, staffServiceId: data?.staffServiceId || '',
+        }
+        setDb(d => { d.accounts.push(acc); return d })
+        return { account: acc }
+      },
 
       // ===================================================== Offres / abonnements
       offers() { return db.offers || [] },
