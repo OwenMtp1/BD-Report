@@ -75,7 +75,60 @@ for (const file of files) {
     `<meta name="twitter:image" content="${esc(image)}">`,
   ].filter(Boolean).join('\n')
 
-  html = html.replace(/<\/head>/i, `${tags}\n</head>`)
+  // ----- Données structurées -----------------------------------------------
+  // Elles disent à un moteur ce QU'EST la page, au lieu de le lui faire deviner :
+  // le fil d'Ariane s'affiche dans les résultats, et les questions de la section
+  // « Questions légitimes » peuvent y apparaître dépliées.
+  const ld = []
+
+  const crumbs = rel.split('/').slice(0, -1)
+  if (crumbs.length) {
+    ld.push({
+      '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'BD Report', item: `${BASE}/` },
+        ...crumbs.map((c, i) => ({
+          '@type': 'ListItem', position: i + 2,
+          name: c === 'produit' ? 'Produit' : c === 'blog' ? 'Blog' : c,
+          item: `${BASE}/${crumbs.slice(0, i + 1).join('/')}/`,
+        })),
+      ],
+    })
+  }
+
+  if (rel === 'index.html') {
+    ld.push({
+      '@context': 'https://schema.org', '@type': 'SoftwareApplication',
+      name: 'BD Report', applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web, Windows, macOS, Linux',
+      description: desc, url: `${BASE}/`, image,
+      inLanguage: ['fr', 'en', 'es'],
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR', description: 'Offre Starter gratuite' },
+    })
+    // Les questions de la page d'accueil, telles qu'elles y sont écrites : on les lit
+    // dans le HTML plutôt que de les recopier, pour qu'elles ne divergent jamais.
+    const qa = [...html.matchAll(/<summary[^>]*>([\s\S]*?)<\/summary>\s*<p[^>]*>([\s\S]*?)<\/p>/gi)]
+      .map(m => ({
+        '@type': 'Question',
+        name: m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(),
+        acceptedAnswer: { '@type': 'Answer', text: m[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() },
+      }))
+      .filter(q => q.name && q.acceptedAnswer.text)
+    if (qa.length) ld.push({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qa })
+  }
+
+  if (rel.startsWith('blog/') && rel !== 'blog/index.html' && !['blog/prospection.html', 'blog/remuneration.html', 'blog/management.html'].includes(rel)) {
+    ld.push({
+      '@context': 'https://schema.org', '@type': 'BlogPosting',
+      headline: title.replace(/^BD Report — /, ''), description: desc,
+      url: canonical, image, inLanguage: 'fr',
+      publisher: { '@type': 'Organization', name: 'BD Report', url: `${BASE}/` },
+    })
+  }
+
+  const ldTags = ld.map(o => `<script type="application/ld+json">${JSON.stringify(o)}<\/script>`).join('\n')
+
+  html = html.replace(/<\/head>/i, `${tags}${ldTags ? '\n' + ldTags : ''}\n</head>`)
   writeFileSync(file, html)
   urls.push({ loc: canonical, priority: priorityOf(rel) })
 }
@@ -91,4 +144,4 @@ writeFileSync(path.join(OUT, 'sitemap.xml'),
 writeFileSync(path.join(OUT, 'robots.txt'),
   `User-agent: *\nAllow: /\nDisallow: /app/\n\nSitemap: ${BASE}/sitemap.xml\n`)
 
-console.log(`✓ SEO : ${urls.length} pages balisées, sitemap.xml et robots.txt générés (${BASE})`)
+console.log(`✓ SEO : ${urls.length} pages balisées (avec données structurées), sitemap.xml et robots.txt générés (${BASE})`)
