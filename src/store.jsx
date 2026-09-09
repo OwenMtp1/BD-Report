@@ -5143,14 +5143,20 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // Fin d'intervention : le projet retrouve l'étape où il en était.
       endProjectMaintenance(envId, backTo = '') {
         if (!isSupportRole(account?.role) || !envId) return
+        const env = db.environments.find(e => e.id === envId)
         setDb(d => {
           const p = (d.projects || []).find(x => x.sourceEnvId === envId || x.envId === envId)
           if (!p || p.currentPhase !== MAINTENANCE_PHASE) return d
           const open = (p.phases || []).filter(ph => ph.name !== MAINTENANCE_PHASE && !ph.done)
           p.currentPhase = backTo || open[0]?.name || ''
+          // La phase disparaît du projet : Maintenance est un ÉTAT, pas une étape du déroulé.
+          // La laisser derrière encombrerait le planning et l'agenda d'une bande qui ne
+          // correspond plus à rien. Elle sera reposée telle quelle à la prochaine intervention.
+          p.phases = (p.phases || []).filter(ph => ph.name !== MAINTENANCE_PHASE)
           p.maintenanceBy = ''; p.maintenanceAt = ''
           return d
         })
+        this.logStaff({ type: 'Projet', cat: 'projet', action: 'Intervention terminée', details: env?.name || '', envId })
       },
       // Qui peut modifier ce projet : personne ne l'a pris, c'est le mien, ou j'ai le droit
       // d'intervenir sur celui d'un autre.

@@ -757,6 +757,26 @@ async function main() {
       if (!proj.phases.find(ph => ph.name === 'Cadrage')?.done) throw new Error('Le déploiement doit clore le cadrage')
       if (!(st.supportLogs || []).some(l => l.action === 'Environnement déployé')) throw new Error('Le déploiement doit être journalisé')
     }
+    // Maintenance : la phase est posée à l'entrée chez un client et RETIRÉE quand
+    // l'intervention est terminée — c'est un état, pas une étape du déroulé.
+    {
+      const api = () => win.__bdrStore
+      api().markProjectMaintenance('env-peoplespheres')
+      await act(async () => {})
+      win.__bdrFlushSave?.()
+      let st = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+      let proj = (st.projects || []).find(p => p.sourceEnvId === 'env-peoplespheres' || p.envId === 'env-peoplespheres')
+      if (proj.currentPhase !== 'Maintenance') throw new Error("L'entrée chez un client doit passer le projet en Maintenance")
+      if (!proj.phases.some(ph => ph.name === 'Maintenance')) throw new Error('La phase Maintenance doit être posée')
+      api().endProjectMaintenance('env-peoplespheres')
+      await act(async () => {})
+      win.__bdrFlushSave?.()
+      st = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+      proj = (st.projects || []).find(p => p.sourceEnvId === 'env-peoplespheres' || p.envId === 'env-peoplespheres')
+      if (proj.phases.some(ph => ph.name === 'Maintenance')) throw new Error("Terminer l'intervention doit retirer la phase Maintenance")
+      if (proj.currentPhase === 'Maintenance') throw new Error('Le projet doit retrouver son étape en cours')
+      if (proj.maintenanceBy) throw new Error("Le nom de l'intervenant doit être effacé")
+    }
     await click(find('button', "Désactiver l'accès"))
     // La confirmation est imbriquée dans la fenêtre Utilisateurs, qui porte elle aussi des
     // boutons « Désactiver » (un par membre) : viser le dernier calque, pas le premier libellé.
