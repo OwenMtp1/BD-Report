@@ -112,8 +112,9 @@ async function main() {
 
   // 5b. Primes : ajout d'une règle de barème par activité (volume de RDV).
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Primes & Commissions'))
-  await click(find('button', 'Ajouter une règle'))
-  if (!text().includes('Paliers de prime')) throw new Error('Activity bonus rule editor did not render')
+  // Les règles ne se règlent plus ici : la page suit, rapporte et prévoit.
+  if (find('button', 'Ajouter une règle')) throw new Error('Rule editor should have left the Primes page')
+  if (!text().includes('Créer votre écosystème')) throw new Error('Primes should point to where rules are set')
 
   // 5b bis. Console « Gestion Manager » : tout le réservé manager tient en un seul écran.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Gestion Manager'))
@@ -125,6 +126,11 @@ async function main() {
   for (const k of ['Étapes de votre pipeline', 'Règle de rattachement au mois', 'Barème des primes', 'déclenche une prime']) {
     if (!text().includes(k)) throw new Error('Ecosystem section missing: ' + k)
   }
+  // L'éditeur de règles par activité a rejoint l'écosystème.
+  const addRule = find('button', 'Ajouter une règle')
+  if (!addRule) throw new Error('Activity rule editor missing from ecosystem')
+  await click(addRule)
+  if (!text().includes('Paliers de prime')) throw new Error('Activity rule editor did not render in ecosystem')
   // Les onglets regroupés ne doivent plus encombrer la barre latérale.
   if ([...container.querySelectorAll('nav button')].some(b => b.textContent.trim() === 'Intégration HubSpot')) {
     throw new Error('Manager tabs should be grouped, not left in the sidebar')

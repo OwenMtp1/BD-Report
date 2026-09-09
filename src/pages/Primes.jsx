@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { Plus, Trash2, AlertTriangle, CalendarRange, Layers, Activity } from 'lucide-react'
-import { useStore, computePrimes, computeActivityPrimes, ACTIVITY_PERIODS, activityRuleTitle, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, uid, SOURCES, DEFAULT_PHASES } from '../store.jsx'
+import { AlertTriangle, Activity, Settings2 } from 'lucide-react'
+import { useStore, computePrimes, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 const SUIVI_TL = [
@@ -236,139 +236,17 @@ export default function Primes() {
         </table>
       </div>
 
-      {/* Barème de commissions (en bas, catégories en colonnes) */}
-      <div className="card p-4 overflow-x-auto">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold">Barème de commissions</h3>
-          <button className="btn-primary !py-1.5 text-xs" onClick={() => { setBareme([...sub.bareme, { id: uid(), min: 0, max: 0, montant: 0, leadSource: '' }]); store.logAction('Prime', 'Catégorie de commission ajoutée') }}>
-            <Plus size={14} /> Ajouter une catégorie
-          </button>
-        </div>
-        <table className="text-sm min-w-[500px]">
-          <tbody>
-            <tr>
-              <td className="label py-2 pr-4 whitespace-nowrap">Catégorie</td>
-              {sub.bareme.map((b, i) => <td key={b.id} className="px-2 text-center font-bold text-xs text-muted">#{i + 1}
-                <button className="ml-1 align-middle" title="Supprimer" onClick={() => setBareme(sub.bareme.filter(x => x.id !== b.id))}>
-                  <Trash2 size={12} className="text-red-400 inline" /></button>
-              </td>)}
-            </tr>
-            <tr>
-              <td className="label py-2 pr-4 whitespace-nowrap">Collaborateurs min</td>
-              {sub.bareme.map(b => <td key={b.id} className="px-1 py-1">
-                <input type="number" className="input !w-24 text-center" value={b.min} onChange={e => patchRow(b.id, 'min', e.target.value)} /></td>)}
-            </tr>
-            <tr>
-              <td className="label py-2 pr-4 whitespace-nowrap">Collaborateurs max</td>
-              {sub.bareme.map(b => <td key={b.id} className="px-1 py-1">
-                <input type="number" className="input !w-24 text-center" value={b.max} onChange={e => patchRow(b.id, 'max', e.target.value)} /></td>)}
-            </tr>
-            <tr>
-              <td className="label py-2 pr-4 whitespace-nowrap">Montant de la prime (€)</td>
-              {sub.bareme.map(b => <td key={b.id} className="px-1 py-1">
-                <input type="number" className="input !w-24 text-center font-bold" value={b.montant} onChange={e => patchRow(b.id, 'montant', e.target.value)} /></td>)}
-            </tr>
-            <tr>
-              <td className="label py-2 pr-4 whitespace-nowrap">Lead source</td>
-              {sub.bareme.map(b => <td key={b.id} className="px-1 py-1">
-                <select className="input !w-24 text-xs" value={b.leadSource || ''} onChange={e => patchRow(b.id, 'leadSource', e.target.value)}>
-                  <option value="">Toutes</option>
-                  {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select></td>)}
-            </tr>
-          </tbody>
-        </table>
-        <p className="text-xs text-muted mt-2">Chaque RDV en phase SQL ou Signée déclenche automatiquement la prime correspondant à sa tranche d'effectif et sa lead source.</p>
+      {/* Renvoi visible : les réglages ont déménagé, le dire évite de les chercher ici. */}
+      <div className="card p-3 flex items-start gap-2">
+        <Settings2 size={15} className="text-brand shrink-0 mt-0.5" />
+        <p className="text-xs text-muted">
+          Les barèmes et les règles de prime se règlent désormais dans
+          <b className="text-ink"> « Créer votre écosystème » </b>
+          (console Gestion Manager) : un seul endroit décide de ce qui déclenche un montant,
+          plutôt que deux écrans qui pouvaient se contredire. Cette page suit, rapporte et prévoit.
+        </p>
       </div>
-
-      <ActivityBaremeCard store={store} sub={sub} phaseOptions={phaseOptions} />
     </div>
   )
 }
 
-// -------------------------------------------------- Barème par activité (règles façon Excel)
-function ActivityBaremeCard({ store, sub, phaseOptions }) {
-  const rules = sub.activityRules || []
-  const setRules = (fn) => store.setSub(d => ({ ...d, activityRules: typeof fn === 'function' ? fn(d.activityRules || []) : fn }))
-  const addRule = () => { setRules(rs => [...rs, { id: uid(), label: '', period: 'mois', phases: [], tiers: [{ id: uid(), min: 10, montant: 200 }] }]); store.logAction('Prime', "Règle de prime d'activité ajoutée") }
-  const patchRule = (id, patch) => setRules(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r))
-  const removeRule = (id) => setRules(rs => rs.filter(r => r.id !== id))
-  const togglePhase = (id, ph) => setRules(rs => rs.map(r => r.id === id ? { ...r, phases: (r.phases || []).includes(ph) ? r.phases.filter(x => x !== ph) : [...(r.phases || []), ph] } : r))
-  const setTiers = (id, tiers) => patchRule(id, { tiers })
-
-  return (
-    <div className="card p-4 space-y-3">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h3 className="font-bold flex items-center gap-2"><Activity size={17} className="text-brand" /> Barème par activité (volume de RDV)</h3>
-          <p className="text-xs text-muted -mt-0.5">Des règles façon « règles de données Excel » : une condition (période + phases) → un résultat (prime par palier de RDV).</p>
-        </div>
-        <button className="btn-primary !py-1.5 text-xs" onClick={addRule}><Plus size={14} /> Ajouter une règle</button>
-      </div>
-
-      {rules.length === 0 && <Empty text="Aucune règle d'activité. Exemple : « ≥ 10 RDV en R1 dans le mois → 200 € »." />}
-
-      <div className="space-y-3">
-        {rules.map((rule, ri) => {
-          const tiers = rule.tiers || []
-          const results = computeActivityPrimes(sub.rdvs, [rule])
-          const total = results.reduce((a, p) => a + p.montant, 0)
-          return (
-            <div key={rule.id} className="rounded-xl border border-line p-3 space-y-2.5 bg-surface/40">
-              {/* Ligne 1 : SI (période) + nom + suppression */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="chip bg-brand/10 text-brand font-bold shrink-0">Règle {ri + 1}</span>
-                <input className="input !py-1 text-sm flex-1 min-w-[140px]" placeholder={activityRuleTitle(rule)} value={rule.label || ''} onChange={e => patchRule(rule.id, { label: e.target.value })} />
-                <button className="btn-ghost !p-1.5 text-red-500 shrink-0" title="Supprimer la règle" onClick={() => removeRule(rule.id)}><Trash2 size={15} /></button>
-              </div>
-
-              {/* Ligne 2 : période + phases */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-muted">
-                  <CalendarRange size={14} /> Sur la
-                  <select className="input !w-auto !py-1 text-xs" value={rule.period} onChange={e => patchRule(rule.id, { period: e.target.value })}>
-                    {ACTIVITY_PERIODS.map(p => <option key={p.id} value={p.id}>{p.label.toLowerCase()}</option>)}
-                  </select>
-                </label>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-xs font-semibold text-muted flex items-center gap-1"><Layers size={14} /> compter les RDV en :</span>
-                  {phaseOptions.map(ph => (
-                    <button key={ph} onClick={() => togglePhase(rule.id, ph)}
-                      className={`chip cursor-pointer ${(rule.phases || []).includes(ph) ? 'bg-brand text-white' : 'bg-card border border-line text-muted'}`}>{ph}</button>
-                  ))}
-                  {(rule.phases || []).length === 0 && <span className="text-[11px] text-muted italic">toutes les phases</span>}
-                </div>
-              </div>
-
-              {/* Ligne 3 : paliers (ALORS) */}
-              <div className="space-y-1.5">
-                <div className="text-xs font-semibold text-muted">Paliers de prime :</div>
-                {tiers.map((t, ti) => (
-                  <div key={t.id || ti} className="flex items-center gap-2 text-sm flex-wrap">
-                    <span className="text-muted">À partir de</span>
-                    <input type="number" min="1" className="input !w-20 !py-1 text-center" value={t.min}
-                      onChange={e => setTiers(rule.id, tiers.map(x => x === t ? { ...x, min: e.target.value } : x))} />
-                    <span className="text-muted">RDV →</span>
-                    <input type="number" min="0" className="input !w-24 !py-1 text-center font-bold" value={t.montant}
-                      onChange={e => setTiers(rule.id, tiers.map(x => x === t ? { ...x, montant: e.target.value } : x))} />
-                    <span className="text-muted">€</span>
-                    <button className="text-red-400 shrink-0" title="Retirer le palier" onClick={() => setTiers(rule.id, tiers.filter(x => x !== t))}><Trash2 size={13} /></button>
-                  </div>
-                ))}
-                <button className="btn-ghost !py-1 text-xs" onClick={() => setTiers(rule.id, [...tiers, { id: uid(), min: (Number(tiers[tiers.length - 1]?.min) || 0) + 10, montant: 0 }])}><Plus size={13} /> Ajouter un palier</button>
-              </div>
-
-              {/* Aperçu sur les données réelles */}
-              <div className="text-xs rounded-lg bg-card border border-line px-3 py-2">
-                {results.length === 0
-                  ? <span className="text-muted">Sur vos RDV actuels : aucun palier atteint pour l'instant.</span>
-                  : <span>Sur vos RDV : <b className="text-emerald-600">{fmtMoney(total)}</b> — {results.sort((a, b) => a.periodKey.localeCompare(b.periodKey)).map(r => `${r.periodLabel} (${r.count} RDV → ${fmtMoney(r.montant)})`).join(' · ')}</span>}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-      <p className="text-xs text-muted">La prime versée par période est celle du <b>palier le plus élevé atteint</b>. Ces primes s'ajoutent aux primes par lead et apparaissent dans le suivi et le reporting ci-dessus.</p>
-    </div>
-  )
-}
