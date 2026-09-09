@@ -52,6 +52,9 @@ jobs:
           cp public/sw.js out/sw.js
           cp dist/app-inline.html out/app/index.html
           node scripts/gen-changelog.mjs   # génère out/app/changelog.json depuis les commits
+          # Balises de partage, canoniques, sitemap et robots.txt — posés sur les pages
+          # PRODUITES, donc toute page ajoutée plus tard est couverte sans rien faire.
+          node scripts/seo.mjs out https://owenmtp1.github.io/BD-Report
           cp public/manifest.webmanifest out/app/manifest.webmanifest
           cp public/icon.svg out/app/icon.svg
           cp public/sw.js out/app/sw.js
