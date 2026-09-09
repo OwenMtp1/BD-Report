@@ -970,7 +970,7 @@ export function memberQuota(env, subId, metricId, now = new Date()) {
 }
 // Réalisé d'une personne sur une métrique, dans la période EN COURS. On réutilise le découpage
 // des primes d'activité (semaine/mois/trimestre/année) plutôt que d'en inventer un second.
-export function quotaAchieved(data, metricId, period = 'mois', now = new Date()) {
+export function quotaAchieved(data, metricId, period = 'mois', now = new Date(), opts = {}) {
   const here = activityPeriodKey(period, now.toISOString().slice(0, 10))
   const on = (dateStr) => !!dateStr && activityPeriodKey(period, dateStr) === here
   const rdvs = data?.rdvs || []
@@ -981,9 +981,24 @@ export function quotaAchieved(data, metricId, period = 'mois', now = new Date())
     // Une signature n'a pas de date propre : on retient celle de la qualification, sinon
     // celle du rendez-vous. Inventer une troisième date serait pire qu'approximer.
     case 'signatures': return rdvs.filter(r => isWonPhase(data, r.phase) && on(r.datePassageSQL || r.dateRdv)).length
-    case 'primes': return computePrimes(rdvs, data?.bareme || [], primeOpts(data))
-      .filter(p => !p.invalidated && on(p.triggerDate))
-      .reduce((a, p) => a + p.montant, 0)
+    // ⚠️ Les primes se comptent au MOIS DE VERSEMENT, pas à la date de déclenchement — c'est
+    // la règle de bascule de l'écosystème qui fait foi, et c'est ce montant que le relevé
+    // signé annonce. Compter à la date de déclenchement donnait un quota en septembre pour
+    // une prime versée en octobre : deux chiffres pour la même chose, donc un litige.
+    // Les modulateurs (seuil, accélérateur, plafond) sont appliqués : le quota porte sur ce
+    // qui est réellement perçu.
+    case 'primes': {
+      const key = activityPeriodKey('mois', now.toISOString().slice(0, 10))
+      if (period !== 'mois') {
+        // Hors maille mensuelle, le mois de versement n'a pas de sens : on retombe sur la
+        // date de déclenchement, faute de mieux, et sans modulation.
+        return computePrimes(rdvs, data?.bareme || [], primeOpts(data))
+          .filter(p => !p.invalidated && on(p.triggerDate)).reduce((a, p) => a + p.montant, 0)
+      }
+      const raw = computePrimes(rdvs, data?.bareme || [], primeOpts(data))
+        .filter(p => !p.invalidated && p.payMonthKey === key).reduce((a, p) => a + p.montant, 0)
+      return applyPrimeRules(raw, { data, env: opts.env, subId: opts.subId, monthKey: key }).total
+    }
     default: return 0
   }
 }
@@ -1422,10 +1437,20 @@ export const logCategoryOf = (l) => l?.cat || LOG_TYPE_CAT[l?.type] || 'support'
 
 function pushSupportLog(d, { type, action, details = '', actorId = null, actorName = 'Système', cat, envId = null, envName = '', targetId = null, targetName = '' }) {
   d.supportLogs = d.supportLogs || []
+  const category = cat || LOG_TYPE_CAT[type] || 'support'
   d.supportLogs.unshift({
     id: uid(), ts: new Date().toISOString(), type, action, details, actorId, actorName,
-    cat: cat || LOG_TYPE_CAT[type] || 'support', envId, envName, targetId, targetName,
+    cat: category, envId, envName, targetId, targetName,
   })
+  // Deux plafonds, et c'est délibéré. La navigation produit beaucoup plus de lignes que les
+  // actions ; un plafond unique la laisserait chasser du journal les modifications d'accès,
+  // c'est-à-dire exactement ce qu'une revue vient y chercher. Elle est donc bornée à part.
+  const NAV_MAX = 800
+  const navs = d.supportLogs.filter(l => l.cat === 'navigation')
+  if (navs.length > NAV_MAX) {
+    const drop = new Set(navs.slice(NAV_MAX).map(l => l.id))
+    d.supportLogs = d.supportLogs.filter(l => !drop.has(l.id))
+  }
   if (d.supportLogs.length > 4000) d.supportLogs.length = 4000
 }
 
@@ -1610,7 +1635,13 @@ export const handoffPhases = (data) => {
 // une affaire signée est passée par le closer, elle ne doit pas disparaître du suivi sous
 // prétexte qu'elle a avancé depuis.
 export const rdvNeedsHandoff = (rdv, data) => {
-  if (!rdv?.phase) return false
+  if (!rdv) return false
+  // Un dossier DÉJÀ remis le reste, quoi qu'il devienne ensuite. Sans cette ligne, une affaire
+  // acceptée puis perdue disparaissait de la file et du taux d'acceptation : le BDR voyait son
+  // taux baisser parce qu'une affaire était morte APRÈS que le closer l'ait acceptée, ce qui
+  // n'a aucun rapport avec la qualité du lead qu'il avait transmis.
+  if (rdv.handoff) return true
+  if (!rdv.phase) return false
   return handoffPhases(data).some(p => rdv.phase === p || phaseAtLeast(data, rdv.phase, p))
 }
 // État de la passation d'un rendez-vous, ou null s'il n'est pas encore concerné.
@@ -3902,7 +3933,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const out = { period, metrics: {} }
         ;(q.metrics || []).forEach(mid => {
           const mq = memberQuota(env, memberSubId, mid)
-          out.metrics[mid] = { done: quotaAchieved(data, mid, period), target: mq.target }
+          out.metrics[mid] = { done: quotaAchieved(data, mid, period, new Date(), { env, subId: memberSubId }), target: mq.target }
         })
         return out
       },

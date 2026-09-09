@@ -192,7 +192,7 @@ export default function Quotas() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {metrics.map(mt => {
                       const eff = memberQuota(store.db.environments.find(e => e.id === envId), s.id, mt.id)
-                      const done = quotaAchieved(data, mt.id, eff.period)
+                      const done = quotaAchieved(data, mt.id, eff.period, new Date(), { env: store.db.environments.find(e => e.id === envId), subId: s.id })
                       const pct = eff.target ? Math.round((done / eff.target) * 100) : 0
                       return (
                         <div key={mt.id}>

@@ -30,7 +30,8 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES } = await import('../src/store.jsx')
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES,
+          handoffState, handoffStats, quotaAchieved, buildStatement } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -163,6 +164,37 @@ async function main() {
     }
     if (fillTemplate('Bonjour {prenom},', {}) !== 'Bonjour [prenom],') throw new Error('Une variable sans valeur doit rester visible')
     if (fillTemplate('Bonjour {prenom},', { prenom: '' }) !== 'Bonjour [prenom],') throw new Error('Une valeur vide ne doit pas produire un trou silencieux')
+  }
+
+  // Passation : un verdict rendu ne s'efface JAMAIS, quoi que devienne le dossier ensuite.
+  // Et « primes du mois » n'a qu'une seule définition : le mois de VERSEMENT.
+  {
+    const base = {
+      phases: ['R1', 'SQL', 'KO', 'Signée'], primePhases: ['SQL'], wonPhases: ['Signée'], lostPhases: ['KO'],
+      primeCutoffDay: 15, bareme: [{ id: 'b', min: 1, max: 99999, montant: 300, leadSource: '' }], rdvs: [],
+    }
+    const accepte = { id: 'r', phase: 'SQL', entreprise: 'A', effectif: 50, source: 'Outbound', handoff: { state: 'accepted' } }
+    if (handoffState(accepte, base) !== 'accepted') throw new Error('Un lead accepté doit rester accepté')
+    const perdu = { ...accepte, phase: 'KO' }
+    if (handoffState(perdu, base) !== 'accepted') {
+      throw new Error("Une affaire perdue APRÈS acceptation ne doit pas effacer le verdict du closer")
+    }
+    if (handoffStats([perdu], base).accepted !== 1) throw new Error("Le taux d'acceptation ne doit pas retomber sur une perte ultérieure")
+
+    // Prime déclenchée le 20 (après la bascule du 15) → versée le mois SUIVANT. Le quota doit
+    // dire la même chose que le relevé, sinon les deux chiffres se contredisent.
+    const d = { ...base, rdvs: [{ id: 'p', phase: 'SQL', entreprise: 'B', effectif: 50, source: 'Outbound', datePassageSQL: '2026-09-20' }] }
+    const sept = quotaAchieved(d, 'primes', 'mois', new Date('2026-09-10T12:00:00Z'))
+    const octo = quotaAchieved(d, 'primes', 'mois', new Date('2026-10-10T12:00:00Z'))
+    if (sept !== 0) throw new Error('Une prime versée en octobre ne doit pas compter dans le quota de septembre')
+    if (octo !== 300) throw new Error('Le quota doit compter la prime sur son mois de versement')
+    if (buildStatement(d, null, 'x', '2026-10').total !== octo) throw new Error('Relevé et quota doivent annoncer le même montant')
+
+    // Le quota porte sur ce qui est PERÇU : les modulateurs s'appliquent.
+    const plafonne = { ...d, primeRules: { on: true, refMetric: 'sql', threshold: { on: false }, accelerator: { on: false }, quality: { on: false }, cap: { on: true, amount: 100 } } }
+    if (quotaAchieved(plafonne, 'primes', 'mois', new Date('2026-10-10T12:00:00Z')) !== 100) {
+      throw new Error('Un plafond doit se voir dans le quota comme sur le relevé')
+    }
   }
 
   // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue

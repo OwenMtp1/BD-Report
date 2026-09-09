@@ -36,8 +36,9 @@ export default function Objections() {
   const [confirmDel, setConfirmDel] = useState(null)
   const list = sub?.objections || []
   const families = sub?.objectionFamilies?.length ? sub.objectionFamilies : OBJECTION_FAMILIES
-  // Valider une réponse est un geste d'encadrement : c'est dire « c'est celle-ci qu'on utilise ».
-  const canValidate = store.hasClientPerm('team.manage') || store.hasClientPerm('team.view')
+  // Valider une réponse, c'est dire « c'est celle-ci qu'on utilise » : un geste d'AUTORITÉ.
+  // `team.view` ne donne que le droit de regarder l'équipe — il n'a rien à faire ici.
+  const canValidate = store.hasClientPerm('team.manage')
 
   const setList = (fn) => store.setSub(d => ({ ...d, objections: fn(d.objections || []) }))
 

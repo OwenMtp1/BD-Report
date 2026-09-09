@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FileSignature, Download, ShieldCheck, Clock, RotateCcw } from 'lucide-react'
+import { FileSignature, Download, ShieldCheck, Clock, RotateCcw, AlertTriangle } from 'lucide-react'
 import { useStore, monthKey, monthLabel, fmtDate, fmtMoney } from '../store.jsx'
 import { Modal, Empty, toast } from '../ui.jsx'
 
@@ -167,6 +167,15 @@ export function StatementsManager() {
             net à verser <b>{fmtMoney(signFor.st.total, signFor.st.currency)}</b>.
           </p>
           <div className="rounded-xl bg-surface/60 p-3 mb-3 max-h-52 overflow-y-auto"><StatementBody st={signFor.st} /></div>
+          {mKey === monthKey(new Date()) && (
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-2.5 mb-3 flex gap-2">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800 dark:text-amber-300">
+                Ce mois n'est pas terminé : une prime déclenchée d'ici la fin du mois n'y figurera pas,
+                puisque le relevé est figé à la signature. Attendez la clôture, ou assumez de le rouvrir.
+              </p>
+            </div>
+          )}
           <label className="flex items-start gap-2 text-sm cursor-pointer">
             <input type="checkbox" className="mt-1" checked={attest} onChange={e => setAttest(e.target.checked)} />
             <span>

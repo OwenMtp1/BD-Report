@@ -394,7 +394,7 @@ export default function Dashboard() {
               )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
                 {quotaMetrics.map(({ m, q }) => {
-                  const cur = quotaAchieved(sub, m.id, q.period)
+                  const cur = quotaAchieved(sub, m.id, q.period, new Date(), { env: store.db.environments.find(e => e.id === store.session?.envId), subId: store.session?.subEnvId })
                   const pct = q.target ? Math.min(100, Math.round((cur / q.target) * 100)) : 0
                   const ok = pct >= 100
                   const show = (v) => (m.id === 'primes' ? fmtMoney(v, sub.currency) : v)
