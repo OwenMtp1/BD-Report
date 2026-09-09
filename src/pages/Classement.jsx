@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Trophy, Flame, Target, Coins, TrendingUp, Percent, CalendarCheck, Medal, Crown } from 'lucide-react'
 import { useStore, inTimeline, computePrimes, primeOpts, monthKey, fmtMoney } from '../store.jsx'
 import { Empty } from '../ui.jsx'
+import Challenges from './Challenges.jsx'
 
 const dayISO = (o = 0) => { const d = new Date(); d.setDate(d.getDate() + o); return d.toISOString().slice(0, 10) }
 
@@ -58,6 +59,10 @@ export default function Classement() {
         <h2 className="text-xl font-extrabold flex items-center gap-2"><Trophy size={20} className="text-amber-500" /> Classement du mois — {env?.name}</h2>
         <p className="text-xs text-muted -mt-0.5">Qui mène la danse ce mois-ci. Choisissez le critère de classement.</p>
       </div>
+
+      {/* Challenges : un concours borné dans le temps vit à côté du classement permanent,
+          pas à sa place — l'un motive sur une semaine, l'autre situe sur la durée. */}
+      {store.hasModule('challenges') && <Challenges />}
 
       {/* Sélecteur de critère */}
       <div className="flex gap-1.5 overflow-x-auto pb-1">

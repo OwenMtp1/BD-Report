@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { Trophy, Pencil, EyeOff, Eye, MonitorPlay } from 'lucide-react'
 import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase, QUOTA_METRICS, ACTIVITY_PERIODS, quotaAchieved } from '../store.jsx'
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
+import { ChallengeBanner } from './Challenges.jsx'
 
 const DEFAULT_WIDGETS = [
   { id: 'rdv-realises', label: 'RDV réalisés', size: 'lg' },
@@ -560,6 +561,11 @@ export default function Dashboard() {
           </button>}
         </div>
       </div>
+
+      {/* Ce qui se joue en ce moment. Placé AVANT les widgets et non parmi eux : un challenge
+          est un événement, il doit se voir en ouvrant l'app, pas se chercher dans une grille. */}
+      <ChallengeBanner />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {widgets.map((w, i) => {
           if (!w.visible && !editMode) return null

@@ -30,7 +30,7 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole } = await import('../src/store.jsx')
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore } = await import('../src/store.jsx')
 
   // Pipeline personnalisé : renommer ou réordonner les étapes ne doit rien casser. Les
   // écrans comparaient aux noms d'origine écrits en dur — tableaux de bord à zéro, ICP
@@ -94,6 +94,24 @@ async function main() {
     const msgs = (d.channelMessages || {})[sara.id] || []
     if (!msgs.some(m => m.report?.engagements?.length)) throw new Error('Le 1:1 de démonstration doit porter un compte rendu avec engagements')
     if (!msgs.some(m => m.report?.snapshot?.metrics)) throw new Error('Un compte rendu doit figer les chiffres du jour')
+  }
+
+  // Challenges : bornés dans le temps, et comptés comme les quotas — deux façons de compter
+  // un SQL dans la même app, et plus personne ne fait confiance au chiffre.
+  {
+    const d = buildDemoDb({})
+    const env = d.environments.find(e => e.id === 'env-demo')
+    const chals = env.challenges || []
+    if (chals.length < 2) throw new Error('La démo doit porter un challenge en cours et un terminé')
+    const today = new Date().toISOString().slice(0, 10)
+    if (!chals.some(c => c.start <= today && today <= c.end)) throw new Error('Aucun challenge en cours dans la démo')
+    if (!chals.some(c => c.end < today)) throw new Error('Aucun challenge terminé dans la démo')
+    const live = chals.find(c => c.start <= today && today <= c.end)
+    const scored = challengeScore(d.data['dsub-b1'] || {}, live.metric, live.start, live.end)
+    if (typeof scored !== 'number') throw new Error('Le score de challenge doit être un nombre')
+    if (challengeScore(d.data['dsub-b1'] || {}, 'sql', '2000-01-01', '2000-01-02') !== 0) {
+      throw new Error('Un challenge hors fenêtre ne doit rien compter')
+    }
   }
 
   // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue
@@ -226,6 +244,11 @@ async function main() {
     if (text() === before) throw new Error('Audit log search did not filter')
     await type(search, '')
   }
+
+  // Classement : le challenge borné dans le temps vit à côté du classement permanent.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Classement'))
+  if (!text().includes('Challenges')) throw new Error('La section Challenges manque au Classement')
+  if (!find('button', 'Lancer un challenge')) throw new Error('Un manager doit pouvoir lancer un challenge')
 
   // 5. Comité d'achat : le formulaire de RDV qualifie chaque interlocuteur, et alerte quand
   // l'affaire ne tient qu'à une personne.

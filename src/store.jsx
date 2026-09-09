@@ -956,6 +956,32 @@ export function quotaAchieved(data, metricId, period = 'mois', now = new Date())
   }
 }
 
+// ---------------------------------------------------------------- Challenges (module `challenges`)
+// Un concours n'a de valeur que s'il a une fin : « le plus de SQL » sans date ne motive
+// personne, c'est le classement permanent. Un challenge porte donc toujours des bornes, et
+// disparaît de lui-même quand elles sont passées.
+export const CHALLENGE_MODES = [
+  { id: 'course', label: 'Le meilleur score gagne' },
+  { id: 'objectif', label: 'Premier à atteindre la cible' },
+]
+export const envChallenges = (env) => (env?.challenges || [])
+export const challengeIsActive = (ch, day = todayISO()) => !!ch && ch.start <= day && day <= ch.end
+// Score d'une personne sur la fenêtre du challenge. Les mêmes définitions que les quotas —
+// deux façons de compter un SQL dans la même app, et plus personne ne fait confiance au chiffre.
+export function challengeScore(data, metric, start, end) {
+  const on = (d) => !!d && d >= start && d <= end
+  const rdvs = data?.rdvs || []
+  switch (metric) {
+    case 'rdvPris': return rdvs.filter(r => on(r.datePriseRdv)).length
+    case 'rdvTenus': return rdvs.filter(r => on(r.dateRdv) && !String(r.opportunite || '').startsWith('No Show')).length
+    case 'sql': return rdvs.filter(r => on(r.datePassageSQL)).length
+    case 'signatures': return rdvs.filter(r => isWonPhase(data, r.phase) && on(r.datePassageSQL || r.dateRdv)).length
+    case 'primes': return computePrimes(rdvs, data?.bareme || [], primeOpts(data))
+      .filter(p => !p.invalidated && on(p.triggerDate)).reduce((a, p) => a + p.montant, 0)
+    default: return 0
+  }
+}
+
 // ---------------------------------------------------------------- Comité d'achat (module `committee`)
 // En B2B, l'affaire ne se perd presque jamais faute d'arguments : elle se perd parce qu'une
 // seule personne portait le sujet en interne. On qualifie donc chaque interlocuteur — son rôle
@@ -1754,6 +1780,20 @@ export function buildDemoDb(brand) {
         'dsub-b4': { targets: {}, startDate: new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10) },
       },
     },
+    // Un challenge en cours (visible sur le tableau de bord de chacun) et un terminé, pour
+    // que le palmarès et le bandeau soient tous les deux montrables.
+    challenges: [
+      { id: 'chal-demo-1', title: 'Sprint qualification', metric: 'sql', mode: 'course', target: 5,
+        reward: 'Déjeuner offert par la direction',
+        start: new Date(Date.now() - 4 * 86400000).toISOString().slice(0, 10),
+        end: new Date(Date.now() + 6 * 86400000).toISOString().slice(0, 10),
+        createdAt: new Date(Date.now() - 4 * 86400000).toISOString() },
+      { id: 'chal-demo-2', title: 'Course aux RDV du mois dernier', metric: 'rdvPris', mode: 'objectif', target: 15,
+        reward: 'Une demi-journée de congé',
+        start: new Date(Date.now() - 45 * 86400000).toISOString().slice(0, 10),
+        end: new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10),
+        createdAt: new Date(Date.now() - 45 * 86400000).toISOString() },
+    ],
     members: ['demo-mgr', 'demo-b1', 'demo-b2', 'demo-b3', 'demo-b4'],
     comments: {
       'novacorp industries': [
@@ -3134,6 +3174,36 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const env = db.environments.find(e => e.id === session?.envId)
         const q = memberQuota(env, session?.subEnvId, metricId)
         return q.target > 0 ? q : null
+      },
+      // ----- Challenges d'équipe
+      challenges() { return envChallenges(db.environments.find(e => e.id === session?.envId)) },
+      activeChallenges() { return this.challenges().filter(c => challengeIsActive(c)) },
+      canRunChallenges() { return this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
+      saveChallenge(ch) {
+        if (readOnly || !this.canRunChallenges()) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === session?.envId); if (!env) return d
+          const list = envChallenges(env)
+          const i = list.findIndex(x => x.id === ch.id)
+          env.challenges = i >= 0 ? list.map(x => x.id === ch.id ? ch : x) : [...list, ch]
+          return d
+        })
+      },
+      deleteChallenge(id) {
+        if (readOnly || !this.canRunChallenges()) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === session?.envId); if (!env) return d
+          env.challenges = envChallenges(env).filter(x => x.id !== id)
+          return d
+        })
+      },
+      // Classement d'un challenge. Les espaces sans donnée sont conservés à 0 : disparaître
+      // du tableau parce qu'on n'a rien fait est la pire façon de l'apprendre.
+      challengeStandings(ch) {
+        return db.subenvs
+          .filter(s => s.envId === session?.envId)
+          .map(s => ({ sub: s, score: challengeScore(db.data[s.id] || {}, ch.metric, ch.start, ch.end) }))
+          .sort((a, b) => b.score - a.score)
       },
       // ----- Comité d'achat : vocabulaire de l'environnement (staff)
       committeeRoles() { return committeeRoles(db.environments.find(e => e.id === session?.envId)) },
