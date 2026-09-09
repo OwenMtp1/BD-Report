@@ -9,6 +9,7 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['lecture seule', 'read-only', 'solo lectura'],
   ['Abonnement en cours de résiliation — accès en lecture seule.', 'Subscription being cancelled — read-only access.', 'Suscripción en proceso de baja — acceso de solo lectura.'],
   ['Seule la rubrique Support reste accessible.', 'Only the Support section stays accessible.', 'Solo la sección de Soporte sigue accesible.'],
   ['Connecter votre CRM et vos outils.', 'Connect your CRM and your tools.', 'Conecta tu CRM y tus herramientas.'],

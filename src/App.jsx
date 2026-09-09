@@ -9,6 +9,7 @@ import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess
 import { NAV_GROUPS, NAV } from './nav.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
+import { trUI } from './i18nAuto.js'
 import { THEMES, applyTheme } from './themes.js'
 // Import statique : le déploiement inline l'app en un seul fichier, un import
 // dynamique local produirait un morceau séparé qui ne serait jamais publié.
@@ -518,7 +519,7 @@ function MainApp() {
   const session = store.session
   const sub = store.db.subenvs.find(s => s.id === session.subEnvId)
   const env = store.db.environments.find(e => e.id === session.envId)
-  const { t: tr } = useT()
+  const { t: tr, lang } = useT()
   const [page, setPage] = useState(() => {
     if (store.demo) return 'dashboard' // démo isolée : n'hérite pas de l'URL de l'app réelle
     const seg = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, '')).split('/')
@@ -731,8 +732,10 @@ function MainApp() {
                       const label = tr(`page.${item.id}`, item.label)
                       // En lecture seule (résiliation/blocage), les briques apparaissent transparentes (consultation uniquement).
                       const dimmed = store.readOnly && item.brick
+                      // Un attribut ne se découpe pas en nœuds : on traduit les deux morceaux
+                      // avant de les assembler, sinon l'infobulle reste en français.
                       return (
-                        <button key={item.id} onClick={() => goto(item.id)} title={dimmed ? `${label} — lecture seule` : label}
+                        <button key={item.id} onClick={() => goto(item.id)} title={dimmed ? `${label} — ${trUI('lecture seule', lang)}` : label}
                           className={`w-full flex items-center gap-2.5 pl-3 pr-2.5 ${itemCls} rounded-xl font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'} ${dimmed && page !== item.id ? 'opacity-40' : ''}`}>
                           <item.icon size={iconSz} className={`shrink-0 ${page === item.id ? '' : 'text-muted'}`} />
                           <span className="truncate">{label}</span>

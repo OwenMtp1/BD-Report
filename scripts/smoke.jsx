@@ -424,6 +424,7 @@ async function main() {
   {
     const frText = text()
     if (!frText.includes('Créer un RDV')) throw new Error('Point de départ français introuvable')
+    win.__bdrI18nResetMissing?.()
     await act(async () => { win.__bdrStore.setUiLang('en') })
     await act(async () => { await new Promise(r => setTimeout(r, 60)) })
     const enText = text()
@@ -1191,8 +1192,13 @@ async function main() {
   // Sans lui, la garantie « tout change de langue » ne portait que sur l'écran des RDV.
   {
     const st = () => win.__bdrStore
+    // Relevé remis à zéro : ce qu'on veut juger, c'est ce que MONTRENT les écrans qui
+    // suivent — pas un état transitoire capté plus tôt, entre deux rendus de React.
     st().setUiLang('en')
     await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    // Remise à zéro APRÈS le premier rendu en anglais : l'instant qui sépare le changement
+    // de langue du rendu de React n'est pas un état que l'utilisateur voit.
+    win.__bdrI18nResetMissing?.()
     const tabs = [...c2.querySelectorAll('nav button')]
     for (const btn of tabs) {
       try {
