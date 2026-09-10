@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList, Search, Target, History } from 'lucide-react'
 import { googleCalUrl, downloadIcs } from '../calendar.js'
-import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey, icpVerdict, committeeGaps, DECIDING_ROLES, DEAL_RECURRENCE, dealAnnualValue, dealValueLabel, fmtMoney } from '../store.jsx'
+import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey, icpVerdict, committeeGaps, DECIDING_ROLES, DEAL_RECURRENCE, dealAnnualValue, dealValueLabel, fmtMoney, cadenceTasks } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 import { HubspotPushButton } from './Hubspot.jsx'
@@ -437,6 +437,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   const [dupConfirm, setDupConfirm] = useState(null) // {data, mode, id, dups} — validation anti-doublon
   const [openGroups, setOpenGroups] = useState({})
   const [openAudit, setOpenAudit] = useState({})
+  const [cadenceFor, setCadenceFor] = useState(null)
   const [menuFor, setMenuFor] = useState(null)
   const [fieldsModal, setFieldsModal] = useState(false)
   // Filtres
@@ -453,6 +454,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   // Module retirable : sans lui, le champ n'existe nulle part et l'écran redevient celui d'avant.
   const dealValue = store.hasModule('dealValue')
   const rdvHistory = store.hasModule('rdvHistory')
+  const cadences = store.hasModule('cadence') ? store.cadences() : []
   const committee = store.hasModule('committee')
     ? { roles: store.committeeRoles(), relations: store.committeeRelations() }
     : null
@@ -652,6 +654,9 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
             {!isChild && <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface"
               onClick={() => { setMenuFor(null); setForm({ mode: 'sub', id: r.id, data: { ...r, id: undefined, phase: '', datePassageSQL: '', opportunite: 'En cours', datePriseRdv: todayISO(), dateRdv: '', contacts: r.contacts.map(c => ({ ...c, id: uid() })) } }) }}>
               Créer le rendez-vous suivant</button>}
+            {cadences.length > 0 && (r.cadence
+              ? <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface" onClick={() => { setMenuFor(null); store.stopCadence(r.id); toast('Plan arrêté — les tâches non faites sont retirées') }}>Arrêter le plan de relance</button>
+              : <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface" onClick={() => { setMenuFor(null); setCadenceFor(r) }}>Appliquer un plan de relance</button>)}
             <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface text-red-500" onClick={() => { setMenuFor(null); setConfirmDel(r.id) }}>Supprimer</button>
           </div>
         )}
@@ -686,6 +691,9 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
               <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface" onClick={() => { setMenuFor(null); setForm({ mode: 'edit', id: r.id, data: { ...r } }) }}>Modifier</button>
               {!isChild && <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface"
                 onClick={() => { setMenuFor(null); setForm({ mode: 'sub', id: r.id, data: { ...r, id: undefined, phase: '', datePassageSQL: '', opportunite: 'En cours', datePriseRdv: todayISO(), dateRdv: '', contacts: r.contacts.map(c => ({ ...c, id: uid() })) } }) }}>Créer le rendez-vous suivant</button>}
+              {cadences.length > 0 && (r.cadence
+                ? <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface" onClick={() => { setMenuFor(null); store.stopCadence(r.id); toast('Plan arrêté — les tâches non faites sont retirées') }}>Arrêter le plan de relance</button>
+                : <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface" onClick={() => { setMenuFor(null); setCadenceFor(r) }}>Appliquer un plan de relance</button>)}
               <button className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-surface text-red-500" onClick={() => { setMenuFor(null); setConfirmDel(r.id) }}>Supprimer</button>
             </div>
           )}
@@ -873,6 +881,37 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       {confirmDel && (
         <Confirm message="Êtes-vous sûr de vouloir supprimer ce Rendez-vous ? Les rendez-vous suivants liés seront aussi supprimés."
           onYes={() => deleteRdv(confirmDel)} onNo={() => setConfirmDel(null)} />
+      )}
+
+      {/* Choix du plan, avec l'aperçu des tâches AVANT de les créer : ce que l'écran montre
+          est exactement ce qui sera posé dans « Mes tâches ». */}
+      {cadenceFor && (
+        <Modal title={`Plan de relance — ${cadenceFor.entreprise || 'affaire'}`} onClose={() => setCadenceFor(null)}>
+          <p className="text-xs text-muted mb-3">
+            Les tâches sont créées aux dates ci-dessous. <b>Rien n'est envoyé automatiquement</b> :
+            vous écrivez et vous envoyez, le plan se contente de vous le rappeler au bon moment.
+          </p>
+          <div className="space-y-2">
+            {cadences.map(c => (
+              <div key={c.id} className="rounded-xl border border-line p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-sm">{c.name}</span>
+                  <button className="btn-primary !py-1 text-xs"
+                    onClick={() => { const n = store.applyCadence(cadenceFor.id, c.id); setCadenceFor(null); toast(`${n} tâche(s) créée(s)`) }}>
+                    Appliquer
+                  </button>
+                </div>
+                <ul className="mt-1.5 space-y-0.5">
+                  {cadenceTasks(c, cadenceFor, todayISO()).map(t => (
+                    <li key={t.id} className="text-[11px] text-muted">
+                      <span className="num">{fmtDate(t.dueDate)}</span> — {t.title}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Modal>
       )}
 
       {sqlAsk && (() => {

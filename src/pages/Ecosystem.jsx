@@ -650,6 +650,91 @@ function RecycleCard({ store, sub }) {
   )
 }
 
+// Plans de relance : la séquence de touches que le manager veut voir appliquée. Le produit
+// dit quoi faire et quand ; il n'envoie rien — voir le commentaire de `cadenceTasks`.
+function CadenceCard({ store, sub }) {
+  const list = store.cadences()
+  const [editing, setEditing] = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null)
+  const blank = () => ({ id: uid(), name: '', steps: [{ id: uid(), offset: 0, title: '', note: '' }] })
+  const setStep = (i, k, v) => setEditing(c => ({ ...c, steps: c.steps.map((s, j) => (j === i ? { ...s, [k]: v } : s)) }))
+
+  return (
+    <div className="card p-4">
+      <h3 className="font-bold mb-1">Plans de relance</h3>
+      <p className="text-xs text-muted mb-3">
+        Une séquence de touches, appliquée à une affaire depuis sa fiche : elle crée les tâches
+        aux bonnes dates. <b>Rien n'est envoyé automatiquement</b> — le plan dit quoi faire et
+        quand, une personne écrit et envoie.
+      </p>
+
+      {list.length === 0 && <Empty text="Aucun plan de relance. Créez-en un pour donner une méthode à votre équipe." />}
+      <div className="space-y-1.5">
+        {list.map(c => (
+          <div key={c.id} className="flex items-center gap-2 p-2 rounded-xl border border-line">
+            <span className="font-semibold text-sm flex-1">{c.name}</span>
+            <span className="text-[11px] text-muted">
+              {c.steps.length} touche{c.steps.length > 1 ? 's' : ''} · sur {Math.max(...c.steps.map(s => Number(s.offset) || 0), 0)} jours
+            </span>
+            <button className="btn-ghost !p-1" title="Modifier" onClick={() => setEditing(JSON.parse(JSON.stringify(c)))}><Pencil size={13} /></button>
+            <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" onClick={() => setConfirmDel(c)}><Trash2 size={13} /></button>
+          </div>
+        ))}
+      </div>
+      <button className="btn-ghost !py-1.5 text-sm mt-2" onClick={() => setEditing(blank())}><Plus size={14} /> Nouveau plan</button>
+
+      {editing && (
+        <div className="mt-3 rounded-xl border border-line p-3 space-y-2.5">
+          <Field label="Nom du plan">
+            <input className="input" value={editing.name} onChange={e => setEditing(c => ({ ...c, name: e.target.value }))}
+              placeholder="ex : Relance après salon" />
+          </Field>
+          <div className="space-y-2">
+            {editing.steps.map((s, i) => (
+              <div key={s.id} className="grid grid-cols-1 sm:grid-cols-[5rem_1fr_auto] gap-2 items-start">
+                <label className="text-xs">
+                  <span className="block text-muted mb-0.5">J+</span>
+                  <input type="number" min="0" className="input !py-1 num" value={s.offset}
+                    onChange={e => setStep(i, 'offset', e.target.value)} />
+                </label>
+                <div className="space-y-1">
+                  <input className="input !py-1 text-sm" placeholder="Intitulé de la touche" value={s.title}
+                    onChange={e => setStep(i, 'title', e.target.value)} />
+                  <input className="input !py-1 text-xs" placeholder="Consigne (facultatif)" value={s.note}
+                    onChange={e => setStep(i, 'note', e.target.value)} />
+                </div>
+                <button className="btn-ghost !p-1 !text-red-500 mt-4" title="Retirer cette touche"
+                  disabled={editing.steps.length <= 1}
+                  onClick={() => setEditing(c => ({ ...c, steps: c.steps.filter((_, j) => j !== i) }))}><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </div>
+          <button className="btn-ghost !py-1 text-xs"
+            onClick={() => setEditing(c => ({ ...c, steps: [...c.steps, { id: uid(), offset: (Number(c.steps[c.steps.length - 1]?.offset) || 0) + 3, title: '', note: '' }] }))}>
+            <Plus size={13} /> Ajouter une touche
+          </button>
+          <div className="flex gap-2 pt-1">
+            <button className="btn-primary !py-1.5 text-sm" disabled={!editing.name.trim() || editing.steps.some(s => !s.title.trim())}
+              onClick={() => { store.saveCadence(editing); setEditing(null); toast('Plan de relance enregistré') }}>
+              <Save size={14} /> Enregistrer
+            </button>
+            <button className="btn-ghost !py-1.5 text-sm" onClick={() => setEditing(null)}>Annuler</button>
+          </div>
+          {editing.steps.some(s => !s.title.trim()) && (
+            <p className="text-[11px] text-amber-600">Chaque touche a besoin d'un intitulé : c'est ce qui apparaîtra dans les tâches.</p>
+          )}
+        </div>
+      )}
+
+      {confirmDel && (
+        <Confirm message={`Supprimer le plan « ${confirmDel.name} » ? Les tâches déjà créées ne sont pas touchées.`}
+          onYes={() => { store.deleteCadence(confirmDel.id); setConfirmDel(null); toast('Plan supprimé') }}
+          onNo={() => setConfirmDel(null)} />
+      )}
+    </div>
+  )
+}
+
 export default function Ecosystem() {
   const store = useStore()
   const sub = store.sub
@@ -669,6 +754,7 @@ export default function Ecosystem() {
       {store.hasModule('handoff') && <HandoffCard store={store} sub={sub} />}
       {store.hasModule('closing') && <ClosingCard store={store} sub={sub} />}
       {store.hasModule('recycling') && <RecycleCard store={store} sub={sub} />}
+      {store.hasModule('cadence') && <CadenceCard store={store} sub={sub} />}
       <PayRule store={store} sub={sub} />
       <Bareme store={store} sub={sub} />
       <PrimeRulesCard store={store} sub={sub} />

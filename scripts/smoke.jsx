@@ -482,6 +482,32 @@ async function main() {
     if (back.recycleAt) throw new Error('Une affaire reprise ne doit plus être en attente de reprise')
     if (back.recycleCount !== 1) throw new Error('Le nombre de reprises doit être compté')
     if (!back.motifKo) throw new Error("Le motif d'origine doit être conservé : c'est le seul avantage sur un lead neuf")
+
+    // Plans de relance : appliquer une séquence pose les tâches AUX BONNES DATES, et
+    // l'arrêter retire celles qui restent sans toucher à ce qui a déjà été fait.
+    await act(async () => { st().setEnvModules(envId, { cadence: true }) })
+    const dbNow2 = () => { win.__bdrFlushSave?.(); return JSON.parse(win.localStorage.getItem('bdrflow_db_v1')) }
+    const plans = st().cadences()
+    if (!plans.length) throw new Error('Aucun plan de relance semé par défaut')
+    const before2 = (dbNow2().data[subId].tasks || []).length
+    let n = 0
+    await act(async () => { n = st().applyCadence(target.id, plans[0].id) })
+    if (n !== plans[0].steps.length) throw new Error(`Le plan devait créer ${plans[0].steps.length} tâches, il en annonce ${n}`)
+    const made = (dbNow2().data[subId].tasks || []).filter(t => t.rdvId === target.id && t.cadenceId === plans[0].id)
+    if (made.length !== plans[0].steps.length) throw new Error(`Tâches réellement créées : ${made.length}`)
+    // Les échéances doivent être ÉCHELONNÉES : un plan qui pose tout le même jour ne relance rien.
+    const dates = [...new Set(made.map(t => t.dueDate))]
+    if (dates.length < 2) throw new Error('Les tâches d\'un plan doivent être échelonnées dans le temps')
+    // Réappliquer ne double pas les tâches non faites.
+    await act(async () => { st().applyCadence(target.id, plans[0].id) })
+    const again = (dbNow2().data[subId].tasks || []).filter(t => t.rdvId === target.id && t.cadenceId === plans[0].id)
+    if (again.length !== plans[0].steps.length) throw new Error(`Réappliquer un plan a empilé les tâches (${again.length})`)
+    // Arrêter retire les tâches non faites, et seulement celles-là.
+    await act(async () => { st().setSub(d => { const t = (d.tasks || []).find(x => x.rdvId === target.id && x.cadenceId === plans[0].id); if (t) t.done = true; return d }) })
+    await act(async () => { st().stopCadence(target.id) })
+    const left = (dbNow2().data[subId].tasks || []).filter(t => t.rdvId === target.id && t.cadenceId === plans[0].id)
+    if (left.length !== 1 || !left[0].done) throw new Error("Arrêter un plan doit garder ce qui a été fait et retirer le reste")
+    if ((dbNow2().data[subId].tasks || []).length < before2) throw new Error('Des tâches étrangères au plan ont été supprimées')
   }
 
   // 5. Comité d'achat : le formulaire de RDV qualifie chaque interlocuteur, et alerte quand

@@ -1019,6 +1019,47 @@ export const QUOTA_METRICS = [
 ]
 export const QUOTA_METRIC_IDS = QUOTA_METRICS.map(m => m.id)
 
+// ---------------------------------------------------------------- Plans de relance (cadences)
+// Un BDR junior ne manque pas d'outils, il manque de méthode : quand relancer, combien de
+// fois, et à quel moment s'arrêter. Le manager décrit la séquence une fois ; l'appliquer à
+// une affaire pose les tâches datées.
+//
+// ⚠️ AUCUN ENVOI AUTOMATIQUE, volontairement. Le produit dit quoi faire et quand ; c'est
+// une personne qui écrit et qui envoie. Automatiser l'envoi transformerait un outil de
+// méthode en machine à spam, et ferait entrer le produit dans un tout autre métier —
+// délivrabilité, désinscription, réputation d'expéditeur — qu'il ne sait pas tenir.
+export function defaultCadences() {
+  return [{
+    id: 'cad-standard', name: 'Relance standard', builtin: true,
+    steps: [
+      { id: 's1', offset: 0, title: 'Premier contact', note: "Message d'accroche : le problème qu'on résout, pas le produit." },
+      { id: 's2', offset: 3, title: 'Relance courte', note: 'Trois lignes maximum, une seule question fermée.' },
+      { id: 's3', offset: 7, title: 'Angle différent', note: 'Autre entrée : un cas client comparable, ou un autre interlocuteur.' },
+      { id: 's4', offset: 14, title: 'Dernier message', note: "Annoncer qu'on arrête. C'est celui qui obtient le plus de réponses." },
+    ],
+  }]
+}
+export const cadenceList = (data) => (Array.isArray(data?.cadences) ? data.cadences : [])
+export const cadenceById = (data, id) => cadenceList(data).find(c => c.id === id) || null
+/**
+ * Les tâches que poserait un plan, sans les écrire. Sert à l'aperçu comme à l'application :
+ * ce que l'écran montre est exactement ce qui sera créé.
+ */
+export function cadenceTasks(cadence, rdv, fromISO) {
+  const start = fromISO || todayISO()
+  return (cadence?.steps || []).slice().sort((a, b) => a.offset - b.offset).map(s => ({
+    id: uid(),
+    title: `${s.title} — ${rdv?.entreprise || 'affaire'}`,
+    description: s.note || '',
+    dueDate: addDaysISO(start, Math.max(0, Number(s.offset) || 0)),
+    company: rdv?.entreprise || '',
+    rdvId: rdv?.id || '',
+    cadenceId: cadence?.id || '',
+    stepId: s.id,
+    done: false, createdAt: new Date().toISOString(),
+  }))
+}
+
 // ---------------------------------------------------------------- Recyclage des leads perdus
 // Le stock de leads perdus est la ressource la moins exploitée d'une équipe : elle l'a déjà
 // travaillé, qualifié, et connaît l'interlocuteur. Un « non » de janvier n'est pas un « non »
@@ -3143,6 +3184,9 @@ function migrate(db) {
     if (!Array.isArray(data.objectionFamilies) || !data.objectionFamilies.length) data.objectionFamilies = [...OBJECTION_FAMILIES]
     // Modèles de messages : semés une seule fois, comme les objections.
     if (!Array.isArray(data.messageTemplates)) data.messageTemplates = defaultMessageTemplates()
+    // Plans de relance : semés une seule fois. Un plan supprimé ne doit pas repousser, et une
+    // équipe qui a écrit les siens ne doit pas retrouver le nôtre par-dessus.
+    if (!Array.isArray(data.cadences)) data.cadences = defaultCadences()
     // Modulateurs de prime : toujours neutres tant qu'un manager ne les active pas.
     data.primeRules = { ...DEFAULT_PRIME_RULES(), ...(data.primeRules || {}) }
     // Pipeline de closing (module `closing`)
@@ -3903,6 +3947,50 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           .filter(s => s.envId === session?.envId)
           .map(s => ({ sub: s, score: challengeScore(db.data[s.id] || {}, ch.metric, ch.start, ch.end) }))
           .sort((a, b) => b.score - a.score)
+      },
+      // ----- Plans de relance
+      cadences() { return cadenceList(this.sub) },
+      saveCadence(c) {
+        this.setSub(d => {
+          const list = cadenceList(d)
+          const i = list.findIndex(x => x.id === c.id)
+          const next = i >= 0 ? list.map(x => (x.id === c.id ? c : x)) : [...list, { ...c, id: c.id || uid() }]
+          return { ...d, cadences: next }
+        })
+      },
+      deleteCadence(id) { this.setSub(d => ({ ...d, cadences: cadenceList(d).filter(c => c.id !== id) })) },
+      /**
+       * Pose les tâches d'un plan sur une affaire. Les tâches d'un plan déjà appliqué à
+       * cette affaire sont REMPLACÉES : réappliquer un plan après avoir décalé une date
+       * doit repartir de la séquence, pas empiler deux relances le même jour.
+       */
+      applyCadence(rdvId, cadenceId) {
+        const cad = cadenceById(this.sub, cadenceId)
+        const rdv = (this.sub?.rdvs || []).find(x => x.id === rdvId)
+        if (!cad || !rdv) return 0
+        // ⚠️ Les tâches sont fabriquées AVANT l'écriture. Un `setSub` passe par une mise à
+        // jour d'état React : son contenu ne s'exécute pas tout de suite, et compter à
+        // l'intérieur renvoyait toujours zéro à l'appelant.
+        const tasks = cadenceTasks(cad, rdv, todayISO())
+        this.setSub(d => {
+          const r = (d.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          // On ne retire QUE les tâches non faites de ce plan sur cette affaire : ce qui a
+          // été fait appartient à l'historique de la personne, pas au plan.
+          const kept = (d.tasks || []).filter(t => !(t.rdvId === rdvId && t.cadenceId === cadenceId && !t.done))
+          r.cadence = { id: cadenceId, appliedAt: todayISO() }
+          return { ...d, tasks: [...kept, ...tasks] }
+        })
+        this.logAction('Lead', 'Plan de relance appliqué', cad.name)
+        return tasks.length
+      },
+      /** Retire les tâches non faites d'un plan : arrêter une séquence ne réécrit pas le passé. */
+      stopCadence(rdvId) {
+        this.setSub(d => {
+          const r = (d.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          const cid = r.cadence?.id
+          r.cadence = null
+          return { ...d, tasks: (d.tasks || []).filter(t => !(t.rdvId === rdvId && t.cadenceId === cid && !t.done)) }
+        })
       },
       // ----- Recyclage des leads perdus
       // Reprendre une affaire, c'est la remettre au DÉBUT du pipeline : la reprendre là où
