@@ -40,12 +40,17 @@ function DeleteDelivery({ target, store, onClose }) {
         <p className="text-xs text-muted">
           Tout part en archive pendant 30 jours : la corbeille support restaure l'ensemble d'un geste. Passé ce délai, la suppression est définitive.
         </p>
-        <Field label="Motif de la fermeture (visible dans le ticket)">
+        <Field label="Motif de la fermeture (interne — jamais montré au client)">
           <textarea className="input" rows={2} value={reason} onChange={e => setReason(e.target.value)}
             placeholder="Fin de contrat, doublon, environnement de test…" />
         </Field>
+        {/* Deux phrases séparées, et non un paragraphe : au-delà de 240 caractères, un texte
+            échappe au contrôle de traduction et resterait en français sans que rien ne le dise. */}
         <p className="text-xs text-muted">
-          Un ticket « Fermeture de projet » est ouvert automatiquement : le propriétaire du projet y a accès pour en discuter en cas de litige.
+          Les accès de l'équipe sont suspendus. Un ticket « Fermeture de projet » s'ouvre avec le propriétaire, qui pourra encore s'y connecter pour en discuter.
+        </p>
+        <p className="text-xs text-muted">
+          La clôture de ce ticket décidera de rétablir le projet ou de le supprimer définitivement.
         </p>
         <div className="flex justify-end gap-2 pt-1">
           <button className="btn-ghost" onClick={onClose}>Annuler</button>

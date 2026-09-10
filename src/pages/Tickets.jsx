@@ -1,8 +1,81 @@
 import React, { useState } from 'react'
-import { LifeBuoy, ArrowLeft, MessageSquare, CheckCircle2, Trash2, Building2, Star, UserCog, MessageSquareText, Plus, Clock, AlertTriangle } from 'lucide-react'
+import { LifeBuoy, ArrowLeft, MessageSquare, CheckCircle2, Trash2, Building2, Star, UserCog, MessageSquareText, Plus, Clock, AlertTriangle, RotateCcw } from 'lucide-react'
 import { useStore, fmtDate, ticketHasUnread, TICKET_PRIORITIES, SUPPORT_ROLES, priorityRank, slaInfo, fmtDuration, SLA_HOURS } from '../store.jsx'
 import { Empty, Confirm, toast, Modal, Field } from '../ui.jsx'
 import TicketChat from './TicketChat.jsx'
+
+/**
+ * LE SORT D'UN PROJET FERMÉ — visible du seul côté support.
+ *
+ * Un ticket de fermeture ne se clôt pas comme les autres : tant que rien n'est décidé,
+ * une équipe entière reste désactivée et son environnement dort dans la corbeille. La
+ * clôture est donc un CHOIX entre deux issues, et l'écran refuse de laisser filer le
+ * ticket sans en prendre une.
+ *
+ * C'est aussi le seul endroit où s'affichent le nom de qui a fermé l'accès et le motif
+ * interne : le client, lui, n'a jamais à savoir quel collègue a appuyé sur le bouton.
+ */
+function ClosureDecision({ ticket }) {
+  const store = useStore()
+  const [confirm, setConfirm] = useState(null) // 'restore' | 'purge'
+  const closure = ticket.projectClosure
+  const entry = store.closureTrashEntry(ticket.id)
+  const impact = entry ? store.closureImpact(entry.id) : null
+  const canDecide = store.hasPerm('projects.manage')
+
+  const act = () => {
+    if (confirm === 'restore') {
+      store.restoreClosedProject(entry.id)
+      toast('Projet rétabli — les accès sont rendus')
+    } else {
+      const removed = store.purgeClosedProject(entry.id)
+      toast(`Projet supprimé définitivement${Array.isArray(removed) && removed.length ? ` — ${removed.length} compte(s) supprimé(s)` : ''}`)
+    }
+    setConfirm(null)
+  }
+
+  // Décision déjà prise : on le dit, plutôt que de reproposer des boutons sans effet.
+  if (closure.decided) {
+    return (
+      <div className="card p-3 text-sm flex items-center gap-2 flex-wrap">
+        <CheckCircle2 size={15} className={closure.decided === 'restored' ? 'text-emerald-600' : 'text-red-500'} />
+        <span>{closure.decided === 'restored' ? 'Projet rétabli : les accès ont été rendus.' : 'Projet supprimé définitivement.'}</span>
+        {closure.deletedBy && <span className="text-xs text-muted">· fermé par {closure.deletedBy}</span>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="card p-3 space-y-2 border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10">
+      <div className="text-sm font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+        <AlertTriangle size={15} /> <span>Projet fermé — décision attendue</span>
+      </div>
+      <div className="text-xs text-amber-800/90 dark:text-amber-300/90 space-y-0.5">
+        <div>Environnement <b>{closure.envName}</b>{closure.deletedBy ? <> · fermé par <b>{closure.deletedBy}</b></> : null}</div>
+        {closure.reason && <div>Motif interne : <i>{closure.reason}</i></div>}
+        {impact && <div><b>{impact.spaces}</b> {impact.spaces > 1 ? 'espaces' : 'espace'} · <b>{impact.accounts}</b> {impact.accounts > 1 ? 'comptes suspendus' : 'compte suspendu'}</div>}
+        {!entry && <div>L'archive a expiré : il n'y a plus rien à rétablir.</div>}
+      </div>
+      {entry && canDecide && (
+        <div className="flex gap-2 flex-wrap">
+          <button className="btn-primary !py-1 text-xs" onClick={() => setConfirm('restore')}><RotateCcw size={13} /> Rétablir le projet</button>
+          <button className="btn-danger !py-1 text-xs" onClick={() => setConfirm('purge')}><Trash2 size={13} /> Supprimer définitivement</button>
+        </div>
+      )}
+      {entry && !canDecide && <p className="text-xs text-muted">Seule l'équipe projets peut trancher.</p>}
+      {confirm && (
+        <Confirm
+          yesLabel={confirm === 'restore' ? 'Rétablir' : 'Supprimer définitivement'}
+          /* Un message recollé avant l'affichage ne se traduit pas : chaque phrase est
+             rendue dans son propre élément, et seul le nom du client reste tel quel. */
+          message={confirm === 'restore'
+            ? <>Rétablir <b>{closure.envName}</b> ? <span>L'environnement, ses espaces et leurs données reviennent tels quels, et chacun retrouve son accès.</span></>
+            : <>Supprimer définitivement <b>{closure.envName}</b> ? <span>Les données ne seront plus récupérables, et les comptes de cet environnement seront supprimés.</span></>}
+          onYes={act} onNo={() => setConfirm(null)} />
+      )}
+    </div>
+  )
+}
 
 // Tableau de bord satisfaction (CSAT)
 function CsatDashboard({ tickets }) {
@@ -140,6 +213,9 @@ export default function Tickets() {
           )
         )}
 
+        {/* Fermeture de projet : ce ticket décide du sort d'un environnement entier. */}
+        {openTicket.projectClosure && <ClosureDecision ticket={openTicket} />}
+
         {/* Clôture demandée par le client : son motif, tel qu'il l'a écrit. */}
         {openTicket.closure?.by === 'client' && (
           <div className="card p-2.5 text-sm">
@@ -179,9 +255,14 @@ export default function Tickets() {
             </div>
             <div className="flex items-center gap-1.5">
               <span className={`chip ${STATUS_CLASS[openTicket.status]}`}>{STATUS_LABEL[openTicket.status]}</span>
-              {openTicket.status !== 'closed'
-                ? <button className="btn-ghost !py-1 text-xs" onClick={() => store.setTicketStatus(openTicket.id, 'closed')}><CheckCircle2 size={13} /> Clôturer</button>
-                : <button className="btn-ghost !py-1 text-xs" onClick={() => store.setTicketStatus(openTicket.id, 'in_progress')}>Rouvrir</button>}
+              {/* Un ticket de fermeture ne se clôt PAS d'un simple clic : sa clôture est le
+                  choix entre rétablir et supprimer, fait juste au-dessus. Le clôturer sans
+                  trancher laisserait une équipe désactivée sans que personne ne l'ait décidé. */}
+              {openTicket.projectClosure && !openTicket.projectClosure.decided
+                ? <span className="text-xs text-muted">Décision attendue ci-dessus</span>
+                : openTicket.status !== 'closed'
+                  ? <button className="btn-ghost !py-1 text-xs" onClick={() => store.setTicketStatus(openTicket.id, 'closed')}><CheckCircle2 size={13} /> Clôturer</button>
+                  : <button className="btn-ghost !py-1 text-xs" onClick={() => store.setTicketStatus(openTicket.id, 'in_progress')}>Rouvrir</button>}
               <button className="btn-danger !py-1 text-xs" onClick={() => setConfirmDel(openTicket.id)}><Trash2 size={13} /></button>
             </div>
           </div>

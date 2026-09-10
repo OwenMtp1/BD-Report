@@ -499,22 +499,31 @@ async function main() {
   //   On vérifie les trois promesses : tout part, tout revient, et le fil de discussion existe.
   {
     const d = s.buildDemoDb({}); s.migrate(d)
-    const env = { id: 'env-supp', name: 'Client à fermer', plan: 'beta', subState: 'active', members: [] }
+    // Une équipe cliente réaliste : un propriétaire, un membre, un membre qui travaille
+    // AUSSI pour une autre société, et un membre du staff invité dans l'environnement.
+    d.accounts.push(
+      { id: 'acc-own', email: 'own@x.fr', pseudo: 'Patronne', role: 'Manager', plan: 'beta', bricks: [] },
+      { id: 'acc-mbr', email: 'mbr@x.fr', pseudo: 'Membre', role: 'Membre', plan: 'beta', bricks: [] },
+      { id: 'acc-two', email: 'two@x.fr', pseudo: 'Double', role: 'Membre', plan: 'beta', bricks: [] },
+      { id: 'acc-stf', email: 'stf@x.fr', pseudo: 'Staff', role: 'Support BD Report', plan: 'beta', bricks: [] },
+    )
+    d.environments.push({ id: 'env-autre', name: 'Autre client', plan: 'beta', subState: 'active', members: ['acc-two'] })
+    const env = { id: 'env-supp', name: 'Client à fermer', plan: 'beta', subState: 'active', createdBy: 'acc-own', members: ['acc-mbr', 'acc-two', 'acc-stf'] }
     d.environments.push(env)
     s.seedEnvClientAndProject(d, env)
     const proj = d.projects.find(p => p.sourceEnvId === 'env-supp')
     ok(!!proj, 'Archive : l\'environnement de test n\'a pas reçu sa livraison')
     // Deux espaces avec des données, pour vérifier qu'ils partent ET reviennent.
-    const owner = d.accounts[0]
+    const owner = d.accounts.find(a => a.id === 'acc-own')
     proj.ownerId = owner.id
     ;['sub-supp-1', 'sub-supp-2'].forEach((id, i) => {
-      d.subenvs.push({ id, envId: 'env-supp', prenom: 'P' + i, nom: '', pin: '0000', ownerId: owner.id })
+      d.subenvs.push({ id, envId: 'env-supp', prenom: 'P' + i, nom: '', pin: '0000', ownerId: i ? 'acc-mbr' : 'acc-own' })
       d.data[id] = { rdvs: [{ id: 'r' + i, entreprise: 'Test' }], _rev: 1 }
     })
     const beforeSpaces = JSON.stringify(['sub-supp-1', 'sub-supp-2'].map(k => d.data[k]))
     const ticketsBefore = d.tickets.length
 
-    const entry = s.archiveDelivery(d, { projectId: proj.id, reason: 'Fin de contrat', actorId: owner.id, actorName: 'Owen' })
+    const entry = s.archiveDelivery(d, { projectId: proj.id, reason: 'Fin de contrat', actorId: 'acc-stf', actorName: 'Nadia (staff)' })
     ok(!!entry, 'Archive : rien n\'a été archivé')
     // a. Plus rien ne se balade.
     ok(!d.environments.some(e => e.id === 'env-supp'), 'Supprimer la livraison laisse l\'environnement derrière')
@@ -526,20 +535,43 @@ async function main() {
       'La livraison supprimée n\'est pas dans la corbeille : la suppression est irréversible')
     ok(entry.data.subenvs.length === 2 && Object.keys(entry.data.spaces).length === 2,
       'L\'archive ne contient pas les espaces : la restauration rendrait une coquille')
-    // c. Le ticket de fermeture existe, appartient au PROPRIÉTAIRE du projet, et se voit.
+    // c. Le ticket de fermeture est ADRESSÉ AU CLIENT, et ne le met pas face à un collègue.
     const tk = (d.tickets || []).find(t => t.id === entry.data.ticketId)
     ok(!!tk && tk.category === s.PROJECT_CLOSURE_CATEGORY, 'Aucun ticket de fermeture n\'a été ouvert')
     ok(d.tickets.length === ticketsBefore + 1, 'La suppression a ouvert plus d\'un ticket')
-    ok(tk && tk.userAccountId === owner.id, 'Le ticket de fermeture n\'est pas accessible au propriétaire du projet')
-    ok(tk && s.ticketHasUnread(tk, 'user') && s.ticketHasUnread(tk, 'support'),
-      'Le ticket de fermeture est déjà marqué lu : la suppression passerait inaperçue')
-    ok(tk && /Fin de contrat/.test(tk.messages[0].text), 'Le motif de fermeture ne figure pas dans le ticket')
+    ok(tk && tk.userAccountId === 'acc-own', 'Le ticket de fermeture n\'est pas adressé au propriétaire du projet')
+    ok(tk && s.ticketHasUnread(tk, 'user'), 'Le ticket de fermeture est déjà lu côté client : la fermeture passerait inaperçue')
+    const seen = (tk?.messages || []).map(m => `${m.text} ${m.authorName || ''}`).join(' ')
+    ok(!/Nadia/.test(seen), 'Le nom du collègue qui a fermé l\'accès est visible du client')
+    ok(!/Fin de contrat/.test(seen), 'Le motif interne de fermeture est visible du client')
+    ok(/L'accès au logiciel BD Report/.test(seen) && /supprimer définitivement/.test(seen),
+      'Le message de contexte ne dit pas que l\'accès est fermé, ni à quoi sert la discussion')
+    // Le message vient du support, pas du « bot » : un message bot disparaît de la
+    // conversation dès la première réponse d'un technicien, avec tout le contexte.
+    ok(tk?.messages[0]?.from === 'support', 'Le message de fermeture disparaîtrait à la première réponse')
+    // …et le support, lui, garde de quoi trancher.
+    ok(tk?.projectClosure?.reason === 'Fin de contrat' && tk?.projectClosure?.deletedBy === 'Nadia (staff)',
+      'Le support perd le motif interne et l\'auteur de la fermeture')
+
+    // c bis. FERMER, c'est fermer l'accès. Sauf pour qui travaille ailleurs, et sauf le
+    //   propriétaire — sans lui, la décision se prendrait entre BD Report et un mur.
+    const acc = (id) => d.accounts.find(a => a.id === id)
+    ok(acc('acc-mbr').disabled === true, 'Un membre du projet fermé peut encore se connecter')
+    ok(!acc('acc-own').disabled && acc('acc-own').closureTicketId === tk.id,
+      'Le propriétaire doit garder une porte d\'entrée, et elle doit mener au ticket')
+    ok(!acc('acc-two').disabled, 'Un membre qui travaille pour une autre société a perdu cet accès aussi')
+    ok(!acc('acc-stf').disabled, 'Un membre du staff a été désactivé avec le client')
+
     // d. Le client reste, devenu ancien : c'est lui qui porte l'histoire du départ.
     const cli = d.clients.find(c => c.key === 'env:env-supp')
     ok(cli && cli.status === 'anciens', 'La fiche client a disparu ou n\'est pas classée en « anciens »')
 
-    // e. Restaurer rend TOUT, à l'identique.
+    // e. Restaurer rend TOUT, à l'identique — y compris les accès.
     s.restoreDelivery(d, entry)
+    ok(!acc('acc-mbr').disabled, 'Rétablir le projet ne rend pas son accès à l\'équipe')
+    ok(!acc('acc-own').closureTicketId, 'Le propriétaire reste enfermé dans l\'écran de fermeture')
+    ok(tk.status === 'closed' && tk.projectClosure.decided === 'restored',
+      'La décision de rétablir ne clôt pas le ticket de fermeture')
     ok(d.environments.some(e => e.id === 'env-supp'), 'Restaurer ne rend pas l\'environnement')
     ok(d.subenvs.filter(x => x.envId === 'env-supp').length === 2, 'Restaurer ne rend pas les espaces')
     ok(JSON.stringify(['sub-supp-1', 'sub-supp-2'].map(k => d.data[k])) === beforeSpaces,
@@ -583,6 +615,46 @@ async function main() {
     )
     ok(m2.environments.some(e => e.id === 'env-mort'), 'Synchro : une restauration plus récente est annulée par la pierre tombale')
     ok(m2.projects.some(p => p.sourceEnvId === 'env-mort') && !!m2.data.sz, 'Synchro : la restauration ne rend pas la livraison et ses données')
+
+    // j. L'AUTRE ISSUE : la suppression définitive. Elle doit vraiment tout emporter —
+    //    un compte laissé derrière, désactivé pour toujours, garderait son adresse prise
+    //    et son propriétaire devant une porte qui ne s'ouvre plus sur rien.
+    const dd = s.buildDemoDb({}); s.migrate(dd)
+    dd.accounts.push(
+      { id: 'p-own', email: 'o@p.fr', pseudo: 'Prop', role: 'Manager', plan: 'beta', bricks: [] },
+      { id: 'p-mbr', email: 'm@p.fr', pseudo: 'Mbr', role: 'Membre', plan: 'beta', bricks: [] },
+      { id: 'p-two', email: 't@p.fr', pseudo: 'Deux', role: 'Membre', plan: 'beta', bricks: [] },
+    )
+    dd.environments.push({ id: 'env-ailleurs', name: 'Ailleurs', plan: 'beta', subState: 'active', members: ['p-two'] })
+    const pe = { id: 'env-purge', name: 'À purger', plan: 'beta', subState: 'active', createdBy: 'p-own', members: ['p-mbr', 'p-two'] }
+    dd.environments.push(pe)
+    s.seedEnvClientAndProject(dd, pe)
+    dd.subenvs.push({ id: 'sub-purge', envId: 'env-purge', prenom: 'P', nom: '', pin: '0000', ownerId: 'p-own' })
+    dd.data['sub-purge'] = { rdvs: [], _rev: 1 }
+    const pEntry = s.archiveDelivery(dd, { envId: 'env-purge', reason: 'Impayé', actorId: null, actorName: 'Staff' })
+    const removed = s.purgeDelivery(dd, pEntry)
+    ok(!dd.accounts.some(a => a.id === 'p-own') && !dd.accounts.some(a => a.id === 'p-mbr'),
+      'Suppression définitive : des comptes du projet supprimé subsistent')
+    ok(dd.accounts.some(a => a.id === 'p-two') && !dd.accounts.find(a => a.id === 'p-two').closureTicketId,
+      'Suppression définitive : un compte qui travaille ailleurs a été supprimé avec le projet')
+    ok(removed.length === 2, `Suppression définitive : ${removed.length} comptes retirés au lieu de 2`)
+    ok(!(dd.supportTrash || []).some(t => t.id === pEntry.id), 'Suppression définitive : l\'archive reste dans la corbeille')
+    const pTk = dd.tickets.find(t => t.id === pEntry.data.ticketId)
+    ok(pTk && pTk.status === 'closed' && pTk.projectClosure.decided === 'purged',
+      'Suppression définitive : le ticket de fermeture reste ouvert')
+    // Le ticket SURVIT à la purge : c'est la trace de la décision et de ce qui s'est dit.
+    ok(!!pTk, 'Suppression définitive : la discussion de fermeture a disparu avec le projet')
+
+    // k. La décision appartient à BD Report, et elle se prend. Le client ne referme pas le
+    //    dossier de son côté, et le support ne clôt pas le ticket sans avoir tranché.
+    const sup = fs.default.readFileSync(path.default.join(dir, 'Support.jsx'), 'utf8')
+    ok(/!openTicket\.projectClosure/.test(sup),
+      'Le client peut refermer un ticket de fermeture de projet sans que rien ne soit décidé')
+    const tic = fs.default.readFileSync(path.default.join(dir, 'Tickets.jsx'), 'utf8')
+    ok(/projectClosure && !openTicket\.projectClosure\.decided/.test(tic),
+      'Le support peut clôturer un ticket de fermeture sans choisir entre rétablir et supprimer')
+    ok(/restoreClosedProject/.test(tic) && /purgeClosedProject/.test(tic),
+      'Le ticket de fermeture ne propose pas ses deux issues')
   }
 
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création

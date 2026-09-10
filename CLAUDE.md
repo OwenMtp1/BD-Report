@@ -38,8 +38,26 @@ npm run dev        # serveur de dev
     console — « des environnements qui se baladent », le pire des deux états. Tout (projet, env, sous-espaces,
     `data`) part dans `db.supportTrash` (`kind: 'project'`, 30 jours), `restoreDelivery` le rend à l'identique,
     et la fiche client RESTE, classée « anciens » : elle porte l'histoire du départ.
-    Chaque suppression **ouvre un ticket** `PROJECT_CLOSURE_CATEGORY` (« Fermeture de projet ») rattaché au
-    **propriétaire du projet** (à défaut, à qui supprime), non lu des deux côtés — le fil où se règle un litige.
+  - **Fermer un projet FERME L'ACCÈS, et ouvre une discussion.** `makeClosureTicket` crée un ticket
+    `PROJECT_CLOSURE_CATEGORY` (« Fermeture de projet ») adressé au **propriétaire côté client**
+    (`env.createdBy` s'il est client, sinon le Manager, sinon le premier membre ; sans compte client, personne).
+    ⚠️ **Le client ne voit JAMAIS qui a fermé, ni le motif interne** : le message dit que l'accès a été fermé
+    « par l'équipe BD Report » et à quoi sert la discussion. L'auteur et le motif vivent dans
+    `ticket.projectClosure` (lu par la seule console support), le journal staff et l'entrée de corbeille.
+    ⚠️ Le message est `from: 'support'`, **pas `'bot'`** : `TicketChat` masque les messages bot dès la première
+    réponse d'un technicien, et le contexte de la fermeture disparaîtrait avec eux.
+    Tous les comptes CLIENTS de l'environnement sont **désactivés** — sauf ceux qui ont encore un autre
+    environnement (`hasAnotherEnv`), et sauf le propriétaire, qui porte `account.closureTicketId` : il peut
+    encore se connecter, mais `App.jsx` ne lui ouvre QUE `ProjectClosed.jsx` (la discussion), avant tout choix
+    d'environnement. Sans lui, la décision se prendrait entre BD Report et un mur.
+    ⚠️ **La clôture de ce ticket EST la décision**, et il n'y a que deux issues (`ClosureDecision` dans
+    `Tickets.jsx`, droit `projects.manage`) : **rétablir** (`restoreClosedProject` → `restoreDelivery` rend tout
+    et rend les accès) ou **supprimer définitivement** (`purgeClosedProject` → `purgeDelivery` purge l'archive
+    ET supprime les comptes qui ne vivaient que là ; le ticket, lui, survit comme trace). Ni le client
+    (`Support.jsx`) ni le support ne peuvent refermer le fil sans trancher — sinon une équipe resterait
+    désactivée sans que personne ne l'ait décidé. `emptySupportTrash` passe par le même chemin.
+    ⚠️ Application 100 % front : « invisible du client » est une garantie d'INTERFACE, pas de confidentialité —
+    tout l'état vit dans le navigateur (même limite que le reste, cf. RLS).
     ⚠️ **Pierre tombale `db._envTombstones[envId] = {deletedAt, restoredAt}`** : une suppression est un FAIT, comme
     un repère de semis, et doit voyager avec l'état. `mergeRemoteDb` la respecte (`mergeEnvTombstones`, la date la
     plus récente gagne — une restauration lève la pierre) et `migrate` l'applique à chaque chargement, sinon la

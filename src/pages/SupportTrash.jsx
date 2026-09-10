@@ -13,10 +13,19 @@ export default function SupportTrash() {
 
   const restore = (id) => { store.restoreSupportItem(id); toast('Élément restauré') }
   const purge = () => {
-    if (confirm.kind === 'all') store.emptySupportTrash()
-    else store.purgeSupportItem(confirm.id)
-    toast('Supprimé définitivement')
+    // Purger une livraison supprime aussi les comptes qui ne vivaient que chez elle : c'est
+    // un geste de gestion de projet, et le store peut le refuser. On ne prétend pas l'avoir
+    // fait quand il ne s'est rien passé.
+    const done = confirm.kind === 'all' ? store.emptySupportTrash() : store.purgeSupportItem(confirm.id)
+    toast(done === false ? "Vous n'avez pas le droit de supprimer une livraison définitivement." : 'Supprimé définitivement')
     setConfirm(null)
+  }
+  const purgeText = () => {
+    if (confirm.kind === 'all') return 'Vider définitivement la corbeille support ? Les livraisons archivées seront supprimées sans retour, avec les comptes de leurs environnements.'
+    const it = items.find(x => x.id === confirm.id)
+    return it?.kind === 'project'
+      ? 'Supprimer définitivement cette livraison ? L\'environnement, ses espaces, leurs données et les comptes de cet environnement seront supprimés sans retour possible.'
+      : 'Supprimer définitivement cet élément ?'
   }
 
   // Une livraison archivée n'est pas une ligne de plus : c'est un environnement entier,
@@ -65,7 +74,7 @@ export default function SupportTrash() {
         </div>
       )}
 
-      {confirm && <Confirm message={confirm.kind === 'all' ? 'Vider définitivement la corbeille support ?' : 'Supprimer définitivement cet élément ?'} onYes={purge} onNo={() => setConfirm(null)} />}
+      {confirm && <Confirm message={purgeText()} onYes={purge} onNo={() => setConfirm(null)} />}
     </div>
   )
 }

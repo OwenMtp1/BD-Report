@@ -44,7 +44,11 @@ export default function EnvAdmin({ envId, store }) {
     // Supprimer un environnement, c'est supprimer sa livraison : les deux partent ensemble,
     // en archive. Promettre une suppression « définitive » était faux — et surtout, laisser
     // croire qu'il n'y a pas de retour en arrière change la décision qu'on prend.
-    return `Supprimer l'environnement « ${env?.name} », sa livraison et toutes ses données ? Tout part en archive 30 jours (corbeille support), un ticket de fermeture est ouvert, et le client est classé en « Anciens clients ».`
+    // Rendu en fragments, sans quoi la phrase recollée resterait en français.
+    return (
+      <>Supprimer l'environnement <b>{env?.name}</b> et sa livraison ?{' '}
+        <span>Tout part en archive pendant 30 jours, les accès de l'équipe sont suspendus, et un ticket de fermeture s'ouvre avec le propriétaire.</span></>
+    )
   }
 
   return (

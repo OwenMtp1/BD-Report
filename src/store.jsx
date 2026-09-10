@@ -1925,6 +1925,38 @@ function makeTicket({ accountId, prenom, photo, clientName, envId, subEnvId, cat
   }
 }
 
+// Le ticket de fermeture d'un projet. Il ne ressemble à aucun autre : il n'est pas ouvert
+// PAR le client, il lui est ADRESSÉ, et il ne nomme jamais le membre du staff qui a fermé
+// l'accès — la décision est celle de BD Report, pas d'une personne qu'on prendrait à partie.
+// Un seul message, du côté support : un message « bot » disparaîtrait de la conversation
+// dès la première réponse d'un technicien, et le client perdrait le contexte de sa fermeture.
+function makeClosureTicket({ accountId, prenom, photo, clientName, envId, envName }) {
+  const now = new Date().toISOString()
+  const where = envName ? ` de l'environnement « ${envName} »` : ''
+  return {
+    id: uid(), category: PROJECT_CLOSURE_CATEGORY, status: 'open',
+    priority: 'haute', assignedTo: null, csat: null,
+    userAccountId: accountId || null, userName: prenom, userPhoto: photo || '',
+    clientName: clientName || prenom, envId: envId || null, subEnvId: null,
+    // Non lu POUR LE CLIENT (il ne l'a pas demandé, il doit le voir) ; déjà lu côté support,
+    // qui vient précisément de le provoquer.
+    createdAt: now, handledBy: null, typing: {}, readUserAt: '', readSupportAt: now,
+    messages: [{
+      id: uid(), ts: now, from: 'support', authorAccountId: null, authorName: 'Équipe BD Report', authorPhoto: '',
+      text: `L'accès au logiciel BD Report${where} a été fermé par l'équipe BD Report. Plus personne ne peut s'y connecter, et les données sont mises de côté.\n\n`
+        + `Cette discussion sert à décider de la suite : remettre le projet en place, ou le supprimer définitivement. Répondez ici pour en parler avec l'équipe BD Report.`,
+      photo: '',
+    }],
+  }
+}
+
+// Un compte a-t-il encore un environnement après ce retrait ? Quelqu'un qui travaille pour
+// deux sociétés clientes ne doit pas perdre sa seconde parce que la première a été fermée.
+function hasAnotherEnv(d, accId) {
+  return (d.environments || []).some(e => e.createdBy === accId || (e.members || []).includes(accId))
+    || (d.subenvs || []).some(s => s.ownerId === accId)
+}
+
 // ---------------------------------------------------------------- Archive d'une livraison
 // UN PROJET EST LA LIVRAISON D'UN ENVIRONNEMENT : les deux partent ensemble.
 // Supprimer la livraison seule laissait l'environnement derrière — vivant, accessible à
@@ -1979,31 +2011,59 @@ export function archiveDelivery(d, { envId, projectId, reason, actorId, actorNam
     // parti. L'effacer reviendrait à effacer la raison du départ.
     if (client) { client.status = 'anciens'; client.blocked = false }
   }
-  // Une suppression ouvre un TICKET DE FERMETURE rattaché au PROPRIÉTAIRE du projet (à
-  // défaut, à qui supprime) : c'est le fil où se règle un litige, et le seul endroit d'où
-  // la restauration se demande tant que l'archive vit. Un projet supprimé sans un mot
-  // laissait le preneur devant un écran vide, sans interlocuteur.
-  const owner = (d.accounts || []).find(a => a.id === (project?.ownerId || actorId)) || null
-  const ownerName = owner?.pseudo || actorName || 'Équipe BD Report'
-  const spaceCount = subenvs.length
-  const ticket = makeTicket({
-    accountId: owner?.id || null, prenom: ownerName, photo: owner?.photo || '',
-    clientName: env?.name || project?.clientName || ownerName,
-    envId: eid, subEnvId: null, category: PROJECT_CLOSURE_CATEGORY, priority: 'haute',
-    message: `Le projet « ${project?.name || env?.name || '—'} »`
-      + (env ? ` et l'environnement « ${env.name} » (${spaceCount} espace${spaceCount > 1 ? 's' : ''})` : '')
-      + ` ont été supprimés par ${actorName || 'un membre de l\'équipe'}.`
-      + (entry.reason ? ` Motif : ${entry.reason}` : ''),
-    botText: `L'ensemble est conservé en archive pendant 30 jours et se restaure d'un geste depuis la corbeille support. Passé ce délai, la suppression est définitive. Cette conversation reste ouverte pour en discuter.`,
+  // FERMER L'ACCÈS. Un environnement archivé dont les comptes resteraient ouverts n'est pas
+  // fermé : ses membres se connecteraient dans le vide. Tous les comptes CLIENTS de cet
+  // environnement sont donc désactivés — sauf ceux qui travaillent encore ailleurs, qui n'ont
+  // rien à voir avec cette fermeture — et sauf LE PROPRIÉTAIRE, qui garde une porte d'entrée :
+  // il ne verra plus que la discussion de fermeture. Sans lui, la décision se prendrait entre
+  // BD Report et un mur.
+  const memberIds = eid
+    ? [...new Set([env?.createdBy, ...(env?.members || []), ...subenvs.map(s => s.ownerId)].filter(Boolean))]
+    : []
+  // À QUI s'adresse la fermeture. Le créateur de l'environnement fait foi — sauf quand
+  // c'est un membre du staff, ce qui arrive dès qu'un environnement est monté depuis
+  // l'atelier : on s'adresse alors au manager du client, à défaut au premier membre.
+  // Sans interlocuteur client (environnement encore vide), le ticket reste au support seul.
+  const clientMembers = memberIds
+    .map(id => (d.accounts || []).find(a => a.id === id))
+    .filter(a => a && isClientRole(a.role))
+  const owner = clientMembers.find(a => a.id === env?.createdBy)
+    || clientMembers.find(a => a.role === 'Manager')
+    || clientMembers[0] || null
+  const disabled = []
+  memberIds.forEach(id => {
+    const a = (d.accounts || []).find(x => x.id === id)
+    if (!a || !isClientRole(a.role)) return          // le staff ne se ferme pas avec un client
+    if (a.id === owner?.id) return
+    if (hasAnotherEnv(d, id)) return                 // il lui reste une autre société
+    if (a.disabled) return                           // déjà désactivé : ne pas le réactiver au retour
+    a.disabled = true
+    disabled.push(id)
   })
-  // Non lu des deux côtés : une suppression de cette portée doit se voir, pas se deviner.
-  ticket.readUserAt = ''
-  // Le premier message porte le nom de qui a réellement supprimé, même si le fil
-  // appartient au propriétaire du projet.
-  if (ticket.messages[0]) { ticket.messages[0].authorAccountId = actorId || null; ticket.messages[0].authorName = actorName || ownerName; ticket.messages[0].authorPhoto = '' }
+  const ticket = makeClosureTicket({
+    accountId: owner?.id || null, prenom: owner?.pseudo || env?.name || 'Client',
+    photo: owner?.photo || '', clientName: env?.name || project?.clientName || '',
+    envId: eid, envName: env?.name || '',
+  })
+  // Le sort du projet se décide DANS ce ticket. Ce bloc est lu par la console support
+  // seulement : le nom de qui a fermé et le motif interne ne s'affichent jamais côté client.
+  ticket.projectClosure = {
+    envId: eid, envName: env?.name || '', trashId: entry.id,
+    deletedBy: actorName || '', reason: entry.reason, decided: '',
+  }
+  if (owner) {
+    // Sa session ne mène plus à aucun environnement : ce marqueur dit à l'application de
+    // n'ouvrir QUE cette discussion. S'il travaille encore pour une autre société cliente,
+    // on ne l'enferme évidemment pas — il retrouvera le fil dans son onglet Support.
+    if (!hasAnotherEnv(d, owner.id)) owner.closureTicketId = ticket.id
+    owner.disabled = false
+  }
+  entry.data.ticketId = ticket.id
+  entry.data.disabledAccounts = disabled
+  entry.data.ownerAccountId = owner?.id || null
+  entry.data.memberAccounts = memberIds
   d.tickets = d.tickets || []
   d.tickets.unshift(ticket)
-  entry.data.ticketId = ticket.id
   d.supportTrash.unshift(entry)
   return entry
 }
@@ -2011,7 +2071,7 @@ export function archiveDelivery(d, { envId, projectId, reason, actorId, actorNam
 // Remet en place ce qui a été archivé. Chaque élément est reposé seulement s'il manque :
 // un environnement recréé entre-temps sous le même identifiant ne doit pas être écrasé.
 export function restoreDelivery(d, entry) {
-  const { project, env, subenvs, spaces, clientId, clientStatus } = entry?.data || {}
+  const { project, env, subenvs, spaces, clientId, clientStatus, disabledAccounts, ownerAccountId, ticketId } = entry?.data || {}
   if (env && !(d.environments || []).some(e => e.id === env.id)) d.environments.push(env)
   ;(subenvs || []).forEach(s => { if (!(d.subenvs || []).some(x => x.id === s.id)) d.subenvs.push(s) })
   Object.entries(spaces || {}).forEach(([k, v]) => { if (!d.data[k]) d.data[k] = v })
@@ -2025,6 +2085,45 @@ export function restoreDelivery(d, entry) {
     const wasDeleted = d._envTombstones[env.id]?.deletedAt || ''
     d._envTombstones[env.id] = { deletedAt: wasDeleted, restoredAt: afterStamp(new Date().toISOString(), wasDeleted) }
   }
+  // « Tel quel » : chacun retrouve son accès exactement comme avant la fermeture. On ne
+  // réactive QUE ce qu'on a désactivé — un compte suspendu pour une autre raison le reste.
+  ;(disabledAccounts || []).forEach(id => {
+    const a = (d.accounts || []).find(x => x.id === id); if (a) a.disabled = false
+  })
+  const owner = (d.accounts || []).find(x => x.id === ownerAccountId)
+  if (owner) { delete owner.closureTicketId; owner.disabled = false }
+  // La question posée par le ticket a reçu sa réponse : il se ferme avec elle.
+  const tk = (d.tickets || []).find(t => t.id === ticketId)
+  if (tk) {
+    tk.projectClosure = { ...(tk.projectClosure || {}), decided: 'restored', decidedAt: new Date().toISOString() }
+    tk.status = 'closed'
+    tk.closedAt = tk.closedAt || new Date().toISOString()
+  }
+}
+
+// SUPPRESSION DÉFINITIVE. L'autre issue du ticket de fermeture : il n'y a plus rien à
+// restaurer. Les comptes clients qui ne vivaient QUE dans cet environnement partent avec
+// lui — les laisser derrière, désactivés à jamais, garderait leurs adresses e-mail prises
+// et le propriétaire devant une porte qui ne s'ouvre plus sur rien.
+export function purgeDelivery(d, entry) {
+  const { ownerAccountId, disabledAccounts, memberAccounts, ticketId } = entry?.data || {}
+  const ids = [...new Set([...(memberAccounts || []), ...(disabledAccounts || []), ownerAccountId].filter(Boolean))]
+  const removed = []
+  ids.forEach(id => {
+    const a = (d.accounts || []).find(x => x.id === id)
+    if (!a || !isClientRole(a.role)) return
+    if (hasAnotherEnv(d, id)) { delete a.closureTicketId; return } // il travaille ailleurs : il reste
+    removed.push(id)
+  })
+  d.accounts = (d.accounts || []).filter(a => !removed.includes(a.id))
+  d.supportTrash = (d.supportTrash || []).filter(t => t.id !== entry.id)
+  const tk = (d.tickets || []).find(t => t.id === ticketId)
+  if (tk) {
+    tk.projectClosure = { ...(tk.projectClosure || {}), decided: 'purged', decidedAt: new Date().toISOString() }
+    tk.status = 'closed'
+    tk.closedAt = tk.closedAt || new Date().toISOString()
+  }
+  return removed
 }
 
 // Une pierre tombale par environnement : la plus récente des deux dates l'emporte, comme
@@ -6166,9 +6265,94 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         })
       },
       purgeSupportItem(trashId) {
+        // Une livraison ne se purge pas comme une ligne : elle emporte les comptes qui ne
+        // vivaient que là. Un seul chemin, sinon vider la corbeille et décider depuis le
+        // ticket ne feraient pas la même chose.
+        const item = (db.supportTrash || []).find(x => x.id === trashId)
+        if (item?.kind === 'project') return this.purgeClosedProject(trashId)
         setDb(d => { d.supportTrash = (d.supportTrash || []).filter(x => x.id !== trashId); return d })
+        return []
       },
-      emptySupportTrash() { setDb(d => { d.supportTrash = []; return d }) },
+      // ----- Le sort d'un projet fermé, décidé depuis son ticket de fermeture
+      // Deux issues, et deux seulement : on remet tout en place, ou on efface pour de bon.
+      // Laisser un projet fermé « en attente » indéfiniment est ce qui produit des comptes
+      // désactivés dont plus personne ne sait s'ils doivent revivre.
+      closureTrashEntry(ticketId) {
+        const t = (db.tickets || []).find(x => x.id === ticketId)
+        const id = t?.projectClosure?.trashId
+        return id ? (db.supportTrash || []).find(x => x.id === id) || null : null
+      },
+      restoreClosedProject(trashId) {
+        if (!accountHasPerm(account, 'projects.manage', db)) return false
+        const item = (db.supportTrash || []).find(x => x.id === trashId)
+        if (!item || item.kind !== 'project') return false
+        setDb(d => {
+          const it = (d.supportTrash || []).find(x => x.id === trashId); if (!it) return d
+          restoreDelivery(d, it)
+          d.supportTrash = d.supportTrash.filter(x => x.id !== trashId)
+          return d
+        })
+        this.logStaff({
+          type: 'Projet', cat: 'projet', action: 'Projet rétabli après fermeture',
+          details: item.label || '', envId: item.data?.env?.id || null,
+        })
+        return true
+      },
+      purgeClosedProject(trashId) {
+        if (!accountHasPerm(account, 'projects.manage', db)) return false
+        const item = (db.supportTrash || []).find(x => x.id === trashId)
+        if (!item || item.kind !== 'project') return false
+        let removed = []
+        setDb(d => {
+          const it = (d.supportTrash || []).find(x => x.id === trashId); if (!it) return d
+          removed = purgeDelivery(d, it)
+          return d
+        })
+        this.logStaff({
+          type: 'Projet', cat: 'projet', action: 'Projet supprimé définitivement',
+          details: `${item.label || ''} · ${removed.length} compte${removed.length > 1 ? 's' : ''} supprimé${removed.length > 1 ? 's' : ''}`,
+          envId: item.data?.env?.id || null,
+        })
+        return removed
+      },
+      // Ce que ce compte perdrait à la purge : à montrer avant de trancher.
+      closureImpact(trashId) {
+        const item = (db.supportTrash || []).find(x => x.id === trashId)
+        const ids = [...new Set([...(item?.data?.memberAccounts || []), item?.data?.ownerAccountId].filter(Boolean))]
+        const accounts = ids.map(id => db.accounts.find(a => a.id === id)).filter(a => a && isClientRole(a.role))
+        return {
+          entry: item || null,
+          spaces: (item?.data?.subenvs || []).length,
+          accounts: accounts.length,
+          owner: db.accounts.find(a => a.id === item?.data?.ownerAccountId) || null,
+        }
+      },
+      // Le compte courant est-il celui d'un propriétaire dont le projet a été fermé ?
+      // Il peut se connecter, mais l'application ne lui ouvre que cette discussion.
+      closureTicket() {
+        const id = account?.closureTicketId
+        if (!id) return null
+        const t = (db.tickets || []).find(x => x.id === id)
+        // Un ticket disparu (purgé par le support) ne doit pas enfermer quelqu'un dans un
+        // écran vide : sans lui, le compte reprend son cours normal.
+        return t || null
+      },
+      emptySupportTrash() {
+        // Vider la corbeille passe par le MÊME chemin que purger une ligne : sans quoi les
+        // livraisons partiraient sans emporter les comptes qu'elles ont fermés, et une
+        // équipe entière resterait désactivée sans plus rien à quoi la rattacher.
+        const projects = (db.supportTrash || []).filter(t => t.kind === 'project')
+        if (projects.length && !accountHasPerm(account, 'projects.manage', db)) return false
+        setDb(d => {
+          ;(d.supportTrash || []).filter(t => t.kind === 'project').forEach(t => purgeDelivery(d, t))
+          d.supportTrash = []
+          return d
+        })
+        if (projects.length) {
+          this.logStaff({ type: 'Projet', cat: 'projet', action: 'Corbeille vidée', details: `${projects.length} livraison${projects.length > 1 ? 's' : ''} supprimée${projects.length > 1 ? 's' : ''} définitivement` })
+        }
+        return true
+      },
       // ----- Kanban Clients (back-office support)
       setClientStatus(id, status) {
         setDb(d => {

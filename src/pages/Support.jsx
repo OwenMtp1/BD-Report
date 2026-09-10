@@ -230,7 +230,10 @@ export default function Support() {
           <div className="flex items-center gap-1.5">
             <span className={`chip ${prio(openTicket.priority).color}`}>{prio(openTicket.priority).label}</span>
             <span className={`chip ${STATUS_CLASS[openTicket.status]}`}>{STATUS_LABEL[openTicket.status]}</span>
-            {openTicket.status !== 'closed' && (
+            {/* Une fermeture de projet ne se referme pas d'un côté : c'est la décision de
+                rétablir ou de supprimer qui la clôt. Laisser le bouton ici reviendrait à
+                proposer de refermer le dossier sans que rien n'ait été tranché. */}
+            {openTicket.status !== 'closed' && !openTicket.projectClosure && (
               <button className="btn-ghost !py-1 text-xs" onClick={() => setClosing(true)}>
                 <CheckCircle2 size={13} /> Fermer ce ticket
               </button>

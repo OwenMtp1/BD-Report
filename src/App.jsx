@@ -51,6 +51,7 @@ import SupportTrash from './pages/SupportTrash.jsx'
 import SupportLogs from './pages/SupportLogs.jsx'
 import KnowledgeBase from './pages/KnowledgeBase.jsx'
 import CompanyModal from './pages/Company.jsx'
+import ProjectClosed from './pages/ProjectClosed.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
 
@@ -1281,6 +1282,13 @@ export default function App() {
   if (splash) return <SplashScreen />
 
   if (!session || !store.account) return <Login />
+  // Projet fermé : le propriétaire garde une porte d'entrée, mais elle ne mène qu'à la
+  // discussion de fermeture. Son environnement n'existe plus — le laisser passer par le
+  // choix d'un espace ne lui montrerait qu'une liste vide et aucun interlocuteur.
+  {
+    const closure = store.closureTicket()
+    if (closure) return <ProjectClosed ticket={closure} />
+  }
   if (!session.welcomed) {
     // Affiche le prénom si un espace de ce compte existe, sinon le pseudo (micro 2)
     const ownSub = store.db.subenvs.find(s => s.ownerId === store.account.id)

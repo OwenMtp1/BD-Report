@@ -1029,20 +1029,37 @@ async function main() {
     if (!entry) throw new Error("La livraison supprimée n'est pas dans la corbeille : la suppression est irréversible")
     const tk = (st.tickets || []).find(t => t.id === entry.data.ticketId)
     if (!tk || tk.category !== 'Fermeture de projet') throw new Error('Aucun ticket de fermeture n\'a été ouvert')
-    if (!tk.messages[0].text.includes('Environnement de test')) throw new Error('Le motif ne figure pas dans le ticket de fermeture')
-    // Le fil appartient au propriétaire du projet — à défaut de preneur, à qui supprime.
-    if (!tk.userAccountId) throw new Error('Le ticket de fermeture n\'est rattaché à personne')
+    // Le ticket est ADRESSÉ au client, et ne lui montre ni le nom du collègue qui a fermé
+    // l'accès, ni le motif interne : la décision est celle de BD Report, pas d'une personne.
+    if (tk.messages[0].from !== 'support') throw new Error('Le message de contexte doit venir de BD Report, pas du client')
+    const seen = tk.messages.map(m => `${m.text} ${m.authorName || ''}`).join(' ')
+    if (entry.deletedBy && seen.includes(entry.deletedBy)) throw new Error('Le nom du staff qui ferme est visible du client')
+    if (seen.includes('Environnement de test')) throw new Error('Le motif interne est visible du client')
+    if (!seen.includes('L\'accès au logiciel BD Report')) throw new Error('Le message ne dit pas que l\'accès a été fermé')
+    if (!seen.includes('supprimer définitivement')) throw new Error('Le message ne dit pas à quoi sert la discussion')
+    // …mais le support, lui, garde tout ce qu'il faut pour trancher.
+    if (tk.projectClosure?.reason !== 'Environnement de test') throw new Error("Le motif interne n'est pas conservé pour le support")
+    if (!tk.projectClosure?.deletedBy) throw new Error("Le ticket ne dit pas au support qui a fermé l'accès")
+    // Aurora n'a encore aucun compte client : le fil reste rattaché à l'environnement, et
+    // à personne — s'adresser à quelqu'un qui n'existe pas serait pire que le silence.
+    if (tk.envId !== envId) throw new Error("Le ticket de fermeture n'est pas rattaché à l'environnement")
 
-    // Et l'archive rend tout : c'est ce qui autorise à supprimer sans crainte.
-    await click(hubTab('Corbeille'))
-    const row = [...container.querySelectorAll('main .card')].find(c => c.textContent.includes('Chantier Aurora')
-      && [...c.querySelectorAll('button')].some(b => b.textContent.includes('Restaurer')))
-    if (!row) throw new Error('La livraison archivée n\'apparaît pas dans la corbeille support')
-    const restore = [...row.querySelectorAll('button')].find(b => b.textContent.includes('Restaurer'))
-    await click(restore)
+    // La CLÔTURE de ce ticket est un choix : rétablir, ou supprimer pour de bon.
+    await click(hubTab('Tickets'))
+    await click(find('button', 'Fermeture de projet'))
+    if (!text().includes('Projet fermé — décision attendue')) throw new Error('Le ticket de fermeture ne propose pas de décision')
+    if (!text().includes('Environnement de test')) throw new Error('Le motif interne doit être lisible côté support')
+    if (find('button', 'Clôturer')) throw new Error('Un ticket de fermeture ne doit pas se clôturer sans décision')
+    await click(find('button', 'Rétablir le projet'))
+    await click(findExact('Rétablir'))
     const back = dbNow()
-    if (!back.environments.some(e => e.id === envId)) throw new Error('Restaurer ne rend pas l\'environnement')
-    if (back.projects.filter(p => p.id === made.id).length !== 1) throw new Error('Restaurer ne rend pas la livraison (ou la duplique)')
+    if (!back.environments.some(e => e.id === envId)) throw new Error('Rétablir ne rend pas l\'environnement')
+    if (back.projects.filter(p => p.id === made.id).length !== 1) throw new Error('Rétablir ne rend pas la livraison (ou la duplique)')
+    if ((back.supportTrash || []).some(t => t.id === entry.id)) throw new Error('L\'archive rétablie reste dans la corbeille')
+    const done = back.tickets.find(t => t.id === tk.id)
+    if (done.status !== 'closed' || done.projectClosure.decided !== 'restored') {
+      throw new Error('Le ticket de fermeture n\'est pas clôturé par la décision')
+    }
     await click(hubTab('Projets & atelier'))
   }
 
@@ -1306,6 +1323,51 @@ async function main() {
   raw.projects = raw.projects.filter(p => p.sourceEnvId !== 'env-peoplespheres')
   win.localStorage.setItem('bdrflow_db_v1', JSON.stringify(raw))
   win.sessionStorage.clear()
+  // ---- L'ÉCRAN DU PROPRIÉTAIRE D'UN PROJET FERMÉ. Il peut encore se connecter, mais
+  //      l'application ne lui ouvre QUE la discussion de fermeture — et cette discussion
+  //      ne lui montre ni le nom du collègue qui a fermé l'accès, ni le motif interne.
+  {
+    const raw2 = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+    const now = new Date().toISOString()
+    raw2.accounts.push({
+      id: 'closed-own', email: 'own@closed.fr', pseudo: 'Patronne', role: 'Manager',
+      plan: 'beta', bricks: [], closureTicketId: 'tk-closed',
+    })
+    raw2.tickets.unshift({
+      id: 'tk-closed', category: 'Fermeture de projet', status: 'open', priority: 'haute',
+      assignedTo: null, csat: null, userAccountId: 'closed-own', userName: 'Patronne', userPhoto: '',
+      clientName: 'Ancien client', envId: null, subEnvId: null, createdAt: now, handledBy: null,
+      typing: {}, readUserAt: '', readSupportAt: now,
+      projectClosure: { envId: 'env-clos', envName: 'Ancien client', trashId: 'tr-x', deletedBy: 'Nadia', reason: 'Impayé', decided: '' },
+      messages: [{
+        id: 'm1', ts: now, from: 'support', authorAccountId: null, authorName: 'Équipe BD Report',
+        authorPhoto: '', text: "L'accès au logiciel BD Report a été fermé par l'équipe BD Report.", photo: '',
+      }],
+    })
+    win.localStorage.setItem('bdrflow_db_v1', JSON.stringify(raw2))
+    win.sessionStorage.setItem('bdrflow_session_v1', JSON.stringify({ accountId: 'closed-own', envId: null, subEnvId: null, welcomed: true }))
+    win.sessionStorage.setItem('bdr_splashed', '1')
+    const cc = win.document.createElement('div')
+    win.document.body.appendChild(cc)
+    const rootc = createRoot(cc)
+    await act(async () => { rootc.render(Root(React.createElement(App))) })
+    const tc = () => cc.textContent || ''
+    if (!tc().includes('Accès fermé')) throw new Error("Le propriétaire d'un projet fermé n'atterrit pas sur sa discussion de fermeture")
+    if (tc().includes('Choisissez votre espace') || tc().includes('Tableau de bord')) {
+      throw new Error("Le propriétaire d'un projet fermé accède encore à l'application")
+    }
+    if (tc().includes('Nadia') || tc().includes('Impayé')) throw new Error('Le client voit le nom du staff ou le motif interne de la fermeture')
+    if (!tc().includes("L'accès au logiciel BD Report a été fermé")) throw new Error('Le message de contexte de fermeture est absent')
+    // Il peut répondre : sans quoi la discussion n'en serait pas une.
+    const zone = [...cc.querySelectorAll('textarea')][0]
+    if (!zone) throw new Error('Le propriétaire ne peut pas répondre dans la discussion de fermeture')
+    await act(async () => { Simulate.change(zone, { target: { value: 'Je conteste cette fermeture.' } }) })
+    const send = [...cc.querySelectorAll('button')].find(b => (b.getAttribute('title') || '').includes('Envoyer')) || [...cc.querySelectorAll('form button')].at(-1)
+    if (send) await act(async () => { send.dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true })) })
+    await act(async () => { rootc.unmount() })
+    win.sessionStorage.removeItem('bdrflow_session_v1')
+  }
+
   // ---- Page de démo commerciale : montée seule elle aussi (#/demo), visite comprise.
   {
     const { default: DemoJourney } = await import('../src/pages/DemoJourney.jsx')
