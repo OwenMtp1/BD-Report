@@ -1100,6 +1100,10 @@ export function mergeRemoteDb(local, remote) {
   // des repères vides, la migration se croyait devant un environnement neuf, et
   // ressuscitait le projet. À chaque synchronisation.
   merged._autoSeed = unionAutoSeed(local._autoSeed, remote._autoSeed)
+  // Même raisonnement pour les demandes du site DÉJÀ ingérées : « celle-ci a été traitée »
+  // est un fait, pas un état. Il n'était porté que par un côté de la fusion — un poste qui
+  // ne l'avait pas ré-ingérait la demande et recréait son client et son projet en double.
+  merged._ingestedRequestIds = [...new Set([...(local._ingestedRequestIds || []), ...(remote._ingestedRequestIds || [])])]
   const localData = local.data || {}
   Object.keys(localData).forEach(subId => {
     const mine = localData[subId], theirs = remote.data?.[subId]
@@ -4004,6 +4008,17 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       //    modifications « après coupure de session ».
       const remote = await fetchRemoteState()
       if (cancelled) return
+      // Une base commune ILLISIBLE n'est pas une base vide. Pousser par-dessus effacerait
+      // le travail de tous les autres postes pour la seule raison qu'on n'a pas su la lire.
+      // On reste donc en local, sans jamais publier, et on le dit — c'est un incident.
+      if (remote?._unreadable) {
+        remoteReady.current = false
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: '⚠️ Synchronisation suspendue : la base commune est illisible. Vos données restent sur cet appareil.',
+        }))
+        setTimeout(maybeInjectPipeline, 0)
+        return
+      }
       const remoteNewer = (remote?._savedAt || 0) > initialLocal.current.savedAt
       if (remote && (!initialLocal.current.had || remoteNewer)) {
         applyingRemote.current = true
@@ -4027,6 +4042,10 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         await pushRemoteState({ ...dbRef.current, _savedAt: lastSavedAt.current || initialLocal.current.savedAt || Date.now(), _client: clientId.current })
       }
       remoteReady.current = true
+      // Les offres n'étaient pas publiées tant que la base commune n'était pas lue ; si elle
+      // n'a rien changé (première utilisation), l'effet ne se rejouerait jamais. On publie donc
+      // une fois ici, sur l'état devenu certain.
+      publishOffersDebounced(dbRef.current.offers || [])
       // Import unique du pipeline d'Owen, en mutation différée (commit séparé → poussé vers le cloud).
       setTimeout(maybeInjectPipeline, 0)
       // 2) Temps réel sur l'état applicatif (on ignore nos propres échos).
@@ -4075,7 +4094,18 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       if (e.key === LS_KEY && e.newValue) {
         try {
           const incoming = JSON.parse(e.newValue)
-          if ((incoming._savedAt || 0) >= lastSavedAt.current) setDbState(incoming)
+          // ⚠️ STRICTEMENT plus récent, et adopté comme un état DISTANT.
+          // Avec `>=` et sans le drapeau, deux onglets ouverts s'écrivaient l'un à l'autre
+          // sans fin : l'onglet B adoptait l'état de A, le ré-enregistrait sous une NOUVELLE
+          // estampille, ce qui réveillait A, qui adoptait à son tour… en boucle, chaque tour
+          // repartant vers Supabase. Le drapeau conserve l'estampille reçue et empêche la
+          // republication ; le `>` arrête la boucle quand l'estampille n'a pas bougé.
+          if ((incoming._savedAt || 0) > lastSavedAt.current) {
+            applyingRemote.current = true
+            // Fusion et non remplacement : l'onglet peut porter des changements que l'autre
+            // n'a jamais vus (même règle que pour un état venu du cloud).
+            setDbState(prev => migrate(mergeRemoteDb(prev, incoming)))
+          }
         } catch (err) { /* contenu invalide : on ignore */ }
       }
     }
@@ -4112,7 +4142,10 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
   useEffect(() => {
     if (demo) return
     try { localStorage.setItem('bdrflow_offers_v1', JSON.stringify(db.offers || [])) } catch (e) { /* quota */ }
-    publishOffersDebounced(db.offers || [])
+    // ⚠️ Pas avant d'avoir lu la base commune : au démarrage, `db.offers` est encore la
+    // liste LOCALE (souvent les offres par défaut d'un semis). La publier aussitôt écrasait
+    // les tarifs réglés par le staff, et le site vitrine affichait un instant les mauvais prix.
+    if (remoteReady.current) publishOffersDebounced(db.offers || [])
   }, [db.offers]) // eslint-disable-line
 
   // Configure le client HubSpot dès qu'un réglage change. La config effective est celle
@@ -4188,12 +4221,18 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       const ownerEnvId = d.subenvs.find(s => s.id === subId)?.envId || session?.envId
       const tracked = demo || envModuleOn(d.environments.find(e => e.id === ownerEnvId), 'rdvHistory')
       const before = tracked ? auditSnapshot(d.data[subId]) : null
+      const prevRev = Number(d.data[subId]?._rev) || 0
       const next = fn(d.data[subId])
       if (tracked) applyRdvAudit(next, before, { name: actorName, subId: session?.subEnvId || '' })
-      // Horodatage de l'espace : c'est lui qui permet à `mergeRemoteDb` de savoir, espace par
-      // espace, quelle version est la plus fraîche. Sans lui, la version distante d'un
+      // Révision de l'espace : c'est elle qui permet à `mergeRemoteDb` de savoir, espace par
+      // espace, quelle version est la plus fraîche. Sans elle, la version distante d'un
       // collègue écrasait le travail en cours de tout le monde (voir le commentaire là-bas).
-      if (next && typeof next === 'object') next._rev = Date.now()
+      // ⚠️ TOUJOURS CROISSANTE, horloge ou pas. C'était `Date.now()` seul : un poste dont
+      // l'horloge retarde de quelques minutes produisait des révisions plus BASSES que
+      // celles qu'il venait d'adopter — ses écritures perdaient donc systématiquement contre
+      // la version déjà reçue, et son travail disparaissait à la synchronisation suivante.
+      // En repartant de la révision reçue + 1, écrire APRÈS avoir lu l'emporte toujours.
+      if (next && typeof next === 'object') next._rev = Math.max(Date.now(), prevRev + 1)
       return next
     }
     return {

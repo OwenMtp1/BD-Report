@@ -5,34 +5,41 @@
 //  Le client @supabase/supabase-js est importé dynamiquement depuis un CDN
 //  (esm.sh) pour ne pas alourdir le bundle/déploiement mono-fichier.
 // ---------------------------------------------------------------------------
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from './supabaseConfig.js'
+import { isSupabaseConfigured } from './supabaseConfig.js'
+import { getClient } from './supabaseClient.js'
 import { encryptBlob, decryptBlob, decryptString } from './blobCrypto.js'
 import { stripDangerousKeys } from './security.js'
 
 const STATE_ID = 'main'
-let clientPromise = null
 
-async function getClient() {
-  if (!isSupabaseConfigured()) return null
-  if (!clientPromise) {
-    clientPromise = import(/* @vite-ignore */ 'https://esm.sh/@supabase/supabase-js@2.45.4')
-      .then(m => m.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 5 } } }))
-      .catch(() => null)
-  }
-  return clientPromise
-}
-// Le client est partagé avec le module des pièces jointes : ouvrir une seconde
-// connexion doublerait les abonnements temps réel.
+// ⚠️ UNE SEULE INSTANCE DE CLIENT dans toute l'application (`supabaseClient.js`).
+// Ce module en fabriquait une seconde, sans les options d'authentification : deux
+// connexions temps réel ouvertes en parallèle sur la même table (donc chaque changement
+// traité deux fois), et une session Google posée sur une instance dont les requêtes de
+// données ne se servaient pas. Le commentaire promettait déjà le partage — il est tenu.
 export const getSupabaseClient = getClient
 
 // ----- État applicatif partagé (toute l'app) ------------------------------
+/**
+ * État distant. TROIS réponses possibles, et il faut savoir les distinguer :
+ *  · `null`          — il n'y a rien là-bas (première utilisation, ou hors ligne).
+ *  · `{_unreadable}` — une ligne EXISTE mais reste illisible (clé changée, blob corrompu).
+ *  · l'état          — lisible.
+ * ⚠️ On renvoyait `null` dans les trois cas. L'appelant en concluait « la base commune est
+ * vide » et poussait la base locale par-dessus : un blob simplement indéchiffrable était
+ * donc REMPLACÉ, et avec lui le travail de tous les autres postes. Un état qu'on ne sait
+ * pas lire n'est pas un état absent.
+ */
 export async function fetchRemoteState() {
   const c = await getClient(); if (!c) return null
   try {
     const { data, error } = await c.from('app_state').select('data').eq('id', STATE_ID).maybeSingle()
     if (error || !data) return null
+    if (data.data == null) return null
     // déchiffre (rétro-compatible clair) + neutralise __proto__/constructor d'un blob distant malveillant
-    return stripDangerousKeys(await decryptBlob(data.data))
+    const clear = stripDangerousKeys(await decryptBlob(data.data))
+    if (!clear || typeof clear !== 'object') return { _unreadable: true }
+    return clear
   } catch (e) { return null }
 }
 
@@ -91,6 +98,9 @@ export async function testConnection() {
     if (up.error) return { ok: false, msg: 'Écriture refusée : ' + up.error.message + ' (le SQL a-t-il bien été exécuté ?)' }
     const rd = await c.from('app_state').select('id').eq('id', id).maybeSingle()
     if (rd.error) return { ok: false, msg: 'Lecture refusée : ' + rd.error.message }
+    // Un test ne laisse pas de trace : la ligne de contrôle repart. Elle restait sinon
+    // à demeure dans la table, à côté de l'état réel, sans que personne ne sache ce que c'est.
+    try { await c.from('app_state').delete().eq('id', id) } catch (e) { /* sans conséquence */ }
     return { ok: true, msg: 'Connexion Supabase OK ✓ — la synchronisation temps réel est active.' }
   } catch (e) {
     return { ok: false, msg: 'Erreur : ' + (e && e.message ? e.message : String(e)) }

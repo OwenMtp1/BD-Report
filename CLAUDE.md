@@ -498,6 +498,31 @@ npm run dev        # serveur de dev
   ⚠️ Limite assumée : cette réunion ne couvre que les ENVIRONNEMENTS (et ce qui y pend). `accounts`,
   `tickets`, `clients` restent au dernier écrivain — les réunir par id ressusciterait ce qui a été
   supprimé, faute de pierre tombale pour eux.
+- 🔄 **Audit des synchronisations — les sept défauts trouvés et corrigés** (figés par `npm run audit`,
+  section « AUDIT DES SYNCHRONISATIONS ») :
+  1. **Un état distant ILLISIBLE n'est pas un état absent.** `fetchRemoteState` renvoyait `null` aussi bien
+     pour « rien là-bas » que pour « blob indéchiffrable » ; le démarrage en concluait que la base commune
+     était vide et poussait la locale par-dessus — le travail de tous les autres postes, effacé parce qu'on
+     n'avait pas su lire. Elle renvoie désormais `{_unreadable:true}`, le démarrage **suspend la publication**
+     (`remoteReady` reste faux), reste en local et le dit à l'écran.
+  2. **Un seul client Supabase.** `supabaseSync.js` en fabriquait un second, sans les options d'auth : deux
+     abonnements temps réel sur la même table (chaque changement traité deux fois) et une session Google posée
+     sur une instance dont les requêtes de données ne se servaient pas. Tout passe par `supabaseClient.js`.
+  3. **Boucle entre onglets.** Le listener `storage` adoptait à `>=` et sans marquer l'état comme distant :
+     l'onglet B adoptait A, le ré-enregistrait sous une NOUVELLE estampille, réveillait A… sans fin, chaque
+     tour repartant vers Supabase. Adopté à `>`, avec `applyingRemote`, et **fusionné** au lieu d'être remplacé.
+  4. **`_rev` d'un espace toujours croissante** — `Math.max(Date.now(), prevRev + 1)`. Avec l'horloge seule, un
+     poste qui retarde écrivait des révisions plus basses que celles qu'il venait d'adopter : ses écritures
+     perdaient systématiquement à la fusion. Écrire APRÈS avoir lu l'emporte désormais, horloge ou pas.
+  5. **`_ingestedRequestIds` se RÉUNIT** comme `_autoSeed` : « cette demande du site a été traitée » est un
+     fait. Porté par un seul côté, il faisait ré-ingérer la demande et recréer son client et son projet en double.
+  6. **Le test de connexion efface sa ligne `__healthcheck__`** au lieu de la laisser à demeure dans la table.
+  7. **Les offres ne partent pas vers le site avant lecture de la base commune** (sinon les tarifs par défaut
+     d'un semis local écrasent ceux réglés par le staff), et sont publiées une fois `remoteReady` acquis —
+     sans quoi une première utilisation ne les publiait jamais.
+  ⚠️ **Limite connue, non corrigée** : `_savedAt` (départage du blob ENTIER) reste une horloge locale. Deux
+  postes aux horloges décalées peuvent s'ignorer en temps réel ; un rechargement répare, la fusion étant
+  bidirectionnelle et `_rev` désormais indépendante de l'horloge. Aucune perte, seulement du retard.
 - ⛔ **RESTE À FAIRE avant une prod publique — voir `supabase/RUNBOOK_SECURITE.md`.**
   La RLS de `app_state` est `using(true)` : la clé anon (publique par construction) permet de
   lire/écrire tout le blob, tous clients confondus. Le schéma cible, la RLS par org, le script de

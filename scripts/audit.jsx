@@ -734,6 +734,64 @@ async function main() {
       'Le ticket de fermeture ne propose pas ses deux issues')
   }
 
+  // 6 sexdecies. AUDIT DES SYNCHRONISATIONS. Tout ce qui circule entre deux copies de
+  //   l'application : la base commune (Supabase), les autres onglets, les offres publiées
+  //   vers le site, les demandes du formulaire de contact. Une synchronisation qui perd
+  //   quelque chose est pire qu'une absence de synchronisation : on croit ses données à
+  //   l'abri.
+  {
+    const sync = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'supabaseSync.js'), 'utf8')
+    const st = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'store.jsx'), 'utf8')
+
+    // a. UN ÉTAT ILLISIBLE N'EST PAS UN ÉTAT ABSENT. Sans cette distinction, un blob qu'on
+    //    ne sait pas déchiffrer était pris pour une base vide, et remplacé par la locale.
+    ok(/_unreadable/.test(sync), "fetchRemoteState : un état distant illisible passe pour absent")
+    ok(/remote\?\._unreadable/.test(st), 'Démarrage : un état distant illisible sera écrasé par le local')
+    ok(/_unreadable[\s\S]{0,400}?remoteReady\.current = false/.test(st),
+      'Démarrage : la synchronisation continue de publier par-dessus un état illisible')
+
+    // b. UNE SEULE INSTANCE DE CLIENT. Deux clients = deux abonnements temps réel sur la
+    //    même table, et une session d'authentification posée sur la mauvaise.
+    ok(!/createClient\(/.test(sync), 'supabaseSync fabrique un second client Supabase')
+    const cli = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'supabaseClient.js'), 'utf8')
+    ok((cli.match(/createClient\(/g) || []).length === 1, 'Plus d\'un endroit fabrique le client Supabase')
+
+    // c. PAS DE BOUCLE ENTRE ONGLETS. Adopté comme un état distant (donc non republié) et
+    //    seulement s'il est STRICTEMENT plus récent, sinon deux onglets s'écrivent sans fin.
+    const tab = st.slice(st.indexOf('e.key === LS_KEY'), st.indexOf('e.key === LS_KEY') + 1600)
+    ok(/> lastSavedAt\.current/.test(tab) && !/>= lastSavedAt\.current/.test(tab),
+      'Onglets : un état d\'estampille égale est ré-adopté — les deux onglets bouclent')
+    ok(/applyingRemote\.current = true/.test(tab),
+      'Onglets : un état venu d\'un autre onglet est republié comme s\'il était local')
+    ok(/mergeRemoteDb/.test(tab), 'Onglets : remplacement au lieu de fusion — les changements du second onglet sont perdus')
+
+    // d. RÉVISION D'ESPACE TOUJOURS CROISSANTE. Avec la seule horloge, un poste qui retarde
+    //    écrit des révisions plus basses que celles qu'il vient d'adopter : ses écritures
+    //    perdent systématiquement.
+    ok(/_rev = Math\.max\(Date\.now\(\), prevRev \+ 1\)/.test(st),
+      "writeSubData : la révision d'espace dépend de l'horloge seule")
+
+    // e. LES FAITS SE RÉUNISSENT, ils ne se remplacent pas — repères de semis ET demandes
+    //    déjà ingérées (sinon la demande du site recrée son client et son projet en double).
+    const m = s.mergeRemoteDb(
+      { _ingestedRequestIds: ['req-a'], _autoSeed: {}, data: {} },
+      { _ingestedRequestIds: ['req-b'], _autoSeed: {}, data: {} },
+    )
+    ok(m._ingestedRequestIds.includes('req-a') && m._ingestedRequestIds.includes('req-b'),
+      'Fusion : une demande déjà ingérée d\'un côté sera ré-ingérée — client et projet en double')
+
+    // f. Le test de connexion ne laisse pas sa ligne de contrôle dans la table.
+    ok(/from\('app_state'\)\.delete\(\)\.eq\('id', id\)/.test(sync),
+      'Le test de connexion laisse une ligne « __healthcheck__ » à demeure')
+
+    // g. Les offres ne partent pas vers le site avant d'avoir lu la base commune — sinon
+    //    les tarifs par défaut d'un semis local écrasent ceux réglés par le staff.
+    ok(/if \(remoteReady\.current\) publishOffersDebounced/.test(st),
+      'Offres : publiées avant la lecture de la base commune')
+    ok(/remoteReady\.current = true[\s\S]{0,400}?publishOffersDebounced/.test(st),
+      'Offres : jamais publiées si la base commune ne change rien au démarrage')
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.
