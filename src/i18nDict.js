@@ -9,6 +9,9 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['Prime pour', 'Bonus to', 'Prima para'],
+  ['Bénéficiaire de la prime modifié', 'Bonus beneficiary changed', 'Beneficiario de la prima modificado'],
+  ['(demandeur)', '(requester)', '(solicitante)'],
   ['Ce que ce client reçoit — modules, offre, membres et accès', 'What this client receives — modules, plan, members and access', 'Lo que recibe este cliente — módulos, plan, miembros y accesos'],
   ['Projets & atelier', 'Projects & workshop', 'Proyectos y taller'],
   ['Livraisons', 'Deliveries', 'Entregas'],

@@ -323,6 +323,47 @@ async function main() {
     })
   }
 
+  // 6 decies. Réattribution d'une prime : RIEN NE SE CRÉE, RIEN NE SE PERD. Une prime
+  //   attribuée à un collègue doit QUITTER le total de son espace d'origine et ENTRER dans
+  //   celui du bénéficiaire. Sans cet invariant, réattribuer reviendrait à payer deux fois —
+  //   ou à ne payer personne.
+  {
+    const d = s.buildDemoDb({})
+    const e = d.environments.find(x => x.id === 'env-demo')
+    const mk = new Date().toISOString().slice(0, 7)
+    const subs = d.subenvs.filter(x => x.envId === 'env-demo')
+    const total = () => subs.reduce((a, x) => a + s.monthlyPaidPrimes(s.primeView(d, x.id), e, x.id, mk), 0)
+    const before = total()
+    // On prend une affaire qui rapporte réellement ce mois-ci, sinon le test ne prouve rien.
+    let from = null, rdv = null
+    subs.some(x => (d.data[x.id]?.rdvs || []).some(r => {
+      const solo = s.monthlyPaidPrimes({ ...d.data[x.id], rdvs: [r] }, e, x.id, mk)
+      if (solo > 0) { from = x; rdv = r; return true }
+      return false
+    }))
+    ok(!!rdv, 'Réattribution : aucune prime du mois pour éprouver le déplacement')
+    if (rdv) {
+      const to = subs.find(x => x.id !== from.id)
+      const soloBefore = s.monthlyPaidPrimes({ ...d.data[from.id], rdvs: [rdv] }, e, from.id, mk)
+      const fromBefore = s.monthlyPaidPrimes(s.primeView(d, from.id), e, from.id, mk)
+      rdv.primeTo = to.id
+      const fromAfter = s.monthlyPaidPrimes(s.primeView(d, from.id), e, from.id, mk)
+      ok(fromAfter < fromBefore, "Réattribution : la prime n'a pas quitté l'espace d'origine")
+      ok(fromBefore - fromAfter === soloBefore,
+        `Réattribution : le montant retiré ne correspond pas à la prime (${fromBefore - fromAfter} vs ${soloBefore})`)
+      ok(total() === before, `Réattribution : le total de l'environnement a changé (${before} → ${total()})`)
+      // Revenir en arrière restitue exactement l'état d'avant.
+      rdv.primeTo = ''
+      ok(s.monthlyPaidPrimes(s.primeView(d, from.id), e, from.id, mk) === fromBefore,
+        "Réattribution : annuler ne restitue pas le montant d'origine")
+    }
+    // Les écrans qui annoncent un montant passent tous par la vue « prime ».
+    ;['Dashboard.jsx', 'Classement.jsx'].forEach(f => {
+      const txt = fs.default.readFileSync(path.default.join(dir, f), 'utf8')
+      ok(/primeView/.test(txt), `${f} : annonce un montant sans passer par la vue « prime » — deux écrans diront deux paies`)
+    })
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.

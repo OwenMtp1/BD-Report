@@ -260,7 +260,10 @@ export default function Dashboard() {
   // Ce que le collaborateur touchera, modulateurs compris — pas le brut du barème : afficher
   // l'un ici et l'autre sur la page Primes reviendrait à annoncer deux montants différents.
   const envNow = store.db.environments.find(e => e.id === store.session?.envId)
-  const primesCeMois = monthlyPaidPrimes(sub, envNow, store.session?.subEnvId, curKey)
+  // `primeView` et non `sub` : une prime réattribuée à quelqu'un d'autre quitte ce total, et
+  // une prime reçue d'un collègue y entre. Deux écrans qui n'utiliseraient pas la même vue
+  // annonceraient deux paies différentes.
+  const primesCeMois = monthlyPaidPrimes(store.primeView(store.session?.subEnvId), envNow, store.session?.subEnvId, curKey)
   const primesMoisSuivant = primes.filter(p => p.payMonthKey === nextKey).reduce((a, p) => a + p.montant, 0)
   const primesTotal = primes.reduce((a, p) => a + p.montant, 0)
   // Primes déclenchées sur la période sélectionnée (suit la timeline des bulles — micro 9)

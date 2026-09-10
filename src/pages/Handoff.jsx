@@ -57,8 +57,12 @@ function DecideModal({ entry, store, onClose }) {
   )
 }
 
-function Line({ e, store, mine, canDecide, closers, onRefuse }) {
+function Line({ e, store, mine, canDecide, closers, onRefuse, members }) {
   const decided = e.state !== 'pending'
+  // À qui revient la prime. Par défaut à celui qui a demandé la passation — c'est-à-dire
+  // l'espace qui porte l'affaire — et le champ reste vide dans ce cas : une valeur vide se
+  // lit « la règle s'applique », ce qui reste vrai si le dossier change de mains.
+  const beneficiary = e.rdv.primeTo || e.subId
   return (
     <div className="rounded-xl border border-line p-3 flex flex-wrap items-center gap-x-3 gap-y-2">
       <div className="min-w-0 flex-1">
@@ -100,6 +104,23 @@ function Line({ e, store, mine, canDecide, closers, onRefuse }) {
           Rouvrir
         </button>
       )}
+      {/* Bénéficiaire de la prime. Presque toujours le demandeur : c'est la valeur par défaut,
+          et l'écran le dit plutôt que de la laisser deviner. Le changer sert aux cas réels —
+          lead sourcé par un collègue, affaire reprise en route, binôme convenu — qui se
+          réglaient jusqu'ici à la main, hors de l'outil et donc sans trace. */}
+      {canDecide && (
+        <label className="flex items-center gap-1.5 text-[11px] text-muted w-full sm:w-auto">
+          <span>Prime pour</span>
+          <select className="input !w-auto !py-1 text-xs" value={beneficiary}
+            onChange={ev => { store.setPrimeBeneficiary(e.subId, e.rdv.id, ev.target.value); toast('Bénéficiaire de la prime modifié') }}>
+            {(members || []).map(m => (
+              <option key={m.id} value={m.id}>
+                {m.prenom} {m.nom}{m.id === e.subId ? ' (demandeur)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </div>
   )
 }
@@ -125,6 +146,9 @@ export default function Handoff() {
   const todo = canClose
     ? [...all].sort((a, b) => (b.handoff?.to === mySubId ? 1 : 0) - (a.handoff?.to === mySubId ? 1 : 0))
     : all.filter(e => e.subId !== mySubId && e.handoff?.to === mySubId)
+  // Tous les espaces de l'environnement : `closers` est une liste filtrée, mais une prime
+  // peut revenir à n'importe qui — y compris à quelqu'un qui ne close pas.
+  const members = store.db.subenvs.filter(s => s.envId === store.session?.envId)
   const closers = store.db.subenvs.filter(s => s.envId === store.session?.envId)
 
   const stats = handoffStats(sub.rdvs || [], sub)
@@ -196,7 +220,7 @@ export default function Handoff() {
         )}
         {list.map(e => (
           <Line key={e.subId + e.rdv.id} e={e} store={store} mine={tab === 'mine' && e.subId === mySubId}
-            canDecide={canClose} closers={closers} onRefuse={setRefuseFor} />
+            canDecide={canClose} closers={closers} members={members} onRefuse={setRefuseFor} />
         ))}
       </div>
 

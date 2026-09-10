@@ -1531,6 +1531,42 @@ export function applyPrimeRules(rawTotal, { data, env, subId, monthKey }) {
 // que le collaborateur touche, donc celui qu'affichent son tableau de bord, son quota, le
 // classement et son relevé. Le brut du barème ne vaut que comme étape de calcul — l'afficher
 // à côté du net, sans le dire, revient à annoncer deux salaires différents.
+// ---------------------------------------------------------------- À qui revient une prime
+// Par défaut, la prime d'une affaire revient à l'espace qui la porte — c'est-à-dire au compte
+// qui a demandé la passation. C'est la règle, et elle reste la règle : `rdv.primeTo` est vide
+// dans l'immense majorité des cas.
+//
+// Elle ne suffit pourtant pas toujours : un lead sourcé par un collègue, une affaire reprise
+// en cours de route, un binôme convenu à l'avance. Sans moyen de le dire, la seule issue était
+// de corriger à la main, hors de l'outil — donc sans trace.
+//
+// ⚠️ RIEN NE SE CRÉE ET RIEN NE SE PERD : une prime réattribuée QUITTE le total de son espace
+// d'origine et ENTRE dans celui du bénéficiaire. Le total de l'environnement est inchangé.
+// C'est l'invariant que vérifie `npm run audit` — sans lui, réattribuer reviendrait à payer
+// deux fois, ou à ne payer personne.
+export function effectivePrimeRdvs(allData, subenvs, subId) {
+  const own = (allData?.[subId]?.rdvs) || []
+  const envId = (subenvs || []).find(s => s.id === subId)?.envId
+  const kept = own.filter(r => !r.primeTo || r.primeTo === subId)
+  if (!envId) return kept
+  const incoming = []
+  ;(subenvs || []).forEach(s => {
+    if (s.id === subId || s.envId !== envId) return
+    ;((allData?.[s.id]?.rdvs) || []).forEach(r => { if (r.primeTo === subId) incoming.push(r) })
+  })
+  return incoming.length ? [...kept, ...incoming] : kept
+}
+
+/**
+ * L'espace tel que les CALCULS DE PRIME doivent le voir : ses données, mais avec la liste
+ * d'affaires corrigée des réattributions. Tous les écrans qui annoncent un montant passent
+ * par ici — sinon deux d'entre eux annonceraient des chiffres différents pour la même paie.
+ */
+export const primeView = (db, subId) => ({
+  ...(db?.data?.[subId] || {}),
+  rdvs: effectivePrimeRdvs(db?.data, db?.subenvs, subId),
+})
+
 export function monthlyPaidPrimes(data, env, subId, mKey) {
   const raw = computePrimes(data?.rdvs || [], data?.bareme || [], primeOpts(data))
     .filter(p => !p.invalidated && p.payMonthKey === mKey)
@@ -4422,6 +4458,20 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           return d
         })
       },
+      // À qui revient la prime de cette affaire. Vide = à l'espace qui la porte, c'est-à-dire
+      // au compte qui a demandé la passation — la règle par défaut, qui couvre presque tout.
+      setPrimeBeneficiary(subId, rdvId, toSubId) {
+        if (readOnly) return
+        setDb(d => {
+          const r = (d.data[subId]?.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          // On n'inscrit rien quand le bénéficiaire est le propriétaire : une valeur vide se
+          // lit « la règle s'applique », ce qui reste vrai si l'affaire change de mains.
+          r.primeTo = (!toSubId || toSubId === subId) ? '' : toSubId
+          return d
+        })
+      },
+      /** L'espace tel que les calculs de prime doivent le voir (réattributions comprises). */
+      primeView(subId) { return primeView(db, subId) },
       // Désigne le closer chargé du dossier (facultatif : sans destinataire, la file est commune).
       assignHandoff(subId, rdvId, toSubId) {
         if (readOnly) return

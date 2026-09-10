@@ -6,7 +6,7 @@ import Challenges from './Challenges.jsx'
 
 const dayISO = (o = 0) => { const d = new Date(); d.setDate(d.getDate() + o); return d.toISOString().slice(0, 10) }
 
-function memberRow(m, data, env) {
+function memberRow(m, data, env, pv) {
   const rdvs = data.rdvs || []
   const now = new Date()
   const curK = monthKey(new Date(now.getFullYear(), now.getMonth(), 1))
@@ -16,8 +16,10 @@ function memberRow(m, data, env) {
   const sql7j = rdvs.filter(r => r.datePassageSQL && r.datePassageSQL >= dayISO(-7)).length
   // Le classement compare ce qui est PERÇU : sous un plafond ou un seuil, un montant brut
   // désignerait un vainqueur qui ne touchera pas cette somme.
-  const primesMois = monthlyPaidPrimes(data, env, m.id, curK)
-  const primesPrev = monthlyPaidPrimes(data, env, m.id, prevK)
+  // `pv` = vue « prime » de l'espace : les réattributions doivent se voir au classement
+  // aussi, sans quoi il récompenserait quelqu'un pour une prime qui va à un autre.
+  const primesMois = monthlyPaidPrimes(pv, env, m.id, curK)
+  const primesPrev = monthlyPaidPrimes(pv, env, m.id, prevK)
   const conv = rdvMois ? Math.round((sqlMois / rdvMois) * 100) : 0
   const goalPrimes = Number((data.goals || {}).primesMois) || 0
   const objPct = goalPrimes ? Math.round((primesMois / goalPrimes) * 100) : 0
@@ -48,7 +50,7 @@ export default function Classement({ embedded }) {
   const members = store.db.subenvs.filter(s => s.envId === envId)
   const [metric, setMetric] = useState('sql')
 
-  const rows = useMemo(() => members.map(m => memberRow(m, store.db.data[m.id] || { rdvs: [], bareme: [] }, env)), [store.db, envId]) // eslint-disable-line
+  const rows = useMemo(() => members.map(m => memberRow(m, store.db.data[m.id] || { rdvs: [], bareme: [] }, env, store.primeView(m.id))), [store.db, envId]) // eslint-disable-line
   const M = METRICS.find(x => x.id === metric)
   const ranked = [...rows].sort((a, b) => M.get(b) - M.get(a))
   const meId = store.session.subEnvId
