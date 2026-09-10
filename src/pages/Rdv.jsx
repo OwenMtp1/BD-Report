@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList, Search, Target } from 'lucide-react'
+import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft, CalendarPlus, LayoutList, Search, Target, History } from 'lucide-react'
 import { googleCalUrl, downloadIcs } from '../calendar.js'
 import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey, icpVerdict, committeeGaps, DECIDING_ROLES, DEAL_RECURRENCE, dealAnnualValue, dealValueLabel, fmtMoney } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast, confetti, DictateButton } from '../ui.jsx'
@@ -436,6 +436,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   const [motifAsk, setMotifAsk] = useState(null) // {rdvId, kind: 'ko'|'noshow', value} — rappel non bloquant
   const [dupConfirm, setDupConfirm] = useState(null) // {data, mode, id, dups} — validation anti-doublon
   const [openGroups, setOpenGroups] = useState({})
+  const [openAudit, setOpenAudit] = useState({})
   const [menuFor, setMenuFor] = useState(null)
   const [fieldsModal, setFieldsModal] = useState(false)
   // Filtres
@@ -451,6 +452,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   // module n'est pas installé (l'écran redevient alors exactement celui d'avant).
   // Module retirable : sans lui, le champ n'existe nulle part et l'écran redevient celui d'avant.
   const dealValue = store.hasModule('dealValue')
+  const rdvHistory = store.hasModule('rdvHistory')
   const committee = store.hasModule('committee')
     ? { roles: store.committeeRoles(), relations: store.committeeRelations() }
     : null
@@ -720,6 +722,29 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
         </p>
       )}
       {r.notes && <p className="text-xs text-muted mt-2.5 line-clamp-2" title={r.notes}>📝 {r.notes}</p>}
+      {/* Historique : replié par défaut. Il ne sert que le jour où quelqu'un conteste —
+          l'afficher en permanence encombrerait la carte pour tous les autres jours. */}
+      {rdvHistory && (r.audit || []).length > 0 && (
+        <div className="mt-2.5">
+          <button className="flex items-center gap-1 text-[11px] font-bold text-muted hover:text-brand"
+            onClick={() => setOpenAudit(a => ({ ...a, [r.id]: !a[r.id] }))}>
+            {openAudit[r.id] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            <History size={12} /> Historique ({r.audit.length})
+          </button>
+          {openAudit[r.id] && (
+            <ul className="mt-1.5 space-y-1 border-l-2 border-border pl-2.5">
+              {[...r.audit].reverse().map((e, i) => (
+                <li key={i} className="text-[11px] text-muted leading-snug">
+                  <span className="text-ink font-semibold">{e.label}</span>{' '}
+                  {e.from ? <><span className="line-through opacity-60">{e.from}</span> → </> : null}
+                  <span className="text-ink">{e.to || '—'}</span>
+                  <span className="block opacity-70">{fmtDate(e.at)} · {e.by}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {!isChild && childCount > 0 && (
         <button className="flex items-center gap-1 text-xs font-bold text-brand mt-2.5" onClick={() => setOpenGroups(g => ({ ...g, [r.id]: !g[r.id] }))}>
           {openGroups[r.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {childCount} rendez-vous suivant{childCount > 1 ? 's' : ''}

@@ -337,8 +337,81 @@ export const ENV_MODULES = [
     desc: "Le montant du contrat sur chaque affaire (ponctuel ou récurrent) : valeur du pipeline, chiffre d'affaires signé, et ce que rapporte réellement chaque provenance." },
   { id: 'statements', label: 'Relevés de primes',
     desc: 'Relevé mensuel par personne, signé par le manager avant de devenir téléchargeable par le collaborateur.' },
+  // ---- Deuxième série. Voir MODULES_V2 : ceux-là n'arrivent PAS allumés chez l'existant.
+  { id: 'rdvHistory', label: 'Historique des modifications',
+    desc: "Qui a changé quoi, et quand, sur chaque affaire. Les primes se calculent sur les passages d'étape : sans trace, une prime contestée ne peut pas être tranchée." },
+  { id: 'forecast', label: 'Atterrissage du mois',
+    desc: "Où l'équipe arrive en fin de période si elle continue à ce rythme — à partir de la cadence réelle et du pipeline ouvert, pas d'une cible saisie à la main." },
+  { id: 'recycling', label: 'Recyclage des leads perdus',
+    desc: "Un refus fixe une date de re-tentative selon son motif ; le lead revient de lui-même dans les recommandations le jour venu." },
+  { id: 'cadence', label: 'Plans de relance',
+    desc: "Une séquence de touches définie par le manager (J+0, J+3, J+7…), appliquée à une affaire, qui crée les tâches datées. Aucun envoi automatique : le produit dit quoi faire et quand." },
+  { id: 'territories', label: 'Territoires & attribution',
+    desc: "Attribution explicite de comptes ou de secteurs par personne, et alerte quand deux commerciaux travaillent la même entreprise — avant le doublon, pas après." },
+  { id: 'weeklyDigest', label: 'Récapitulatif hebdomadaire',
+    desc: "Chaque lundi dans le canal de reporting : ce qui a bougé, ce qui stagne, qui est sous quota." },
 ]
 export const ENV_MODULE_IDS = ENV_MODULES.map(m => m.id)
+// ⚠️ EXCEPTION ASSUMÉE à la règle « absent = actif ». Ces six briques sont arrivées après
+// que des équipes travaillaient déjà : les allumer d'office aurait fait apparaître six
+// onglets du jour au lendemain, sans que personne ne l'ait demandé. `migrate` les inscrit
+// donc explicitement à `false` sur les environnements EXISTANTS (une seule fois, via
+// `_autoSeed.modulesV2`). Les environnements créés ensuite les reçoivent actives, comme
+// le reste. Le staff les allume quand le client le décide.
+export const MODULES_V2 = ['rdvHistory', 'forecast', 'recycling', 'cadence', 'territories', 'weeklyDigest']
+
+// ---------------------------------------------------------------- Historique d'une affaire
+// Les primes se calculent sur des passages d'étape et des dates. Tant que personne ne peut
+// dire QUI a passé une affaire en SQL ni QUAND, une prime contestée se règle de mémoire.
+//
+// Liste volontairement COURTE : on trace ce qui change une rémunération ou un engagement,
+// pas chaque frappe. Un commentaire retouché n'a pas à laisser de trace ; une date de
+// passage SQL, si.
+export const AUDIT_FIELDS = [
+  ['phase', 'Étape'],
+  ['opportunite', 'Statut'],
+  ['datePassageSQL', 'Date de passage SQL'],
+  ['dateRdv', 'Date du rendez-vous'],
+  ['montant', "Montant de l'affaire"],
+  ['recurrence', 'Récurrence'],
+  ['source', 'Provenance'],
+  ['effectif', 'Effectif'],
+  ['motifKo', 'Motif de perte'],
+  ['entreprise', 'Entreprise'],
+  ['primeInvalid', 'Prime invalidée'],
+]
+// Au-delà, on coupe par le début : l'état entier est sérialisé à chaque sauvegarde, et un
+// historique sans bornes finirait par peser sur toute l'application, pas seulement sur lui.
+const AUDIT_MAX = 200
+const auditPick = (r) => { const o = {}; AUDIT_FIELDS.forEach(([f]) => { o[f] = r[f] }); return o }
+
+// Photographie d'avant l'écriture. Prise AVANT car les écritures mutent les RDV en place :
+// sans copie des champs suivis, la comparaison d'après porterait sur l'objet déjà modifié.
+export function auditSnapshot(data) {
+  const m = new Map()
+  ;(data?.rdvs || []).forEach(r => m.set(r.id, auditPick(r)))
+  return m
+}
+
+// Compare l'après à l'avant et inscrit les écarts. Appelé depuis `setSub`/`setSubData`,
+// c'est-à-dire le passage OBLIGÉ de toute écriture : aucun écran n'a à y penser, et un
+// nouvel écran qui déplacerait une affaire serait tracé sans rien avoir à ajouter.
+export function applyRdvAudit(data, before, actor) {
+  if (!before) return
+  const at = new Date().toISOString()
+  ;(data?.rdvs || []).forEach(r => {
+    const prev = before.get(r.id)
+    if (!prev) return // création : la frise `history` porte déjà l'origine de l'affaire
+    const lines = []
+    AUDIT_FIELDS.forEach(([f, label]) => {
+      const a = prev[f] ?? '', b = r[f] ?? ''
+      if (String(a) !== String(b)) lines.push({ at, by: actor?.name || '—', bySub: actor?.subId || '', field: f, label, from: String(a), to: String(b) })
+    })
+    if (!lines.length) return
+    const next = [...(r.audit || []), ...lines]
+    r.audit = next.length > AUDIT_MAX ? next.slice(next.length - AUDIT_MAX) : next
+  })
+}
 // Un module absent du réglage est actif : voir l'avertissement ci-dessus.
 export const envModuleOn = (env, id) => (env?.modules?.[id] !== false)
 export const defaultEnvModules = () => Object.fromEntries(ENV_MODULE_IDS.map(id => [id, true]))
@@ -2138,6 +2211,9 @@ export function buildDemoDb(brand) {
   db.environments.push({
     id: 'env-demo', name: String(brand?.company || '').trim() || 'Atlas Revenue', logo: '', pin: '', plan: 'beta', createdBy: 'demo-mgr', subState: 'active',
     departments: ['Sales', 'SDR'], services: [{ id: svcSales, name: 'Sales' }, { id: svcSdr, name: 'SDR' }],
+    // La démo montre le produit ENTIER : toutes les briques allumées, explicitement — sans
+    // quoi la migration éteindrait chez elle la deuxième série, qui est justement la nouveauté.
+    modules: defaultEnvModules(),
     // Quotas de démonstration : une équipe au régime commun, et une arrivée récente en
     // montée en charge — c'est ce cas-là qu'il faut montrer, pas un tableau uniforme.
     quotas: {
@@ -2857,6 +2933,16 @@ function migrate(db) {
   // Ainsi, ce que l'utilisateur supprime ne réapparaît pas au rechargement (bug de résurrection).
   db._autoSeed = db._autoSeed || { envClients: [], envProjects: [], reqProjects: [], reqClients: [] }
   db._autoSeed.reqClients = db._autoSeed.reqClients || []
+  // Deuxième série de modules : éteinte sur les environnements qui existaient avant elle.
+  // On l'inscrit noir sur blanc (plutôt que de compter sur une absence) et une seule fois :
+  // le staff qui allume une brique ne doit pas la voir s'éteindre au rechargement suivant.
+  if (!db._autoSeed.modulesV2) {
+    ;(db.environments || []).forEach(e => {
+      e.modules = { ...(e.modules || {}) }
+      MODULES_V2.forEach(id => { if (e.modules[id] === undefined) e.modules[id] = false })
+    })
+    db._autoSeed.modulesV2 = true
+  }
   // Contenus support semés une seule fois (respecte les suppressions ultérieures)
   if (!db._autoSeed.supportContent) {
     if (!db.cannedReplies.length) db.cannedReplies = defaultCannedReplies()
@@ -3363,6 +3449,19 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       window.dispatchEvent(new CustomEvent('app-toast', { detail: '🔒 Accès en lecture seule : abonnement résilié ou bloqué. Seul le support reste accessible.' }))
       return true
     }
+    // Écriture dans un espace, avec la trace de ce qui a changé. Passer par ici plutôt que
+    // par chaque écran garantit qu'AUCUNE modification n'échappe à l'historique — y compris
+    // celles d'un écran qui n'existe pas encore.
+    // L'espace visé peut relever d'un AUTRE environnement (pipeline entreprise, vue manager) :
+    // c'est le réglage de CET environnement-là qui décide, pas celui de qui écrit.
+    const writeSubData = (d, subId, fn) => {
+      const ownerEnvId = d.subenvs.find(s => s.id === subId)?.envId || session?.envId
+      const tracked = demo || envModuleOn(d.environments.find(e => e.id === ownerEnvId), 'rdvHistory')
+      const before = tracked ? auditSnapshot(d.data[subId]) : null
+      const next = fn(d.data[subId])
+      if (tracked) applyRdvAudit(next, before, { name: actorName, subId: session?.subEnvId || '' })
+      return next
+    }
     return {
       db, setDb, session, setSession,
       account, currentEnv, readOnly, demo,
@@ -3854,13 +3953,13 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const subId = session?.subEnvId
         if (!subId) return
         if (readOnly) { window.dispatchEvent(new CustomEvent('app-toast', { detail: '🔒 Accès en lecture seule : abonnement résilié ou bloqué. Seul le support reste accessible.' })); return }
-        setDb(d => { d.data[subId] = fn(d.data[subId]); return d })
+        setDb(d => { d.data[subId] = writeSubData(d, subId, fn); return d })
       },
       // Met à jour les données d'un sous-environnement précis (ex : pipeline entreprise, leads d'un collègue).
       setSubData(subId, fn) {
         if (!subId) return
         if (readOnly) { window.dispatchEvent(new CustomEvent('app-toast', { detail: '🔒 Accès en lecture seule.' })); return }
-        setDb(d => { if (d.data[subId]) d.data[subId] = fn(d.data[subId]); return d })
+        setDb(d => { if (d.data[subId]) d.data[subId] = writeSubData(d, subId, fn); return d })
       },
       // Valide/invalide la prime d'un RDV (action manager). Invalidée = retirée des stats
       // du collaborateur + notification déposée dans son espace (centre de notifications).

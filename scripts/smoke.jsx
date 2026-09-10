@@ -415,6 +415,36 @@ async function main() {
   if (!text().includes('Challenges')) throw new Error('La section Challenges manque au Classement')
   if (!find('button', 'Lancer un challenge')) throw new Error('Un manager doit pouvoir lancer un challenge')
 
+  // Historique d'une affaire. La brique arrive ÉTEINTE chez les clients existants : on
+  // vérifie d'abord ce silence, puis qu'une fois allumée elle trace le changement d'étape
+  // — c'est sur ces passages-là que se calculent les primes.
+  {
+    const st = () => win.__bdrStore
+    const envId = st().session.envId
+    const subId = st().session.subEnvId
+    const rdvOf = () => { win.__bdrFlushSave?.(); return JSON.parse(win.localStorage.getItem('bdrflow_db_v1')).data[subId].rdvs[0] }
+    const target = rdvOf()
+    if (!target) throw new Error('Aucun RDV pour éprouver l\'historique')
+
+    // Éteinte : rien ne doit être écrit.
+    await act(async () => { st().setEnvModules(envId, { rdvHistory: false }) })
+    await act(async () => { st().setSub(d => { const r = d.rdvs.find(x => x.id === target.id); if (r) r.effectif = '111'; return d }) })
+    if ((rdvOf().audit || []).length) throw new Error("L'historique écrit alors que la brique est éteinte")
+
+    // Allumée : le changement laisse une trace nommée, datée et signée.
+    await act(async () => { st().setEnvModules(envId, { rdvHistory: true }) })
+    await act(async () => { st().setSub(d => { const r = d.rdvs.find(x => x.id === target.id); if (r) r.effectif = '222'; return d }) })
+    const trace = (rdvOf().audit || [])
+    if (trace.length !== 1) throw new Error(`L'historique devrait porter une ligne, il en porte ${trace.length}`)
+    const l = trace[0]
+    if (l.from !== '111' || l.to !== '222') throw new Error(`L'historique retient la mauvaise valeur : ${l.from} → ${l.to}`)
+    if (!l.by || !l.at || !l.label) throw new Error("Une ligne d'historique sans auteur, date ou intitulé ne sert à rien")
+
+    // Un champ NON suivi (une note) ne doit pas encombrer l'historique.
+    await act(async () => { st().setSub(d => { const r = d.rdvs.find(x => x.id === target.id); if (r) r.notes = 'bla'; return d }) })
+    if ((rdvOf().audit || []).length !== 1) throw new Error('Un champ non suivi a été inscrit dans l\'historique')
+  }
+
   // 5. Comité d'achat : le formulaire de RDV qualifie chaque interlocuteur, et alerte quand
   // l'affaire ne tient qu'à une personne.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes Rendez-vous'))
