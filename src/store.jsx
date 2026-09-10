@@ -2994,8 +2994,87 @@ function reconcileReporting(db) {
         if (events.clientLost?.on && r.opportunite === 'Perdue') mark('lost:' + r.id, buildReportText(cat, 'clientLost', fieldsOf('clientLost'), { ...base, motif: r.motifKo || '—' }), r.dateRdv)
       })
     })
+
+    // Récapitulatif hebdomadaire. Les événements ci-dessus disent ce qui s'est passé, un à
+    // un ; le récapitulatif dit ce que la semaine a donné — et surtout ce qui n'a PAS bougé,
+    // qu'aucun événement ne peut signaler puisque, justement, il ne s'est rien passé.
+    if (envModuleOn(db.environments.find(e => e.id === ch.envId), 'weeklyDigest')) {
+      // Bornées aux quatre dernières semaines : allumer la brique ne doit pas déverser un
+      // an de récapitulatifs dans le canal.
+      weeklyDigestWeeks(4).forEach(({ key, start, end }) => {
+        const text = buildWeeklyDigest(db, ch.envId, start, end)
+        if (text) mark('digest:' + key, text, end)
+      })
+    }
   })
   return changed
+}
+
+// Les quatre dernières semaines ACHEVÉES, la plus ancienne d'abord. On ne récapitule pas la
+// semaine en cours : un bilan à mi-parcours n'est pas un bilan.
+function weeklyDigestWeeks(n) {
+  const out = []
+  const monday = startOfWeek(new Date())
+  for (let i = n; i >= 1; i--) {
+    const start = new Date(monday); start.setDate(start.getDate() - 7 * i)
+    const end = new Date(start); end.setDate(end.getDate() + 6)
+    const { year, week } = isoWeekParts(start)
+    out.push({ key: `${year}-S${String(week).padStart(2, '0')}`, start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) })
+  }
+  return out
+}
+
+/**
+ * Le bilan d'une semaine pour un environnement. Rend `null` quand il n'y a rien à dire :
+ * un canal qui poste « 0 partout » toutes les semaines finit par ne plus être lu.
+ */
+export function buildWeeklyDigest(db, envId, startISO, endISO) {
+  const env = (db.environments || []).find(e => e.id === envId)
+  const subs = (db.subenvs || []).filter(s => s.envId === envId)
+  const inWeek = (d) => !!d && d >= startISO && d <= endISO
+  const lines = []
+  let totalPris = 0, totalSql = 0, totalWon = 0
+  const behind = [], silent = []
+
+  subs.forEach(sub => {
+    const data = db.data?.[sub.id]; if (!data) return
+    const name = `${sub.prenom || ''} ${sub.nom || ''}`.trim() || 'Membre'
+    const rdvs = data.rdvs || []
+    const pris = rdvs.filter(r => inWeek(r.datePriseRdv)).length
+    const sql = rdvs.filter(r => inWeek(r.datePassageSQL)).length
+    const won = rdvs.filter(r => isWonPhase(data, r.phase) && inWeek(r.datePassageSQL || r.dateRdv)).length
+    totalPris += pris; totalSql += sql; totalWon += won
+    if (pris === 0 && sql === 0) silent.push(name)
+    else lines.push(`• ${name} : ${pris} RDV pris, ${sql} qualifié(s)${won ? `, ${won} signature(s)` : ''}`)
+    // Sous quota : on ne le dit que si un quota EXISTE. Reprocher un retard sur une cible
+    // que personne n'a fixée serait une accusation sans objet.
+    const q = memberQuota(env, sub.id, 'rdvPris')
+    if (q.target > 0 && quotaAchieved(data, 'rdvPris', envQuotas(env).period, new Date(endISO), { env, subId: sub.id }) < q.target) {
+      behind.push(name)
+    }
+  })
+
+  // Ce qui stagne : des affaires ouvertes sans le moindre mouvement depuis trois semaines.
+  const stale = []
+  subs.forEach(sub => {
+    const data = db.data?.[sub.id]; if (!data) return
+    ;(data.rdvs || []).filter(r => r.opportunite === 'En cours').forEach(r => {
+      const h = r.history || []
+      const last = (h.length ? h[h.length - 1].date : '') || r.datePriseRdv || ''
+      if (last && last < addDaysISO(startISO, -14)) stale.push(r.entreprise || 'Affaire')
+    })
+  })
+
+  if (!totalPris && !totalSql && !totalWon && !stale.length) return null
+  const parts = [
+    `📅 Semaine du ${fmtReportD(startISO)} au ${fmtReportD(endISO)}`,
+    `${totalPris} RDV pris · ${totalSql} qualifié(s) · ${totalWon} signature(s)`,
+  ]
+  if (lines.length) parts.push(lines.join('\n'))
+  if (silent.length) parts.push(`⚪ Sans activité cette semaine : ${silent.join(', ')}`)
+  if (behind.length) parts.push(`⚠️ Sous quota : ${behind.join(', ')}`)
+  if (stale.length) parts.push(`💤 Sans mouvement depuis 3 semaines : ${[...new Set(stale)].slice(0, 8).join(', ')}${stale.length > 8 ? '…' : ''}`)
+  return parts.join('\n')
 }
 
 // Crée automatiquement (une seule fois, respecte les suppressions) un canal « Général » par

@@ -168,6 +168,33 @@ async function main() {
     ok(s.territoryOwner({}, { entreprise: 'Renault' }) === null, 'Territoires : sans carte, aucune attribution')
   }
 
+  // 6 quinquies. Récapitulatif hebdomadaire : il doit compter la BONNE semaine, nommer ce
+  //   qui ne bouge pas, et se taire quand il n'y a rien à dire — un canal qui poste
+  //   « 0 partout » toutes les semaines finit par ne plus être lu.
+  {
+    const monday = s.startOfWeek(new Date())
+    const lastMon = new Date(monday); lastMon.setDate(lastMon.getDate() - 7)
+    const iso = (d) => d.toISOString().slice(0, 10)
+    const inWeek = iso(new Date(lastMon.getTime() + 2 * 86400000)) // mercredi dernier
+    const outWeek = iso(new Date(lastMon.getTime() - 5 * 86400000)) // la semaine d'avant
+    const db = {
+      environments: [{ id: 'e1', name: 'X' }],
+      subenvs: [{ id: 'sa', envId: 'e1', prenom: 'Ana', nom: 'B' }, { id: 'sb', envId: 'e1', prenom: 'Zoé', nom: 'C' }],
+      data: {
+        sa: { rdvs: [{ id: '1', datePriseRdv: inWeek, opportunite: 'En cours', phase: 'R1' }, { id: '2', datePriseRdv: outWeek, opportunite: 'En cours', phase: 'R1' }], phases: ['R1', 'SQL', 'Signée'], bareme: [] },
+        sb: { rdvs: [], phases: ['R1', 'SQL', 'Signée'], bareme: [] },
+      },
+    }
+    const txt = s.buildWeeklyDigest(db, 'e1', iso(lastMon), iso(new Date(lastMon.getTime() + 6 * 86400000)))
+    ok(!!txt, 'Récapitulatif : aucun texte produit alors que la semaine a de l\'activité')
+    ok(/1 RDV pris/.test(txt || ''), `Récapitulatif : le compte de la semaine est faux — ${JSON.stringify(txt)}`)
+    ok(/Ana/.test(txt || ''), 'Récapitulatif : la personne active doit être nommée')
+    ok(/Sans activité/.test(txt || '') && /Zoé/.test(txt || ''), "Récapitulatif : il doit nommer qui n'a rien fait — aucun événement ne peut le signaler")
+    // Semaine vide : silence.
+    const quiet = s.buildWeeklyDigest({ environments: [{ id: 'e1' }], subenvs: [{ id: 'sa', envId: 'e1' }], data: { sa: { rdvs: [] } } }, 'e1', '2020-01-06', '2020-01-12')
+    ok(quiet === null, 'Récapitulatif : une semaine sans rien à dire ne doit rien poster')
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.
