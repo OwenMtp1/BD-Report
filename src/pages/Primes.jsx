@@ -4,6 +4,7 @@ import { AlertTriangle, Activity, Settings2, Gauge } from 'lucide-react'
 import { useStore, computePrimes, primeOpts, computeActivityPrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, SOURCES, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, DEFAULT_PRIME_PHASES, phaseProbability, milestonePhase, applyPrimeRules } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 import { MyStatement } from './Statements.jsx'
+import Simulateur from './Simulateur.jsx'
 
 const SUIVI_TL = [
   { id: 'next', label: 'Le mois suivant' },
@@ -54,6 +55,7 @@ export default function Primes() {
   const cutoffDay = sub.primeCutoffDay || DEFAULT_PRIME_CUTOFF
   const triggerLabel = (sub.primePhases && sub.primePhases.length ? sub.primePhases : DEFAULT_PRIME_PHASES).join(' ou ')
 
+  const [tab, setTab] = useState('suivi')
   const [repTl, setRepTl] = useState('cur')
   const [repCustom, setRepCustom] = useState({})
   const [suiviTl, setSuiviTl] = useState('year')
@@ -98,7 +100,22 @@ export default function Primes() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-extrabold">Primes & Commissions</h2>
+      {/* Le Simulateur était un onglet à part : même sujet, même chiffre, deux endroits où
+          le chercher. Il devient une vue de cette page — « ce que j'ai touché » et
+          « ce que je toucherais » se lisent enfin au même endroit. */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <h2 className="text-xl font-extrabold">Primes & Commissions</h2>
+        <div className="ml-auto flex gap-1 p-1 rounded-xl bg-surface">
+          {[['suivi', 'Suivi'], ['simulateur', 'Simulateur']].map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${tab === id ? 'bg-card shadow text-ink' : 'text-muted hover:text-ink'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'simulateur' ? <Simulateur embedded /> : (<>
 
       {/* Détail du calcul du mois. Affiché dès qu'une règle joue : un montant modifié sans
           explication est un litige qui arrive. */}
@@ -308,7 +325,7 @@ export default function Primes() {
           plutôt que deux écrans qui pouvaient se contredire. Cette page suit, rapporte et prévoit.
         </p>
       </div>
+      </>)}
     </div>
   )
 }
-

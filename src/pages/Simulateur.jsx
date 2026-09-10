@@ -9,7 +9,10 @@ const polar = (angleDeg) => {
   return { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) }
 }
 
-export default function Simulateur() {
+// `embedded` : rendu comme vue de « Primes & Commissions » plutôt que comme page.
+// Le titre de page disparaît alors — deux titres empilés donneraient l'impression
+// d'être ailleurs, alors qu'on est resté sur la même page.
+export default function Simulateur({ embedded }) {
   const store = useStore()
   const sub = store.sub
   const svgRef = useRef(null)
@@ -88,7 +91,7 @@ export default function Simulateur() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-extrabold flex items-center gap-2"><Gauge size={20} className="text-brand" /> Combien vais-je toucher ?</h2>
+        {!embedded && <h2 className="text-xl font-extrabold flex items-center gap-2"><Gauge size={20} className="text-brand" /> Combien vais-je toucher ?</h2>}
         <p className="text-xs text-muted -mt-0.5">Votre progression vers l'objectif de primes — et un curseur pour simuler la cadence à tenir.</p>
       </div>
 

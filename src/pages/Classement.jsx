@@ -40,7 +40,8 @@ const METRICS = [
 ]
 const MEDAL = ['text-amber-400', 'text-slate-400', 'text-orange-400']
 
-export default function Classement() {
+// `embedded` : rendu comme section du tableau de bord plutôt que comme page.
+export default function Classement({ embedded }) {
   const store = useStore()
   const envId = store.session.envId
   const env = store.db.environments.find(e => e.id === envId)
@@ -57,7 +58,7 @@ export default function Classement() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-extrabold flex items-center gap-2"><Trophy size={20} className="text-amber-500" /> Classement du mois — {env?.name}</h2>
+        {!embedded && <h2 className="text-xl font-extrabold flex items-center gap-2"><Trophy size={20} className="text-amber-500" /> Classement du mois — {env?.name}</h2>}
         <p className="text-xs text-muted -mt-0.5">Qui mène la danse ce mois-ci. Choisissez le critère de classement.</p>
       </div>
 

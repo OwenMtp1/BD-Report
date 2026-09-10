@@ -32,7 +32,8 @@ function metricValue(data, metric, tl, custom, source) {
   }
 }
 
-export default function Kpi() {
+// `embedded` : rendu comme section de « Pilotage équipe » plutôt que comme page.
+export default function Kpi({ embedded }) {
   const store = useStore()
   const session = store.session
   const env = store.db.environments.find(e => e.id === session.envId)
@@ -54,7 +55,7 @@ export default function Kpi() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-extrabold">KPI Entreprise</h2>
+      {!embedded && <h2 className="text-xl font-extrabold">KPI Entreprise</h2>}
       <p className="text-sm text-muted -mt-2">Créez des tableurs croisant les données de plusieurs profils de l'environnement.</p>
       <div className="card p-3 flex items-center gap-2">
         <input className="input !w-64" placeholder="Nom du tableur" value={newName} onChange={e => setNewName(e.target.value)} />

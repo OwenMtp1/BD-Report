@@ -389,7 +389,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Main app / Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Qualité des données', 'Mes notes', 'Conversations', 'Logs', 'Passation au closer', 'Closing', 'Primes & Commissions', 'Simulateur de primes', 'ICP', 'Classement', 'Support', 'Souscrire à une offre', 'Gestion Manager', 'Équipe support']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Conversations', 'Logs', 'Passation au closer', 'Closing', 'Primes & Commissions', 'ICP', 'Support', 'Souscrire à une offre', 'Gestion Manager', 'Équipe support']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
@@ -411,9 +411,11 @@ async function main() {
   }
 
   // Classement : le challenge borné dans le temps vit à côté du classement permanent.
-  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Classement'))
-  if (!text().includes('Challenges')) throw new Error('La section Challenges manque au Classement')
-  if (!find('button', 'Lancer un challenge')) throw new Error('Un manager doit pouvoir lancer un challenge')
+  // Le Classement a été absorbé par le tableau de bord : il n'a plus d'onglet, mais rien
+  // de son contenu ne doit avoir disparu au passage.
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Dashboard'))
+  if (!text().includes('Challenges')) throw new Error('La section Challenges a disparu avec la fusion du Classement')
+  if (!find('button', 'Lancer un challenge')) throw new Error('Un manager doit pouvoir lancer un challenge depuis le tableau de bord')
 
   // Historique d'une affaire. La brique arrive ÉTEINTE chez les clients existants : on
   // vérifie d'abord ce silence, puis qu'une fois allumée elle trace le changement d'étape
@@ -508,6 +510,34 @@ async function main() {
     const left = (dbNow2().data[subId].tasks || []).filter(t => t.rdvId === target.id && t.cadenceId === plans[0].id)
     if (left.length !== 1 || !left[0].done) throw new Error("Arrêter un plan doit garder ce qui a été fait et retirer le reste")
     if ((dbNow2().data[subId].tasks || []).length < before2) throw new Error('Des tâches étrangères au plan ont été supprimées')
+  }
+
+  // Fusion des écrans « où j'en suis » : quatre onglets en moins, mais AUCUNE fonction
+  // perdue. On vérifie que chaque contenu est bien joignable dans son nouveau logement —
+  // sans quoi la consolidation serait une suppression déguisée.
+  {
+    const gone = ['Simulateur de primes', 'Qualité des données', 'Classement', 'KPI Entreprise']
+    gone.forEach(l => {
+      if ([...container.querySelectorAll('nav button')].some(b => b.textContent.trim().replace(/\d+$/, '').trim() === l)) {
+        throw new Error(`L'onglet « ${l} » aurait dû être absorbé par un autre écran`)
+      }
+    })
+    // Le Simulateur vit maintenant dans « Primes & Commissions ».
+    await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Primes & Commissions'))
+    const simBtn = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Simulateur')
+    if (!simBtn) throw new Error('Le Simulateur n\'est pas accessible depuis Primes & Commissions')
+    await click(simBtn)
+    if (!text().includes('Combien') && !text().includes('Prime acquise') && !text().includes('acquise')) {
+      throw new Error('La vue Simulateur ne rend pas son contenu')
+    }
+    // La Qualité des données vit maintenant dans « Leads ».
+    await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Leads'))
+    const qBtn = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Qualité')
+    if (!qBtn) throw new Error("Le panneau Qualité des données n'est pas accessible depuis Leads")
+    await click(qBtn)
+    if (!text().includes('/100') && !text().includes('Contacts sans e-mail')) {
+      throw new Error('Le panneau Qualité des données ne rend pas son contenu')
+    }
   }
 
   // 5. Comité d'achat : le formulaire de RDV qualifie chaque interlocuteur, et alerte quand
@@ -625,7 +655,7 @@ async function main() {
 
   // 5b bis. Console « Gestion Manager » : tout le réservé manager tient en un seul écran.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Gestion Manager'))
-  for (const t of ['Utilisateurs', 'Organigramme', 'Créer votre écosystème', 'Objectifs & quotas', 'Pilotage équipe', 'KPI Entreprise', 'Intégration HubSpot']) {
+  for (const t of ['Utilisateurs', 'Organigramme', 'Créer votre écosystème', 'Objectifs & quotas', 'Pilotage équipe', 'Intégration HubSpot']) {
     if (!find('button', t)) throw new Error('Manager hub tab missing: ' + t)
   }
   // Objectifs & quotas : règles communes, montée en charge, cible par personne.
@@ -806,7 +836,9 @@ async function main() {
   if (!text().includes('Offres & abonnements')) throw new Error('Offers admin tab did not render')
   // L'éditeur d'offres liste automatiquement TOUS les onglets (dont les récents).
   await click(find('button', 'Nouvelle offre'))
-  if (!text().includes('Onglets inclus') || !text().includes('Simulateur de primes') || !text().includes('Qualité des données')) throw new Error('Offer editor did not list all tabs')
+  // L'éditeur liste les onglets RÉELS : on vérifie sur deux briques récentes, pas sur
+  // celles qui ont été fusionnées ailleurs.
+  if (!text().includes('Onglets inclus') || !text().includes('Closing') || !text().includes('Passation au closer')) throw new Error('Offer editor did not list all tabs')
   await click(find('button', 'Annuler'))
   // Onglet Permissions staff : matrice exhaustive des droits + création d'un rôle + attribution.
   await click(hubTab('Permissions staff'))

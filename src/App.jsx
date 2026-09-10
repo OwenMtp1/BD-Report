@@ -513,6 +513,16 @@ function ProductSurvey() {
   )
 }
 
+// Onglets absorbés par d'autres écrans. Conservé APRÈS la fusion : les liens partagés et
+// les favoris survivent aux réorganisations, et tomber sur le tableau de bord sans
+// explication ferait croire à une perte de fonctionnalité.
+const MERGED_PAGES = {
+  simulateur: 'primes',      // même sujet, même chiffre
+  dataquality: 'leads',      // on corrige la donnée là où elle est
+  classement: 'dashboard',   // devenu un bloc du tableau de bord
+  kpi: 'teamlead',           // indicateurs d'entreprise et pilotage d'équipe réunis
+}
+
 function MainApp() {
   const store = useStore()
   const me = store.account
@@ -523,7 +533,10 @@ function MainApp() {
   const [page, setPage] = useState(() => {
     if (store.demo) return 'dashboard' // démo isolée : n'hérite pas de l'URL de l'app réelle
     const seg = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, '')).split('/')
-    return (seg[0] && seg[0] !== 'company') ? seg[0] : 'dashboard'
+    const id = (seg[0] && seg[0] !== 'company') ? seg[0] : 'dashboard'
+    // Écrans fusionnés : un lien ou un favori vers l'ancien onglet doit mener là où le
+    // contenu a été déplacé, plutôt que sur un tableau de bord sans rapport.
+    return MERGED_PAGES[id] || id
   })
   const [pendingNote, setPendingNote] = useState('')
   const [theme, setTheme] = useState(() => store.sub?.theme || 'ocean-pro')

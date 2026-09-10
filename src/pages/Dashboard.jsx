@@ -5,6 +5,7 @@ import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, mont
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
 import { ChallengeBanner } from './Challenges.jsx'
 import LandingPanel from './Forecast.jsx'
+import Classement from './Classement.jsx'
 
 const DEFAULT_WIDGETS = [
   { id: 'rdv-realises', label: 'RDV réalisés', size: 'lg' },
@@ -14,6 +15,9 @@ const DEFAULT_WIDGETS = [
   // alors aussi de l'éditeur de tableau de bord — proposer d'afficher ce qui n'existe pas
   // ferait passer une absence de brique pour une panne.
   { id: 'atterrissage', label: 'Atterrissage de la période', size: 'lg', module: 'forecast' },
+  // Le Classement était un onglet : on n'allait le voir que pour le voir. En bloc du
+  // tableau de bord, il se lit dans le mouvement — et reste masquable comme les autres.
+  { id: 'classement', label: 'Classement de l\'équipe', size: 'lg' },
   { id: 'bubbles', label: 'Indicateurs clés (MQL / SQL / Primes)', size: 'lg' },
   { id: 'performance', label: 'Performance', size: 'md' },
   { id: 'provenance', label: 'Provenance des RDV', size: 'md' },
@@ -488,6 +492,8 @@ export default function Dashboard() {
       }
       case 'atterrissage':
         return <LandingPanel data={sub} subId={store.session?.subEnvId} />
+      case 'classement':
+        return <div className="card p-4"><Classement embedded /></div>
       case 'velocite': {
         const velo = pipelineVelocity(rdvs, sub)
         const maxAvg = Math.max(1, ...velo.map(v => v.avg))

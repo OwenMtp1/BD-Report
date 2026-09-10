@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { Clock, Building2, Users, UserRound, MessageSquare, Trash2, CheckSquare } from 'lucide-react'
+import { Clock, Building2, Users, UserRound, MessageSquare, Trash2, CheckSquare, ShieldCheck } from 'lucide-react'
 import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS, phaseColor, oppColor, companyKey } from '../store.jsx'
+import DataQuality from './DataQuality.jsx'
 import { Modal, SlideOver, Confirm, Empty, toast, confetti } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
@@ -84,6 +85,9 @@ export default function Leads() {
   const sub = store.sub
   const [detail, setDetail] = useState(null)
   const [dragKey, setDragKey] = useState(null)
+  // Qualité des données : replié par défaut. On corrige les données là où elles sont —
+  // un onglet séparé obligeait à retenir un problème, changer d'écran, retrouver la ligne.
+  const [showQuality, setShowQuality] = useState(false)
   const [scope, setScope] = useState('me') // 'me' = mon pipeline | 'org' = pipeline entreprise (partagé)
   // Filtres : propriétaire + plages de dates (ouverture / fermeture / dernière activité)
   const [fOwner, setFOwner] = useState('')
@@ -198,7 +202,12 @@ export default function Leads() {
             onClick={() => setScope('me')}><UserRound size={13} /> Mon pipeline</button>
           <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${scope === 'org' ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
             onClick={() => setScope('org')}><Users size={13} /> Pipeline entreprise</button>
+          <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 bg-card text-muted hover:bg-surface border-l border-line`}
+            onClick={() => setShowQuality(q => !q)} title="Contrôler la qualité de vos données">
+            <ShieldCheck size={13} /> Qualité
+          </button>
         </div>
+      {showQuality && <div className="card p-4"><DataQuality embedded /></div>}
       </div>
       <p className="text-xs text-muted -mt-2">
         {scope === 'me'

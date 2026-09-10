@@ -9,6 +9,13 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['Aucun challenge. Exemple : « le plus de leads qualifiés cette semaine ».', 'No challenge yet. For example: "most qualified leads this week".', 'Ningún reto. Por ejemplo: «más leads cualificados esta semana».'],
+  ['Contrôler la qualité de vos données', 'Check the quality of your data', 'Comprobar la calidad de tus datos'],
+  ['Qualité', 'Quality', 'Calidad'],
+  ['Suivi', 'Tracking', 'Seguimiento'],
+  ['Simulateur', 'Simulator', 'Simulador'],
+  ['Classement de l\'équipe', 'Team leaderboard', 'Clasificación del equipo'],
+  ['Indicateurs de l\'entreprise', 'Company indicators', 'Indicadores de la empresa'],
   ['Attribué à', 'Assigned to', 'Asignado a'],
   ['Aucun territoire défini — tous les comptes sont ouverts à tout le monde.', 'No territory defined — every account is open to everyone.', 'Ningún territorio definido — todas las cuentas están abiertas a todos.'],
   ['Comptes nommés (un par ligne)', 'Named accounts (one per line)', 'Cuentas nombradas (una por línea)'],

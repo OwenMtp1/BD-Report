@@ -18,9 +18,7 @@ export const NAV_GROUPS = [
   {
     id: 'pilotage', label: 'Pilotage', items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
-      { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: MANAGER_ROLES, inManagerHub: true },
       { id: 'icp', label: 'ICP', icon: Target, brick: 'ICP' },
-      { id: 'classement', label: 'Classement', icon: Trophy, brick: 'Classement' },
       { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, brick: 'Pilotage équipe', roles: MANAGER_ROLES, inManagerHub: true },
     ],
   },
@@ -35,7 +33,6 @@ export const NAV_GROUPS = [
       { id: 'handoff', label: 'Passation au closer', icon: ArrowRightLeft, brick: 'Passation au closer', module: 'handoff' },
       { id: 'closing', label: 'Closing', icon: Handshake, brick: 'Closing', module: 'closing' },
       { id: 'primes', label: 'Primes & Commissions', icon: Coins, brick: 'Primes & Commissions' },
-      { id: 'simulateur', label: 'Simulateur de primes', icon: Gauge, brick: 'Simulateur de primes' },
     ],
   },
   {
@@ -46,7 +43,6 @@ export const NAV_GROUPS = [
   {
     id: 'donnees', label: 'Mes données', items: [
       { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
-      { id: 'dataquality', label: 'Qualité des données', icon: ShieldCheck, brick: 'Qualité des données' },
       { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
       { id: 'logs', label: 'Logs', icon: ScrollText, brick: 'Logs' },
       { id: 'corbeille', label: 'Corbeille', icon: Trash2, brick: 'Corbeille' },

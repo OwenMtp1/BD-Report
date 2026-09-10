@@ -4,6 +4,7 @@ import { useStore, inTimeline, computePrimes, primeOpts, parseISO, fmtDate, mont
 import { Empty, toast, Confirm } from '../ui.jsx'
 import { StatementsManager } from './Statements.jsx'
 import LandingPanel, { TeamLanding } from './Forecast.jsx'
+import Kpi from './Kpi.jsx'
 
 const dayISO = (offset = 0) => {
   const d = new Date(); d.setDate(d.getDate() + offset)
@@ -270,6 +271,13 @@ export default function TeamLead() {
       )}
 
       {store.hasModule('territories') && <Territories store={store} members={members} />}
+
+      {/* KPI Entreprise, absorbés ici : les indicateurs de l'entreprise et le pilotage de
+          l'équipe répondaient à la même question depuis deux onglets voisins. */}
+      <details className="card p-4">
+        <summary className="cursor-pointer font-bold">Indicateurs de l'entreprise</summary>
+        <div className="mt-3"><Kpi embedded /></div>
+      </details>
 
       {/* Fourchette de primes du mois — le chiffre qu'on présente en comité */}
       <div className="card p-4">

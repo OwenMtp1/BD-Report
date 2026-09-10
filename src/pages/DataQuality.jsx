@@ -36,7 +36,10 @@ function ScoreRing({ score }) {
   )
 }
 
-export default function DataQuality() {
+// `embedded` : rendu comme panneau de « Leads » plutôt que comme page. La qualité des
+// données se corrige là où sont les données — un onglet séparé obligeait à retenir un
+// problème, changer d'écran, et retrouver la bonne ligne.
+export default function DataQuality({ embedded }) {
   const store = useStore()
   const sub = store.sub
   const [open, setOpen] = useState(null)
@@ -87,7 +90,7 @@ export default function DataQuality() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-extrabold flex items-center gap-2"><ShieldCheck size={20} className="text-brand" /> Qualité des données</h2>
+        {!embedded && <h2 className="text-xl font-extrabold flex items-center gap-2"><ShieldCheck size={20} className="text-brand" /> Qualité des données</h2>}
         <p className="text-xs text-muted -mt-0.5">Repérez et corrigez les données manquantes, les doublons et les leads oubliés de votre espace.</p>
       </div>
 
