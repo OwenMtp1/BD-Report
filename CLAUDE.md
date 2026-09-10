@@ -10,7 +10,9 @@ npm install
 npm run build      # build Vite -> dist/
 npm run smoke      # test de fumée jsdom (rend l'app, traverse les écrans) — DOIT passer avant tout commit
 npm run audit      # audit structurel : démo complète, catalogues de droits, contraste sombre,
-                   # RETRAIT de chaque module (rien ne s'efface, rien ne casse), couverture i18n
+                   # RETRAIT de chaque module, atterrissage, territoires, récap hebdo,
+                   # AUCUN mot de passe en clair, fusion des états distants,
+                   # invariant de découpage multi-tenant, couverture i18n
 npm run dev        # serveur de dev
 ```
 `scripts/smoke.jsx` se connecte en OwenMtp / demo1234 → PeopleSpheres → Owen Mrani Bonnier → PIN 1205, puis traverse les pages. **Mets-le à jour quand tu ajoutes une page/feature.**
@@ -173,7 +175,13 @@ npm run dev        # serveur de dev
   « Comptes & environnements » de `SupportHub` (perm `accounts.view`) : côté client elle exposait les comptes des autres
   entreprises clientes (`Admin.jsx`, mode `admin`, ne filtrait sur aucun environnement).
 - **Modules optionnels par environnement** — `ENV_MODULES` (store.jsx) : `handoff`, `closing`, `dealValue`,
-  `committee`, `quotas`, `oneToOne`, `challenges`, `statements`. Le staff coche ce qu'il installe **à la création** de
+  `committee`, `quotas`, `oneToOne`, `challenges`, `statements`, puis la 2e série `rdvHistory`,
+  `forecast`, `recycling`, `cadence`, `territories`, `weeklyDigest`.
+  ⚠️ **`MODULES_V2` = EXCEPTION à la règle « absent = actif »** : ces six-là sont inscrits
+  explicitement à `false` sur les environnements EXISTANTS par `migrate` (une fois, via
+  `_autoSeed.modulesV2`) — les allumer d'office aurait fait apparaître six onglets du jour au
+  lendemain chez des équipes qui ne les avaient pas demandés. Les environnements créés ensuite
+  les reçoivent actifs ; la démo les a tous (`modules: defaultEnvModules()` en dur). Le staff coche ce qu'il installe **à la création** de
   l'environnement (App.jsx) et peut y revenir depuis la fiche du projet (`ProjectUsers`).
   ⚠️ **Un module absent du réglage est ACTIF** (`envModuleOn`) : un environnement créé avant ces
   modules ne doit rien perdre. `store.hasModule(id)` répond pour l'env courant (toujours vrai en démo) ;
@@ -388,16 +396,27 @@ npm run dev        # serveur de dev
   à la lecture/realtime (rétro-compatible avec l'ancien clair). Neutralise le pillage auto de la table via la clé anon.
   Limite : app 100 % front ⇒ clé livrée au client (protège du scan opportuniste, pas d'un attaquant ciblé). Vrai
   correctif = RLS par org (`supabase/schema_multitenant.sql` + `MIGRATION_MULTITENANT.md`, derrière `FEATURES.multiTenant`).
-- ⚠️ **Sécurité — mots de passe** : `account.password` reste un hash `sha256:…` (auth). À la demande explicite du
-  propriétaire, un `account.passwordClear` (clair) est aussi conservé pour permettre au **manager/support/fondateur**
-  d'afficher le mot de passe (bouton œil dans Gestion Administration, `store.revealPassword`). Compromis assumé : le clair
-  est reprotégé au repos par le chiffrement du blob (`blobCrypto`) côté Supabase, mais reste récupérable côté client — la
-  vraie confidentialité passerait par Supabase Auth + RLS. Les anciens mots de passe déjà purgés (sans `passwordClear`)
-  ne sont **pas** récupérables : il faut les réinitialiser pour les rendre visibles. L'ancien `passwordPlain` reste purgé.
-  **Aucun mot de passe en clair dans le code** : les comptes de démo (`buildSeedDb` compte '01', `injectTestEnv`) portent
-  un hash `sha256:…` en dur (jamais le clair) ; seuls les comptes créés/réinitialisés dans l'app ont un `passwordClear`.
-  RESTE À DURCIR avant prod publique : la RLS de `app_state` est `using(true)` → la clé anon (publique, livrée au client)
-  permet de lire/écrire tout le blob. Vrai correctif = Supabase Auth + RLS `authenticated` (cf. `supabase/SETUP.md`).
+- 🔒 **Sécurité — mots de passe : PLUS AUCUN CLAIR, nulle part.** `account.password` est un hash
+  `sha256:…` et rien d'autre. `passwordClear`/`passwordPlain` sont **purgés par `migrate`** et ne
+  sont plus jamais écrits (création client, création staff, réinitialisation, migration d'un
+  format hérité). Le droit `passwords.view` a été **retiré du catalogue** : un droit qui ne fait
+  rien laisse croire qu'il protège quelque chose. Reste `passwords.reset`.
+  **Contrepartie, exigée et vérifiée** : le manager conserve l'accès à l'ESPACE de ses
+  collaborateurs (`team.view`/`team.manage`) — cet accès n'a jamais eu besoin de leur mot de
+  passe, et confondre les deux est ce qui justifiait de garder un clair. `npm run audit` fige
+  les deux garanties.
+- 🔒 **Écrasement entre collègues — corrigé.** L'arrivée d'un état distant ne REMPLACE plus
+  l'état local : `mergeRemoteDb(local, remote)` garde, espace par espace, la version au `_rev`
+  le plus récent (`_rev` posé par `writeSubData` à chaque écriture). Sans cela, la copie périmée
+  qu'un collègue portait de votre espace effaçait votre travail en cours. Ce n'est pas de la
+  fusion de contenu : deux personnes sur le MÊME espace se départagent toujours à la plus récente.
+- ⛔ **RESTE À FAIRE avant une prod publique — voir `supabase/RUNBOOK_SECURITE.md`.**
+  La RLS de `app_state` est `using(true)` : la clé anon (publique par construction) permet de
+  lire/écrire tout le blob, tous clients confondus. Le schéma cible, la RLS par org, le script de
+  migration, l'auth Supabase et la synchro par org sont **écrits et vérifiés** (l'invariant de
+  découpage tourne à chaque `npm run audit`), mais **`store.jsx` n'est pas branché dessus** : le
+  drapeau `FEATURES.multiTenant` est donc inerte. Le runbook dit précisément ce qui reste, et
+  pourquoi le branchement ne doit pas se faire avant d'avoir un projet Supabase de test.
 
 ## DÉPLOIEMENT — IMPORTANT
 Le **proxy git de l'environnement de dev bloque la branche `gh-pages`** (seul le push de la branche de travail passe).
