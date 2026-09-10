@@ -933,7 +933,7 @@ async function main() {
   await click(hubTab('Demandes'))
   if (!text().includes('ACME Corp')) throw new Error('Contact request not ingested into Demandes')
   // ...et a généré automatiquement un projet ; chaque environnement a aussi son projet d'implémentation.
-  await click(hubTab('Projets'))
+  await click(hubTab('Projets & atelier'))
   // Organigramme d'un projet : organisation des personnes et rôles de l'entreprise.
   {
     const orgBtn = [...container.querySelectorAll('main button[title="Organigramme du projet"]')][0]
@@ -974,9 +974,24 @@ async function main() {
   await click(find('button', 'Enregistrer'))
   if (!text().includes('Avancement')) throw new Error('Project not created / Gantt did not render')
 
-  // Atelier : l'assistant compose un environnement et montre ce que chaque rôle verra.
-  await click(hubTab('Atelier'))
-  if (!text().includes('Atelier d\'environnement')) throw new Error("L'atelier ne s'affiche pas")
+  // Atelier : désormais une VUE de « Projets & atelier », pas un onglet à part. On y accède
+  // par le sélecteur de vue, et l'assistant doit s'y comporter comme avant.
+  await click(hubTab('Projets & atelier'))
+  // Les deux anciens onglets ont disparu de la barre du hub.
+  {
+    const hubBtns = [...container.querySelectorAll('main button')].map(b => b.textContent.trim())
+    if (hubBtns.includes('Projets') && !hubBtns.includes('Projets & atelier')) throw new Error("L'ancien onglet Projets subsiste")
+  }
+  // Passerelle : depuis une livraison, on ouvre l'atelier SUR son environnement.
+  {
+    const bridge = [...container.querySelectorAll('main button[title="Ouvrir dans l\'atelier"]')][0]
+    if (!bridge) throw new Error("La passerelle vers l'atelier manque sur les livraisons")
+    await click(bridge)
+    if (!text().includes('Voir comme')) throw new Error("La passerelle n'ouvre pas l'explorateur de l'atelier")
+    await click([...container.querySelectorAll('main button')].find(b => b.textContent.trim() === 'Livraisons'))
+  }
+  await click([...container.querySelectorAll('main button')].find(b => b.textContent.trim() === 'Atelier'))
+  if (!text().includes('Composer un espace client')) throw new Error("L'atelier ne s'affiche pas dans la vue fusionnée")
   if (!text().includes('Voir comme')) throw new Error("L'aperçu par rôle manque à l'explorateur")
   {
     await click(find('button', 'Nouvel environnement'))
@@ -1023,7 +1038,7 @@ async function main() {
     throw new Error('Env controls should have left the client card')
   }
   await click(find('button', 'Fermer'))
-  await click(hubTab('Projets'))
+  await click(hubTab('Projets & atelier'))
   {
     const usersBtn = [...container.querySelectorAll('main .card')]
       .find(c => c.textContent.includes('PeopleSpheres') && c.querySelector('button[title="Utilisateurs du projet"]'))

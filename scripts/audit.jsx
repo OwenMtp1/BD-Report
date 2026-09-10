@@ -290,6 +290,25 @@ async function main() {
       'Rattrapage : un environnement déjà en service ne doit pas se voir recréer un projet supprimé')
   }
 
+  // 6 nonies. Fusion « Projets & atelier » : réunir deux écrans ne doit accorder AUCUN droit.
+  //   L'onglet s'ouvre à qui a l'un OU l'autre des deux droits, mais chaque vue reste gardée
+  //   par le sien. Sans cela, la fusion aurait ouvert la composition d'environnements à tous
+  //   ceux qui pouvaient seulement consulter les projets.
+  {
+    const src = fs.default.readFileSync(path.default.join(dir, 'Delivery.jsx'), 'utf8')
+    ok(/hasPerm\('env\.build'\)/.test(src), "Delivery : la vue Atelier n'est pas gardée par `env.build`")
+    ok(/hasPerm\('projects\.view'\)/.test(src), "Delivery : la vue Livraisons n'est pas gardée par `projects.view`")
+    // La passerelle vers l'atelier ne doit être proposée qu'à qui peut composer.
+    ok(/canBuild \? openWorkshop : null/.test(src), 'Delivery : la passerelle vers l\'atelier est proposée sans le droit de composer')
+    const hub = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'pages', 'SupportHub.jsx'), 'utf8')
+    ok(!/id: 'workshop'/.test(hub) && !/id: 'projects'/.test(hub), 'SupportHub : un onglet fusionné subsiste dans la barre')
+    ok(/perms: \['projects\.view', 'env\.build'\]/.test(hub), "SupportHub : l'onglet fusionné ne s'ouvre pas à l'un OU l'autre droit")
+    // Le parcours de formation visait l'ancien identifiant : il déraillerait en silence.
+    const tour = fs.default.readFileSync(path.default.join(dir, 'TrainingJourney.jsx'), 'utf8')
+    ok(!/hub: 'projects'/.test(tour) && !/hub: 'workshop'/.test(tour),
+      'Parcours de formation : une étape vise encore un onglet qui n\'existe plus')
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.

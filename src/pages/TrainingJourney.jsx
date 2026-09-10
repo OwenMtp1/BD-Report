@@ -42,11 +42,11 @@ const TOUR = [
     text: "Le kanban range les entreprises par situation, jusqu'aux « clients non aboutis ». Ouvrez une fiche : vous y trouvez ses tickets, les notes de l'équipe et les motifs de clôture de ses projets.",
   },
   {
-    perm: 'projects.view', page: 'supporthub', hub: 'projects', title: 'Les projets à paramétrer',
+    perm: 'projects.view', page: 'supporthub', hub: 'delivery', title: 'Les projets à paramétrer',
     text: "Vallon et Hexatel sont signés mais rien n'est en place. Le planning montre les phases ; le bouton « Utilisateurs » gère les accès, et l'icône d'organigramme ouvre l'organisation du client.",
   },
   {
-    perm: 'projects.manage', page: 'supporthub', hub: 'projects', title: "Rôles et accès d'un client",
+    perm: 'projects.manage', page: 'supporthub', hub: 'delivery', title: "Rôles et accès d'un client",
     text: "Depuis l'organigramme d'un projet, « Rôles et accès » décide de ce que voit chaque rôle de l'entreprise et de ce qu'il peut faire. Rien ne s'applique avant que vous n'enregistriez : ces cases changent le quotidien de vraies personnes.",
   },
   {

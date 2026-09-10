@@ -355,9 +355,11 @@ function Wizard({ store, onDone, onCancel }) {
 }
 
 // ---------------------------------------------------------------- Explorateur d'environnements
-function Explorer({ store }) {
+function Explorer({ store, initialEnvId }) {
   const envs = store.db.environments.filter(e => e.id !== 'env-demo')
-  const [selId, setSelId] = useState(envs[0]?.id || null)
+  // `initialEnvId` : on arrive depuis une livraison, sur CET environnement-là. Sans quoi il
+  // faudrait le retrouver dans la liste, ce qui est exactement le va-et-vient qu'on supprime.
+  const [selId, setSelId] = useState(initialEnvId || envs[0]?.id || null)
   const env = envs.find(e => e.id === selId)
   const [asRole, setAsRole] = useState('')
   const [asService, setAsService] = useState('')
@@ -476,15 +478,22 @@ function LiveRoleEditor({ store, env, onClose }) {
 }
 
 // ---------------------------------------------------------------- Page
-export default function Workshop() {
+/**
+ * `embedded` : rendu comme vue de « Projets & atelier » plutôt que comme page.
+ * `initialEnvId` : ouvert sur un environnement précis, quand on arrive depuis sa livraison.
+ * `startInWizard` : ouvert directement sur l'assistant de création.
+ * `onCreated` : prévient l'écran parent qu'un environnement vient d'être composé — c'est lui
+ *   qui ramène alors vers la livraison correspondante, sans quoi il faudrait aller la chercher.
+ */
+export default function Workshop({ embedded, initialEnvId, startInWizard, onCreated }) {
   const store = useStore()
-  const [mode, setMode] = useState('explore')
+  const [mode, setMode] = useState(startInWizard ? 'create' : 'explore')
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-extrabold flex items-center gap-2"><Hammer size={20} className="text-brand" /> Atelier d'environnement</h2>
+          {!embedded && <h2 className="text-xl font-extrabold flex items-center gap-2"><Hammer size={20} className="text-brand" /> Atelier d'environnement</h2>}
           <p className="text-xs text-muted -mt-0.5">
             Composer un espace client — modules, offre, rôles, équipe — puis vérifier ce que chacun verra.
           </p>
@@ -495,8 +504,8 @@ export default function Workshop() {
       </div>
 
       {mode === 'create'
-        ? <Wizard store={store} onCancel={() => setMode('explore')} onDone={() => setMode('explore')} />
-        : <Explorer store={store} />}
+        ? <Wizard store={store} onCancel={() => setMode('explore')} onDone={(envId) => { setMode('explore'); onCreated?.(envId) }} />
+        : <Explorer store={store} initialEnvId={initialEnvId} />}
     </div>
   )
 }

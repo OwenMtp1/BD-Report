@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Network, Unlock, ShieldAlert, UserCheck, Hand, Rocket, LogIn, Wrench } from 'lucide-react'
+import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Users2, ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Network, Unlock, ShieldAlert, UserCheck, Hand, Rocket, LogIn, Wrench, Hammer } from 'lucide-react'
 import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, todayISO, ENV_MODULES } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 import ProjectOrgChart from './ProjectOrgChart.jsx'
@@ -481,7 +481,12 @@ function ProjectForm({ initial, clients, onSave, onClose }) {
   )
 }
 
-export default function Projects() {
+/**
+ * `embedded` : rendu comme vue de « Projets & atelier » plutôt que comme page.
+ * `onOpenWorkshop(envId)` : passerelle vers l'atelier, sur l'environnement de CETTE livraison.
+ *   C'est le va-et-vient qu'on supprime — composer et livrer sont deux moments du même travail.
+ */
+export default function Projects({ embedded, onOpenWorkshop }) {
   const store = useStore()
   const projects = store.db.projects || []
   const clients = store.db.clients || []
@@ -506,7 +511,7 @@ export default function Projects() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-xl font-extrabold flex items-center gap-2"><FolderKanban size={20} className="text-brand" /> Gestion de Projet</h2>
+        {!embedded && <h2 className="text-xl font-extrabold flex items-center gap-2"><FolderKanban size={20} className="text-brand" /> Gestion de Projet</h2>}
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-line overflow-hidden">
             <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${view === 'gantt' ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`} onClick={() => setView('gantt')}><GanttChartSquare size={13} /> Planning</button>
@@ -536,6 +541,13 @@ export default function Projects() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <span className={`chip ${st.color}`}>{st.label}</span>
+                      {/* Passerelle vers l'atelier, sur l'environnement de cette livraison :
+                          composer et livrer sont deux moments du même travail. Absente si le
+                          droit `env.build` manque — fusionner deux écrans ne donne aucun droit. */}
+                      {p.envId && onOpenWorkshop && (
+                        <button className="p-1.5 rounded-lg hover:bg-surface" title="Ouvrir dans l'atelier"
+                          onClick={() => onOpenWorkshop(p.envId)}><Hammer size={14} /></button>
+                      )}
                       {p.envId && <button className="p-1.5 rounded-lg hover:bg-surface" title="Utilisateurs du projet" onClick={() => setUsersFor(p)}><Users2 size={14} /></button>}
                       {p.envId && <button className="p-1.5 rounded-lg hover:bg-surface" title="Organigramme du projet" onClick={() => setOrgFor(p)}><Network size={14} /></button>}
                       {/* Modifier n'est proposé qu'à qui en a le droit : un bouton inerte ne

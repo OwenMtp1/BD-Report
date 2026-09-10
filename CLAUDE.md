@@ -247,7 +247,15 @@ npm run dev        # serveur de dev
   - **Objections** + **Modèles de messages** — catégories de « Mes notes » (`Objections.jsx`,
     `MessageTemplates.jsx`), `data.objections` / `data.messageTemplates`, semés une seule fois.
     `fillTemplate` laisse une variable sans valeur VISIBLE entre crochets.
-- **Console éditeur** — **`Workshop.jsx`** (onglet « Atelier », perm `env.build`) : assistant en 5 étapes
+- **Console éditeur** — **`Delivery.jsx`** = onglet **« Projets & atelier »** de `SupportHub`.
+  Un projet EST la livraison d'un environnement : les séparer imposait un va-et-vient constant
+  (composer dans l'atelier, retrouver le projet ailleurs pour le déployer, revenir ajuster un rôle).
+  Deux vues et surtout deux **passerelles** — depuis une livraison, l'atelier s'ouvre SUR son
+  environnement (`initialEnvId`) ; à la sortie de l'assistant, on revient sur la livraison née.
+  ⚠️ **Fusionner deux écrans n'accorde AUCUN droit** : l'onglet s'ouvre à qui a `projects.view`
+  **ou** `env.build` (`perms: [...]` dans `SupportHub`), mais chaque vue reste gardée par le sien,
+  et la passerelle n'apparaît qu'avec `env.build`. `npm run audit` fige ces gardes.
+  **`Workshop.jsx`** (vue « Atelier », perm `env.build`) : assistant en 5 étapes
   (identité & modèle, modules, rôles & onglets, équipe, récapitulatif) + explorateur avec « Voir comme… »
   par rôle/service, sans entrer dans l'environnement (`previewTabs(env, offers, role)` = module ∩ offre ∩ rôle).
   `store.provisionEnvMember()` ouvre un accès chez un client (`addAccount` consomme un siège de l'env COURANT).

@@ -9,6 +9,12 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['Projets & atelier', 'Projects & workshop', 'Proyectos y taller'],
+  ['Livraisons', 'Deliveries', 'Entregas'],
+  ['Composer l\'environnement d\'un client et suivre sa mise en place — deux moments du même travail, au même endroit.', 'Build a client\'s environment and follow its rollout — two moments of the same work, in one place.', 'Componer el entorno de un cliente y seguir su puesta en marcha — dos momentos del mismo trabajo, en un solo lugar.'],
+  ['Vous n\'avez accès ni aux livraisons ni à l\'atelier.', 'You have access to neither deliveries nor the workshop.', 'No tienes acceso ni a las entregas ni al taller.'],
+  ['Environnement composé — sa livraison vous attend ici', 'Environment built — its delivery is waiting here', 'Entorno compuesto — su entrega te espera aquí'],
+  ['Ouvrir dans l\'atelier', 'Open in the workshop', 'Abrir en el taller'],
   ['non lisible — réinitialisez pour redonner l\'accès', 'not readable — reset it to restore access', 'no legible — restablécelo para devolver el acceso'],
   ['mot de passe non lisible', 'password not readable', 'contraseña no legible'],
   ['Aucun challenge. Exemple : « le plus de leads qualifiés cette semaine ».', 'No challenge yet. For example: "most qualified leads this week".', 'Ningún reto. Por ejemplo: «más leads cualificados esta semana».'],

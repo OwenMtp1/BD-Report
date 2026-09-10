@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network, GraduationCap, CalendarDays, Hammer } from 'lucide-react'
+import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network, GraduationCap, CalendarDays } from 'lucide-react'
 import { useStore, slaInfo, ticketHasUnread } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
 import Clients from './Clients.jsx'
-import Projects from './Projects.jsx'
+import Delivery from './Delivery.jsx'
 import KnowledgeBase from './KnowledgeBase.jsx'
 import SupportLogs from './SupportLogs.jsx'
 import SupportTrash from './SupportTrash.jsx'
@@ -17,7 +17,6 @@ import Admin from './Admin.jsx'
 import StaffOrgChart from './StaffOrgChart.jsx'
 import StaffTraining from './StaffTraining.jsx'
 import StaffAgenda from './StaffAgenda.jsx'
-import Workshop from './Workshop.jsx'
 
 const SupportConversations = () => <Conversations scope="support" />
 
@@ -30,9 +29,11 @@ const TABS = [
   { id: 'conversations', label: 'Conversations', icon: MessagesSquare, El: SupportConversations },
   { id: 'tickets', label: 'Tickets', icon: LifeBuoy, El: Tickets, perm: 'tickets.view' },
   { id: 'clients', label: 'Clients', icon: Users2, El: Clients, perm: 'clients.view' },
-  { id: 'projects', label: 'Projets', icon: FolderKanban, El: Projects, perm: 'projects.view' },
+  // Projets et atelier réunis : un projet EST la livraison d'un environnement, et les
+  // séparer imposait un va-et-vient constant. `perms` = visible si l'un DES droits suffit ;
+  // à l'intérieur, chaque vue reste gardée par le sien (voir Delivery.jsx).
+  { id: 'delivery', label: 'Projets & atelier', icon: FolderKanban, El: Delivery, perms: ['projects.view', 'env.build'] },
   { id: 'agenda', label: 'Agenda', icon: CalendarDays, El: StaffAgenda, perm: 'projects.view' },
-  { id: 'workshop', label: 'Atelier', icon: Hammer, El: Workshop, perm: 'env.build' },
   // Vue globale des comptes et environnements : c'est du back-office éditeur, sa place est
   // ici et non côté client, où elle exposait les comptes des autres entreprises clientes.
   { id: 'accounts', label: 'Comptes & environnements', icon: Shield, El: () => <Admin mode="admin" />, perm: 'accounts.view' },
@@ -50,7 +51,11 @@ export default function SupportHub() {
   const store = useStore()
   const db = store.db
   // Onglets visibles selon les permissions du rôle (le Fondateur voit tout).
-  const tabs = TABS.filter(t => !t.perm || store.hasPerm(t.perm))
+  // Un onglet peut demander UN droit (`perm`) ou se contenter de l'un de plusieurs (`perms`) :
+  // un écran qui réunit deux métiers s'ouvre à qui exerce l'un ou l'autre, sans accorder
+  // à l'un les droits de l'autre — ce filtrage-là se fait à l'intérieur de l'écran.
+  const tabs = TABS.filter(t => (t.perm ? store.hasPerm(t.perm) : true)
+    && (t.perms ? t.perms.some(p => store.hasPerm(p)) : true))
   const [tab, setTab] = useState(tabs[0]?.id || 'conversations')
 
   // Journal : on trace l'écran sur lequel un membre du staff travaille. En revue, savoir
@@ -77,7 +82,7 @@ export default function SupportHub() {
     { label: 'Tickets ouverts', value: openTickets.length, tab: 'tickets', color: 'text-sky-600' },
     { label: 'SLA à risque', value: slaRisk, tab: 'tickets', color: slaRisk ? 'text-red-600' : 'text-muted' },
     { label: 'Clients', value: (db.clients || []).length, tab: 'clients', color: 'text-emerald-600' },
-    { label: 'Projets', value: (db.projects || []).length, tab: 'projects', color: 'text-amber-600' },
+    { label: 'Projets', value: (db.projects || []).length, tab: 'delivery', color: 'text-amber-600' },
   ]
 
   // Pastilles par onglet : la notification globale ne disait pas d'où elle venait.
