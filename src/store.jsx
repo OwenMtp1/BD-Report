@@ -3973,7 +3973,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           return key && !mine.has(key)
         })
         if (!add.length) return 0
-        setSub(d => ({
+        this.setSub(d => ({
           ...d,
           contacts: [...(d.contacts || []), ...add.map(c => {
             const { owners, mine: _m, ...rest } = c
@@ -3986,10 +3986,10 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // jour de bascule du mois de paiement. Renommer une phase reporte le nouveau nom sur
       // les rendez-vous qui la portent ET sur les phases déclencheuses, faute de quoi les
       // primes cesseraient d'être calculées sans que personne ne comprenne pourquoi.
-      setEcosystem(patch) { setSub(d => ({ ...d, ...patch })) },
+      setEcosystem(patch) { this.setSub(d => ({ ...d, ...patch })) },
       renamePhase(oldName, newName) {
         const to = (newName || '').trim(); if (!to || to === oldName) return
-        setSub(d => {
+        this.setSub(d => {
           // Trace du renommage : les automatisations (Perdue → KO, Gagnée → SQL, Signée)
           // visent des noms par défaut. Sans cet alias, renommer « SQL » ferait poser aux
           // RDV gagnés une étiquette qui n'existe plus dans le pipeline.

@@ -1005,6 +1005,47 @@ async function main() {
     await click(find('button', 'Annuler'))
   }
 
+  // CRÉATION RÉELLE d'un environnement par l'assistant. Le test s'arrêtait jusqu'ici à
+  // « Annuler » : il éprouvait la composition, jamais la livraison. Or c'est précisément le
+  // geste final — créer — qui compte, et personne ne le vérifiait.
+  {
+    await click(find('button', 'Nouvel environnement'))
+    const nameInput = [...container.querySelectorAll('main input')].find(i => !i.placeholder && i.type !== 'checkbox' && i.type !== 'radio')
+    if (!nameInput) throw new Error("Le champ du nom manque à la première étape de l'assistant")
+    await type(nameInput, 'Client Atelier')
+    for (let i = 0; i < 4; i++) {
+      const next = find('button', 'Suivant')
+      if (!next) throw new Error(`Étape ${i + 1} : bouton « Suivant » introuvable`)
+      await click(next)
+    }
+    const createBtn = find('button', "Créer l'environnement")
+    if (!createBtn) throw new Error("Le bouton « Créer l'environnement » manque à la dernière étape")
+    await click(createBtn)
+    const st = dbNow()
+    const made = (st.environments || []).find(e => e.name === 'Client Atelier')
+    if (!made) throw new Error("L'assistant n'a PAS créé l'environnement")
+    // Un environnement créé est une livraison : sans son projet, il n'apparaît nulle part.
+    if (!(st.projects || []).some(p => p.sourceEnvId === made.id)) {
+      throw new Error("L'environnement créé n'a pas de livraison — il serait invisible dans « Projets & atelier »")
+    }
+    // Et son repère de semis est posé, sinon le projet ressusciterait après suppression.
+    if (!(st._autoSeed?.envProjects || []).includes(made.id)) {
+      throw new Error('Le repère de semis manque : le projet supprimé reviendrait au rechargement')
+    }
+    // Présent dans la base ne veut pas dire VISIBLE : après l'assistant, on doit atterrir sur
+    // la livraison qui vient de naître et la voir. C'est ce que l'utilisateur constate, lui.
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    if (!text().includes('Client Atelier')) {
+      throw new Error("L'environnement créé n'apparaît pas à l'écran après la création")
+    }
+    // Il doit aussi figurer dans l'explorateur de l'atelier.
+    await click([...container.querySelectorAll('main button')].find(b => b.textContent.trim() === 'Atelier'))
+    if (!text().includes('Client Atelier')) {
+      throw new Error("L'environnement créé n'apparaît pas dans l'explorateur de l'atelier")
+    }
+    await click([...container.querySelectorAll('main button')].find(b => b.textContent.trim() === 'Livraisons'))
+  }
+
   // Agenda staff : mon agenda ne montre que ce dont je réponds, l'agenda d'équipe montre tout.
   await click(hubTab('Agenda'))
   if (!text().includes('Mon agenda')) throw new Error("L'agenda staff ne s'affiche pas")

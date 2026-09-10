@@ -445,6 +445,50 @@ async function main() {
     ok(s.statementMode({}) === 'onRequest', 'Le mode par défaut doit rester « à la demande »')
   }
 
+  // 6 quaterdecies. APPELS NUS À UNE MÉTHODE DU STORE.
+  //   Les méthodes du store vivent dans un objet littéral : `setSub(...)` sans `this.` ne
+  //   désigne rien, et lève une ReferenceError au CLIC — le bouton « ne fait rien », sans
+  //   message, sans trace. Trois méthodes en souffraient (`setEcosystem`, `renamePhase`,
+  //   `importEnvContacts`) : activer les seuils et plafonds était sans effet.
+  //   Aucun test de rendu ne peut voir cela, puisque l'erreur n'arrive qu'à l'usage.
+  {
+    const raw = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'store.jsx'), 'utf8')
+    // Sans commentaires ni chaînes : un nom cité dans une phrase n'est pas un appel.
+    // ⚠️ Les commentaires de bloc sont remplacés en CONSERVANT leurs retours à la ligne :
+    // les supprimer décalerait toute la numérotation, et le repère de début d'objet ne
+    // tomberait plus au bon endroit — le détecteur ne chercherait alors nulle part.
+    // ⚠️ Tout se fait LIGNE PAR LIGNE. Une première version nettoyait les chaînes sur le
+    // fichier entier : une apostrophe déséquilibrée avalait des dizaines de lignes, la
+    // numérotation partait, et le détecteur ne trouvait plus le début de l'objet — il ne
+    // cherchait donc nulle part, tout en affichant « aucun problème ».
+    const lines = raw.split('\n').map(l => l
+      .replace(/(^|[^:'"\\])\/\/.*$/, '$1')           // commentaires de fin de ligne
+      .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")          // chaînes simples, sans franchir la ligne
+      .replace(/"(?:[^"\\\n]|\\.)*"/g, '""'))
+    const start = lines.findIndex((l, i) => l.trim() === 'return {' && i > 3400)
+    const methods = new Set()
+    lines.slice(start).forEach(l => { const m = /^ {6}([a-zA-Z_$][\w$]*)\s*\(/.exec(l); if (m) methods.add(m[1]) })
+    // Ce qui existe AUSSI comme fonction/variable/import est appelable sans `this.`.
+    const scope = new Set(['if', 'for', 'while', 'switch', 'catch', 'return', 'typeof', 'new', 'function', 'await'])
+    for (const m of raw.matchAll(/^\s*(?:export\s+)?(?:const|let|var|function|async function)\s+([a-zA-Z_$][\w$]*)/gm)) scope.add(m[1])
+    for (const m of raw.matchAll(/import\s*\{([^}]*)\}\s*from/g)) {
+      m[1].split(',').forEach(x => scope.add(x.trim().split(' as ').pop().trim()))
+    }
+    const suspects = [...methods].filter(n => !scope.has(n))
+    const bare = []
+    lines.slice(start).forEach((l, k) => {
+      const decl = /^ {6}([a-zA-Z_$][\w$]*)\s*\(/.exec(l)
+      suspects.forEach(n => {
+        const re = new RegExp('(?<![.\\w$])' + n.replace(/[$]/g, '\\$') + '\\s*\\(', 'g')
+        for (const mm of l.matchAll(re)) {
+          if (decl && decl[1] === n && mm.index === 6) continue
+          bare.push(`${start + k + 1}: ${n}()`)
+        }
+      })
+    })
+    ok(bare.length === 0, `Appel nu à une méthode du store (ReferenceError au clic) : ${bare.slice(0, 5).join(', ')}`)
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.

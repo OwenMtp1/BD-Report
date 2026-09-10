@@ -464,6 +464,11 @@ Le **proxy git de l'environnement de dev bloque la branche `gh-pages`** (seul le
 ## Conventions
 - Travailler/commiter sur la branche **`claude/adoring-tesla-t0fwpc`** (le push y est autorisé).
 - Finir chaque lot par `npm run build` + `npm run smoke` + `npm run audit` (doivent être verts).
+- ⚠️ **`this.` DEVANT TOUT APPEL À UNE MÉTHODE DU STORE.** Les méthodes vivent dans un objet
+  littéral : `setSub(...)` sans `this.` ne désigne rien et lève une `ReferenceError` **au clic**
+  — le bouton « ne fait rien », sans message ni trace, et aucun test de rendu ne peut le voir.
+  Trois méthodes en ont souffert (`setEcosystem`, `renamePhase`, `importEnvContacts`) : activer
+  les seuils et plafonds était sans effet. `npm run audit` refuse désormais tout appel nu.
 - ⚠️ **Tous les hooks React AVANT le moindre `return` conditionnel** : un espace qui se charge en
   différé ferait sinon varier l'ordre des hooks d'un rendu à l'autre (bug corrigé sur Handoff,
   Objections et MessageTemplates).
