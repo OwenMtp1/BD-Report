@@ -487,6 +487,17 @@ npm run dev        # serveur de dev
   le plus récent (`_rev` posé par `writeSubData` à chaque écriture). Sans cela, la copie périmée
   qu'un collègue portait de votre espace effaçait votre travail en cours. Ce n'est pas de la
   fusion de contenu : deux personnes sur le MÊME espace se départagent toujours à la plus récente.
+  ⚠️ **La fusion joue dans LES DEUX SENS, y compris au démarrage.** Quand la base locale est plus
+  récente que la base commune, on poussait le local TEL QUEL : un environnement créé sur un autre
+  poste — jamais vu par celui-ci — disparaissait de la base commune au simple démarrage de
+  l'application, parce que ce poste avait enregistré une seconde plus tard. Symptôme : « ce client
+  n'est pas accessible partout ». Le démarrage fait donc `mergeRemoteDb(remote, dbRef.current)`
+  (le local fait foi, le distant complète) et pousse le RÉSULTAT. `mergeRemoteDb` est symétrique par
+  construction : espaces départagés au `_rev`, `_autoSeed` réuni, environnements présents d'un seul
+  côté réajoutés avec leurs sous-espaces, données et livraison — sauf pierre tombale.
+  ⚠️ Limite assumée : cette réunion ne couvre que les ENVIRONNEMENTS (et ce qui y pend). `accounts`,
+  `tickets`, `clients` restent au dernier écrivain — les réunir par id ressusciterait ce qui a été
+  supprimé, faute de pierre tombale pour eux.
 - ⛔ **RESTE À FAIRE avant une prod publique — voir `supabase/RUNBOOK_SECURITE.md`.**
   La RLS de `app_state` est `using(true)` : la clé anon (publique par construction) permet de
   lire/écrire tout le blob, tous clients confondus. Le schéma cible, la RLS par org, le script de

@@ -4011,6 +4011,18 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         // copie locale est plus fraîche. Un travail fait hors ligne ne disparaît pas parce
         // qu'un collègue a enregistré entre-temps.
         setDbState(prev => migrate(mergeRemoteDb(prev, remote)))
+      } else if (remote) {
+        // ⚠️ LE LOCAL PLUS RÉCENT NE DOIT PAS EFFACER LE DISTANT. On poussait ici la base
+        // locale TELLE QUELLE : un environnement créé sur un autre poste — jamais vu par
+        // celui-ci — disparaissait de la base commune au simple démarrage de l'application,
+        // parce que ce poste avait enregistré une seconde plus tard. C'est ce qui faisait
+        // qu'un client n'était « pas accessible partout » : il existait chez l'un, effacé
+        // chez l'autre. On fusionne donc dans CE sens aussi (le local fait foi, le distant
+        // complète), et c'est le résultat fusionné qui repart.
+        applyingRemote.current = true
+        const merged = migrate(mergeRemoteDb(remote, dbRef.current))
+        setDbState(merged)
+        await pushRemoteState({ ...merged, _savedAt: lastSavedAt.current || initialLocal.current.savedAt || Date.now(), _client: clientId.current })
       } else {
         await pushRemoteState({ ...dbRef.current, _savedAt: lastSavedAt.current || initialLocal.current.savedAt || Date.now(), _client: clientId.current })
       }

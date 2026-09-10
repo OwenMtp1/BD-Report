@@ -667,6 +667,29 @@ async function main() {
       },
       { _envTombstones: { 'env-mort': dead }, environments: [], subenvs: [], projects: [], data: {} },
     )
+    // i bis. LE POSTE LE PLUS RÉCENT NE DOIT RIEN EFFACER. Au démarrage, quand la base
+    //   locale est plus fraîche que la base commune, on poussait le local TEL QUEL : un
+    //   environnement créé sur un autre poste disparaissait de la base commune au simple
+    //   démarrage de l'application. C'est « le client n'est pas accessible partout ».
+    const distant = {
+      environments: [{ id: 'env-ailleurs2', name: 'Créé sur un autre poste' }],
+      subenvs: [{ id: 'sa', envId: 'env-ailleurs2', ownerId: 'a1' }],
+      projects: [{ id: 'pa', sourceEnvId: 'env-ailleurs2', name: 'Sa livraison' }],
+      data: { sa: { _rev: 2 } },
+    }
+    const localFrais = { environments: [{ id: 'env-ici', name: 'Ici' }], subenvs: [], projects: [], data: {} }
+    // Sens « le local fait foi, le distant complète » — celui du démarrage.
+    const m3 = s.mergeRemoteDb(distant, localFrais)
+    ok(m3.environments.some(e => e.id === 'env-ici'), 'Fusion au démarrage : le poste perd ses propres environnements')
+    ok(m3.environments.some(e => e.id === 'env-ailleurs2'),
+      'Fusion au démarrage : un environnement créé sur un autre poste est effacé par le plus récent')
+    ok(m3.subenvs.some(x => x.id === 'sa') && !!m3.data.sa && m3.projects.some(p => p.id === 'pa'),
+      'Fusion au démarrage : l\'environnement revient sans ses espaces ni sa livraison')
+    // Et le code de démarrage doit VRAIMENT fusionner dans ce sens, pas pousser le local brut.
+    const stSync = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'store.jsx'), 'utf8')
+    ok(/mergeRemoteDb\(remote, dbRef\.current\)/.test(stSync),
+      'Démarrage : la base locale plus récente écrase la base commune au lieu de la compléter')
+
     ok(m2.environments.some(e => e.id === 'env-mort'), 'Synchro : une restauration plus récente est annulée par la pierre tombale')
     ok(m2.projects.some(p => p.sourceEnvId === 'env-mort') && !!m2.data.sz, 'Synchro : la restauration ne rend pas la livraison et ses données')
 
