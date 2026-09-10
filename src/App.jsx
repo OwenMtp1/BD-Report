@@ -261,7 +261,8 @@ function EnvPicker() {
     : store.db.environments.filter(e => e.createdBy === me.id || (e.members || []).includes(me.id))
 
   const enter = (env) => {
-    if (env.pin) setPinFor(env)
+    // L'équipe BD Report n'a pas de code à donner chez un client : voir `store.skipsPin`.
+    if (env.pin && !store.skipsPin(env.id)) setPinFor(env)
     else store.enterEnv(env.id)
   }
 
@@ -423,7 +424,7 @@ function SubEnvPicker() {
             <button key={s.id} disabled={!open}
               title={open ? '' : "Vous ne pouvez ouvrir que votre propre espace"}
               className={`card w-44 h-44 flex flex-col items-center justify-center gap-2 transition fade-in ${open ? 'hover:scale-105' : 'opacity-55 cursor-not-allowed'}`}
-              onClick={() => { if (!open) return; s.pin ? setPinFor(s) : store.enterSubEnv(s.id) }}>
+              onClick={() => { if (!open) return; (s.pin && !store.skipsPin()) ? setPinFor(s) : store.enterSubEnv(s.id) }}>
               {s.photo
                 ? <img src={s.photo} alt="" className="w-14 h-14 rounded-full object-cover" />
                 : <div className="w-14 h-14 rounded-full bg-brand/15 text-brand font-extrabold flex items-center justify-center text-lg">{(s.prenom?.[0] || '') + (s.nom?.[0] || '')}</div>}

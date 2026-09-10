@@ -364,6 +364,42 @@ async function main() {
     })
   }
 
+  // 6 undecies. Code d'accès : l'équipe BD Report n'en a pas à donner chez un client, mais
+  //   personne d'autre n'échappe au verrou. Une exception mal bornée transformerait un
+  //   contournement légitime en porte ouverte.
+  {
+    const app = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'App.jsx'), 'utf8')
+    ok(/skipsPin/.test(app), "App : le code est encore demandé au staff, l'entrée depuis l'atelier reste bloquée")
+    // Les DEUX portes doivent appliquer la règle : l'environnement et le sous-espace.
+    ok((app.match(/skipsPin/g) || []).length >= 2,
+      'App : une seule des deux portes applique la règle — le staff sera bloqué à la seconde')
+    const st = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'store.jsx'), 'utf8')
+    ok(/skipsPin\(envId\) \{\s*\n\s*if \(!isSupportRole/.test(st),
+      "store.skipsPin : l'exception n'est pas bornée au rôle support")
+    ok(/env\.createdBy !== account\?\.id/.test(st),
+      'store.skipsPin : un membre du staff doit rester soumis au code dans SON PROPRE environnement')
+  }
+
+  // 6 duodecies. « Voir en situation » : CHAQUE brique doit savoir dire où elle se montre.
+  //   Une brique sans destination laisserait un bouton qui ne mène nulle part — pire qu'un
+  //   bouton absent, puisqu'il promet quelque chose.
+  {
+    const navItems = nav.NAV_GROUPS.flatMap(g => g.items).map(i => i.id)
+    s.ENV_MODULES.forEach(m => {
+      ok(!!m.where?.page, `Module ${m.id} : aucune destination pour « Voir en situation »`)
+      ok(!!m.where?.hint, `Module ${m.id} : aucune indication de l'endroit où la brique se voit`)
+      if (m.where?.page) {
+        ok(navItems.includes(m.where.page),
+          `Module ${m.id} : « Voir en situation » vise « ${m.where.page} », qui n'est pas un écran de l'application`)
+      }
+    })
+    // Les onglets fusionnés ne doivent pas être visés : ils n'existent plus.
+    s.ENV_MODULES.forEach(m => {
+      ok(!['simulateur', 'dataquality', 'classement', 'kpi', 'workshop', 'projects'].includes(m.where?.page),
+        `Module ${m.id} : vise un onglet fusionné ou supprimé (${m.where?.page})`)
+    })
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.

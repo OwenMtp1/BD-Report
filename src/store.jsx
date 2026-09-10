@@ -350,34 +350,34 @@ export function previewTabs(env, offers, role) {
 // ⚠️ L'absence de réglage vaut « tout activé » : un environnement créé avant ces modules ne
 // doit rien perdre au premier chargement de la nouvelle version.
 export const ENV_MODULES = [
-  { id: 'handoff', label: 'Passation au closer', tab: 'Passation au closer',
+  { id: 'handoff', where: { page: 'handoff', hub: null, hint: "l'onglet « Passation au closer »" }, label: 'Passation au closer', tab: 'Passation au closer',
     desc: "Le lead qualifié part en attente d'acceptation chez le closer, qui l'accepte ou le refuse avec un motif. Mesure la qualité réelle des leads." },
-  { id: 'committee', label: "Comité d'achat",
+  { id: 'committee', where: { page: 'rdv', hub: null, hint: "le formulaire d'un rendez-vous (rôle et relation de chaque interlocuteur)" }, label: "Comité d'achat",
     desc: "Rôle (décideur, prescripteur, opposant…) et niveau de relation sur chaque interlocuteur d'un rendez-vous." },
-  { id: 'quotas', label: 'Objectifs & montée en charge',
+  { id: 'quotas', where: { page: 'manager', hub: 'quotas', hint: "l'onglet « Objectifs & quotas » de la console Manager" }, label: 'Objectifs & montée en charge',
     desc: 'Quotas par personne et par période, avec un plan de montée en charge pour les arrivées récentes.' },
-  { id: 'oneToOne', label: 'Entretiens 1:1',
+  { id: 'oneToOne', where: { page: 'conversations', hub: null, hint: "le dossier « 1:1 » des conversations" }, label: 'Entretiens 1:1',
     desc: "Un fil de discussion dédié entre chaque membre et son manager, rangé dans un dossier « 1:1 » des Conversations." },
-  { id: 'challenges', label: "Challenges d'équipe",
+  { id: 'challenges', where: { page: 'dashboard', hub: null, hint: "le bandeau de challenge en tête du tableau de bord" }, label: "Challenges d'équipe",
     desc: "Concours à durée limitée annoncés sur le tableau de bord de chaque commercial pendant l'événement." },
-  { id: 'closing', label: 'Closer & pipeline de closing', tab: 'Closing',
+  { id: 'closing', where: { page: 'closing', hub: null, hint: "l'onglet « Closing »" }, label: 'Closer & pipeline de closing', tab: 'Closing',
     desc: "Un rôle Closer avec son propre pipeline en aval de la passation : proposition, négociation, signature. Sans ce module, l'affaire s'arrête au lead qualifié." },
-  { id: 'dealValue', label: "Montant des affaires",
+  { id: 'dealValue', where: { page: 'rdv', hub: null, hint: "le champ « Montant de l'affaire » d'un rendez-vous" }, label: "Montant des affaires",
     desc: "Le montant du contrat sur chaque affaire (ponctuel ou récurrent) : valeur du pipeline, chiffre d'affaires signé, et ce que rapporte réellement chaque provenance." },
-  { id: 'statements', label: 'Relevés de primes',
+  { id: 'statements', where: { page: 'primes', hub: null, hint: "le relevé mensuel, sur la page Primes" }, label: 'Relevés de primes',
     desc: 'Relevé mensuel par personne, signé par le manager avant de devenir téléchargeable par le collaborateur.' },
   // ---- Deuxième série. Voir MODULES_V2 : ceux-là n'arrivent PAS allumés chez l'existant.
-  { id: 'rdvHistory', label: 'Historique des modifications',
+  { id: 'rdvHistory', where: { page: 'rdv', hub: null, hint: "l'historique replié au bas de chaque fiche de rendez-vous" }, label: 'Historique des modifications',
     desc: "Qui a changé quoi, et quand, sur chaque affaire. Les primes se calculent sur les passages d'étape : sans trace, une prime contestée ne peut pas être tranchée." },
-  { id: 'forecast', label: 'Atterrissage du mois',
+  { id: 'forecast', where: { page: 'dashboard', hub: null, hint: "le bloc « Atterrissage de la période » du tableau de bord" }, label: 'Atterrissage du mois',
     desc: "Où l'équipe arrive en fin de période si elle continue à ce rythme — à partir de la cadence réelle et du pipeline ouvert, pas d'une cible saisie à la main." },
-  { id: 'recycling', label: 'Recyclage des leads perdus',
+  { id: 'recycling', where: { page: 'tasks', hub: null, hint: "la section « À reprendre aujourd'hui » des recommandations" }, label: 'Recyclage des leads perdus',
     desc: "Un refus fixe une date de re-tentative selon son motif ; le lead revient de lui-même dans les recommandations le jour venu." },
-  { id: 'cadence', label: 'Plans de relance',
+  { id: 'cadence', where: { page: 'rdv', hub: null, hint: "le menu d'un rendez-vous : « Appliquer un plan de relance »" }, label: 'Plans de relance',
     desc: "Une séquence de touches définie par le manager (J+0, J+3, J+7…), appliquée à une affaire, qui crée les tâches datées. Aucun envoi automatique : le produit dit quoi faire et quand." },
-  { id: 'territories', label: 'Territoires & attribution',
+  { id: 'territories', where: { page: 'teamlead', hub: null, hint: "la carte des territoires, dans Pilotage équipe" }, label: 'Territoires & attribution',
     desc: "Attribution explicite de comptes ou de secteurs par personne, et alerte quand deux commerciaux travaillent la même entreprise — avant le doublon, pas après." },
-  { id: 'weeklyDigest', label: 'Récapitulatif hebdomadaire',
+  { id: 'weeklyDigest', where: { page: 'conversations', hub: null, hint: "le canal de reporting, chaque lundi" }, label: 'Récapitulatif hebdomadaire',
     desc: "Chaque lundi dans le canal de reporting : ce qui a bougé, ce qui stagne, qui est sous quota." },
 ]
 export const ENV_MODULE_IDS = ENV_MODULES.map(m => m.id)
@@ -3994,6 +3994,51 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       logout() {
         setSession(null); localStorage.removeItem(REMEMBER_KEY)
         Promise.resolve(signOutSupabase()).catch(() => {})
+      },
+      /**
+       * Le code d'accès est-il demandé à cette personne ?
+       *
+       * Non pour l'équipe BD Report intervenant chez un client. Le PIN protège du REGARD
+       * d'un collègue à l'intérieur d'une équipe ; il n'a jamais été une autorisation, et il
+       * ne défend rien contre quelqu'un qui peut déjà réinitialiser les mots de passe,
+       * effacer un espace ou supprimer l'environnement entier. Le demander ne protégeait
+       * personne — cela rendait seulement « entrer dans l'environnement », depuis l'atelier,
+       * impossible à qui n'a pas un code qu'il n'a aucune raison de connaître.
+       *
+       * L'entrée reste TRACÉE : c'est le journal, pas un chiffre à quatre chiffres, qui rend
+       * une intervention chez un client vérifiable.
+       */
+      skipsPin(envId) {
+        if (!isSupportRole(account?.role)) return false
+        const env = db.environments.find(e => e.id === (envId || session?.envId))
+        // Chez lui, un membre du staff est un utilisateur comme un autre : son propre code
+        // le protège de ses propres collègues, et il le connaît.
+        return !!env && env.createdBy !== account?.id
+      },
+      /**
+       * Ouvrir l'environnement d'un client DIRECTEMENT sur l'écran où vit une brique.
+       *
+       * Cocher une case et lire une description ne dit pas ce que le client verra. Le seul
+       * moyen de le savoir était d'entrer, de choisir un espace, puis de retrouver l'écran
+       * à la main — trois gestes qui font qu'on ne vérifie pas.
+       *
+       * On entre donc dans le premier espace disponible : sans espace ouvert, l'application
+       * n'affiche aucun écran métier, et le bouton retomberait sur le sélecteur.
+       */
+      previewFeature(envId, moduleId) {
+        const mod = ENV_MODULES.find(m => m.id === moduleId)
+        if (!mod?.where) return false
+        const sub = db.subenvs.find(s => s.envId === envId)
+        if (!sub) return false
+        this.enterEnv(envId)
+        this.enterSubEnv(sub.id)
+        // Après le changement d'espace : le rendu de l'application doit avoir eu lieu pour
+        // que la navigation trouve sa cible.
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('app-navigate', { detail: mod.where.page }))
+          if (mod.where.hub) setTimeout(() => window.dispatchEvent(new CustomEvent('hub-tab', { detail: mod.where.hub })), 260)
+        }, 260)
+        return true
       },
       enterEnv(envId) {
         setSession(s => ({ ...s, envId, subEnvId: null }))

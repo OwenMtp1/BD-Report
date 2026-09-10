@@ -11,7 +11,7 @@
 //  chemin d'accès, jamais le sujet.
 // ---------------------------------------------------------------------------
 import React, { useState } from 'react'
-import { ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Unlock, ShieldAlert, Rocket, LogIn, Trash2 } from 'lucide-react'
+import { ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Unlock, ShieldAlert, Rocket, LogIn, Trash2, Eye } from 'lucide-react'
 import { ENV_MODULES } from '../store.jsx'
 import { Field, Empty, Confirm, toast } from '../ui.jsx'
 import { ChipEditor } from './Projects.jsx'
@@ -118,14 +118,29 @@ export default function EnvAdmin({ envId, store }) {
               {ENV_MODULES.map(m => {
                 const on = store.envModules(envId)[m.id]
                 return (
-                  <label key={m.id} className="flex items-start gap-2 text-sm p-1.5 rounded-lg hover:bg-surface cursor-pointer">
-                    <input type="checkbox" className="mt-1" checked={on}
-                      onChange={e => { store.setEnvModules(envId, { [m.id]: e.target.checked }); toast(e.target.checked ? `« ${m.label} » activé` : `« ${m.label} » retiré`) }} />
-                    <span className="min-w-0">
-                      <span className="font-semibold">{m.label}</span>
-                      <span className="block text-[11px] text-muted">{m.desc}</span>
-                    </span>
-                  </label>
+                  <div key={m.id} className="flex items-start gap-2 text-sm p-1.5 rounded-lg hover:bg-surface">
+                    <label className="flex items-start gap-2 min-w-0 flex-1 cursor-pointer">
+                      <input type="checkbox" className="mt-1" checked={on}
+                        onChange={e => { store.setEnvModules(envId, { [m.id]: e.target.checked }); toast(e.target.checked ? `« ${m.label} » activé` : `« ${m.label} » retiré`) }} />
+                      <span className="min-w-0">
+                        <span className="font-semibold">{m.label}</span>
+                        <span className="block text-[11px] text-muted">{m.desc}</span>
+                        {on && m.where && <span className="block text-[11px] text-muted italic mt-0.5">Se voit dans {m.where.hint}.</span>}
+                      </span>
+                    </label>
+                    {/* Cocher une case et lire une description ne dit pas ce que le client
+                        verra. Ce bouton ouvre l'environnement DIRECTEMENT sur l'écran
+                        concerné — sans lui, il fallait entrer, choisir un espace, puis
+                        retrouver l'écran à la main, c'est-à-dire ne pas vérifier. */}
+                    {on && m.where && (
+                      <button className="btn-ghost !py-1 !px-2 text-[11px] shrink-0" title="Ouvrir l'environnement sur cet écran"
+                        onClick={() => {
+                          if (!store.previewFeature(envId, m.id)) toast("Aucun espace dans cet environnement — impossible d'ouvrir l'écran")
+                        }}>
+                        <Eye size={12} /> Voir en situation
+                      </button>
+                    )}
+                  </div>
                 )
               })}
             </div>
