@@ -232,6 +232,25 @@ async function main() {
       "Le rôle Manager doit pouvoir ouvrir l'espace de ses collaborateurs — c'est la contrepartie du retrait de l'affichage des mots de passe")
   }
 
+  // 6 septies. Fusion des états distants. Le scénario à couvrir : A et B travaillent en même
+  //   temps ; B enregistre, et sa version contient une copie PÉRIMÉE de l'espace de A.
+  //   Remplacer l'état local par le distant faisait disparaître le travail de A sans un mot.
+  {
+    const local = { data: { a: { note: 'travail de A', _rev: 200 }, b: { note: 'vieux B', _rev: 50 } }, accounts: [] }
+    const remote = { data: { a: { note: 'copie périmée de A', _rev: 100 }, b: { note: 'B tout frais', _rev: 300 } }, accounts: [] }
+    const m = s.mergeRemoteDb(local, remote)
+    ok(m.data.a.note === 'travail de A', "Fusion : le travail local plus récent doit survivre à une copie périmée")
+    ok(m.data.b.note === 'B tout frais', 'Fusion : la version distante plus récente doit être adoptée')
+    // Un espace créé localement et inconnu du distant ne doit pas disparaître.
+    const m2 = s.mergeRemoteDb({ data: { neuf: { _rev: 10 } } }, { data: {} })
+    ok(!!m2.data.neuf, "Fusion : un espace créé ici ne doit pas être effacé par un distant qui l'ignore")
+    // Sans horodatage des deux côtés, le distant l'emporte — comportement d'avant, conservé.
+    const m3 = s.mergeRemoteDb({ data: { x: { v: 'local' } } }, { data: { x: { v: 'distant' } } })
+    ok(m3.data.x.v === 'distant', 'Fusion : sans horodatage, le distant fait foi comme avant')
+    ok(s.mergeRemoteDb(null, remote) === remote && s.mergeRemoteDb(local, null) === local,
+      'Fusion : un côté absent ne doit pas faire tomber la fusion')
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.

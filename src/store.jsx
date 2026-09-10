@@ -1018,6 +1018,36 @@ export const QUOTA_METRICS = [
 ]
 export const QUOTA_METRIC_IDS = QUOTA_METRICS.map(m => m.id)
 
+// ---------------------------------------------------------------- Fusion des états distants
+// Tout l'état vit dans un seul document partagé. À l'arrivée d'une version distante, on la
+// substituait ENTIÈREMENT à la version locale — dernier écrit gagné, y compris sur des
+// espaces que l'expéditeur n'avait pas touchés.
+//
+// Le scénario, banal : A et B travaillent en même temps. B enregistre ; sa version contient
+// une copie PÉRIMÉE de l'espace de A, celle qu'il avait au chargement. À la réception, A
+// voyait son propre travail des dernières minutes disparaître sans un mot.
+//
+// Chaque espace porte donc son horodatage (`_rev`, posé à l'écriture). On garde, espace par
+// espace, la version la plus récente — quelle que soit la personne qui a poussé le document.
+//
+// ⚠️ Ce n'est PAS de la fusion de contenu : deux personnes qui modifient le MÊME espace en
+// même temps se départagent toujours à la plus récente. C'est le cas rare (un espace a un
+// propriétaire) ; celui qu'on corrige est le cas courant.
+export function mergeRemoteDb(local, remote) {
+  if (!local) return remote
+  if (!remote) return local
+  const merged = { ...remote, data: { ...(remote.data || {}) } }
+  const localData = local.data || {}
+  Object.keys(localData).forEach(subId => {
+    const mine = localData[subId], theirs = remote.data?.[subId]
+    // Un espace que le distant ne connaît pas est un espace créé ici : le perdre reviendrait
+    // à annuler sa création parce qu'un collègue a enregistré entre-temps.
+    if (!theirs) { merged.data[subId] = mine; return }
+    if ((mine?._rev || 0) > (theirs?._rev || 0)) merged.data[subId] = mine
+  })
+  return merged
+}
+
 // ---------------------------------------------------------------- Territoires & attribution
 // `envContacts` sait dire qu'un collègue travaille déjà une entreprise — mais APRÈS coup,
 // quand les deux ont déjà appelé. L'attribution règle la question avant : ce compte, ce
@@ -3566,7 +3596,10 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       const remoteNewer = (remote?._savedAt || 0) > initialLocal.current.savedAt
       if (remote && (!initialLocal.current.had || remoteNewer)) {
         applyingRemote.current = true
-        setDbState(migrate(remote))
+        // Même règle qu'en temps réel : le distant fait foi, SAUF pour les espaces dont la
+        // copie locale est plus fraîche. Un travail fait hors ligne ne disparaît pas parce
+        // qu'un collègue a enregistré entre-temps.
+        setDbState(prev => migrate(mergeRemoteDb(prev, remote)))
       } else {
         await pushRemoteState({ ...dbRef.current, _savedAt: lastSavedAt.current || initialLocal.current.savedAt || Date.now(), _client: clientId.current })
       }
@@ -3576,7 +3609,12 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // 2) Temps réel sur l'état applicatif (on ignore nos propres échos).
       unsubState = await subscribeRemoteState(remote => {
         if (cancelled || !remote || remote._client === clientId.current) return
-        if ((remote._savedAt || 0) >= lastSavedAt.current) { applyingRemote.current = true; setDbState(migrate(remote)) }
+        if ((remote._savedAt || 0) >= lastSavedAt.current) {
+          applyingRemote.current = true
+          // Fusion espace par espace plutôt que remplacement : la version distante porte une
+          // copie possiblement PÉRIMÉE des espaces que son auteur n'a pas touchés.
+          setDbState(prev => migrate(mergeRemoteDb(prev, remote)))
+        }
       })
       // 3) Demandes de contact distantes (site → app), ingérées une seule fois.
       const reqs = await fetchContactRequests()
@@ -3729,6 +3767,10 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       const before = tracked ? auditSnapshot(d.data[subId]) : null
       const next = fn(d.data[subId])
       if (tracked) applyRdvAudit(next, before, { name: actorName, subId: session?.subEnvId || '' })
+      // Horodatage de l'espace : c'est lui qui permet à `mergeRemoteDb` de savoir, espace par
+      // espace, quelle version est la plus fraîche. Sans lui, la version distante d'un
+      // collègue écrasait le travail en cours de tout le monde (voir le commentaire là-bas).
+      if (next && typeof next === 'object') next._rev = Date.now()
       return next
     }
     return {
