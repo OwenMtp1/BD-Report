@@ -1040,11 +1040,19 @@ async function main() {
   await click(find('button', 'Fermer'))
   await click(hubTab('Projets & atelier'))
   {
-    const usersBtn = [...container.querySelectorAll('main .card')]
-      .find(c => c.textContent.includes('PeopleSpheres') && c.querySelector('button[title="Utilisateurs du projet"]'))
-      ?.querySelector('button[title="Utilisateurs du projet"]')
-    if (!usersBtn) throw new Error('PeopleSpheres project users button missing')
-    await click(usersBtn)
+    // Ce que le client reçoit (modules, offre, membres, accès, déploiement) vit désormais
+    // dans l'ATELIER, à côté de l'aperçu par rôle — plus dans une fenêtre ouverte depuis
+    // une livraison. On y arrive par la passerelle de la livraison concernée.
+    const bridge = [...container.querySelectorAll('main .card')]
+      .find(c => c.textContent.includes('PeopleSpheres') && c.querySelector('button[title="Ouvrir dans l\'atelier"]'))
+      ?.querySelector('button[title="Ouvrir dans l\'atelier"]')
+    if (!bridge) throw new Error("La passerelle vers l'atelier manque sur la livraison PeopleSpheres")
+    await click(bridge)
+    // `<details>` s'ouvre par son attribut, pas par un gestionnaire React : le simuler
+    // par un clic ne déclencherait rien.
+    const panel = [...container.querySelectorAll('main details')].find(d => d.textContent.includes('Ce que ce client reçoit'))
+    if (!panel) throw new Error("Le panneau « Ce que ce client reçoit » manque à l'atelier")
+    await act(async () => { panel.open = true })
     if (!text().includes("Accès de l'environnement")) throw new Error('Env access panel missing from project users')
     if (!find('button', "Supprimer l'environnement")) throw new Error("Delete-env button missing from project users")
     // Déploiement : le geste ferme le cadrage et ouvre l'implémentation.
@@ -1087,7 +1095,7 @@ async function main() {
     if (dbNow().environments.find(e => e.id === 'env-peoplespheres').subState !== 'blocked') throw new Error('Env not blocked')
     await click(find('button', "Réactiver l'accès"))
     if (dbNow().environments.find(e => e.id === 'env-peoplespheres').subState !== 'active') throw new Error('Env not unblocked')
-    await click(container.querySelector('.fixed.z-50 button')) // ferme la fenêtre Utilisateurs
+    // Plus rien à fermer : le panneau fait partie de l'atelier, il n'ouvre plus de fenêtre.
   }
 
   // 7. Créer un RDV via le formulaire : validation des champs obligatoires puis création réelle

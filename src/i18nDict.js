@@ -9,6 +9,7 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['Ce que ce client reçoit — modules, offre, membres et accès', 'What this client receives — modules, plan, members and access', 'Lo que recibe este cliente — módulos, plan, miembros y accesos'],
   ['Projets & atelier', 'Projects & workshop', 'Proyectos y taller'],
   ['Livraisons', 'Deliveries', 'Entregas'],
   ['Composer l\'environnement d\'un client et suivre sa mise en place — deux moments du même travail, au même endroit.', 'Build a client\'s environment and follow its rollout — two moments of the same work, in one place.', 'Componer el entorno de un cliente y seguir su puesta en marcha — dos momentos del mismo trabajo, en un solo lugar.'],

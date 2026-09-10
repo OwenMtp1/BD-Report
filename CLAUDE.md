@@ -255,6 +255,14 @@ npm run dev        # serveur de dev
   ⚠️ **Fusionner deux écrans n'accorde AUCUN droit** : l'onglet s'ouvre à qui a `projects.view`
   **ou** `env.build` (`perms: [...]` dans `SupportHub`), mais chaque vue reste gardée par le sien,
   et la passerelle n'apparaît qu'avec `env.build`. `npm run audit` fige ces gardes.
+  ⚠️ **La ligne de partage** : l'**Atelier** décrit ce que le client REÇOIT (modules, offre,
+  rôles & onglets, membres, accès de l'environnement, entrée et déploiement) ; les **Livraisons**
+  décrivent OÙ EN EST la mise en place (phases datées, avancement, prise en charge, calendrier,
+  motif de clôture). **`EnvAdmin.jsx`** porte le premier — il vivait dans une fenêtre ouverte
+  depuis une livraison, donc loin de l'aperçu par rôle qui montre justement l'effet de ce qu'on
+  coche. Il prend un `envId`, jamais un projet : la livraison n'était qu'un chemin d'accès.
+  L'audit refuse toute seconde copie de ces réglages dans `Projects.jsx` — deux réglages du même
+  objet finissent par se contredire.
   **`Workshop.jsx`** (vue « Atelier », perm `env.build`) : assistant en 5 étapes
   (identité & modèle, modules, rôles & onglets, équipe, récapitulatif) + explorateur avec « Voir comme… »
   par rôle/service, sans entrer dans l'environnement (`previewTabs(env, offers, role)` = module ∩ offre ∩ rôle).

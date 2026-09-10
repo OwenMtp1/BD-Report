@@ -307,6 +307,20 @@ async function main() {
     const tour = fs.default.readFileSync(path.default.join(dir, 'TrainingJourney.jsx'), 'utf8')
     ok(!/hub: 'projects'/.test(tour) && !/hub: 'workshop'/.test(tour),
       'Parcours de formation : une étape vise encore un onglet qui n\'existe plus')
+
+    // Ce que le client REÇOIT (modules, offre, membres, accès) a rejoint l'atelier. Il ne
+    // doit pas rester une seconde copie dans les livraisons : deux réglages du même objet
+    // finissent par se contredire, et l'utilisateur ne sait plus lequel fait foi.
+    const proj = fs.default.readFileSync(path.default.join(dir, 'Projects.jsx'), 'utf8')
+    const wk = fs.default.readFileSync(path.default.join(dir, 'Workshop.jsx'), 'utf8')
+    ok(!/ENV_MODULES/.test(proj), 'Les modules se règlent encore depuis les livraisons — il en reste deux copies')
+    ok(!/setEnvOffer|deleteClientEnv|blockEnv/.test(proj),
+      "L'administration de l'environnement se fait encore depuis les livraisons")
+    ok(/EnvAdmin/.test(wk), "L'atelier n'expose pas la fiche d'administration de l'environnement")
+    const adm = fs.default.readFileSync(path.default.join(dir, 'EnvAdmin.jsx'), 'utf8')
+    ;['ENV_MODULES', 'setEnvOffer', 'blockEnv', 'deleteClientEnv', 'deployEnvProject', 'enterEnv'].forEach(k => {
+      ok(new RegExp(k).test(adm), `EnvAdmin : « ${k} » a été perdu lors du déplacement`)
+    })
   }
 
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création

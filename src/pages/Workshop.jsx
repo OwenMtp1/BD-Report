@@ -8,6 +8,7 @@ import {
   DEFAULT_PHASES, fmtMoney, envModuleOn,
 } from '../store.jsx'
 import { Field, Empty, Confirm, toast } from '../ui.jsx'
+import EnvAdmin from './EnvAdmin.jsx'
 
 // ATELIER D'ENVIRONNEMENT — console éditeur.
 // Ouvrir un espace client, ce n'est pas remplir un formulaire : c'est composer un produit
@@ -452,6 +453,17 @@ function Explorer({ store, initialEnvId }) {
               <LiveRoleEditor store={store} env={env} onClose={() => setEditRoles(null)} />
             </div>
           )}
+
+          {/* Ce que ce client reçoit : modules, offre, membres, accès, déploiement. Ces
+              réglages vivaient dans une fenêtre ouverte depuis une livraison — donc loin de
+              l'aperçu par rôle, alors que c'est justement lui qui montre l'effet de ce qu'on
+              coche. Repliés par défaut : on vient souvent ici pour REGARDER, pas pour changer. */}
+          <details className="card p-3">
+            <summary className="cursor-pointer text-sm font-bold">
+              Ce que ce client reçoit — modules, offre, membres et accès
+            </summary>
+            <div className="mt-3"><EnvAdmin envId={env.id} store={store} /></div>
+          </details>
         </div>
       )}
     </div>
