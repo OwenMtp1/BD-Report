@@ -1018,6 +1018,85 @@ export const QUOTA_METRICS = [
   { id: 'primes', label: 'Primes', hint: 'Montant de primes rattaché à la période' },
 ]
 export const QUOTA_METRIC_IDS = QUOTA_METRICS.map(m => m.id)
+
+// ---------------------------------------------------------------- Atterrissage de période
+// Le Simulateur répond « combien si je fais X ». Personne ne répondait « où j'arrive si je
+// continue comme ça » — la question qu'un manager se pose le 12 du mois.
+//
+// ⚠️ Deux estimations EXPLICABLES plutôt qu'une prévision savante : le rythme depuis le
+// début de période, et celui des 7 derniers jours. La fourchette, c'est l'écart entre les
+// deux, et l'écran dit laquelle est laquelle. Un intervalle de confiance calculé sur
+// quinze jours de données donnerait un faux air de science à une devinette — et personne
+// ne saurait dire d'où sort le chiffre le jour où il se trompe.
+const DAY = 86400000
+// Bornes calendaires de la période en cours (mêmes découpages que les quotas).
+export function periodBounds(period, now = new Date()) {
+  const y = now.getFullYear(), m = now.getMonth()
+  if (period === 'annee') return { start: new Date(y, 0, 1), end: new Date(y, 11, 31) }
+  if (period === 'trimestre') { const q = Math.floor(m / 3); return { start: new Date(y, q * 3, 1), end: new Date(y, q * 3 + 3, 0) } }
+  if (period === 'semaine') {
+    const day = (now.getDay() + 6) % 7 // lundi = 0
+    const start = new Date(y, m, now.getDate() - day)
+    return { start, end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6) }
+  }
+  return { start: new Date(y, m, 1), end: new Date(y, m + 1, 0) }
+}
+
+// Ce qui a été réalisé entre deux dates, pour la même métrique qu'un quota. Sert à mesurer
+// le rythme RÉCENT, qu'aucune clé de période ne sait donner (une semaine à cheval sur deux mois).
+export function achievedBetween(data, metricId, fromISO, toISO) {
+  const rdvs = data?.rdvs || []
+  const inRange = (s) => !!s && s >= fromISO && s <= toISO
+  switch (metricId) {
+    case 'rdvPris': return rdvs.filter(r => inRange(r.datePriseRdv)).length
+    case 'rdvTenus': return rdvs.filter(r => inRange(r.dateRdv) && !String(r.opportunite || '').startsWith('No Show')).length
+    case 'sql': return rdvs.filter(r => inRange(r.datePassageSQL)).length
+    case 'signatures': return rdvs.filter(r => isWonPhase(data, r.phase) && inRange(r.datePassageSQL || r.dateRdv)).length
+    case 'primes':
+      return computePrimes(rdvs, data?.bareme || [], primeOpts(data))
+        .filter(p => !p.invalidated && inRange(p.triggerDate)).reduce((a, p) => a + p.montant, 0)
+    default: return 0
+  }
+}
+
+/**
+ * Où l'on arrive en fin de période si le rythme se maintient.
+ * `done` = le réalisé (même définition que le quota, donc le même chiffre à l'écran).
+ * `sinceStart` / `last7` = les deux projections ; `low`/`high` = leur encadrement.
+ * `target` = le quota s'il existe — sinon null, on ne fabrique pas d'objectif.
+ */
+export function landingForecast(data, metricId, opts = {}) {
+  const now = opts.now || new Date()
+  const period = opts.period || 'mois'
+  const { start, end } = periodBounds(period, now)
+  const iso = (d) => d.toISOString().slice(0, 10)
+  const totalDays = Math.max(1, Math.round((end - start) / DAY) + 1)
+  const elapsed = Math.min(totalDays, Math.max(1, Math.round((now - start) / DAY) + 1))
+  const remaining = Math.max(0, totalDays - elapsed)
+  const done = quotaAchieved(data, metricId, period, now, opts)
+
+  // Rythme depuis le début de période.
+  const sinceStart = Math.round((done / elapsed) * totalDays)
+  // Rythme des 7 derniers jours, projeté sur ce qu'il reste. Fenêtre bornée au début de
+  // période : un lundi 1er, « les 7 derniers jours » n'existent pas encore.
+  const windowDays = Math.min(7, elapsed)
+  const from = new Date(Math.max(start.getTime(), now.getTime() - (windowDays - 1) * DAY))
+  const recent = achievedBetween(data, metricId, iso(from), iso(now))
+  const last7 = Math.round(done + (recent / windowDays) * remaining)
+
+  // `memberQuota` rend le DÉTAIL du quota (base, montée en charge, cible) : c'est la cible
+  // pondérée qui nous intéresse ici, pas l'objet.
+  const target = opts.env && opts.subId ? (memberQuota(opts.env, opts.subId, metricId).target || 0) : 0
+  return {
+    metricId, period, done, elapsed, totalDays, remaining,
+    sinceStart, last7, recent, windowDays,
+    low: Math.min(sinceStart, last7), high: Math.max(sinceStart, last7),
+    target: target || null,
+    // Sur la trajectoire actuelle, le quota est-il tenu ? Null s'il n'y a pas de quota :
+    // annoncer « en retard » sans cible, c'est juger quelqu'un sur un objectif inventé.
+    onTrack: target ? Math.min(sinceStart, last7) >= target : null,
+  }
+}
 export function defaultQuotas() {
   return {
     period: 'mois',                                   // période de référence (voir ACTIVITY_PERIODS)

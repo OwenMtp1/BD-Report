@@ -443,6 +443,16 @@ async function main() {
     // Un champ NON suivi (une note) ne doit pas encombrer l'historique.
     await act(async () => { st().setSub(d => { const r = d.rdvs.find(x => x.id === target.id); if (r) r.notes = 'bla'; return d }) })
     if ((rdvOf().audit || []).length !== 1) throw new Error('Un champ non suivi a été inscrit dans l\'historique')
+
+    // Atterrissage : absent tant que la brique est éteinte, présent une fois allumée — et
+    // il doit DIRE d'où sortent ses deux bornes, sinon le chiffre n'est pas discutable.
+    await act(async () => { st().setEnvModules(envId, { forecast: false }) })
+    await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Dashboard'))
+    if (text().includes('Atterrissage')) throw new Error("L'atterrissage s'affiche alors que la brique est éteinte")
+    await act(async () => { st().setEnvModules(envId, { forecast: true }) })
+    await act(async () => {})
+    if (!text().includes('Atterrissage')) throw new Error("L'atterrissage manque au tableau de bord une fois la brique allumée")
+    if (!text().includes('au rythme depuis le début')) throw new Error("L'atterrissage doit expliquer d'où viennent ses bornes")
   }
 
   // 5. Comité d'achat : le formulaire de RDV qualifie chaque interlocuteur, et alerte quand

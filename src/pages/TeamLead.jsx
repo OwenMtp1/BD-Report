@@ -3,6 +3,7 @@ import { TrendingUp, Sun, AlertTriangle, ArrowRightLeft, ShieldCheck, ChevronDow
 import { useStore, inTimeline, computePrimes, primeOpts, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, fmtMoney, baremeMatch, phaseProbability, milestonePhase, PHASE_COLORS, phaseColor } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
 import { StatementsManager } from './Statements.jsx'
+import LandingPanel, { TeamLanding } from './Forecast.jsx'
 
 const dayISO = (offset = 0) => {
   const d = new Date(); d.setDate(d.getDate() + offset)
@@ -100,6 +101,7 @@ export default function TeamLead() {
   const envId = store.session.envId
   const members = store.db.subenvs.filter(s => s.envId === envId)
   const stats = useMemo(() => members.map(m => ({ m, s: memberStats(store.db.data[m.id] || { rdvs: [], bareme: [] }) })), [store.db, envId])
+  const forecastSubs = useMemo(() => members.map(m => ({ id: m.id, data: store.db.data[m.id] })), [store.db, envId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Réassignation
   const [fromId, setFromId] = useState('')
@@ -158,6 +160,29 @@ export default function TeamLead() {
           <ul className="space-y-1 text-sm">
             {alerts.map((a, i) => <li key={i}><b>{a.name}</b> — {a.text}</li>)}
           </ul>
+        </div>
+      )}
+
+      {/* Où l'équipe arrive si le rythme se maintient. Placé haut : c'est la question du
+          milieu de période, avant même de savoir qui est en avance sur qui. */}
+      {store.hasModule('forecast') && (
+        <div className="card p-4">
+          <h3 className="font-bold mb-1">Atterrissage de l'équipe</h3>
+          <p className="text-xs text-muted mb-3">
+            Somme des trajectoires individuelles. La fourchette encadre deux rythmes : depuis le
+            début de période, et sur les derniers jours.
+          </p>
+          <TeamLanding subs={forecastSubs} />
+          <div className="mt-3 space-y-1.5">
+            {members.map(m => (
+              <details key={m.id} className="rounded-xl border border-line">
+                <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">{m.prenom} {m.nom}</summary>
+                <div className="px-3 pb-3">
+                  <LandingPanel data={store.db.data[m.id]} subId={m.id} title="" compact />
+                </div>
+              </details>
+            ))}
+          </div>
         </div>
       )}
 

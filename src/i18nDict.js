@@ -9,6 +9,18 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['Atterrissage de la période', 'Landing for the period', 'Cierre previsto del periodo'],
+  ['Atterrissage de l\'équipe', 'Team landing', 'Cierre previsto del equipo'],
+  ['au rythme depuis le début', 'at the pace since the start', 'al ritmo desde el inicio'],
+  ['au rythme des derniers jours', 'at the pace of the last few days', 'al ritmo de los últimos días'],
+  ['Objectif', 'Target', 'Objetivo'],
+  ['non tenu sur cette trajectoire', 'not met on this trajectory', 'no se cumple con esta trayectoria'],
+  ['tenu sur cette trajectoire', 'met on this trajectory', 'se cumple con esta trayectoria'],
+  ['Aucun objectif fixé pour cette métrique.', 'No target set for this metric.', 'Ningún objetivo fijado para esta métrica.'],
+  ['à ce jour', 'to date', 'hasta hoy'],
+  ['rien à ce jour', 'nothing to date', 'nada hasta hoy'],
+  ['période terminée', 'period over', 'periodo terminado'],
+  ['Somme des trajectoires individuelles. La fourchette encadre deux rythmes : depuis le début de période, et sur les derniers jours.', 'Sum of the individual trajectories. The range brackets two paces: since the start of the period, and over the last few days.', 'Suma de las trayectorias individuales. El rango encuadra dos ritmos: desde el inicio del periodo y en los últimos días.'],
   ['Historique', 'History', 'Historial'],
   ['Étape', 'Stage', 'Etapa'],
   ['Date de passage SQL', 'SQL date', 'Fecha de paso a SQL'],

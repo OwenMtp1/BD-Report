@@ -11,7 +11,10 @@ const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach(e => {
 })
 walk('src')
 
-const CODE = /=>|&&|\|\||\?\?|\?\.|===|!==|\.[a-zA-Z]\w*\(|\breturn\b|\bconst \b|\.length|\.toLowerCase|\.indexOf|useState|\bnull\b|\bundefined\b|\bfunction\b|[{}$]|['"][a-z][\w-]*['"]\s*:/
+// `\w+\.\w+` attrape les accès de propriété (`f.sinceStart ? … : f.last7`) qu'un fragment
+// de ternaire laisse passer entre deux chevrons. Aucune phrase d'interface n'accole une
+// lettre à un point puis une autre lettre — les chemins de fichiers, eux, sont écartés plus bas.
+const CODE = /=>|&&|\|\||\?\?|\?\.|===|!==|\.[a-zA-Z]\w*\(|\breturn\b|\bconst \b|\.length|\.toLowerCase|\.indexOf|useState|\bnull\b|\bundefined\b|\bfunction\b|[{}$]|['"][a-z][\w-]*['"]\s*:|[a-zA-Z_$][\w$]*\.[a-zA-Z_$][\w$]*/
 const START_BAD = /^[)(\[\],:;=!.`|&+*/%<>~^-]/
 const KEEP_START = /^[—·▶«»→✓✨⚠🎫🎯🏆💤📅🔥↺]/
 // Noms propres et notations qui ne se traduisent pas : les signaler comme « manquantes »

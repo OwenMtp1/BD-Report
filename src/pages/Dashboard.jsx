@@ -4,11 +4,16 @@ import { Trophy, Pencil, EyeOff, Eye, MonitorPlay } from 'lucide-react'
 import { useStore, inTimeline, computePrimes, primeOpts, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO, phaseList, isLostPhase, isWonPhase, phaseAtLeast, qualifyPhase, milestonePhase, QUOTA_METRICS, ACTIVITY_PERIODS, quotaAchieved, monthlyPaidPrimes, pipelineValue, wonValue, valueBySource, dealAnnualValue } from '../store.jsx'
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
 import { ChallengeBanner } from './Challenges.jsx'
+import LandingPanel from './Forecast.jsx'
 
 const DEFAULT_WIDGETS = [
   { id: 'rdv-realises', label: 'RDV réalisés', size: 'lg' },
   { id: 'rdv-pris', label: 'RDV pris', size: 'lg' },
   { id: 'objectifs', label: 'Objectifs & quotas', size: 'lg' },
+  // `module` : le bloc n'existe que si la brique est installée chez le client. Il disparaît
+  // alors aussi de l'éditeur de tableau de bord — proposer d'afficher ce qui n'existe pas
+  // ferait passer une absence de brique pour une panne.
+  { id: 'atterrissage', label: 'Atterrissage de la période', size: 'lg', module: 'forecast' },
   { id: 'bubbles', label: 'Indicateurs clés (MQL / SQL / Primes)', size: 'lg' },
   { id: 'performance', label: 'Performance', size: 'md' },
   { id: 'provenance', label: 'Provenance des RDV', size: 'md' },
@@ -481,6 +486,8 @@ export default function Dashboard() {
           </div>
         )
       }
+      case 'atterrissage':
+        return <LandingPanel data={sub} subId={store.session?.subEnvId} />
       case 'velocite': {
         const velo = pipelineVelocity(rdvs, sub)
         const maxAvg = Math.max(1, ...velo.map(v => v.avg))
@@ -602,6 +609,7 @@ export default function Dashboard() {
           if (!w.visible && !editMode) return null
           const def = DEFAULT_WIDGETS.find(d => d.id === w.id)
           if (!def) return null
+          if (def.module && !store.hasModule(def.module)) return null
           return (
             <div key={w.id} className={`relative ${sizeClass(w.id)} ${!w.visible ? 'opacity-40' : ''}`}>
               {editMode && (

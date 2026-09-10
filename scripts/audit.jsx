@@ -120,6 +120,31 @@ async function main() {
     })
   }
 
+  // 6 ter. Atterrissage : la fourchette doit REFLÉTER un ralentissement, sinon elle ne sert
+  //   à rien. Espace fabriqué à la main — 10 rendez-vous pris du 1er au 10, puis plus rien.
+  {
+    const now = new Date(2026, 8, 15) // 15 septembre, mois de 30 jours
+    const rdvs = []
+    for (let i = 1; i <= 10; i++) rdvs.push({ id: 'r' + i, datePriseRdv: `2026-09-${String(i).padStart(2, '0')}`, phase: 'R1', opportunite: 'En cours' })
+    const f = s.landingForecast({ rdvs, phases: ['R1', 'SQL', 'Signée'], bareme: [] }, 'rdvPris', { now, period: 'mois' })
+    ok(f.elapsed === 15 && f.totalDays === 30, `Atterrissage : découpage de période faux (${f.elapsed}/${f.totalDays})`)
+    ok(f.done === 10, `Atterrissage : réalisé faux (${f.done})`)
+    ok(f.sinceStart === 20, `Atterrissage : 10 en 15 jours doit projeter 20 sur 30, pas ${f.sinceStart}`)
+    ok(f.last7 < f.sinceStart, "Atterrissage : l'arrêt d'activité doit tirer la borne basse vers le bas")
+    ok(f.low === f.last7 && f.high === f.sinceStart, 'Atterrissage : fourchette mal ordonnée')
+    // Un espace vide ne divise pas par zéro et n'invente pas d'objectif.
+    const empty = s.landingForecast({ rdvs: [] }, 'sql', { now, period: 'mois' })
+    ok(empty.low === 0 && empty.high === 0, 'Atterrissage : un espace vide doit projeter zéro')
+    ok(empty.target === null && empty.onTrack === null, "Atterrissage : sans quota, aucun objectif ne doit être inventé")
+    // La cible vient du DÉTAIL du quota, pas de l'objet qui le décrit : un objet passé tel
+    // quel donnait « Objectif NaN » à l'écran.
+    const d2 = s.buildDemoDb({})
+    const e2 = d2.environments.find(x => x.id === 'env-demo')
+    const k2 = Object.keys(d2.data)[0]
+    const withQuota = s.landingForecast(d2.data[k2], 'sql', { now: new Date(), period: 'mois', env: e2, subId: k2 })
+    ok(withQuota.target === null || Number.isFinite(withQuota.target), `Atterrissage : objectif non numérique (${withQuota.target})`)
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.
