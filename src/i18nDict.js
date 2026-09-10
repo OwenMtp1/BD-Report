@@ -9,6 +9,20 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['Attribué à', 'Assigned to', 'Asignado a'],
+  ['Aucun territoire défini — tous les comptes sont ouverts à tout le monde.', 'No territory defined — every account is open to everyone.', 'Ningún territorio definido — todas las cuentas están abiertas a todos.'],
+  ['Comptes nommés (un par ligne)', 'Named accounts (one per line)', 'Cuentas nombradas (una por línea)'],
+  ['Hors de votre périmètre :', 'Outside your scope:', 'Fuera de tu ámbito:'],
+  ['Nom du territoire', 'Territory name', 'Nombre del territorio'],
+  ['Secteurs (un par ligne)', 'Sectors (one per line)', 'Sectores (uno por línea)'],
+  ['Territoire enregistré', 'Territory saved', 'Territorio guardado'],
+  ['Territoire supprimé', 'Territory deleted', 'Territorio eliminado'],
+  ['Un compte nommé l\'emporte sur un secteur : une exception nominative existe précisément pour déroger à la règle générale.', 'A named account takes precedence over a sector: a by-name exception exists precisely to depart from the general rule.', 'Una cuenta nombrada prevalece sobre un sector: una excepción nominal existe precisamente para apartarse de la regla general.'],
+  ['ex : Grands comptes Île-de-France', 'e.g. Key accounts Greater Paris', 'ej.: Grandes cuentas Isla de Francia'],
+  ['le premier appel — l\'alerte de doublon existante, elle, ne se déclenche qu\'une fois que deux personnes ont travaillé la même entreprise.', 'the first call — the existing duplicate alert only fires once two people have worked the same company.', 'la primera llamada — la alerta de duplicado existente solo salta cuando dos personas ya han trabajado la misma empresa.'],
+  ['À qui revient quel compte, quel secteur. L\'alerte apparaît dans le formulaire de RDV,', 'Who gets which account, which sector. The alert appears in the meeting form,', 'A quién corresponde cada cuenta y cada sector. El aviso aparece en el formulario de cita,'],
+  ['Nouveau territoire', 'New territory', 'Nuevo territorio'],
+  ['Grands comptes', 'Key accounts', 'Grandes cuentas'],
   ['Ajouter une touche', 'Add a touch', 'Añadir un contacto'],
   ['Appliquer', 'Apply', 'Aplicar'],
   ['Appliquer un plan de relance', 'Apply a follow-up plan', 'Aplicar un plan de seguimiento'],

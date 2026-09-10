@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { TrendingUp, Sun, AlertTriangle, ArrowRightLeft, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react'
 import { useStore, inTimeline, computePrimes, primeOpts, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, fmtMoney, baremeMatch, phaseProbability, milestonePhase, PHASE_COLORS, phaseColor } from '../store.jsx'
-import { Empty, toast } from '../ui.jsx'
+import { Empty, toast, Confirm } from '../ui.jsx'
 import { StatementsManager } from './Statements.jsx'
 import LandingPanel, { TeamLanding } from './Forecast.jsx'
 
@@ -96,6 +96,89 @@ function memberStats(data) {
   }
 }
 
+// Carte des territoires. Portée par l'environnement : une carte que chacun verrait
+// différemment ne serait pas une carte.
+function Territories({ store, members }) {
+  const list = store.territories()
+  const [editing, setEditing] = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null)
+  const blank = () => ({ id: uid(), name: '', ownerSubId: members[0]?.id || '', companies: [], sectors: [] })
+  const nameOf = (id) => { const m = members.find(x => x.id === id); return m ? `${m.prenom} ${m.nom}` : '—' }
+  // Saisie en texte libre, une entrée par ligne : plus rapide qu'un formulaire à puces pour
+  // coller une liste de comptes venue d'ailleurs.
+  const toList = (txt) => txt.split('\n').map(s => s.trim()).filter(Boolean)
+
+  return (
+    <div className="card p-4">
+      <h3 className="font-bold mb-1">Territoires & attribution</h3>
+      <p className="text-xs text-muted mb-3">
+        À qui revient quel compte, quel secteur. L'alerte apparaît dans le formulaire de RDV,
+        <b> avant</b> le premier appel — l'alerte de doublon existante, elle, ne se déclenche
+        qu'une fois que deux personnes ont travaillé la même entreprise.
+      </p>
+
+      {list.length === 0 && <Empty text="Aucun territoire défini — tous les comptes sont ouverts à tout le monde." />}
+      <div className="space-y-1.5">
+        {list.map(t => (
+          <div key={t.id} className="flex items-center gap-2 p-2 rounded-xl border border-line">
+            <span className="font-semibold text-sm flex-1">{t.name}</span>
+            <span className="text-[11px] text-muted">{nameOf(t.ownerSubId)}</span>
+            <span className="text-[11px] text-muted">
+              {(t.companies || []).length} compte(s) · {(t.sectors || []).length} secteur(s)
+            </span>
+            <button className="btn-ghost !p-1" title="Modifier" onClick={() => setEditing(JSON.parse(JSON.stringify(t)))}>✎</button>
+            <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" onClick={() => setConfirmDel(t)}>✕</button>
+          </div>
+        ))}
+      </div>
+      <button className="btn-ghost !py-1.5 text-sm mt-2" onClick={() => setEditing(blank())}>+ Nouveau territoire</button>
+
+      {editing && (
+        <div className="mt-3 rounded-xl border border-line p-3 space-y-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <label className="text-xs">
+              <span className="block text-muted mb-1">Nom du territoire</span>
+              <input className="input" value={editing.name} placeholder="ex : Grands comptes Île-de-France"
+                onChange={e => setEditing(t => ({ ...t, name: e.target.value }))} />
+            </label>
+            <label className="text-xs">
+              <span className="block text-muted mb-1">Attribué à</span>
+              <select className="input" value={editing.ownerSubId} onChange={e => setEditing(t => ({ ...t, ownerSubId: e.target.value }))}>
+                {members.map(m => <option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>)}
+              </select>
+            </label>
+            <label className="text-xs">
+              <span className="block text-muted mb-1">Comptes nommés (un par ligne)</span>
+              <textarea className="input h-24" value={(editing.companies || []).join('\n')}
+                onChange={e => setEditing(t => ({ ...t, companies: toList(e.target.value) }))} />
+            </label>
+            <label className="text-xs">
+              <span className="block text-muted mb-1">Secteurs (un par ligne)</span>
+              <textarea className="input h-24" value={(editing.sectors || []).join('\n')}
+                onChange={e => setEditing(t => ({ ...t, sectors: toList(e.target.value) }))} />
+            </label>
+          </div>
+          <p className="text-[11px] text-muted">
+            Un compte nommé l'emporte sur un secteur : une exception nominative existe
+            précisément pour déroger à la règle générale.
+          </p>
+          <div className="flex gap-2">
+            <button className="btn-primary !py-1.5 text-sm" disabled={!editing.name.trim() || !editing.ownerSubId}
+              onClick={() => { store.saveTerritory(editing); setEditing(null); toast('Territoire enregistré') }}>Enregistrer</button>
+            <button className="btn-ghost !py-1.5 text-sm" onClick={() => setEditing(null)}>Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {confirmDel && (
+        <Confirm message={`Supprimer le territoire « ${confirmDel.name} » ? Les comptes qu'il couvrait redeviennent ouverts à tout le monde.`}
+          onYes={() => { store.deleteTerritory(confirmDel.id); setConfirmDel(null); toast('Territoire supprimé') }}
+          onNo={() => setConfirmDel(null)} />
+      )}
+    </div>
+  )
+}
+
 export default function TeamLead() {
   const store = useStore()
   const envId = store.session.envId
@@ -185,6 +268,8 @@ export default function TeamLead() {
           </div>
         </div>
       )}
+
+      {store.hasModule('territories') && <Territories store={store} members={members} />}
 
       {/* Fourchette de primes du mois — le chiffre qu'on présente en comité */}
       <div className="card p-4">

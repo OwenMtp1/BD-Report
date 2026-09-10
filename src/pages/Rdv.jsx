@@ -72,7 +72,7 @@ function ContactSearch({ onPick }) {
   )
 }
 
-function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners, committee, dealValue }) {
+function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners, committee, dealValue, territoryOf }) {
   const [f, setF] = useState(initial)
   const icp = useMemo(() => icpVerdict(f, sub), [f.secteur, f.effectif, f.contacts, sub.icpProfiles]) // eslint-disable-line
   const [err, setErr] = useState('')
@@ -88,6 +88,8 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
     e && sub.contacts.some(c => (c.email || '').toLowerCase() === e))
   // Conflit de comptes : un autre membre de l'organisation travaille déjà cette entreprise
   const orgOwners = f.entreprise.trim().length > 1 && findOrgOwners ? findOrgOwners(f.entreprise) : []
+  // Territoire couvrant ce compte (module `territories`), calculé à la volée pendant la saisie.
+  const territory = territoryOf ? territoryOf({ entreprise: f.entreprise, secteur: f.secteur }) : null
 
   const submit = () => {
     if (!f.phase || !f.entreprise || !f.provenance) {
@@ -279,6 +281,19 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
           <span><b>Conflit de compte possible :</b> « {f.entreprise} » est déjà travaillée par <b>{orgOwners.join(', ')}</b> dans votre organisation.
             Vérifiez les commentaires d'équipe sur la fiche entreprise avant de prospecter.</span>
+        </div>
+      )}
+      {/* Attribution : l'alerte porte sur la CARTE, pas sur ce qui a déjà été fait. Elle
+          arrive donc avant le premier appel, là où elle peut encore éviter le doublon.
+          Informative et non bloquante : une exception est parfois la bonne décision, et
+          c'est au commercial de la prendre, pas à l'outil de l'interdire. */}
+      {territory && !territory.mine && territory.owner && (
+        <div className="mt-2 rounded-xl bg-sky-50 dark:bg-sky-500/10 border border-sky-300 dark:border-sky-500/30 p-3 text-xs text-sky-800 dark:text-sky-300 flex gap-2">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span>
+            <b>Hors de votre périmètre :</b> ce compte relève du territoire «&nbsp;{territory.territory.name}&nbsp;»,
+            attribué à <b>{territory.owner.prenom} {territory.owner.nom}</b>. Prévenez-le avant de prospecter.
+          </span>
         </div>
       )}
       {err && <p className="text-red-500 text-sm mt-3">{err}</p>}
@@ -866,6 +881,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
         <RdvForm
           title={form.mode === 'create' ? 'Créer un RDV' : form.mode === 'sub' ? 'Créer le rendez-vous suivant' : 'Modifier le RDV'}
           initial={form.data} sub={sub} setSubList={setSubList} isCreate={form.mode === 'create'} committee={committee} dealValue={dealValue}
+          territoryOf={store.hasModule('territories') ? (x => store.territoryFor(x)) : null}
           findOrgOwners={(name) => {
             const k = companyKey(name)
             return store.db.subenvs

@@ -1019,6 +1019,28 @@ export const QUOTA_METRICS = [
 ]
 export const QUOTA_METRIC_IDS = QUOTA_METRICS.map(m => m.id)
 
+// ---------------------------------------------------------------- Territoires & attribution
+// `envContacts` sait dire qu'un collègue travaille déjà une entreprise — mais APRÈS coup,
+// quand les deux ont déjà appelé. L'attribution règle la question avant : ce compte, ce
+// secteur, c'est à cette personne.
+//
+// Porté par l'ENVIRONNEMENT et non par un espace : une carte de territoires que chacun
+// verrait différemment ne serait pas une carte.
+export const envTerritories = (env) => (Array.isArray(env?.territories) ? env.territories : [])
+const normName = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
+/**
+ * À qui revient cette affaire, d'après la carte. Le NOM d'entreprise l'emporte sur le
+ * secteur : une exception nominative existe précisément pour déroger à la règle générale.
+ * Rend `null` si rien ne s'applique — un territoire non couvert reste ouvert à tous.
+ */
+export function territoryOwner(env, { entreprise, secteur } = {}) {
+  const list = envTerritories(env)
+  const c = normName(entreprise), s = normName(secteur)
+  const byCompany = list.find(t => (t.companies || []).some(x => normName(x) === c && c))
+  if (byCompany) return byCompany
+  return list.find(t => (t.sectors || []).some(x => normName(x) === s && s)) || null
+}
+
 // ---------------------------------------------------------------- Plans de relance (cadences)
 // Un BDR junior ne manque pas d'outils, il manque de méthode : quand relancer, combien de
 // fois, et à quel moment s'arrêter. Le manager décrit la séquence une fois ; l'appliquer à
@@ -3947,6 +3969,34 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           .filter(s => s.envId === session?.envId)
           .map(s => ({ sub: s, score: challengeScore(db.data[s.id] || {}, ch.metric, ch.start, ch.end) }))
           .sort((a, b) => b.score - a.score)
+      },
+      // ----- Territoires (portés par l'environnement : une seule carte pour tout le monde)
+      territories() { return envTerritories(db.environments.find(e => e.id === session?.envId)) },
+      saveTerritory(t) {
+        if (roBlocked()) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === session?.envId); if (!env) return d
+          const list = envTerritories(env)
+          const i = list.findIndex(x => x.id === t.id)
+          env.territories = i >= 0 ? list.map(x => (x.id === t.id ? t : x)) : [...list, { ...t, id: t.id || uid() }]
+          return d
+        })
+      },
+      deleteTerritory(id) {
+        if (roBlocked()) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === session?.envId); if (!env) return d
+          env.territories = envTerritories(env).filter(t => t.id !== id)
+          return d
+        })
+      },
+      /** Le territoire qui couvre cette affaire, et s'il appartient à quelqu'un d'autre. */
+      territoryFor(rdvLike) {
+        const env = db.environments.find(e => e.id === session?.envId)
+        const t = territoryOwner(env, rdvLike)
+        if (!t) return null
+        const owner = db.subenvs.find(s => s.id === t.ownerSubId)
+        return { territory: t, owner, mine: t.ownerSubId === session?.subEnvId }
       },
       // ----- Plans de relance
       cadences() { return cadenceList(this.sub) },

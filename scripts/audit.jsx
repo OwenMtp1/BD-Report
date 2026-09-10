@@ -145,6 +145,29 @@ async function main() {
     ok(withQuota.target === null || Number.isFinite(withQuota.target), `Atterrissage : objectif non numérique (${withQuota.target})`)
   }
 
+  // 6 quater. Territoires : un compte NOMMÉ l'emporte sur un secteur — une exception
+  //   nominative existe précisément pour déroger à la règle générale. Sans cet ordre,
+  //   impossible de sortir un grand compte du territoire qui le couvre par défaut.
+  {
+    const env = {
+      territories: [
+        { id: 't1', name: 'Industrie', ownerSubId: 'sub-a', companies: [], sectors: ['Industrie'] },
+        { id: 't2', name: 'Grands comptes', ownerSubId: 'sub-b', companies: ['Renault'], sectors: [] },
+      ],
+    }
+    ok(s.territoryOwner(env, { entreprise: 'Renault', secteur: 'Industrie' })?.id === 't2',
+      "Territoires : le compte nommé doit l'emporter sur le secteur")
+    ok(s.territoryOwner(env, { entreprise: 'Autre SA', secteur: 'Industrie' })?.id === 't1',
+      'Territoires : le secteur doit couvrir les comptes non nommés')
+    ok(s.territoryOwner(env, { entreprise: 'Inconnue', secteur: 'Services' }) === null,
+      "Territoires : un compte non couvert reste ouvert à tous, il ne s'attribue pas au hasard")
+    // La casse et les espaces ne doivent pas créer de faux territoires libres.
+    ok(s.territoryOwner(env, { entreprise: '  renault ', secteur: '' })?.id === 't2',
+      'Territoires : la comparaison doit ignorer casse et espaces')
+    // Un environnement sans carte n'attribue rien.
+    ok(s.territoryOwner({}, { entreprise: 'Renault' }) === null, 'Territoires : sans carte, aucune attribution')
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.
