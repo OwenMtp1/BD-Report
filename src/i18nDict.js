@@ -9,6 +9,8 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['non lisible — réinitialisez pour redonner l\'accès', 'not readable — reset it to restore access', 'no legible — restablécelo para devolver el acceso'],
+  ['mot de passe non lisible', 'password not readable', 'contraseña no legible'],
   ['Aucun challenge. Exemple : « le plus de leads qualifiés cette semaine ».', 'No challenge yet. For example: "most qualified leads this week".', 'Ningún reto. Por ejemplo: «más leads cualificados esta semana».'],
   ['Contrôler la qualité de vos données', 'Check the quality of your data', 'Comprobar la calidad de tus datos'],
   ['Qualité', 'Quality', 'Calidad'],

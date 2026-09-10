@@ -540,7 +540,6 @@ export const STAFF_PERMISSION_GROUPS = [
   },
   {
     id: 'passwords', label: 'Mots de passe', perms: [
-      { id: 'passwords.view', label: 'Afficher les mots de passe en clair' },
       { id: 'passwords.reset', label: 'Réinitialiser un mot de passe' },
     ],
   },
@@ -655,10 +654,10 @@ function defaultPermsFor(roleKey) {
     'requests.view', 'requests.manage', 'kb.manage', 'canned.manage',
     'clients.view', 'clients.manage', 'clients.delete', 'env.build', 'env.modules', 'projects.view', 'projects.manage', 'projects.others',
     'accounts.view', 'accounts.create', 'accounts.role', 'accounts.offer', 'accounts.disable', 'accounts.remove',
-    'passwords.view', 'passwords.reset', 'services.manage', 'channels.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access',
+    'passwords.reset', 'services.manage', 'channels.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access',
   ]
   if (roleKey === 'Développeur') return ['tickets.view', 'tickets.reply', 'tickets.priority', 'tickets.status', 'projects.view', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access']
-  if (roleKey === 'Manager') return ['passwords.view', 'passwords.reset', 'accounts.create', 'stats.view', 'dashboard.view', 'manager.view', 'orgchart.edit', 'demo.access']
+  if (roleKey === 'Manager') return ['passwords.reset', 'accounts.create', 'stats.view', 'dashboard.view', 'manager.view', 'orgchart.edit', 'demo.access']
   return [] // Membre + rôles personnalisés : aucune permission staff par défaut
 }
 
@@ -3143,7 +3142,9 @@ function seedAutoChannels(db) {
   })
 }
 
-function migrate(db) {
+// Exportée pour l'audit : c'est elle qui doit purger les mots de passe en clair des bases
+// héritées, et cette garantie mérite d'être vérifiée sur une vraie base, pas sur parole.
+export function migrate(db) {
   injectTestEnv(db)
   // Ajoute les nouvelles briques aux comptes qui avaient déjà l'accès cœur (proxy : brique "Leads").
   ;(db.accounts || []).forEach(a => {
@@ -3155,9 +3156,14 @@ function migrate(db) {
     })
     // Offre par défaut : les comptes existants gardent l'accès complet (beta)
     if (!a.plan) a.plan = 'beta'
-    // Hashage des mots de passe hérités. On mémorise le clair (passwordClear) pour la visibilité
-    // manager/support avant de ne stocker QUE le hash pour l'authentification.
-    if (a.password && !String(a.password).startsWith('sha256:')) { if (!a.passwordClear) a.passwordClear = a.password; a.password = hashPw(a.password) }
+    // ⚠️ SEUL le hash est conservé. Un mot de passe hérité en clair est hashé puis effacé.
+    if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
+    // Purge des clairs déjà stockés. Irréversible, et c'est le but : tant qu'ils existaient,
+    // ils voyageaient dans l'état synchronisé, dans chaque sauvegarde et dans chaque export
+    // — un seul accès à la base rendait tous les comptes réutilisables ailleurs, y compris
+    // là où les gens ont réemployé le même mot de passe. Un manager qui doit rendre l'accès
+    // à quelqu'un le RÉINITIALISE ; il n'a jamais eu besoin de le lire.
+    delete a.passwordClear
     delete a.passwordPlain
     // Présence (en ligne / hors ligne / ne pas déranger) + préférences conversations
     if (!a.presence) a.presence = 'online'
@@ -3835,7 +3841,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const wanted = (pseudo || email.split('@')[0]).trim()
         if (wanted && db.accounts.some(a => a.pseudo.toLowerCase() === wanted.toLowerCase())) return { error: 'Ce pseudo est déjà pris, choisissez-en un autre.' }
         // Inscription libre = offre Starter (accès très limité), avec son propre environnement starter.
-        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), passwordClear: password, role: 'Fondateur', developer: false, plan: 'starter', photo: '', bricks: [...STARTER_BRICKS], teamOf: null }
+        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), role: 'Fondateur', developer: false, plan: 'starter', photo: '', bricks: [...STARTER_BRICKS], teamOf: null }
         setDb(d => { d.accounts.push(acc); return d })
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return { account: acc }
@@ -5258,7 +5264,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (db.accounts.some(a => (a.email || '').toLowerCase() === email)) return { error: 'Un compte utilise déjà cet e-mail.' }
         if (db.accounts.some(a => (a.pseudo || '').toLowerCase() === pseudo.toLowerCase())) return { error: 'Ce pseudo est déjà pris.' }
         const acc = {
-          id: uid(), email, pseudo, password: hashPw(password), passwordClear: password,
+          id: uid(), email, pseudo, password: hashPw(password),
           role, developer: role === 'Développeur', plan: 'beta', photo: '', bricks: [...BRICKS],
           teamOf: data?.teamOf || null, staffServiceId: data?.staffServiceId || '',
         }
@@ -5363,14 +5369,15 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           account: a, sub: db.subenvs.find(s => s.envId === envId && s.ownerId === a.id) || null, isOwner: env.createdBy === a.id,
         }))
       },
-      // ===================================================== Mots de passe (visibilité manager/support)
-      canViewPasswords() { return accountHasPerm(account, 'passwords.view', db) },
-      // Renvoie le mot de passe en clair si connu (comptes créés/réinitialisés depuis l'app),
-      // sinon null (les anciens mots de passe purgés ne sont pas récupérables).
-      revealPassword(id) {
-        if (!this.canViewPasswords()) return null
-        return db.accounts.find(a => a.id === id)?.passwordClear || null
-      },
+      // ===================================================== Mots de passe
+      // ⚠️ PLUS AUCUN MOT DE PASSE EN CLAIR, nulle part. Un manager ne peut plus AFFICHER
+      // le mot de passe d'un collaborateur : il peut le RÉINITIALISER, ce qui couvre le
+      // besoin réel (« il ne peut plus entrer ») sans conserver un secret réutilisable
+      // ailleurs — dans l'état synchronisé, dans une sauvegarde, chez un tiers.
+      // Ce que le manager conserve, et qui était la vraie demande : l'accès à l'ESPACE de
+      // ses collaborateurs (droit `team.view` / `team.manage`), qui n'a jamais eu besoin de
+      // leur mot de passe.
+      canResetPasswords() { return accountHasPerm(account, 'passwords.reset', db) },
       // ----- changement d'Id sûr : met à jour toutes les références + la session courante
       changeAccountId(oldId, newId) {
         if (!newId || newId === oldId) return
@@ -5420,7 +5427,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const offerBricks = findOffer(db.offers, plan)?.bricks || PLANS[plan]?.bricks || BRICKS
         const a = { id: uid(), role: 'Membre', developer: false, photo: '', bricks: [...offerBricks], teamOf: null, ...acc, plan }
         // Conserve le mot de passe en clair (visible manager/support) puis stocke le hash pour l'auth.
-        if (a.password && !String(a.password).startsWith('sha256:')) { a.passwordClear = a.password; a.password = hashPw(a.password) }
+        if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
         delete a.passwordPlain
         setDb(d => { d.accounts.push(a); return d })
         return a
@@ -5428,7 +5435,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // Définit un nouveau mot de passe (stocke uniquement le hash — jamais le clair).
       setAccountPassword(id, plain) {
         if (roBlocked()) return
-        setDb(d => { const a = d.accounts.find(x => x.id === id); if (a) { a.password = hashPw(plain); a.passwordClear = plain; delete a.passwordPlain } return d })
+        setDb(d => { const a = d.accounts.find(x => x.id === id); if (a) { a.password = hashPw(plain); delete a.passwordClear; delete a.passwordPlain } return d })
       },
       // ----- Identité de l'utilisateur courant pour le support (prénom + photo, sinon logo BD Report)
       currentIdentity() {
@@ -5785,7 +5792,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const plan = env.plan || 'beta'
         const bricks = findOffer(db.offers, plan)?.bricks || BRICKS
         const acc = {
-          id: uid(), email: mail, pseudo: nick, password: hashPw(password), passwordClear: password,
+          id: uid(), email: mail, pseudo: nick, password: hashPw(password),
           role: isManager ? 'Manager' : 'Membre', developer: false, plan, photo: '',
           bricks: [...bricks], teamOf: null, createdAt: new Date().toISOString(),
         }

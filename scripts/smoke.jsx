@@ -910,7 +910,10 @@ async function main() {
     await click(find('button', 'Créer le profil'))
     const made = dbNow().accounts.find(a => a.email === 'camille@bdreport.fr')
     if (!made) throw new Error('Staff profile not created')
-    if (made.passwordClear !== 'motdepasse1' || !String(made.password).startsWith('sha256:')) throw new Error('Staff password not hashed')
+    // Le compte est créé avec un hash, et RIEN d'autre : plus aucun clair n'est conservé,
+    // pas même à la création.
+    if (!String(made.password).startsWith('sha256:')) throw new Error('Le mot de passe du profil staff n\'est pas hashé')
+    if (made.passwordClear !== undefined || made.passwordPlain !== undefined) throw new Error('Un mot de passe en clair a été conservé à la création')
     if (dbNow().accounts.filter(a => a.role === 'Développeur').length !== before + 1) throw new Error('New staff did not take the chosen role')
     if (!text().includes('camille')) throw new Error('New staff member absent from the org chart')
   }

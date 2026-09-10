@@ -195,6 +195,43 @@ async function main() {
     ok(quiet === null, 'Récapitulatif : une semaine sans rien à dire ne doit rien poster')
   }
 
+  // 6 sexies. AUCUN mot de passe en clair, nulle part. C'est la garantie la plus simple à
+  //   énoncer et la plus facile à casser par inadvertance : un seul `passwordClear` réécrit
+  //   quelque part, et tous les comptes redeviennent réutilisables ailleurs.
+  {
+    const scan = (db, where) => {
+      ;(db.accounts || []).forEach(a => {
+        ok(a.passwordClear === undefined, `${where} : ${a.pseudo || a.id} porte un mot de passe en clair`)
+        ok(a.passwordPlain === undefined, `${where} : ${a.pseudo || a.id} porte un ancien mot de passe en clair`)
+        ok(!a.password || String(a.password).startsWith('sha256:'), `${where} : ${a.pseudo || a.id} n'a pas de hash`)
+      })
+    }
+    scan(s.buildDemoDb({}), 'Démo')
+    scan(s.buildTrainingDb('Fondateur', []), 'Formation')
+    // Une base héritée porteuse d'un clair doit ressortir PURGÉE de la migration. On part
+    // d'une base réelle plutôt que d'un objet minimal : c'est ce chemin-là qui compte.
+    const legacy = s.buildDemoDb({})
+    legacy.accounts[0].passwordClear = 'motdepasse'
+    legacy.accounts[0].passwordPlain = 'motdepasse'
+    legacy.accounts[0].password = 'motdepasse'   // ancien format, non hashé
+    s.migrate(legacy)
+    scan(legacy, "Après migration d'une base héritée")
+    // Le droit d'AFFICHER un mot de passe ne doit plus exister : un droit qui ne fait rien
+    // laisse croire qu'il protège quelque chose.
+    ok(!s.STAFF_PERMISSION_IDS.includes('passwords.view'), "Le droit « afficher les mots de passe » subsiste alors qu'il n'y a plus rien à afficher")
+    ok(s.STAFF_PERMISSION_IDS.includes('passwords.reset'), 'Le droit de réinitialiser un mot de passe doit rester : c\'est ce qui remplace l\'affichage')
+    // ⚠️ CONTREPARTIE EXIGÉE de la suppression de l'affichage : le manager doit continuer
+    // d'accéder à l'ESPACE de ses collaborateurs. Cet accès ne passe pas — et n'a jamais
+    // eu besoin de passer — par leur mot de passe : il repose sur un droit d'encadrement.
+    ok(s.CLIENT_PERMISSION_IDS.includes('team.view'), "Le droit d'accéder aux espaces de l'équipe a disparu")
+    ok(s.CLIENT_PERMISSION_IDS.includes('team.manage'), "Le droit d'encadrement de l'équipe a disparu")
+    const roles = s.defaultEnvRoles()
+    const mgr = roles.find(r => /manager/i.test(r.name))
+    ok(!!mgr, 'Aucun rôle Manager par défaut dans un environnement')
+    ok(mgr && (mgr.perms || []).includes('team.view'),
+      "Le rôle Manager doit pouvoir ouvrir l'espace de ses collaborateurs — c'est la contrepartie du retrait de l'affichage des mots de passe")
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.

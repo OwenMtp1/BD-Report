@@ -44,7 +44,7 @@ function ProjectUsers({ project, store, onClose }) {
   const [pwFor, setPwFor] = useState(null)
   const [pwVal, setPwVal] = useState('')
   const [confirm, setConfirm] = useState(null) // { kind, member }
-  const canView = store.canViewPasswords()
+  const canView = store.canResetPasswords()
 
   const doConfirm = () => {
     const { kind, m } = confirm
@@ -224,7 +224,6 @@ function ProjectUsers({ project, store, onClose }) {
           {members.map(m => {
             const a = m.account
             const isMgr = a.role === 'Manager'
-            const pwClear = canView ? store.revealPassword(a.id) : null
             return (
               <div key={a.id} className="rounded-xl border border-line p-3">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -248,7 +247,8 @@ function ProjectUsers({ project, store, onClose }) {
                 </div>
                 {pwFor === a.id && (
                   <div className="mt-2 flex items-center gap-2 flex-wrap">
-                    {canView && <span className="text-xs font-mono px-2 py-1 rounded bg-surface">{pwClear || 'non disponible'}</span>}
+                    {/* Le mot de passe n'est plus lisible : seul son hash est conservé. */}
+                    {canView && <span className="text-xs text-muted">mot de passe non lisible</span>}
                     <input className="input !py-1 text-xs !w-48" placeholder="Nouveau mot de passe…" value={pwVal} onChange={e => setPwVal(e.target.value)} />
                     <button className="btn-primary !py-1 text-xs" disabled={!pwVal.trim()} onClick={() => { store.setAccountPassword(a.id, pwVal.trim()); setPwVal(''); toast('Mot de passe mis à jour') }}>Changer</button>
                   </div>

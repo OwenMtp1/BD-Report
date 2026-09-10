@@ -8,22 +8,16 @@ import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 function PasswordCell({ u, editable, store }) {
   const [val, setVal] = useState('')
   const [shown, setShown] = useState(false)
-  const canView = store.canViewPasswords()
-  const clear = canView && shown ? store.revealPassword(u.id) : null
   const reset = () => { if (val.trim()) { store.setAccountPassword(u.id, val.trim()); setVal(''); toast('Mot de passe mis à jour') } }
   return (
     <div className="space-y-1.5">
-      {canView && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-mono px-2 py-1 rounded bg-surface min-w-[90px]">
-            {shown ? (clear || 'non disponible') : '••••••••'}
-          </span>
-          <button type="button" className="btn-ghost !p-1.5" title={shown ? 'Masquer' : 'Afficher'} onClick={() => setShown(s => !s)}>
-            {shown ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-          {shown && !clear && <span className="text-[10px] text-muted">(défini avant l'affichage — réinitialisez pour le voir)</span>}
-        </div>
-      )}
+      {/* Un mot de passe ne se lit plus : il n'est conservé que sous forme de hash. Le
+          besoin réel d'un manager — « cette personne ne peut plus entrer » — se règle par
+          une réinitialisation, sans garder un secret réutilisable ailleurs. */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs font-mono px-2 py-1 rounded bg-surface min-w-[90px]">••••••••</span>
+        <span className="text-[10px] text-muted">non lisible — réinitialisez pour redonner l'accès</span>
+      </div>
       {editable && (
         <div className="flex items-center gap-1">
           <input className="input !py-1 text-xs" placeholder="Nouveau mot de passe…" value={val} onChange={e => setVal(e.target.value)}
@@ -31,7 +25,6 @@ function PasswordCell({ u, editable, store }) {
           <button type="button" className="btn-ghost !py-1 text-xs shrink-0" disabled={!val.trim()} onClick={reset}>Réinitialiser</button>
         </div>
       )}
-      {!editable && !canView && <span className="text-xs text-muted">••••••••</span>}
     </div>
   )
 }
