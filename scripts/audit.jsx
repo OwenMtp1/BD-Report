@@ -377,8 +377,8 @@ async function main() {
     ok((app.match(/skipsPin/g) || []).length >= 2,
       'App : une seule des deux portes applique la règle — le staff sera bloqué à la seconde')
     const st = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'store.jsx'), 'utf8')
-    ok(/skipsPin\(envId\) \{\s*\n\s*if \(!isSupportRole/.test(st),
-      "store.skipsPin : l'exception n'est pas bornée au rôle support")
+    ok(/canEnterClientEnvs\(\) \{ return accountHasPerm\(account, 'env\.access'/.test(st),
+      "store.canEnterClientEnvs : l'accès aux environnements clients n'est pas une permission")
     ok(/env\.createdBy !== account\?\.id/.test(st),
       'store.skipsPin : un membre du staff doit rester soumis au code dans SON PROPRE environnement')
     // Et la porte doit seulement EXISTER : le sélecteur tranchait sur `account.developer`,
@@ -389,8 +389,46 @@ async function main() {
       "App : le sélecteur d'environnements décide seul de ce qu'il montre")
     ok(!/developer\s*\n?\s*\?\s*store\.db\.environments/.test(app),
       "App : le sélecteur filtre encore les environnements sur le drapeau `developer`")
-    ok(/selectableEnvs\(\) \{\s*\n\s*if \(isSupportRole/.test(st),
-      "store.selectableEnvs : la liste n'est pas ouverte au rôle support")
+    ok(/selectableEnvs\(\) \{\s*\n\s*if \(this\.canEnterClientEnvs\(\)\)/.test(st),
+      'store.selectableEnvs : la liste ne suit pas la permission')
+    // UN SEUL critère sur tout le chemin : la liste, l'exemption de code, la trace laissée
+    // en entrant. Accorder l'accès et laisser une porte verrouillée derrière n'accorde rien.
+    ;['skipsPin', 'enterEnv', 'markProjectMaintenance', 'endProjectMaintenance'].forEach(m => {
+      const body = st.slice(st.indexOf(`      ${m}(`))
+      ok(/canEnterClientEnvs/.test(body.slice(0, 700)),
+        `store.${m} : décide de l'accès client sans passer par la permission \`env.access\``)
+    })
+
+    // La permission existe, elle est au catalogue, et le rôle Support la porte par défaut —
+    // sans quoi la rendre paramétrable REVIENDRAIT à la retirer à ceux qui l'avaient.
+    ok(s.STAFF_PERMISSION_IDS.includes('env.access'), 'La permission `env.access` manque au catalogue staff')
+    const seeded = s.seedStaffRoles([])
+    const sup = seeded.find(r => r.roleKey === 'Support BD Report')
+    ok((sup?.permissions || []).includes('env.access'),
+      'Support BD Report perd l\'accès aux environnements clients qu\'il avait de fait')
+    const dev = seeded.find(r => r.roleKey === 'Développeur')
+    ok(!(dev?.permissions || []).includes('env.access'),
+      'La permission est accordée d\'office à un rôle qui ne l\'avait pas : elle ne gate rien')
+
+    // Rattrapage des bases DÉJÀ en service : le rôle Support enregistré sans cet id doit le
+    // recevoir une fois… et ne jamais le récupérer si on le lui retire ensuite.
+    const dbOld = s.buildDemoDb({}); s.migrate(dbOld)
+    dbOld.staffRoles.forEach(r => { r.permissions = (r.permissions || []).filter(p => p !== 'env.access') })
+    delete dbOld._autoSeed.envAccessPerm
+    s.migrate(dbOld)
+    ok((dbOld.staffRoles.find(r => r.roleKey === 'Support BD Report')?.permissions || []).includes('env.access'),
+      'Rattrapage : une base en service voit son équipe support perdre l\'accès aux environnements')
+    const supRole = dbOld.staffRoles.find(r => r.roleKey === 'Support BD Report')
+    supRole.permissions = supRole.permissions.filter(p => p !== 'env.access') // retrait VOULU
+    s.migrate(dbOld)
+    ok(!(dbOld.staffRoles.find(r => r.roleKey === 'Support BD Report')?.permissions || []).includes('env.access'),
+      'Une permission retirée volontairement est remise par la migration')
+
+    // Et le gate mord : sans la permission, on ne voit que ses propres environnements.
+    const acc = (role) => ({ id: 'x', role })
+    ok(!s.accountHasPerm(acc('Développeur'), 'env.access', dbOld),
+      'Un rôle sans la permission passe quand même')
+    ok(s.accountHasPerm(acc('Fondateur'), 'env.access', dbOld), 'Le Fondateur perd l\'accès (anti-lockout)')
   }
 
   // 6 duodecies. « Voir en situation » : CHAQUE brique doit savoir dire où elle se montre.

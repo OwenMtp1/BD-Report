@@ -92,8 +92,17 @@ npm run dev        # serveur de dev
   **`EnvPicker`** liste `store.selectableEnvs()` — jamais sa propre règle. ⚠️ Il tranchait sur `account.developer`,
   un drapeau que seul le compte d'origine ('01') porte : tout autre compte **Fondateur ou Support** voyait les
   environnements clients partout (fiche client, livraisons, atelier, « voir en situation ») et n'en trouvait
-  **aucun** au moment d'entrer. `selectableEnvs` applique le MÊME critère que `skipsPin` et `enterEnv`
-  (`isSupportRole`) : la même question ne peut pas recevoir deux réponses selon l'écran qui la pose.
+  **aucun** au moment d'entrer.
+  🔑 **`env.access` — « Entrer dans tous les environnements clients » est une PERMISSION staff**, pas une
+  déduction de rôle. `store.canEnterClientEnvs()` (= `accountHasPerm(account,'env.access')`) commande TOUT le
+  chemin : `selectableEnvs` (la liste), `skipsPin` (l'exemption de code), `enterEnv` +
+  `markProjectMaintenance`/`endProjectMaintenance` (la trace laissée en entrant). Accorder l'accès en laissant
+  une porte verrouillée derrière n'accorderait rien ; `npm run audit` fige les cinq points.
+  Défaut : Fondateur (tous droits) et Support BD Report ; **pas** Administrateur — composer un environnement
+  (`env.build`) et entrer chez le client sont deux gestes différents. ⚠️ Rattrapage `_autoSeed.envAccessPerm` :
+  les rôles déjà enregistrés ne contiennent pas ce nouvel id, une base en service aurait vu son équipe support
+  perdre l'accès du jour au lendemain. Posé UNE FOIS sur les rôles de `SUPPORT_ROLES` — donc le retirer ensuite
+  est un choix, jamais un oubli que la migration corrigerait.
   **`SubEnvPicker`** : sans droit d'encadrement (`team.view`/`team.manage`), seul SON espace est ouvrable — ceux des
   collègues portent un cadenas et sont inertes. Le code PIN protège d'un regard, il n'autorisait pas à entrer chez
   un autre. Avec le droit, tous les espaces restent accessibles, PIN demandé.

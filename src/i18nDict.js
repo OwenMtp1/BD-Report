@@ -1703,4 +1703,5 @@ export const UI_DICT = [
   ['Supprimer définitivement cet élément ?', 'Permanently delete this item?', '¿Eliminar definitivamente este elemento?'],
   ['Fermé par', 'Closed by', 'Cerrado por'],
   ['· projet', '· project', '· proyecto'],
+  ['Entrer dans tous les environnements clients', 'Enter any client environment', 'Entrar en todos los entornos de cliente'],
 ]

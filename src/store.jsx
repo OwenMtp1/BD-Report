@@ -544,6 +544,12 @@ export const STAFF_PERMISSION_GROUPS = [
       // rôles, accès. Ce n'est pas la même chose que modifier une fiche client.
       { id: 'env.build', label: "Composer et livrer un environnement (atelier)" },
       { id: 'env.modules', label: "Installer ou retirer les modules d'un environnement" },
+      // ENTRER chez un client est le droit le plus intrusif du back-office : on voit son
+      // pipeline, ses contacts, ses primes. Il était jusqu'ici déduit du rôle (Fondateur /
+      // Support) et d'un vieux drapeau de compte, donc ni visible ni retirable. Il se donne
+      // maintenant comme les autres — et il commande TOUT le chemin : la liste des
+      // environnements, l'exemption de code, et la trace laissée en entrant.
+      { id: 'env.access', label: 'Entrer dans tous les environnements clients' },
     ],
   },
   {
@@ -681,6 +687,8 @@ function defaultPermsFor(roleKey) {
   if (roleKey === 'Administrateur') return [
     'tickets.view', 'tickets.reply', 'tickets.assign', 'tickets.priority', 'tickets.status',
     'requests.view', 'requests.manage', 'kb.manage', 'canned.manage',
+    // `env.access` n'y est PAS : composer un environnement et entrer chez le client sont
+    // deux gestes différents. Il s'accorde, il ne se déduit pas d'un rôle voisin.
     'clients.view', 'clients.manage', 'clients.delete', 'env.build', 'env.modules', 'projects.view', 'projects.manage', 'projects.others',
     'accounts.view', 'accounts.create', 'accounts.role', 'accounts.offer', 'accounts.disable', 'accounts.remove',
     'passwords.reset', 'services.manage', 'channels.manage', 'orgchart.edit', 'logs.view', 'stats.view', 'dashboard.view', 'manager.view', 'demo.access',
@@ -3736,6 +3744,20 @@ export function migrate(db) {
   db.channelMessages = db.channelMessages || {}
   db.staffServices = db.staffServices || [] // services de l'équipe support / staff (fondateur)
   db.staffRoles = seedStaffRoles(db.staffRoles) // rôles + permissions de l'équipe staff (idempotent)
+  // `env.access` était jusqu'ici DÉDUIT du rôle (Fondateur / Support BD Report). En devenant
+  // une permission, il ne figure dans aucun rôle déjà enregistré : sans ce rattrapage, une
+  // base en service verrait son équipe support perdre du jour au lendemain l'accès aux
+  // environnements clients. On le pose UNE FOIS, sur les rôles qui l'avaient de fait — et
+  // le repère fait que le retirer ensuite est un choix, pas un oubli à corriger.
+  if (!db._autoSeed.envAccessPerm) {
+    db.staffRoles.forEach(r => {
+      const key = r.roleKey || r.name
+      if (SUPPORT_ROLES.includes(key) && !(r.permissions || []).includes('env.access')) {
+        r.permissions = [...(r.permissions || []), 'env.access']
+      }
+    })
+    db._autoSeed.envAccessPerm = true
+  }
   if (!Array.isArray(db.productRatings)) db.productRatings = [] // notes de satisfaction produit
   // Sans date de création, aucun jalon d'enquête ne peut être calculé : les comptes
   // existants démarrent leur compteur maintenant plutôt que d'être sollicités aussitôt.
@@ -4306,14 +4328,19 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
        * reste du store le laisse déjà y entrer (`skipsPin`, `enterEnv` qui journalise
        * l'intervention). Un client visible dans la console et introuvable au moment d'y
        * entrer : la même question répondue à deux endroits, forcément de deux façons.
-       * Elle se décide donc ICI, une fois, avec le MÊME critère que ces deux méthodes.
+       * Elle se décide donc ICI, une fois, avec le MÊME critère que ces deux méthodes :
+       * la permission staff `env.access`, qui s'accorde et se retire dans « Permissions
+       * staff » au lieu d'être déduite d'un rôle ou d'un drapeau.
        */
+      canEnterClientEnvs() { return accountHasPerm(account, 'env.access', db) },
       selectableEnvs() {
-        if (isSupportRole(account?.role) || account?.developer) return db.environments
+        if (this.canEnterClientEnvs()) return db.environments
         return db.environments.filter(e => e.createdBy === account?.id || (e.members || []).includes(account?.id))
       },
       skipsPin(envId) {
-        if (!isSupportRole(account?.role)) return false
+        // Même clé que la liste : accorder l'accès et laisser une porte verrouillée derrière
+        // reviendrait à ne rien accorder du tout.
+        if (!this.canEnterClientEnvs()) return false
         const env = db.environments.find(e => e.id === (envId || session?.envId))
         // Chez lui, un membre du staff est un utilisateur comme un autre : son propre code
         // le protège de ses propres collègues, et il le connaît.
@@ -4370,7 +4397,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         // passe en Maintenance pour que le reste de l'équipe le sache. Le créateur d'un
         // environnement n'est pas concerné — c'est chez lui.
         const env = db.environments.find(e => e.id === envId)
-        if (isSupportRole(account?.role) && env && env.createdBy !== account?.id) {
+        if (this.canEnterClientEnvs() && env && env.createdBy !== account?.id) {
           this.markProjectMaintenance(envId)
           this.logStaff({ type: 'Navigation', cat: 'navigation', action: "Entrée dans l'environnement d'un client", envId })
         }
@@ -6598,7 +6625,9 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // temps de l'intervention. Ce n'est pas de la surveillance — c'est ce qui évite que deux
       // techniciens travaillent au même moment sur la même configuration sans le savoir.
       markProjectMaintenance(envId) {
-        if (!isSupportRole(account?.role) || !envId) return
+        // Même clé que l'entrée : qui peut entrer chez un client y intervient, et la trace
+        // doit suivre. Un critère plus étroit ici laisserait des interventions sans trace.
+        if (!this.canEnterClientEnvs() || !envId) return
         setDb(d => {
           const p = (d.projects || []).find(x => x.sourceEnvId === envId || x.envId === envId)
           if (!p) return d
@@ -6615,7 +6644,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       },
       // Fin d'intervention : le projet retrouve l'étape où il en était.
       endProjectMaintenance(envId, backTo = '') {
-        if (!isSupportRole(account?.role) || !envId) return
+        if (!this.canEnterClientEnvs() || !envId) return
         const env = db.environments.find(e => e.id === envId)
         setDb(d => {
           const p = (d.projects || []).find(x => x.sourceEnvId === envId || x.envId === envId)

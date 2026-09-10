@@ -1352,6 +1352,26 @@ async function main() {
       throw new Error(`Environnements invisibles au sélecteur pour un compte staff : ${hidden.map(e => e.name).join(', ')}`)
     }
     await act(async () => { roote.unmount() })
+
+    // …et c'est bien la PERMISSION qui décide, pas le rôle : on la retire au rôle Support,
+    // et le même compte ne doit plus voir que les siens. Tester un rôle qui ne l'a jamais eue
+    // ne prouverait rien — le rôle seul suffirait à expliquer le résultat.
+    const raw4 = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+    const supRole = raw4.staffRoles.find(r => (r.roleKey || r.name) === 'Support BD Report')
+    if (!supRole || !supRole.permissions.includes('env.access')) throw new Error('Le rôle Support ne porte pas « env.access »')
+    supRole.permissions = supRole.permissions.filter(p => p !== 'env.access')
+    win.localStorage.setItem('bdrflow_db_v1', JSON.stringify(raw4))
+    win.sessionStorage.setItem('bdrflow_session_v1', JSON.stringify({ accountId: 'staff-sansdev', envId: null, subEnvId: null, welcomed: true }))
+    const cg = win.document.createElement('div')
+    win.document.body.appendChild(cg)
+    const rootg = createRoot(cg)
+    await act(async () => { rootg.render(Root(React.createElement(App))) })
+    const tg = () => cg.textContent || ''
+    const leaked = envsNow.filter(e => tg().includes(e.name))
+    if (leaked.length) {
+      throw new Error(`Sans la permission « env.access », des environnements clients restent visibles : ${leaked.map(e => e.name).join(', ')}`)
+    }
+    await act(async () => { rootg.unmount() })
     win.sessionStorage.removeItem('bdrflow_session_v1')
   }
 

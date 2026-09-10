@@ -389,7 +389,10 @@ export default function Projects({ embedded, onOpenWorkshop }) {
           Il continue pourtant d'exister pour son équipe. Plutôt qu'une purge automatique —
           une migration qui efface des données client est pire que le désordre qu'elle
           corrige — on les montre, et le staff tranche. */}
-      {orphans.length > 0 && store.hasPerm('projects.manage') && (
+      {/* Le bandeau se MONTRE à qui voit les livraisons — un environnement invisible et
+          actif est un fait à connaître, pas une action réservée. Seules les deux issues
+          demandent `projects.manage`. */}
+      {orphans.length > 0 && (
         <div className="card p-3 border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 space-y-2">
           <div className="text-sm font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
             <AlertTriangle size={15} /> <span>Environnements sans livraison</span>
@@ -402,8 +405,12 @@ export default function Projects({ embedded, onOpenWorkshop }) {
               <div key={e.id} className="flex items-center gap-2 flex-wrap rounded-lg bg-card px-2.5 py-1.5">
                 <span className="text-sm font-semibold flex-1 min-w-0 truncate">{e.name}</span>
                 <span className="text-xs text-muted">{store.envMembers(e.id).length} {store.envMembers(e.id).length > 1 ? 'membres' : 'membre'}</span>
-                <button className="btn-ghost !py-1 text-xs" onClick={() => { store.recreateDelivery(e.id); toast('Livraison rouverte') }}><RotateCcw size={12} /> Rouvrir la livraison</button>
-                <button className="btn-danger !py-1 text-xs" onClick={() => setConfirmDel({ envId: e.id })}><Archive size={12} /> Archiver</button>
+                {store.hasPerm('projects.manage') && (
+                  <>
+                    <button className="btn-ghost !py-1 text-xs" onClick={() => { store.recreateDelivery(e.id); toast('Livraison rouverte') }}><RotateCcw size={12} /> Rouvrir la livraison</button>
+                    <button className="btn-danger !py-1 text-xs" onClick={() => setConfirmDel({ envId: e.id })}><Archive size={12} /> Archiver</button>
+                  </>
+                )}
               </div>
             ))}
           </div>
