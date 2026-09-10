@@ -183,7 +183,7 @@ function MonthCalendar({ projects }) {
 }
 
 // ---------------------------------------------------------------- Éditeur de projet
-function ProjectForm({ initial, clients, onSave, onClose }) {
+function ProjectForm({ initial, clients, envs, isCreate, onSave, onClose }) {
   const [p, setP] = useState(initial)
   const set = (k, v) => setP(x => ({ ...x, [k]: v }))
   const setPhase = (id, patch) => setP(x => ({ ...x, phases: x.phases.map(ph => ph.id === id ? { ...ph, ...patch } : ph) }))
@@ -211,6 +211,29 @@ function ProjectForm({ initial, clients, onSave, onClose }) {
           </select>
         </Field>
       </div>
+      {/* Un projet EST la livraison d'un environnement. Sans lui, la fiche reste une
+          coquille : pas de modules, pas de rôles, pas de passerelle vers l'atelier, pas
+          d'utilisateurs. On le crée donc par défaut, tout en laissant rattacher à un
+          environnement existant — un client peut recevoir plusieurs chantiers. */}
+      {isCreate && (
+        <Field label="Environnement client">
+          <select className="input" value={p.envId || (p.__noEnv ? '' : '__new')}
+            onChange={e => {
+              const v = e.target.value
+              setP(x => ({ ...x, envId: v === '__new' || v === '' ? null : v, __noEnv: v === '' }))
+            }}>
+            <option value="__new">Créer l'environnement en même temps (recommandé)</option>
+            {(envs || []).map(en => <option key={en.id} value={en.id}>Rattacher à « {en.name} »</option>)}
+            <option value="">Aucun — projet interne, sans espace client</option>
+          </select>
+          <p className="text-[11px] text-muted mt-1">
+            {p.envId ? "Le projet suivra la mise en place de cet environnement."
+              : p.__noEnv ? "Sans environnement, ce projet n'aura ni modules, ni rôles, ni utilisateurs."
+                : "L'environnement portera le nom du client, et vous pourrez le composer aussitôt dans l'atelier."}
+          </p>
+        </Field>
+      )}
+
       {/* Clôturer un projet impose d'en dire la raison : c'est elle qui alimente
           l'analyse du churn et qui s'affiche ensuite sur la fiche du client. */}
       {p.status === 'termine' && (
@@ -268,7 +291,16 @@ export default function Projects({ embedded, onOpenWorkshop }) {
   const [orgFor, setOrgFor] = useState(null)     // projet dont on ouvre l'organigramme
 
   const save = (data) => {
-    store.saveProject(data)
+    // Créer une livraison sans environnement laissait une coquille : ni modules, ni rôles,
+    // ni utilisateurs. Sauf choix explicite du contraire, on crée les deux d'un seul geste.
+    const { __noEnv, ...clean } = data
+    if (form.mode === 'create' && !clean.envId && !__noEnv) {
+      const made = store.createProjectWithEnv(clean)
+      toast(made ? `Projet et environnement « ${made.clientName} » créés` : 'Création impossible.')
+      setForm(null)
+      return
+    }
+    store.saveProject(clean)
     toast(form.mode === 'create' ? 'Projet créé' : 'Projet mis à jour')
     setForm(null)
   }
@@ -382,7 +414,8 @@ export default function Projects({ embedded, onOpenWorkshop }) {
 
       {form && (
         <Modal title={form.mode === 'create' ? 'Nouveau projet' : 'Modifier le projet'} onClose={() => setForm(null)} wide>
-          <ProjectForm initial={form.data} clients={clients} onSave={save} onClose={() => setForm(null)} />
+          <ProjectForm initial={form.data} clients={clients} envs={store.db.environments.filter(e => e.id !== 'env-demo')}
+            isCreate={form.mode === 'create'} onSave={save} onClose={() => setForm(null)} />
         </Modal>
       )}
       {confirmDel && <Confirm message="Supprimer ce projet ?" onYes={() => { store.deleteProject(confirmDel); setConfirmDel(null); toast('Projet supprimé') }} onNo={() => setConfirmDel(null)} />}

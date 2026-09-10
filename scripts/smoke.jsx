@@ -974,6 +974,34 @@ async function main() {
   await click(find('button', 'Enregistrer'))
   if (!text().includes('Avancement')) throw new Error('Project not created / Gantt did not render')
 
+  // « Nouveau projet » doit créer la livraison ET son environnement : une livraison sans
+  // environnement est une coquille — ni modules, ni rôles, ni utilisateurs, ni passerelle.
+  {
+    const envsBefore = dbNow().environments.length
+    const projBefore = dbNow().projects.length
+    await click(find('button', 'Nouveau projet'))
+    const nameF = [...container.querySelectorAll('main input')].find(i => (i.placeholder || '').includes('Déploiement'))
+    const clientF = [...container.querySelectorAll('main input')].find(i => (i.placeholder || '').includes('Nom du client'))
+    if (!nameF || !clientF) throw new Error('Champs du formulaire de projet introuvables')
+    await type(nameF, 'Chantier Aurora')
+    await type(clientF, 'Aurora SAS')
+    await click(find('button', 'Enregistrer') || find('button', 'Créer'))
+    const st2 = dbNow()
+    if (st2.environments.length !== envsBefore + 1) throw new Error("« Nouveau projet » n'a pas créé l'environnement associé")
+    // UN SEUL projet : `createEnv` sème déjà une livraison, on la reprend au lieu d'en ajouter une.
+    if (st2.projects.length !== projBefore + 1) {
+      throw new Error(`« Nouveau projet » a créé ${st2.projects.length - projBefore} projets au lieu d'un seul`)
+    }
+    const made = st2.projects.find(p => p.name === 'Chantier Aurora')
+    if (!made) throw new Error('Le projet créé ne porte pas le nom saisi')
+    if (!made.envId) throw new Error("Le projet créé n'est pas rattaché à son environnement")
+    const env2 = st2.environments.find(e => e.id === made.envId)
+    if (!env2 || env2.name !== 'Aurora SAS') throw new Error("L'environnement doit porter le nom du client")
+    if (!(st2._autoSeed?.envProjects || []).includes(env2.id)) {
+      throw new Error('Repère de semis manquant : le projet reviendrait après suppression')
+    }
+  }
+
   // Atelier : désormais une VUE de « Projets & atelier », pas un onglet à part. On y accède
   // par le sélecteur de vue, et l'assistant doit s'y comporter comme avant.
   await click(hubTab('Projets & atelier'))

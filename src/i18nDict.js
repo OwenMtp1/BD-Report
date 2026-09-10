@@ -9,6 +9,12 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['Environnement client', 'Client environment', 'Entorno del cliente'],
+  ['Créer l\'environnement en même temps (recommandé)', 'Create the environment at the same time (recommended)', 'Crear el entorno al mismo tiempo (recomendado)'],
+  ['Aucun — projet interne, sans espace client', 'None — internal project, no client workspace', 'Ninguno — proyecto interno, sin espacio de cliente'],
+  ['Le projet suivra la mise en place de cet environnement.', 'The project will follow this environment\'s rollout.', 'El proyecto seguirá la puesta en marcha de este entorno.'],
+  ['Sans environnement, ce projet n\'aura ni modules, ni rôles, ni utilisateurs.', 'With no environment, this project will have no modules, no roles and no users.', 'Sin entorno, este proyecto no tendrá ni módulos, ni roles, ni usuarios.'],
+  ['L\'environnement portera le nom du client, et vous pourrez le composer aussitôt dans l\'atelier.', 'The environment will take the client\'s name, and you can compose it right away in the workshop.', 'El entorno tomará el nombre del cliente y podrás componerlo enseguida en el taller.'],
   ['Automatique chaque mois', 'Automatic every month', 'Automático cada mes'],
   ['À la demande du salarié', 'At the employee\'s request', 'A petición del empleado'],
   ['Comment le relevé de primes est délivré', 'How the bonus statement is delivered', 'Cómo se entrega el resumen de primas'],

@@ -4125,6 +4125,40 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // pipeline, issues, barèmes, règles de prime, services et rôles. Jamais les données
       // du client d'origine : ouvrir un espace ne doit pas y recopier les rendez-vous,
       // contacts ou notes de quelqu'un d'autre.
+      /**
+       * Créer une livraison ET l'environnement qu'elle livre, d'un seul geste.
+       *
+       * Le lien n'existait que dans un sens : créer un environnement produisait sa
+       * livraison, jamais l'inverse. Un projet créé à la main restait donc ORPHELIN — pas
+       * d'environnement, donc pas de modules, pas de rôles, pas de passerelle vers
+       * l'atelier, pas de bouton « Utilisateurs ». Une coquille portant un nom.
+       *
+       * ⚠️ UN SEUL projet à l'arrivée. `createEnv` sème déjà sa livraison : on la REPREND et
+       * on y applique la saisie, au lieu d'en créer une seconde qui ferait doublon.
+       */
+      createProjectWithEnv(data) {
+        const env = this.createEnv({ name: (data.clientName || data.name || 'Nouveau client').trim() })
+        if (!env) return null
+        let out = null
+        setDb(d => {
+          const seeded = (d.projects || []).find(p => p.sourceEnvId === env.id)
+          const merged = {
+            ...(seeded || { id: uid(), createdAt: new Date().toISOString(), sourceEnvId: env.id }),
+            ...data,
+            // Ces deux-là viennent de l'environnement, pas du formulaire : c'est le lien qui
+            // fait la différence entre une livraison et une simple fiche.
+            envId: env.id,
+            clientName: (data.clientName || env.name),
+          }
+          d.projects = seeded
+            ? d.projects.map(p => (p.id === seeded.id ? merged : p))
+            : [merged, ...(d.projects || [])]
+          out = merged
+          return d
+        })
+        this.logStaff({ type: 'Projet', cat: 'projets', action: 'Projet et environnement créés', envId: env.id })
+        return out
+      },
       createEnv({ name, logo, templateOf, modules, closerServices, statementMode: stMode }) {
         // L'environnement hérite de l'offre de son créateur (Starter reste limité).
         const plan = account?.plan || 'starter'
