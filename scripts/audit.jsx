@@ -393,6 +393,23 @@ async function main() {
           `Module ${m.id} : « Voir en situation » vise « ${m.where.page} », qui n'est pas un écran de l'application`)
       }
     })
+    // Tout onglet accordable doit pouvoir s'ouvrir en situation, pas seulement les briques.
+    // Un onglet de la console Manager n'est pas une page : sans le second temps qui désigne
+    // l'onglet interne, la moitié des onglets accordables resteraient injoignables.
+    const allItems = nav.NAV_GROUPS.flatMap(g => g.items)
+    nav.GRANTABLE_TABS.forEach(t => {
+      const item = allItems.find(i => i.id === t.id)
+      ok(!!item, `Onglet « ${t.id} » : introuvable dans la navigation`)
+    })
+    const st2 = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'store.jsx'), 'utf8')
+    ok(/previewPage\(envId, pageId, hubTab\)/.test(st2), 'store.previewPage : absent — les onglets ne s\'ouvrent pas en situation')
+    ok(/manager-tab/.test(st2), 'store.previewPage : un onglet de la console Manager ne peut pas être visé')
+    const mh = fs.default.readFileSync(path.default.join(dir, 'ManagerHub.jsx'), 'utf8')
+    ok(/manager-tab/.test(mh), "ManagerHub : n'écoute pas la désignation d'onglet, la moitié des onglets restent injoignables")
+    const wk2 = fs.default.readFileSync(path.default.join(dir, 'Workshop.jsx'), 'utf8')
+    ok((wk2.match(/previewPage/g) || []).length >= 2,
+      "Atelier : les onglets ne sont pas cliquables partout (aperçu de rôle ET éditeur d'onglets)")
+
     // Les onglets fusionnés ne doivent pas être visés : ils n'existent plus.
     s.ENV_MODULES.forEach(m => {
       ok(!['simulateur', 'dataquality', 'classement', 'kpi', 'workshop', 'projects'].includes(m.where?.page),

@@ -4058,15 +4058,35 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       previewFeature(envId, moduleId) {
         const mod = ENV_MODULES.find(m => m.id === moduleId)
         if (!mod?.where) return false
+        return this.previewPage(envId, mod.where.page, mod.where.hub)
+      },
+      /**
+       * Ouvrir un environnement DIRECTEMENT sur un écran donné. Sert aussi bien aux briques
+       * qu'aux onglets : dans les deux cas la question est la même — « à quoi cela ressemble
+       * chez le client ? » — et elle ne se répond pas en lisant un libellé.
+       *
+       * Un onglet de la console Manager n'est pas une page : il faut d'abord ouvrir la
+       * console, puis y désigner l'onglet. Sans ce second temps, la moitié des onglets
+       * accordables resteraient injoignables.
+       */
+      previewPage(envId, pageId, hubTab) {
+        if (!pageId) return false
         const sub = db.subenvs.find(s => s.envId === envId)
+        // Sans espace ouvert, l'application n'affiche aucun écran métier : le bouton
+        // retomberait sur le sélecteur d'espaces, ce qui n'est pas ce qu'il promet.
         if (!sub) return false
+        const item = NAV.find(i => i.id === pageId)
+        const page = item?.inManagerHub ? 'manager' : pageId
+        const inner = hubTab || (item?.inManagerHub ? pageId : null)
         this.enterEnv(envId)
         this.enterSubEnv(sub.id)
-        // Après le changement d'espace : le rendu de l'application doit avoir eu lieu pour
-        // que la navigation trouve sa cible.
+        // Après le changement d'espace : le rendu doit avoir eu lieu pour que la navigation
+        // trouve sa cible.
         setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('app-navigate', { detail: mod.where.page }))
-          if (mod.where.hub) setTimeout(() => window.dispatchEvent(new CustomEvent('hub-tab', { detail: mod.where.hub })), 260)
+          window.dispatchEvent(new CustomEvent('app-navigate', { detail: page }))
+          if (inner) setTimeout(() => {
+            window.dispatchEvent(new CustomEvent(page === 'manager' ? 'manager-tab' : 'hub-tab', { detail: inner }))
+          }, 260)
         }, 260)
         return true
       },

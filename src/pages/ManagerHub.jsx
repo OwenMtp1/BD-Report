@@ -60,6 +60,14 @@ export default function ManagerHub() {
   })
 
   const [tab, setTab] = useState(tabs[0]?.id)
+  // Même prise que la console support : un onglet de cette console doit pouvoir être ouvert
+  // depuis l'extérieur — sinon « voir en situation », depuis l'atelier, ne pourrait viser que
+  // les écrans de premier niveau et laisserait la moitié des briques injoignables.
+  React.useEffect(() => {
+    const h = (e) => { if (e.detail && tabs.some(t => t.id === e.detail)) setTab(e.detail) }
+    window.addEventListener('manager-tab', h)
+    return () => window.removeEventListener('manager-tab', h)
+  }, [tabs])
   const current = tabs.find(t => t.id === tab) || tabs[0]
 
   return (

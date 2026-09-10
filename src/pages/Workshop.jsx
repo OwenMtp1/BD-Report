@@ -27,6 +27,12 @@ const STEPS = [
 // ---------------------------------------------------------------- Aperçu d'un rôle
 function RolePreview({ store, env, role }) {
   const tabs = useMemo(() => previewTabs(env, store.db.offers, role), [env, role, store.db.offers])
+  // Chaque onglet s'ouvre EN SITUATION, comme une brique installée. Lire « Closing » dans une
+  // liste ne dit pas ce que le client verra en cliquant dessus — et c'est précisément ce
+  // qu'on vient vérifier ici.
+  const open = (t) => {
+    if (!store.previewPage(env.id, t.id)) toast("Aucun espace dans cet environnement — impossible d'ouvrir l'écran")
+  }
   const groups = [...new Set(tabs.map(t => t.group))]
   const perms = role?.perms || []
   return (
@@ -40,7 +46,12 @@ function RolePreview({ store, env, role }) {
           <div key={g}>
             <div className="text-[10px] uppercase tracking-wide text-muted">{g}</div>
             <div className="flex flex-wrap gap-1 mt-0.5">
-              {tabs.filter(t => t.group === g).map(t => <span key={t.id} className="chip bg-surface text-muted">{t.label}</span>)}
+              {tabs.filter(t => t.group === g).map(t => (
+                <button key={t.id} className="chip bg-surface text-muted hover:bg-brand hover:text-white transition"
+                  title={`Ouvrir « ${t.label} » dans l'environnement`} onClick={() => open(t)}>
+                  {t.label}
+                </button>
+              ))}
             </div>
           </div>
         ))}
@@ -100,8 +111,18 @@ function RoleEditor({ store, env, roles, setRoles }) {
             {allTabs.map(t => {
               const on = (role.tabs || []).includes(t.brick)
               return (
-                <button key={t.brick} onClick={() => toggleTab(t.brick)}
-                  className={`chip cursor-pointer ${on ? 'bg-brand text-white' : 'bg-card border border-line text-muted'}`}>{t.label}</button>
+                <span key={t.brick} className={`chip inline-flex items-center gap-1 ${on ? 'bg-brand text-white' : 'bg-card border border-line text-muted'}`}>
+                  <button className="cursor-pointer" onClick={() => toggleTab(t.brick)}>{t.label}</button>
+                  {/* Voir l'onglet en situation, sans quitter le réglage : accorder un onglet
+                      sans savoir ce qu'il montre, c'est composer à l'aveugle. Réservé aux
+                      environnements DÉJÀ créés — pendant l'assistant, il n'y a rien à ouvrir. */}
+                  {env?.id && (
+                    <button title={`Ouvrir « ${t.label} » dans l'environnement`} className="opacity-70 hover:opacity-100"
+                      onClick={() => { if (!store.previewPage(env.id, t.id)) toast("Aucun espace dans cet environnement — impossible d'ouvrir l'écran") }}>
+                      <Eye size={11} />
+                    </button>
+                  )}
+                </span>
               )
             })}
           </div>
