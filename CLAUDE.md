@@ -23,6 +23,15 @@ npm run dev        # serveur de dev
   `supportRequests`, `tickets`, `clients`, `projects`, `supportLogs`, `supportTrash`, `cannedReplies`, `kbArticles`).
   - `migrate(db)` tourne à chaque `load()` (idempotent) : valeurs par défaut, rétro-compat, **auto-seed** (clients/projets
     par environnement et par demande) suivi via `db._autoSeed` pour **ne créer qu'une fois** (sinon les suppressions « ressuscitent »).
+    ⚠️ **Créer et MARQUER ne se séparent jamais** : `seedEnvClientAndProject(db, env)` fait les deux, et c'est le
+    SEUL chemin (migration comme `createEnv`). Tant que les deux gestes vivaient à deux endroits, l'un a fini par
+    oublier l'autre — `createEnv` posait le projet sans l'inscrire, et le rechargement suivant recréait le projet
+    que l'utilisateur venait de supprimer.
+    ⚠️ **`_autoSeed` se RÉUNIT à la synchro, il ne se remplace pas** (`unionAutoSeed`, appelé par `mergeRemoteDb`).
+    Un repère est un FAIT (« ceci a déjà été créé une fois ») : le perdre ne peut produire qu'une résurrection.
+    La photo d'un collègue prise avant le semis ramenait des repères vides → le projet revenait à CHAQUE synchro.
+    `_autoSeed.envSeedBackfill` rattrape une fois les bases déjà en service : dans une base qui porte déjà des
+    repères, un environnement présent a forcément eu son projet — son absence est une suppression, pas un oubli.
   - `setSub(fn)` = écrit dans l'espace courant ; `setSubData(subId, fn)` = écrit dans un espace précis (pipeline entreprise).
     Les deux sont **bloqués en lecture seule** (`readOnly`, voir résiliation).
   - ⚠️ **Sauvegarde différée (400 ms)** : `JSON.stringify` de tout l'état coûte cher dès qu'une équipe a de

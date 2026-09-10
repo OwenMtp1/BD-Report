@@ -77,6 +77,35 @@ function makeClientFromEnv(env) {
 }
 
 // ...et possède son projet d'implémentation dans la Gestion de Projet.
+/**
+ * Ouvre le client et le projet d'implémentation d'un environnement — UNE SEULE FOIS.
+ *
+ * ⚠️ Créer et MARQUER doivent rester ensemble. Tant que les deux gestes vivaient à deux
+ * endroits, l'un a fini par oublier l'autre : `createEnv` posait le projet sans l'inscrire
+ * dans `_autoSeed`, si bien qu'au rechargement suivant la migration croyait n'avoir jamais
+ * rien semé — et recréait le projet que l'utilisateur venait de supprimer. Un projet
+ * ressuscité est pire qu'un projet manquant : on le resupprime, il revient, et on cesse de
+ * faire confiance à la corbeille.
+ *
+ * Le repère est posé MÊME quand rien n'est créé : c'est le fait d'avoir semé qu'on retient,
+ * pas le résultat.
+ */
+export function seedEnvClientAndProject(db, env) {
+  db._autoSeed = db._autoSeed || {}
+  db._autoSeed.envClients = db._autoSeed.envClients || []
+  db._autoSeed.envProjects = db._autoSeed.envProjects || []
+  db.clients = db.clients || []
+  db.projects = db.projects || []
+  if (!db._autoSeed.envClients.includes(env.id)) {
+    if (!db.clients.some(c => c.key === 'env:' + env.id)) db.clients.unshift(makeClientFromEnv(env))
+    db._autoSeed.envClients.push(env.id)
+  }
+  if (!db._autoSeed.envProjects.includes(env.id)) {
+    if (!db.projects.some(p => p.sourceEnvId === env.id)) db.projects.unshift(makeProjectFromEnv(env))
+    db._autoSeed.envProjects.push(env.id)
+  }
+}
+
 function makeProjectFromEnv(env) {
   return {
     id: uid(), name: `Implémentation — ${env.name}`, clientName: env.name,
@@ -1018,6 +1047,25 @@ export const QUOTA_METRICS = [
 ]
 export const QUOTA_METRIC_IDS = QUOTA_METRICS.map(m => m.id)
 
+// Réunion des repères de semis de deux versions. Les listes s'additionnent (sans doublon),
+// les drapeaux vrais l'emportent : dans les deux cas, « déjà semé » gagne sur « pas encore ».
+// L'asymétrie est voulue — oublier un semis fait réapparaître des suppressions, tandis que
+// s'en souvenir à tort ne fait, au pire, que ne pas créer un élément qu'on peut créer à la main.
+export function unionAutoSeed(a, b) {
+  const out = { ...(b || {}) }
+  Object.entries(a || {}).forEach(([k, v]) => {
+    const other = out[k]
+    if (Array.isArray(v) || Array.isArray(other)) {
+      out[k] = [...new Set([...(Array.isArray(other) ? other : []), ...(Array.isArray(v) ? v : [])])]
+    } else if (typeof v === 'boolean' || typeof other === 'boolean') {
+      out[k] = !!v || !!other
+    } else if (out[k] === undefined) {
+      out[k] = v
+    }
+  })
+  return out
+}
+
 // ---------------------------------------------------------------- Fusion des états distants
 // Tout l'état vit dans un seul document partagé. À l'arrivée d'une version distante, on la
 // substituait ENTIÈREMENT à la version locale — dernier écrit gagné, y compris sur des
@@ -1037,6 +1085,13 @@ export function mergeRemoteDb(local, remote) {
   if (!local) return remote
   if (!remote) return local
   const merged = { ...remote, data: { ...(remote.data || {}) } }
+  // ⚠️ Les repères de semis (`_autoSeed`) se RÉUNISSENT, ils ne se remplacent jamais.
+  // Un repère dit « ceci a déjà été créé une fois » : c'est un FAIT, et le perdre ne peut
+  // produire qu'une chose — recréer ce que quelqu'un avait supprimé. C'est ce qui faisait
+  // revenir des projets en boucle : la photo d'un collègue, prise avant le semis, ramenait
+  // des repères vides, la migration se croyait devant un environnement neuf, et
+  // ressuscitait le projet. À chaque synchronisation.
+  merged._autoSeed = unionAutoSeed(local._autoSeed, remote._autoSeed)
   const localData = local.data || {}
   Object.keys(localData).forEach(subId => {
     const mine = localData[subId], theirs = remote.data?.[subId]
@@ -3283,16 +3338,26 @@ export function migrate(db) {
       db._autoSeed.reqClients.push(req.id)
     }
   })
+  // Rattrapage, une seule fois, pour les bases déjà en service. Un environnement créé avant
+  // la correction n'avait pas de repère de semis : au prochain chargement, la migration
+  // l'aurait pris pour un environnement neuf et aurait recréé le projet supprimé — une
+  // dernière résurrection, celle de trop. Dans une base DÉJÀ UTILISÉE (des repères existent),
+  // tout environnement présent a forcément eu son projet à un moment : son absence
+  // aujourd'hui est une suppression, pas un oubli. On le déclare donc semé sans rien créer.
+  if (!db._autoSeed.envSeedBackfill) {
+    const used = ['envClients', 'envProjects', 'reqProjects', 'reqClients']
+      .some(k => (db._autoSeed[k] || []).length > 0)
+    if (used) {
+      ;(db.environments || []).forEach(env => {
+        if (!db._autoSeed.envClients.includes(env.id)) db._autoSeed.envClients.push(env.id)
+        if (!db._autoSeed.envProjects.includes(env.id)) db._autoSeed.envProjects.push(env.id)
+      })
+    }
+    db._autoSeed.envSeedBackfill = true
+  }
   // Chaque environnement existant est forcément un client (Clients actifs) avec son projet d'implémentation.
   ;(db.environments || []).forEach(env => {
-    if (!db._autoSeed.envClients.includes(env.id)) {
-      if (!db.clients.some(c => c.key === 'env:' + env.id)) db.clients.unshift(makeClientFromEnv(env))
-      db._autoSeed.envClients.push(env.id)
-    }
-    if (!db._autoSeed.envProjects.includes(env.id)) {
-      if (!db.projects.some(p => p.sourceEnvId === env.id)) db.projects.unshift(makeProjectFromEnv(env))
-      db._autoSeed.envProjects.push(env.id)
-    }
+    seedEnvClientAndProject(db, env)
   })
   // Corbeille support : purge des éléments supprimés depuis plus de 30 jours
   const supCutoff = new Date(Date.now() - 30 * 86400000).toISOString()
@@ -3967,10 +4032,9 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         setDb(d => {
           d.environments.push(env)
           // Tout nouvel environnement devient un client avec son projet d'implémentation.
-          d.clients = d.clients || []
-          if (!d.clients.some(c => c.key === 'env:' + env.id)) d.clients.unshift(makeClientFromEnv(env))
-          d.projects = d.projects || []
-          if (!d.projects.some(p => p.sourceEnvId === env.id)) d.projects.unshift(makeProjectFromEnv(env))
+          // Par le MÊME chemin que la migration, qui pose aussi le repère de semis : sans lui,
+          // le prochain rechargement recréait le projet qu'on venait de supprimer.
+          seedEnvClientAndProject(d, env)
           return d
         })
         return env

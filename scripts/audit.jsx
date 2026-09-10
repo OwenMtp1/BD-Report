@@ -251,6 +251,45 @@ async function main() {
       'Fusion : un côté absent ne doit pas faire tomber la fusion')
   }
 
+  // 6 octies. RÉSURRECTION. Un projet supprimé qui revient est pire qu'un projet manquant :
+  //   on le resupprime, il revient, et on cesse de faire confiance à la corbeille. Trois
+  //   chemins le provoquaient, on les rejoue tous les trois.
+  {
+    // a) Environnement créé DANS l'app : créer et marquer doivent aller ensemble.
+    const db = s.buildDemoDb({}); s.migrate(db)
+    const env = { id: 'env-neuf', name: 'Neuf', plan: 'beta', subState: 'active' }
+    db.environments.push(env)
+    s.seedEnvClientAndProject(db, env)
+    ok(db.projects.some(p => p.sourceEnvId === 'env-neuf'), 'Un environnement neuf doit recevoir son projet')
+    db.projects = db.projects.filter(p => p.sourceEnvId !== 'env-neuf')
+    db.clients = db.clients.filter(c => c.key !== 'env:env-neuf')
+    s.migrate(db); s.migrate(db)
+    ok(!db.projects.some(p => p.sourceEnvId === 'env-neuf'), 'Le projet supprimé est ressuscité par la migration')
+    ok(!db.clients.some(c => c.key === 'env:env-neuf'), 'Le client supprimé est ressuscité par la migration')
+
+    // b) Synchronisation : la photo d'un collègue ne doit pas EFFACER les repères de semis.
+    //    C'est ce qui rendait la résurrection répétitive, à chaque synchronisation.
+    const merged = s.mergeRemoteDb(
+      { _autoSeed: { envProjects: ['env-x'], envClients: ['env-x'], modulesV2: true }, data: {} },
+      { _autoSeed: { envProjects: [], envClients: [] }, data: {} },
+    )
+    ok((merged._autoSeed.envProjects || []).includes('env-x'),
+      'Fusion : un repère de semis local a été perdu — les suppressions vont revenir')
+    ok(merged._autoSeed.modulesV2 === true, 'Fusion : un drapeau de semis local a été perdu')
+    // Et dans l'autre sens : le repère du distant doit survivre aussi.
+    const merged2 = s.mergeRemoteDb({ _autoSeed: { envProjects: [] }, data: {} }, { _autoSeed: { envProjects: ['env-y'] }, data: {} })
+    ok((merged2._autoSeed.envProjects || []).includes('env-y'), 'Fusion : un repère de semis distant a été perdu')
+
+    // c) Rattrapage des bases déjà en service : un environnement sans repère, dans une base
+    //    qui en a d'autres, ne doit PAS voir son projet recréé.
+    const old = s.buildDemoDb({}); s.migrate(old)
+    old.environments.push({ id: 'env-ancien', name: 'Ancien', plan: 'beta', subState: 'active' })
+    old._autoSeed.envSeedBackfill = false      // on rejoue une base d'avant la correction
+    s.migrate(old)
+    ok(!old.projects.some(p => p.sourceEnvId === 'env-ancien'),
+      'Rattrapage : un environnement déjà en service ne doit pas se voir recréer un projet supprimé')
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.
