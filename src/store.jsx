@@ -1930,20 +1930,25 @@ function makeTicket({ accountId, prenom, photo, clientName, envId, subEnvId, cat
 // l'accès — la décision est celle de BD Report, pas d'une personne qu'on prendrait à partie.
 // Un seul message, du côté support : un message « bot » disparaîtrait de la conversation
 // dès la première réponse d'un technicien, et le client perdrait le contexte de sa fermeture.
-function makeClosureTicket({ accountId, prenom, photo, clientName, envId, envName }) {
+function makeClosureTicket({ accountId, prenom, photo, clientName, envId, envName, projectName }) {
   const now = new Date().toISOString()
-  const where = envName ? ` de l'environnement « ${envName} »` : ''
+  // DE QUOI PARLE-T-ON : le client et le projet, nommés en tête. Une équipe peut avoir
+  // plusieurs projets chez nous, et un fil qui annonce une fermeture sans dire LAQUELLE
+  // oblige à deviner — au moment précis où l'on a le moins envie de deviner.
+  const head = [envName && `Client : ${envName}`, projectName && `Projet : ${projectName}`]
+    .filter(Boolean).join('\n')
   return {
     id: uid(), category: PROJECT_CLOSURE_CATEGORY, status: 'open',
     priority: 'haute', assignedTo: null, csat: null,
     userAccountId: accountId || null, userName: prenom, userPhoto: photo || '',
-    clientName: clientName || prenom, envId: envId || null, subEnvId: null,
+    clientName: clientName || prenom, projectName: projectName || '', envId: envId || null, subEnvId: null,
     // Non lu POUR LE CLIENT (il ne l'a pas demandé, il doit le voir) ; déjà lu côté support,
     // qui vient précisément de le provoquer.
     createdAt: now, handledBy: null, typing: {}, readUserAt: '', readSupportAt: now,
     messages: [{
       id: uid(), ts: now, from: 'support', authorAccountId: null, authorName: 'Équipe BD Report', authorPhoto: '',
-      text: `L'accès au logiciel BD Report${where} a été fermé par l'équipe BD Report. Plus personne ne peut s'y connecter, et les données sont mises de côté.\n\n`
+      text: (head ? head + '\n\n' : '')
+        + `L'accès au logiciel BD Report a été fermé par l'équipe BD Report. Plus personne ne peut s'y connecter, et les données sont mises de côté.\n\n`
         + `Cette discussion sert à décider de la suite : remettre le projet en place, ou le supprimer définitivement. Répondez ici pour en parler avec l'équipe BD Report.`,
       photo: '',
     }],
@@ -2043,7 +2048,7 @@ export function archiveDelivery(d, { envId, projectId, reason, actorId, actorNam
   const ticket = makeClosureTicket({
     accountId: owner?.id || null, prenom: owner?.pseudo || env?.name || 'Client',
     photo: owner?.photo || '', clientName: env?.name || project?.clientName || '',
-    envId: eid, envName: env?.name || '',
+    envId: eid, envName: env?.name || '', projectName: project?.name || '',
   })
   // Le sort du projet se décide DANS ce ticket. Ce bloc est lu par la console support
   // seulement : le nom de qui a fermé et le motif interne ne s'affichent jamais côté client.

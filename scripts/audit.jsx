@@ -546,6 +546,12 @@ async function main() {
     ok(!/Fin de contrat/.test(seen), 'Le motif interne de fermeture est visible du client')
     ok(/L'accès au logiciel BD Report/.test(seen) && /supprimer définitivement/.test(seen),
       'Le message de contexte ne dit pas que l\'accès est fermé, ni à quoi sert la discussion')
+    // De QUOI parle ce fil : le client et le projet, nommés. Un client peut avoir plusieurs
+    // projets chez nous — annoncer une fermeture sans dire laquelle oblige à deviner.
+    ok(seen.includes('Client à fermer') && seen.includes(proj.name),
+      'Le ticket de fermeture ne nomme pas le client et le projet concernés')
+    ok(tk?.projectName === proj.name && tk?.clientName === 'Client à fermer',
+      'Le ticket ne porte pas le nom du client et du projet fermés')
     // Le message vient du support, pas du « bot » : un message bot disparaît de la
     // conversation dès la première réponse d'un technicien, avec tout le contexte.
     ok(tk?.messages[0]?.from === 'support', 'Le message de fermeture disparaîtrait à la première réponse')

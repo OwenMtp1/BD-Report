@@ -33,6 +33,11 @@ export default function ProjectClosed({ ticket }) {
           </div>
           <div className="min-w-0">
             <h1 className="font-extrabold text-lg">Accès fermé</h1>
+            {/* Dire DE QUOI on parle : le client et le projet concernés. */}
+            <div className="text-sm font-semibold mt-0.5 flex items-center gap-2 flex-wrap">
+              {ticket.clientName && <span>{ticket.clientName}</span>}
+              {ticket.projectName && <span className="chip bg-surface text-muted">{ticket.projectName}</span>}
+            </div>
             <p className="text-sm text-muted mt-1">
               L'accès au logiciel BD Report a été fermé par l'équipe BD Report. Vos données sont mises de côté, et les accès de votre équipe sont suspendus.
             </p>

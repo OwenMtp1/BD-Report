@@ -40,6 +40,7 @@ function ClosureDecision({ ticket }) {
       <div className="card p-3 text-sm flex items-center gap-2 flex-wrap">
         <CheckCircle2 size={15} className={closure.decided === 'restored' ? 'text-emerald-600' : 'text-red-500'} />
         <span>{closure.decided === 'restored' ? 'Projet rétabli : les accès ont été rendus.' : 'Projet supprimé définitivement.'}</span>
+        <span className="text-xs text-muted">{closure.envName}{ticket.projectName ? ` · ${ticket.projectName}` : ''}</span>
         {closure.deletedBy && <span className="text-xs text-muted">· fermé par {closure.deletedBy}</span>}
       </div>
     )
@@ -51,7 +52,8 @@ function ClosureDecision({ ticket }) {
         <AlertTriangle size={15} /> <span>Projet fermé — décision attendue</span>
       </div>
       <div className="text-xs text-amber-800/90 dark:text-amber-300/90 space-y-0.5">
-        <div>Environnement <b>{closure.envName}</b>{closure.deletedBy ? <> · fermé par <b>{closure.deletedBy}</b></> : null}</div>
+        <div>Client <b>{closure.envName}</b>{ticket.projectName ? <> · projet <b>{ticket.projectName}</b></> : null}</div>
+        {closure.deletedBy && <div>Fermé par <b>{closure.deletedBy}</b></div>}
         {closure.reason && <div>Motif interne : <i>{closure.reason}</i></div>}
         {impact && <div><b>{impact.spaces}</b> {impact.spaces > 1 ? 'espaces' : 'espace'} · <b>{impact.accounts}</b> {impact.accounts > 1 ? 'comptes suspendus' : 'compte suspendu'}</div>}
         {!entry && <div>L'archive a expiré : il n'y a plus rien à rétablir.</div>}

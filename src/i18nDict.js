@@ -1701,4 +1701,6 @@ export const UI_DICT = [
   ['Vider définitivement la corbeille support ? Les livraisons archivées seront supprimées sans retour, avec les comptes de leurs environnements.', 'Permanently empty the support trash? Archived deliveries will be deleted for good, along with the accounts of their environments.', '¿Vaciar definitivamente la papelera de soporte? Las entregas archivadas se eliminarán sin retorno, junto con las cuentas de sus entornos.'],
   ['Supprimer définitivement cette livraison ? L\'environnement, ses espaces, leurs données et les comptes de cet environnement seront supprimés sans retour possible.', 'Permanently delete this delivery? The environment, its workspaces, their data and the accounts of this environment will be deleted with no way back.', '¿Eliminar definitivamente esta entrega? El entorno, sus espacios, sus datos y las cuentas de este entorno se eliminarán sin retorno posible.'],
   ['Supprimer définitivement cet élément ?', 'Permanently delete this item?', '¿Eliminar definitivamente este elemento?'],
+  ['Fermé par', 'Closed by', 'Cerrado por'],
+  ['· projet', '· project', '· proyecto'],
 ]

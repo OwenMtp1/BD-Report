@@ -1036,6 +1036,10 @@ async function main() {
     if (entry.deletedBy && seen.includes(entry.deletedBy)) throw new Error('Le nom du staff qui ferme est visible du client')
     if (seen.includes('Environnement de test')) throw new Error('Le motif interne est visible du client')
     if (!seen.includes('L\'accès au logiciel BD Report')) throw new Error('Le message ne dit pas que l\'accès a été fermé')
+    // DE QUOI on parle : un client peut avoir plusieurs projets chez nous.
+    if (!seen.includes('Aurora SAS')) throw new Error('Le ticket de fermeture ne nomme pas le client')
+    if (!seen.includes('Chantier Aurora')) throw new Error('Le ticket de fermeture ne nomme pas le projet')
+    if (tk.projectName !== 'Chantier Aurora') throw new Error('Le ticket ne porte pas le nom du projet fermé')
     if (!seen.includes('supprimer définitivement')) throw new Error('Le message ne dit pas à quoi sert la discussion')
     // …mais le support, lui, garde tout ce qu'il faut pour trancher.
     if (tk.projectClosure?.reason !== 'Environnement de test') throw new Error("Le motif interne n'est pas conservé pour le support")
