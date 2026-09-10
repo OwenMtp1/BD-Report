@@ -9,6 +9,18 @@
 //  typographiques comprises. Une clé approximative ne traduit rien, en silence.
 // ---------------------------------------------------------------------------
 export const UI_DICT = [
+  ['Affaire reprise — remise au début du pipeline', 'Deal picked up again — back to the start of the pipeline', 'Operación retomada — vuelve al inicio del pipeline'],
+  ['Au moment du refus, le motif fixe la date de re-tentative. L\'affaire revient d\'elle-même dans vos recommandations le jour venu — personne n\'a à y penser entre-temps.', 'At the moment of refusal, the reason sets the retry date. The deal comes back on its own in your recommendations when the day arrives — nobody has to think about it in between.', 'En el momento del rechazo, el motivo fija la fecha de reintento. La operación vuelve sola a tus recomendaciones llegado el día — nadie tiene que pensar en ello mientras tanto.'],
+  ['Des affaires perdues dont le moment de re-tentative est arrivé, d\'après le motif du refus.', 'Lost deals whose retry moment has come, based on the reason for the refusal.', 'Operaciones perdidas cuyo momento de reintento ha llegado, según el motivo del rechazo.'],
+  ['Ne sera plus proposée', 'Will no longer be offered', 'Ya no se propondrá'],
+  ['Repoussée de 30 jours', 'Pushed back 30 days', 'Aplazada 30 días'],
+  ['Reprendre', 'Pick up again', 'Retomar'],
+  ['À reprendre aujourd\'hui', 'To pick up today', 'Para retomar hoy'],
+  ['repousser de 30 j', 'push back 30 d', 'aplazar 30 d'],
+  ['ne plus proposer', 'stop offering', 'dejar de proponer'],
+  ['jours après', 'days after', 'días después'],
+  ['jamais', 'never', 'nunca'],
+  ['Aucune affaire perdue en attente de reprise.', 'No lost deal waiting to be picked up.', 'Ninguna operación perdida a la espera de ser retomada.'],
   ['Atterrissage de la période', 'Landing for the period', 'Cierre previsto del periodo'],
   ['Atterrissage de l\'équipe', 'Team landing', 'Cierre previsto del equipo'],
   ['au rythme depuis le début', 'at the pace since the start', 'al ritmo desde el inicio'],

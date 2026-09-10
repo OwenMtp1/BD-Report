@@ -1019,6 +1019,45 @@ export const QUOTA_METRICS = [
 ]
 export const QUOTA_METRIC_IDS = QUOTA_METRICS.map(m => m.id)
 
+// ---------------------------------------------------------------- Recyclage des leads perdus
+// Le stock de leads perdus est la ressource la moins exploitée d'une équipe : elle l'a déjà
+// travaillé, qualifié, et connaît l'interlocuteur. Un « non » de janvier n'est pas un « non »
+// de juin — sauf quand il l'est vraiment, et le délai le dit.
+//
+// Les délais sont attachés au MOTIF : « pas de budget » se retente à l'exercice suivant,
+// « mauvais timing » dans un trimestre, « concurrent retenu » à l'échéance du contrat.
+// Zéro = on ne retente pas (l'entreprise a fermé, l'interlocuteur a refusé tout contact).
+export const DEFAULT_RECYCLE_DELAYS = {
+  'Pas de budget': 180,
+  'Mauvais timing': 90,
+  'Concurrent retenu': 365,
+  'Pas décideur': 60,
+  'Injoignable': 45,
+}
+// Motif inconnu du réglage (ajouté par le client) : on retente à six mois plutôt que jamais.
+// Ne rien faire d'un motif qu'on ne connaît pas revient à perdre le lead une seconde fois.
+export const RECYCLE_FALLBACK_DAYS = 180
+export const recycleDelays = (data) => ({ ...DEFAULT_RECYCLE_DELAYS, ...(data?.recycleDelays || {}) })
+export function recycleDelay(data, motif) {
+  const m = recycleDelays(data)
+  const v = m[motif]
+  return v === undefined ? RECYCLE_FALLBACK_DAYS : Math.max(0, Number(v) || 0)
+}
+/** Les affaires perdues dont la date de re-tentative est arrivée. */
+export function recyclables(data, now = new Date()) {
+  const today = now.toISOString().slice(0, 10)
+  return (data?.rdvs || [])
+    .filter(r => r.opportunite === 'Perdue' && r.recycleAt && r.recycleAt <= today)
+    .sort((a, b) => (a.recycleAt || '').localeCompare(b.recycleAt || ''))
+}
+/** Celles qui reviendront plus tard — utile pour montrer que rien n'est abandonné. */
+export function recycleUpcoming(data, now = new Date()) {
+  const today = now.toISOString().slice(0, 10)
+  return (data?.rdvs || [])
+    .filter(r => r.opportunite === 'Perdue' && r.recycleAt && r.recycleAt > today)
+    .sort((a, b) => (a.recycleAt || '').localeCompare(b.recycleAt || ''))
+}
+
 // ---------------------------------------------------------------- Atterrissage de période
 // Le Simulateur répond « combien si je fais X ». Personne ne répondait « où j'arrive si je
 // continue comme ça » — la question qu'un manager se pose le 12 du mois.
@@ -3865,6 +3904,45 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           .map(s => ({ sub: s, score: challengeScore(db.data[s.id] || {}, ch.metric, ch.start, ch.end) }))
           .sort((a, b) => b.score - a.score)
       },
+      // ----- Recyclage des leads perdus
+      // Reprendre une affaire, c'est la remettre au DÉBUT du pipeline : la reprendre là où
+      // elle s'était arrêtée ferait entrer dans les statistiques une étape franchie il y a
+      // six mois, dans un contexte qui n'existe plus.
+      recycleRdv(rdvId) {
+        this.setSub(d => {
+          const r = (d.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          r.opportunite = 'En cours'
+          r.phase = firstPhase(d)
+          r.recycleAt = ''
+          r.recycledAt = todayISO()
+          r.recycleCount = (r.recycleCount || 0) + 1
+          // On garde le motif d'origine : savoir POURQUOI c'était non la dernière fois est
+          // le seul avantage qu'on ait sur un lead neuf.
+          r.history = [...(r.history || []), { type: 'phase', value: r.phase, date: todayISO() }]
+          return d
+        })
+        this.logAction('Lead', 'Lead repris', '')
+      },
+      // Repousser sans reprendre : ce n'est toujours pas le moment, mais ce n'est pas non plus fini.
+      snoozeRecycle(rdvId, days) {
+        this.setSub(d => {
+          const r = (d.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          r.recycleAt = addDaysISO(todayISO(), Math.max(1, Number(days) || 30))
+          return d
+        })
+      },
+      // Abandonner pour de bon. Volontairement explicite : rien ne disparaît tout seul.
+      dropRecycle(rdvId) {
+        this.setSub(d => {
+          const r = (d.rdvs || []).find(x => x.id === rdvId); if (!r) return d
+          r.recycleAt = ''
+          return d
+        })
+      },
+      recycleDelays() { return recycleDelays(this.sub) },
+      setRecycleDelay(motif, days) {
+        this.setSub(d => ({ ...d, recycleDelays: { ...recycleDelays(d), [motif]: Math.max(0, Number(days) || 0) } }))
+      },
       // ----- Comité d'achat : vocabulaire de l'environnement (staff)
       committeeRoles() { return committeeRoles(db.environments.find(e => e.id === session?.envId)) },
       committeeRelations() { return committeeRelations(db.environments.find(e => e.id === session?.envId)) },
@@ -5655,6 +5733,19 @@ export function applyRdvAutomations(rdv, patch, data) {
     if (data && rdvNeedsHandoff({ phase: out.phase }, data) && !rdv.handoff) {
       out.handoff = { state: 'pending', to: '', at: new Date().toISOString(), decidedAt: '', decidedBy: '', reason: '' }
     }
+  }
+  // Recyclage : un refus n'est presque jamais définitif, il est prématuré. Le motif fixe
+  // lui-même la date de re-tentative — posée ICI, au moment du refus, plutôt que réclamée
+  // à quelqu'un qui vient de perdre une affaire et n'a aucune envie d'y penser.
+  // Inerte tant que la brique n'est pas installée : c'est l'affichage qui décide, pas la donnée.
+  const nextOpp = out.opportunite ?? rdv.opportunite
+  const nextKo = out.motifKo ?? rdv.motifKo
+  if (data && nextOpp === 'Perdue' && nextKo) {
+    const days = recycleDelay(data, nextKo)
+    // Une date déjà posée n'est pas réécrite : sinon, corriger un motif deux jours plus tard
+    // repousserait la relance sans que personne ne l'ait demandé.
+    if (days > 0 && !rdv.recycleAt) out.recycleAt = addDaysISO(day, days)
+    if (days === 0 && !rdv.recycleAt) out.recycleAt = '' // motif sans retour possible
   }
   if (hist.length) out.history = [...(rdv.history || []), ...hist]
   return out

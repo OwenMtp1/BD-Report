@@ -3,7 +3,7 @@ import {
   Workflow, Plus, Trash2, Pencil, Check, X, Coins, CalendarClock, AlertTriangle,
   ChevronUp, ChevronDown, Save, Activity, CalendarRange, Layers, ArrowRightLeft, Gauge, Handshake,
 } from 'lucide-react'
-import { useStore, uid, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, fmtMoney, ACTIVITY_PERIODS, activityRuleTitle, computeActivityPrimes, handoffPhases, DEFAULT_HANDOFF_REASONS, primeRules, QUOTA_METRICS, closingPhases, DEFAULT_CLOSING_LOST_REASONS } from '../store.jsx'
+import { useStore, uid, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, fmtMoney, ACTIVITY_PERIODS, activityRuleTitle, computeActivityPrimes, handoffPhases, DEFAULT_HANDOFF_REASONS, primeRules, QUOTA_METRICS, closingPhases, DEFAULT_CLOSING_LOST_REASONS, DEFAULT_RECYCLE_DELAYS, RECYCLE_FALLBACK_DAYS } from '../store.jsx'
 import { Confirm, Field, Empty, toast } from '../ui.jsx'
 
 // « Créer votre écosystème » : le manager compose ici le vocabulaire de son équipe —
@@ -614,6 +614,42 @@ function HandoffCard({ store, sub }) {
   )
 }
 
+// Délais de re-tentative, motif par motif. Le bon moment de rappeler dépend de la RAISON
+// du refus, pas de l'ancienneté : « pas de budget » se retente à l'exercice suivant,
+// « mauvais timing » dans un trimestre. Zéro = on ne retente pas.
+function RecycleCard({ store, sub }) {
+  const delays = store.recycleDelays()
+  const motifs = [...new Set([...(sub.lostReasons || []), ...Object.keys(DEFAULT_RECYCLE_DELAYS)])]
+  return (
+    <div className="card p-4">
+      <h3 className="font-bold mb-1">Recyclage des leads perdus</h3>
+      <p className="text-xs text-muted mb-3">
+        Au moment du refus, le motif fixe la date de re-tentative. L'affaire revient d'elle-même
+        dans vos recommandations le jour venu — personne n'a à y penser entre-temps.
+      </p>
+      <div className="space-y-1.5">
+        {motifs.map(m => (
+          <div key={m} className="flex items-center justify-between gap-3">
+            <span className="text-sm">{m}</span>
+            <span className="flex items-center gap-1.5 shrink-0">
+              <input type="number" min="0" className="input !w-20 !py-1 text-right num"
+                value={delays[m] ?? RECYCLE_FALLBACK_DAYS}
+                onChange={e => store.setRecycleDelay(m, e.target.value)} />
+              <span className="text-xs text-muted w-24">
+                {Number(delays[m] ?? RECYCLE_FALLBACK_DAYS) === 0 ? 'jamais' : 'jours après'}
+              </span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted mt-2.5">
+        Un motif que vous ajoutez ensuite est retenté à {RECYCLE_FALLBACK_DAYS} jours par défaut :
+        ne rien faire d'un motif inconnu reviendrait à perdre le lead une seconde fois.
+      </p>
+    </div>
+  )
+}
+
 export default function Ecosystem() {
   const store = useStore()
   const sub = store.sub
@@ -632,6 +668,7 @@ export default function Ecosystem() {
       <Phases store={store} sub={sub} />
       {store.hasModule('handoff') && <HandoffCard store={store} sub={sub} />}
       {store.hasModule('closing') && <ClosingCard store={store} sub={sub} />}
+      {store.hasModule('recycling') && <RecycleCard store={store} sub={sub} />}
       <PayRule store={store} sub={sub} />
       <Bareme store={store} sub={sub} />
       <PrimeRulesCard store={store} sub={sub} />

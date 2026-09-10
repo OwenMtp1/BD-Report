@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { CalendarClock, Flame, RotateCcw, Phone, Mail, ExternalLink, Building2 } from 'lucide-react'
-import { useStore, parseISO, fmtDate, applyRdvAutomations, PHASE_COLORS, phaseColor, firstPhase, nextPhase } from '../store.jsx'
+import { useStore, parseISO, fmtDate, applyRdvAutomations, PHASE_COLORS, phaseColor, firstPhase, nextPhase, recyclables, recycleUpcoming } from '../store.jsx'
 import { safeUrl } from '../security.js'
-import { Empty } from '../ui.jsx'
+import { Empty, toast } from '../ui.jsx'
 
 // Date à laquelle un RDV est passé "Perdu" (depuis l'historique), sinon sa date de RDV.
 function lostDate(r) {
@@ -65,6 +65,11 @@ export default function Tasks() {
     return d
   })
 
+  // 0 — Recyclage : les affaires dont la date de re-tentative est arrivée.
+  const recycling = store.hasModule('recycling')
+  const due = recycling ? recyclables(sub) : []
+  const upcoming = recycling ? recycleUpcoming(sub) : []
+
   // 1 — R1 No Show à replanifier
   const noShows = sub.rdvs.filter(r => r.opportunite === 'No Show R1')
   // 2 — Opportunités en cours à traiter (les plus anciennes d'abord)
@@ -102,6 +107,32 @@ export default function Tasks() {
           : enCours.map(r => <TaskCard key={r.id} r={r} store={store} tone="bg-amber-500 text-white hover:bg-amber-600"
             action={Object.assign(() => patch(r.id, { phase: nextPhase(sub, r.phase) || r.phase }), { label: 'Faire avancer' })} />)}
       </Section>
+
+      {/* Recyclage : ces leads-là ne sont pas trouvés par un filtre d'ancienneté, ils se
+          présentent d'eux-mêmes le jour dit — la date ayant été fixée par le MOTIF au
+          moment du refus. C'est la différence entre fouiller un stock et être rappelé. */}
+      {recycling && (
+        <Section icon={<RotateCcw size={18} className="text-emerald-600" />} color="bg-emerald-100 dark:bg-emerald-500/15"
+          title="À reprendre aujourd'hui" count={due.length}
+          desc="Des affaires perdues dont le moment de re-tentative est arrivé, d'après le motif du refus.">
+          {due.length === 0 ? (
+            <Empty text={upcoming.length
+              ? `Rien à reprendre aujourd'hui — ${upcoming.length} affaire(s) reviendront plus tard.`
+              : 'Aucune affaire perdue en attente de reprise.'} />
+          ) : due.map(r => (
+            <div key={r.id} className="space-y-0">
+              <TaskCard r={r} store={store} tone="bg-emerald-600 text-white hover:bg-emerald-700"
+                action={Object.assign(() => { store.recycleRdv(r.id); toast('Affaire reprise — remise au début du pipeline') }, { label: 'Reprendre' })} />
+              <div className="flex items-center gap-2 flex-wrap text-xs text-muted pl-3">
+                <span>Perdue le {fmtDate(lostDate(r))}{r.motifKo ? ' — ' : ''}{r.motifKo}</span>
+                {r.recycleCount > 0 && <span className="chip !text-[10px]">déjà reprise {r.recycleCount} fois</span>}
+                <button className="underline hover:text-brand" onClick={() => { store.snoozeRecycle(r.id, 30); toast('Repoussée de 30 jours') }}>repousser de 30 j</button>
+                <button className="underline hover:text-brand" onClick={() => { store.dropRecycle(r.id); toast('Ne sera plus proposée') }}>ne plus proposer</button>
+              </div>
+            </div>
+          ))}
+        </Section>
+      )}
 
       <Section icon={<RotateCcw size={18} className="text-gray-600" />} color="bg-gray-200"
         title="Opportunités perdues à relancer" count={lost.length}

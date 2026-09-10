@@ -453,6 +453,35 @@ async function main() {
     await act(async () => {})
     if (!text().includes('Atterrissage')) throw new Error("L'atterrissage manque au tableau de bord une fois la brique allumée")
     if (!text().includes('au rythme depuis le début')) throw new Error("L'atterrissage doit expliquer d'où viennent ses bornes")
+
+    // Recyclage : perdre une affaire avec un motif doit poser la date de re-tentative TOUT
+    // SEUL — la réclamer à quelqu'un qui vient de perdre une affaire ne marcherait jamais.
+    await act(async () => { st().setEnvModules(envId, { recycling: true }) })
+    await act(async () => {
+      st().setSub(d => {
+        const r = d.rdvs.find(x => x.id === target.id)
+        Object.assign(r, applyRdvAutomations(r, { opportunite: 'Perdue', motifKo: 'Mauvais timing' }, d))
+        return d
+      })
+    })
+    const lost = rdvOf()
+    if (!lost.recycleAt) throw new Error("Perdre une affaire avec un motif doit poser une date de re-tentative")
+    // « Mauvais timing » = 90 jours : la date doit tomber dans le futur, pas aujourd'hui.
+    if (lost.recycleAt <= new Date().toISOString().slice(0, 10)) throw new Error(`Date de re-tentative non future : ${lost.recycleAt}`)
+
+    // Une affaire dont le jour est venu revient dans les recommandations, et la reprendre
+    // la replace au DÉBUT du pipeline.
+    await act(async () => { st().setSub(d => { const r = d.rdvs.find(x => x.id === target.id); r.recycleAt = '2020-01-01'; return d }) })
+    await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Recommandations prioritaires'))
+    if (!text().includes('À reprendre aujourd\'hui')) throw new Error('La section de recyclage manque aux recommandations')
+    const reprendre = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Reprendre')
+    if (!reprendre) throw new Error('Aucun bouton « Reprendre » sur une affaire dont le jour est venu')
+    await click(reprendre)
+    const back = rdvOf()
+    if (back.opportunite !== 'En cours') throw new Error('Une affaire reprise doit redevenir en cours')
+    if (back.recycleAt) throw new Error('Une affaire reprise ne doit plus être en attente de reprise')
+    if (back.recycleCount !== 1) throw new Error('Le nombre de reprises doit être compté')
+    if (!back.motifKo) throw new Error("Le motif d'origine doit être conservé : c'est le seul avantage sur un lead neuf")
   }
 
   // 5. Comité d'achat : le formulaire de RDV qualifie chaque interlocuteur, et alerte quand
