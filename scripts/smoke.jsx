@@ -1002,6 +1002,50 @@ async function main() {
     }
   }
 
+  // Supprimer une livraison doit emporter SON ENVIRONNEMENT : sans cela il se balade —
+  // invisible depuis la console, bien vivant pour son équipe. Et rien n'est définitif :
+  // tout passe par l'archive, avec un ticket de fermeture pour en discuter.
+  {
+    const made = dbNow().projects.find(p => p.name === 'Chantier Aurora')
+    const envId = made.envId
+    // La fiche du projet — pas le planning, qui contient le même nom sans les actions.
+    const card = [...container.querySelectorAll('main .card')].find(c => c.textContent.includes('Chantier Aurora')
+      && c.querySelector('button[title="Supprimer le projet et son environnement"]'))
+    const del = card && card.querySelector('button[title="Supprimer le projet et son environnement"]')
+    if (!del) throw new Error('Bouton de suppression du projet introuvable')
+    await click(del)
+    if (!text().includes('Supprimer la livraison et son environnement')) {
+      throw new Error("La suppression ne dit pas ce qu'elle emporte")
+    }
+    const reason = [...container.querySelectorAll('main textarea')].find(t => (t.placeholder || '').includes('Fin de contrat'))
+    if (!reason) throw new Error('Le motif de fermeture n\'est pas demandé')
+    await type(reason, 'Environnement de test')
+    await click(find('button', 'Supprimer et archiver'))
+    const st = dbNow()
+    if (st.projects.some(p => p.id === made.id)) throw new Error('Le projet supprimé est toujours là')
+    if (st.environments.some(e => e.id === envId)) throw new Error("L'environnement du projet supprimé se balade encore")
+    if (st.subenvs.some(x => x.envId === envId)) throw new Error('Des espaces orphelins subsistent après la suppression')
+    const entry = (st.supportTrash || []).find(t => t.kind === 'project' && t.data?.env?.id === envId)
+    if (!entry) throw new Error("La livraison supprimée n'est pas dans la corbeille : la suppression est irréversible")
+    const tk = (st.tickets || []).find(t => t.id === entry.data.ticketId)
+    if (!tk || tk.category !== 'Fermeture de projet') throw new Error('Aucun ticket de fermeture n\'a été ouvert')
+    if (!tk.messages[0].text.includes('Environnement de test')) throw new Error('Le motif ne figure pas dans le ticket de fermeture')
+    // Le fil appartient au propriétaire du projet — à défaut de preneur, à qui supprime.
+    if (!tk.userAccountId) throw new Error('Le ticket de fermeture n\'est rattaché à personne')
+
+    // Et l'archive rend tout : c'est ce qui autorise à supprimer sans crainte.
+    await click(hubTab('Corbeille'))
+    const row = [...container.querySelectorAll('main .card')].find(c => c.textContent.includes('Chantier Aurora')
+      && [...c.querySelectorAll('button')].some(b => b.textContent.includes('Restaurer')))
+    if (!row) throw new Error('La livraison archivée n\'apparaît pas dans la corbeille support')
+    const restore = [...row.querySelectorAll('button')].find(b => b.textContent.includes('Restaurer'))
+    await click(restore)
+    const back = dbNow()
+    if (!back.environments.some(e => e.id === envId)) throw new Error('Restaurer ne rend pas l\'environnement')
+    if (back.projects.filter(p => p.id === made.id).length !== 1) throw new Error('Restaurer ne rend pas la livraison (ou la duplique)')
+    await click(hubTab('Projets & atelier'))
+  }
+
   // Atelier : désormais une VUE de « Projets & atelier », pas un onglet à part. On y accède
   // par le sélecteur de vue, et l'assistant doit s'y comporter comme avant.
   await click(hubTab('Projets & atelier'))

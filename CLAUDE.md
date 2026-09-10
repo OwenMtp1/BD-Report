@@ -32,6 +32,23 @@ npm run dev        # serveur de dev
     La photo d'un collègue prise avant le semis ramenait des repères vides → le projet revenait à CHAQUE synchro.
     `_autoSeed.envSeedBackfill` rattrape une fois les bases déjà en service : dans une base qui porte déjà des
     repères, un environnement présent a forcément eu son projet — son absence est une suppression, pas un oubli.
+  - **Supprimer une livraison SUPPRIME SON ENVIRONNEMENT** — `archiveDelivery(d, {projectId|envId, reason, actor})`,
+    chemin UNIQUE de `store.deleteProject` ET de `store.deleteClientEnv`. Un projet EST la livraison d'un
+    environnement : retirer la fiche seule laissait l'environnement vivant pour son équipe et invisible depuis la
+    console — « des environnements qui se baladent », le pire des deux états. Tout (projet, env, sous-espaces,
+    `data`) part dans `db.supportTrash` (`kind: 'project'`, 30 jours), `restoreDelivery` le rend à l'identique,
+    et la fiche client RESTE, classée « anciens » : elle porte l'histoire du départ.
+    Chaque suppression **ouvre un ticket** `PROJECT_CLOSURE_CATEGORY` (« Fermeture de projet ») rattaché au
+    **propriétaire du projet** (à défaut, à qui supprime), non lu des deux côtés — le fil où se règle un litige.
+    ⚠️ **Pierre tombale `db._envTombstones[envId] = {deletedAt, restoredAt}`** : une suppression est un FAIT, comme
+    un repère de semis, et doit voyager avec l'état. `mergeRemoteDb` la respecte (`mergeEnvTombstones`, la date la
+    plus récente gagne — une restauration lève la pierre) et `migrate` l'applique à chaque chargement, sinon la
+    photo périmée d'un collègue ramenait l'environnement à la synchro suivante. Purge à 90 jours.
+    ⚠️ `afterStamp` : deux gestes dans la MÊME milliseconde (restaurer puis resupprimer) se départageaient au
+    hasard — le dernier est daté strictement après le précédent.
+    `store.orphanEnvs()` liste les environnements sans livraison, montrés en bandeau dans le panneau Projets
+    (« Rouvrir la livraison » via `recreateDelivery`, ou archiver). **Jamais de purge automatique** : une migration
+    qui efface des données client est pire que le désordre qu'elle corrige.
   - `setSub(fn)` = écrit dans l'espace courant ; `setSubData(subId, fn)` = écrit dans un espace précis (pipeline entreprise).
     Les deux sont **bloqués en lecture seule** (`readOnly`, voir résiliation).
   - ⚠️ **Sauvegarde différée (400 ms)** : `JSON.stringify` de tout l'état coûte cher dès qu'une équipe a de
@@ -262,7 +279,10 @@ npm run dev        # serveur de dev
   depuis une livraison, donc loin de l'aperçu par rôle qui montre justement l'effet de ce qu'on
   coche. Il prend un `envId`, jamais un projet : la livraison n'était qu'un chemin d'accès.
   L'audit refuse toute seconde copie de ces réglages dans `Projects.jsx` — deux réglages du même
-  objet finissent par se contredire.
+  objet finissent par se contredire. **Exception assumée : la SUPPRESSION** est pilotée depuis le
+  panneau des projets (`deleteClientEnv` y est donc autorisé) — un projet est la livraison d'un
+  environnement, les deux partent ensemble ; ce qui reste interdit, c'est la CONFIGURATION
+  (`setEnvOffer`, `blockEnv`, `ENV_MODULES`).
   **`Workshop.jsx`** (vue « Atelier », perm `env.build`) : assistant en 5 étapes
   (identité & modèle, modules, rôles & onglets, équipe, récapitulatif) + explorateur avec « Voir comme… »
   par rôle/service, sans entrer dans l'environnement (`previewTabs(env, offers, role)` = module ∩ offre ∩ rôle).

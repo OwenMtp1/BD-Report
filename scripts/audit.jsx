@@ -314,7 +314,10 @@ async function main() {
     const proj = fs.default.readFileSync(path.default.join(dir, 'Projects.jsx'), 'utf8')
     const wk = fs.default.readFileSync(path.default.join(dir, 'Workshop.jsx'), 'utf8')
     ok(!/ENV_MODULES/.test(proj), 'Les modules se règlent encore depuis les livraisons — il en reste deux copies')
-    ok(!/setEnvOffer|deleteClientEnv|blockEnv/.test(proj),
+    // `deleteClientEnv` fait exception depuis que la SUPPRESSION est pilotée par le panneau
+    // des projets (un projet est la livraison d'un environnement : les deux partent
+    // ensemble). Ce qui reste interdit ici, c'est la CONFIGURATION — offre, modules, blocage.
+    ok(!/setEnvOffer|blockEnv/.test(proj),
       "L'administration de l'environnement se fait encore depuis les livraisons")
     ok(/EnvAdmin/.test(wk), "L'atelier n'expose pas la fiche d'administration de l'environnement")
     const adm = fs.default.readFileSync(path.default.join(dir, 'EnvAdmin.jsx'), 'utf8')
@@ -487,6 +490,99 @@ async function main() {
       })
     })
     ok(bare.length === 0, `Appel nu à une méthode du store (ReferenceError au clic) : ${bare.slice(0, 5).join(', ')}`)
+  }
+
+  // 6 quindecies. SUPPRIMER UNE LIVRAISON EMPORTE SON ENVIRONNEMENT — et rien d'autre.
+  //   Le défaut signalé : « des environnements se baladent alors que j'ai supprimé les
+  //   projets ». Un environnement sans livraison n'apparaît plus nulle part, mais reste
+  //   vivant pour son équipe : invisible et actif, c'est le pire des deux états.
+  //   On vérifie les trois promesses : tout part, tout revient, et le fil de discussion existe.
+  {
+    const d = s.buildDemoDb({}); s.migrate(d)
+    const env = { id: 'env-supp', name: 'Client à fermer', plan: 'beta', subState: 'active', members: [] }
+    d.environments.push(env)
+    s.seedEnvClientAndProject(d, env)
+    const proj = d.projects.find(p => p.sourceEnvId === 'env-supp')
+    ok(!!proj, 'Archive : l\'environnement de test n\'a pas reçu sa livraison')
+    // Deux espaces avec des données, pour vérifier qu'ils partent ET reviennent.
+    const owner = d.accounts[0]
+    proj.ownerId = owner.id
+    ;['sub-supp-1', 'sub-supp-2'].forEach((id, i) => {
+      d.subenvs.push({ id, envId: 'env-supp', prenom: 'P' + i, nom: '', pin: '0000', ownerId: owner.id })
+      d.data[id] = { rdvs: [{ id: 'r' + i, entreprise: 'Test' }], _rev: 1 }
+    })
+    const beforeSpaces = JSON.stringify(['sub-supp-1', 'sub-supp-2'].map(k => d.data[k]))
+    const ticketsBefore = d.tickets.length
+
+    const entry = s.archiveDelivery(d, { projectId: proj.id, reason: 'Fin de contrat', actorId: owner.id, actorName: 'Owen' })
+    ok(!!entry, 'Archive : rien n\'a été archivé')
+    // a. Plus rien ne se balade.
+    ok(!d.environments.some(e => e.id === 'env-supp'), 'Supprimer la livraison laisse l\'environnement derrière')
+    ok(!d.subenvs.some(x => x.envId === 'env-supp'), 'Supprimer la livraison laisse des espaces orphelins')
+    ok(!d.data['sub-supp-1'] && !d.data['sub-supp-2'], 'Supprimer la livraison laisse les données des espaces')
+    ok(!d.projects.some(p => p.id === proj.id), 'La livraison supprimée est toujours là')
+    // b. Rien n'est perdu : tout est dans la corbeille, avec de quoi le remettre.
+    ok((d.supportTrash || []).some(t => t.id === entry.id && t.kind === 'project'),
+      'La livraison supprimée n\'est pas dans la corbeille : la suppression est irréversible')
+    ok(entry.data.subenvs.length === 2 && Object.keys(entry.data.spaces).length === 2,
+      'L\'archive ne contient pas les espaces : la restauration rendrait une coquille')
+    // c. Le ticket de fermeture existe, appartient au PROPRIÉTAIRE du projet, et se voit.
+    const tk = (d.tickets || []).find(t => t.id === entry.data.ticketId)
+    ok(!!tk && tk.category === s.PROJECT_CLOSURE_CATEGORY, 'Aucun ticket de fermeture n\'a été ouvert')
+    ok(d.tickets.length === ticketsBefore + 1, 'La suppression a ouvert plus d\'un ticket')
+    ok(tk && tk.userAccountId === owner.id, 'Le ticket de fermeture n\'est pas accessible au propriétaire du projet')
+    ok(tk && s.ticketHasUnread(tk, 'user') && s.ticketHasUnread(tk, 'support'),
+      'Le ticket de fermeture est déjà marqué lu : la suppression passerait inaperçue')
+    ok(tk && /Fin de contrat/.test(tk.messages[0].text), 'Le motif de fermeture ne figure pas dans le ticket')
+    // d. Le client reste, devenu ancien : c'est lui qui porte l'histoire du départ.
+    const cli = d.clients.find(c => c.key === 'env:env-supp')
+    ok(cli && cli.status === 'anciens', 'La fiche client a disparu ou n\'est pas classée en « anciens »')
+
+    // e. Restaurer rend TOUT, à l'identique.
+    s.restoreDelivery(d, entry)
+    ok(d.environments.some(e => e.id === 'env-supp'), 'Restaurer ne rend pas l\'environnement')
+    ok(d.subenvs.filter(x => x.envId === 'env-supp').length === 2, 'Restaurer ne rend pas les espaces')
+    ok(JSON.stringify(['sub-supp-1', 'sub-supp-2'].map(k => d.data[k])) === beforeSpaces,
+      'Restaurer ne rend pas les données des espaces à l\'identique')
+    ok(d.projects.filter(p => p.id === proj.id).length === 1, 'Restaurer duplique la livraison (ou ne la rend pas)')
+    // f. Et une migration derrière ne recrée rien en double.
+    s.migrate(d)
+    ok(d.projects.filter(p => p.sourceEnvId === 'env-supp').length === 1,
+      'Après restauration, la migration recrée un second projet')
+
+    // g. Supprimer par l'autre bout (l'environnement) doit emporter la livraison de la
+    //    même façon : deux gestes aux effets différents laisseraient toujours une moitié.
+    const e2 = s.archiveDelivery(d, { envId: 'env-supp', actorId: owner.id, actorName: 'Owen' })
+    ok(!!e2 && !d.projects.some(p => p.sourceEnvId === 'env-supp'),
+      'Supprimer l\'environnement laisse sa livraison derrière')
+    // h. Et une migration ne le ramène par aucun chemin : la pierre tombale fait foi.
+    d.environments.push({ id: 'env-supp', name: 'Revenant', plan: 'beta', subState: 'active' })
+    s.migrate(d)
+    ok(!d.environments.some(e => e.id === 'env-supp'),
+      'Un environnement supprimé revient par la migration (sauvegarde locale, importation)')
+
+    // i. SYNCHRONISATION : la photo périmée d'un collègue contient encore l'environnement.
+    //    Sans pierre tombale, elle le « rebaladait » à chaque échange — le défaut signalé.
+    const dead = { deletedAt: '2026-01-02T00:00:00.000Z', restoredAt: '' }
+    const m = s.mergeRemoteDb(
+      { _envTombstones: { 'env-mort': dead }, environments: [], subenvs: [], projects: [], data: {} },
+      { environments: [{ id: 'env-mort', name: 'Zombie' }], subenvs: [{ id: 'sz', envId: 'env-mort' }], projects: [{ id: 'pz', sourceEnvId: 'env-mort' }], data: { sz: { _rev: 3 } } },
+    )
+    ok(!m.environments.some(e => e.id === 'env-mort'), 'Synchro : un environnement supprimé revient par la fusion')
+    ok(!m.projects.some(p => p.sourceEnvId === 'env-mort'), 'Synchro : la livraison supprimée revient par la fusion')
+    ok(!m.data.sz, 'Synchro : les données d\'un espace supprimé reviennent par la fusion')
+    // Et l'inverse doit tenir aussi : une restauration plus récente lève la pierre, sinon
+    // « Restaurer » ne tiendrait que jusqu'à la prochaine synchronisation.
+    const m2 = s.mergeRemoteDb(
+      {
+        _envTombstones: { 'env-mort': { deletedAt: dead.deletedAt, restoredAt: '2026-01-03T00:00:00.000Z' } },
+        environments: [{ id: 'env-mort', name: 'Restauré' }], subenvs: [{ id: 'sz', envId: 'env-mort' }],
+        projects: [{ id: 'pz', sourceEnvId: 'env-mort' }], data: { sz: { _rev: 1 } },
+      },
+      { _envTombstones: { 'env-mort': dead }, environments: [], subenvs: [], projects: [], data: {} },
+    )
+    ok(m2.environments.some(e => e.id === 'env-mort'), 'Synchro : une restauration plus récente est annulée par la pierre tombale')
+    ok(m2.projects.some(p => p.sourceEnvId === 'env-mort') && !!m2.data.sz, 'Synchro : la restauration ne rend pas la livraison et ses données')
   }
 
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création

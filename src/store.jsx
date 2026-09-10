@@ -1100,6 +1100,31 @@ export function mergeRemoteDb(local, remote) {
     if (!theirs) { merged.data[subId] = mine; return }
     if ((mine?._rev || 0) > (theirs?._rev || 0)) merged.data[subId] = mine
   })
+  // ⚠️ Les suppressions d'environnement voyagent, elles aussi. Les tableaux de tête
+  // (`environments`, `projects`, `subenvs`) viennent du distant : la photo d'un collègue
+  // prise AVANT une suppression la ramenait donc intégralement — l'environnement supprimé
+  // « se rebaladait » à la synchronisation suivante. La pierre tombale tranche, et une
+  // restauration plus récente la lève.
+  merged._envTombstones = mergeEnvTombstones(local._envTombstones, remote._envTombstones)
+  // a) Ce que le distant ignore encore mais qui vit ici (créé ou restauré) revient.
+  ;(local.environments || []).forEach(env => {
+    if (envIsDeleted(merged._envTombstones[env.id])) return
+    if ((merged.environments || []).some(e => e.id === env.id)) return
+    merged.environments = [...(merged.environments || []), env]
+    const subs = (local.subenvs || []).filter(s => s.envId === env.id)
+    merged.subenvs = [...(merged.subenvs || []), ...subs.filter(s => !(merged.subenvs || []).some(x => x.id === s.id))]
+    subs.forEach(s => { if (!merged.data[s.id] && local.data?.[s.id]) merged.data[s.id] = local.data[s.id] })
+    const projs = (local.projects || []).filter(p => p.envId === env.id || p.sourceEnvId === env.id)
+    merged.projects = [...(merged.projects || []), ...projs.filter(p => !(merged.projects || []).some(x => x.id === p.id))]
+  })
+  // b) Et ce qui a été supprimé s'en va, même si l'autre côté l'ignore encore.
+  Object.keys(merged._envTombstones).forEach(id => {
+    if (!envIsDeleted(merged._envTombstones[id])) return
+    merged.environments = (merged.environments || []).filter(e => e.id !== id)
+    ;(merged.subenvs || []).filter(s => s.envId === id).forEach(s => { delete merged.data[s.id] })
+    merged.subenvs = (merged.subenvs || []).filter(s => s.envId !== id)
+    merged.projects = (merged.projects || []).filter(p => p.envId !== id && p.sourceEnvId !== id)
+  })
   return merged
 }
 
@@ -1899,6 +1924,121 @@ function makeTicket({ accountId, prenom, photo, clientName, envId, subEnvId, cat
     ],
   }
 }
+
+// ---------------------------------------------------------------- Archive d'une livraison
+// UN PROJET EST LA LIVRAISON D'UN ENVIRONNEMENT : les deux partent ensemble.
+// Supprimer la livraison seule laissait l'environnement derrière — vivant, accessible à
+// son équipe, facturé, mais invisible depuis la console : personne ne le voyait plus,
+// donc personne ne s'en occupait. Ce sont les « environnements qui se baladent ».
+//
+// Et le geste ne peut pas être définitif au premier clic : effacer les espaces de toute
+// une équipe est l'action la plus destructrice de l'application. Tout part donc d'abord
+// dans la CORBEILLE SUPPORT (30 jours), d'où l'ensemble se restaure tel quel.
+export const PROJECT_CLOSURE_CATEGORY = 'Fermeture de projet'
+
+// Suppression et restauration se départagent à la date. Deux gestes tombés dans la même
+// milliseconde ne doivent pas se départager au hasard : le dernier est daté strictement
+// après le précédent, pour que « la dernière action l'emporte » reste vrai à la seconde près.
+const afterStamp = (iso, other) => ((other || '') >= iso ? new Date(new Date(other).getTime() + 1).toISOString() : iso)
+
+// Retire la livraison ET son environnement de la base, en déposant tout dans la corbeille.
+// Rien n'est cloné : ce qui est retiré des tableaux est justement ce qu'on range.
+export function archiveDelivery(d, { envId, projectId, reason, actorId, actorName }) {
+  d.supportTrash = d.supportTrash || []
+  const project = projectId
+    ? (d.projects || []).find(p => p.id === projectId)
+    : (d.projects || []).find(p => p.sourceEnvId === envId || p.envId === envId)
+  const eid = envId || project?.envId || project?.sourceEnvId || null
+  const env = eid ? (d.environments || []).find(e => e.id === eid) : null
+  if (!project && !env) return null
+  const subenvs = eid ? (d.subenvs || []).filter(s => s.envId === eid) : []
+  const spaces = {}
+  subenvs.forEach(s => { if (d.data?.[s.id]) { spaces[s.id] = d.data[s.id]; delete d.data[s.id] } })
+  const client = eid ? (d.clients || []).find(c => c.envId === eid || c.key === 'env:' + eid) : null
+  const entry = {
+    id: uid(), kind: 'project', deletedAt: new Date().toISOString(),
+    deletedBy: actorName || '', deletedById: actorId || null, reason: String(reason || '').trim(),
+    label: project?.name || env?.name || 'Livraison',
+    data: {
+      project: project || null, env: env || null, subenvs, spaces,
+      clientId: client?.id || null, clientStatus: client?.status || null, ticketId: null,
+    },
+  }
+  if (project) d.projects = (d.projects || []).filter(p => p.id !== project.id)
+  if (eid) {
+    d.subenvs = (d.subenvs || []).filter(s => s.envId !== eid)
+    d.environments = (d.environments || []).filter(e => e.id !== eid)
+    // PIERRE TOMBALE. Une suppression est un FAIT, comme un repère de semis : elle doit
+    // voyager avec l'état. Sans elle, la photo périmée d'un collègue — qui contient encore
+    // l'environnement — le ramenait à la synchronisation suivante, et on recommençait.
+    d._envTombstones = d._envTombstones || {}
+    const wasRestored = d._envTombstones[eid]?.restoredAt || ''
+    d._envTombstones[eid] = { deletedAt: afterStamp(entry.deletedAt, wasRestored), restoredAt: wasRestored }
+    // La FICHE CLIENT reste, devenue « ancien client » : elle porte l'histoire (tickets,
+    // motifs de churn, satisfaction) qui est précisément ce qu'on veut garder d'un client
+    // parti. L'effacer reviendrait à effacer la raison du départ.
+    if (client) { client.status = 'anciens'; client.blocked = false }
+  }
+  // Une suppression ouvre un TICKET DE FERMETURE rattaché au PROPRIÉTAIRE du projet (à
+  // défaut, à qui supprime) : c'est le fil où se règle un litige, et le seul endroit d'où
+  // la restauration se demande tant que l'archive vit. Un projet supprimé sans un mot
+  // laissait le preneur devant un écran vide, sans interlocuteur.
+  const owner = (d.accounts || []).find(a => a.id === (project?.ownerId || actorId)) || null
+  const ownerName = owner?.pseudo || actorName || 'Équipe BD Report'
+  const spaceCount = subenvs.length
+  const ticket = makeTicket({
+    accountId: owner?.id || null, prenom: ownerName, photo: owner?.photo || '',
+    clientName: env?.name || project?.clientName || ownerName,
+    envId: eid, subEnvId: null, category: PROJECT_CLOSURE_CATEGORY, priority: 'haute',
+    message: `Le projet « ${project?.name || env?.name || '—'} »`
+      + (env ? ` et l'environnement « ${env.name} » (${spaceCount} espace${spaceCount > 1 ? 's' : ''})` : '')
+      + ` ont été supprimés par ${actorName || 'un membre de l\'équipe'}.`
+      + (entry.reason ? ` Motif : ${entry.reason}` : ''),
+    botText: `L'ensemble est conservé en archive pendant 30 jours et se restaure d'un geste depuis la corbeille support. Passé ce délai, la suppression est définitive. Cette conversation reste ouverte pour en discuter.`,
+  })
+  // Non lu des deux côtés : une suppression de cette portée doit se voir, pas se deviner.
+  ticket.readUserAt = ''
+  // Le premier message porte le nom de qui a réellement supprimé, même si le fil
+  // appartient au propriétaire du projet.
+  if (ticket.messages[0]) { ticket.messages[0].authorAccountId = actorId || null; ticket.messages[0].authorName = actorName || ownerName; ticket.messages[0].authorPhoto = '' }
+  d.tickets = d.tickets || []
+  d.tickets.unshift(ticket)
+  entry.data.ticketId = ticket.id
+  d.supportTrash.unshift(entry)
+  return entry
+}
+
+// Remet en place ce qui a été archivé. Chaque élément est reposé seulement s'il manque :
+// un environnement recréé entre-temps sous le même identifiant ne doit pas être écrasé.
+export function restoreDelivery(d, entry) {
+  const { project, env, subenvs, spaces, clientId, clientStatus } = entry?.data || {}
+  if (env && !(d.environments || []).some(e => e.id === env.id)) d.environments.push(env)
+  ;(subenvs || []).forEach(s => { if (!(d.subenvs || []).some(x => x.id === s.id)) d.subenvs.push(s) })
+  Object.entries(spaces || {}).forEach(([k, v]) => { if (!d.data[k]) d.data[k] = v })
+  if (project && !(d.projects || []).some(p => p.id === project.id)) { d.projects = d.projects || []; d.projects.unshift(project) }
+  const c = (d.clients || []).find(x => x.id === clientId)
+  if (c && clientStatus) { c.status = clientStatus; c.blocked = false }
+  // La restauration est un fait aussi récent que la suppression : elle l'annule, et se
+  // départage d'elle à la date — sinon la pierre tombale reviendrait effacer ce retour.
+  if (env) {
+    d._envTombstones = d._envTombstones || {}
+    const wasDeleted = d._envTombstones[env.id]?.deletedAt || ''
+    d._envTombstones[env.id] = { deletedAt: wasDeleted, restoredAt: afterStamp(new Date().toISOString(), wasDeleted) }
+  }
+}
+
+// Une pierre tombale par environnement : la plus récente des deux dates l'emporte, comme
+// `_rev` départage deux versions d'un espace.
+export function mergeEnvTombstones(a, b) {
+  const out = {}
+  const latest = (x, y) => ((x || '') > (y || '') ? (x || '') : (y || ''))
+  new Set([...Object.keys(a || {}), ...Object.keys(b || {})]).forEach(k => {
+    const x = (a || {})[k] || {}, y = (b || {})[k] || {}
+    out[k] = { deletedAt: latest(x.deletedAt, y.deletedAt), restoredAt: latest(x.restoredAt, y.restoredAt) }
+  })
+  return out
+}
+export const envIsDeleted = (t) => !!t && (t.deletedAt || '') > (t.restoredAt || '')
 
 // Journal d'audit du back-office support (visible dans « Logs Support »).
 // ---------------------------------------------------------------- Journal de l'équipe BD Report
@@ -3428,6 +3568,20 @@ export function migrate(db) {
   // Corbeille support : purge des éléments supprimés depuis plus de 30 jours
   const supCutoff = new Date(Date.now() - 30 * 86400000).toISOString()
   db.supportTrash = (db.supportTrash || []).filter(t => t.deletedAt > supCutoff)
+  // Pierres tombales des environnements : un environnement supprimé ne revient par AUCUN
+  // chemin — ni par une sauvegarde locale, ni par une importation, ni par une synchro.
+  // Elles s'effacent au bout de 90 jours : passé ce délai, plus aucune photo périmée
+  // plausible ne le contient encore, et la liste cesserait de faire autre chose que grossir.
+  db._envTombstones = db._envTombstones || {}
+  const tombCutoff = new Date(Date.now() - 90 * 86400000).toISOString()
+  Object.entries(db._envTombstones).forEach(([id, t]) => {
+    if ((t?.deletedAt || '') < tombCutoff && (t?.restoredAt || '') < tombCutoff) { delete db._envTombstones[id]; return }
+    if (!envIsDeleted(t)) return
+    ;(db.subenvs || []).filter(s => s.envId === id).forEach(s => { delete db.data[s.id] })
+    db.subenvs = (db.subenvs || []).filter(s => s.envId !== id)
+    db.environments = (db.environments || []).filter(e => e.id !== id)
+    db.projects = (db.projects || []).filter(p => p.envId !== id && p.sourceEnvId !== id)
+  })
   // Valeurs par défaut des nouveaux champs + purge de la corbeille (> 30 jours)
   const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
   Object.values(db.data || {}).forEach(data => {
@@ -6004,6 +6158,9 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           if (!item) return d
           if (item.kind === 'request') { d.supportRequests = d.supportRequests || []; d.supportRequests.unshift(item.data) }
           else if (item.kind === 'ticket') { d.tickets = d.tickets || []; d.tickets.unshift(item.data) }
+          // Une livraison archivée revient ENTIÈRE : projet, environnement, espaces et
+          // données. Restaurer la fiche seule recréerait exactement le désordre qu'on corrige.
+          else if (item.kind === 'project') restoreDelivery(d, item)
           d.supportTrash = d.supportTrash.filter(x => x.id !== trashId)
           return d
         })
@@ -6045,19 +6202,22 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           return d
         })
       },
-      deleteClientEnv(envId) {
-        // Le support supprime l'environnement client : le client devient « ancien », son projet est retiré.
+      // Supprimer l'environnement, c'est le MÊME geste que supprimer sa livraison, vu de
+      // l'autre côté : il passe donc par le même chemin — archive, ticket de fermeture,
+      // client classé « ancien ». Deux suppressions aux effets différents pour un même
+      // objet finissent toujours par en laisser une moitié derrière.
+      deleteClientEnv(envId, { reason = '' } = {}) {
+        const env = db.environments.find(e => e.id === envId)
+        let entry = null
         setDb(d => {
-          const e = d.environments.find(x => x.id === envId)
-          const name = e?.name || ''
-          d.subenvs.filter(s => s.envId === envId).forEach(s => delete d.data[s.id])
-          d.subenvs = d.subenvs.filter(s => s.envId !== envId)
-          d.environments = d.environments.filter(x => x.id !== envId)
-          const c = (d.clients || []).find(x => x.envId === envId); if (c) { c.status = 'anciens'; c.blocked = false }
-          d.projects = (d.projects || []).filter(p => p.sourceEnvId !== envId)
-          pushSupportLog(d, { type: 'Client', action: 'Environnement client supprimé', details: name, actorId: account?.id || null, actorName })
+          entry = archiveDelivery(d, { envId, reason, actorId: account?.id || null, actorName })
           return d
         })
+        this.logStaff({
+          type: 'Client', cat: 'client', action: 'Environnement client archivé',
+          details: `${env?.name || ''}${reason ? ` · ${reason}` : ''}`, envId,
+        })
+        return entry
       },
       // ----- Gestion de projet (back-office support)
       saveProject(project) {
@@ -6075,7 +6235,58 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           return d
         })
       },
-      deleteProject(id) { setDb(d => { d.projects = (d.projects || []).filter(p => p.id !== id); return d }) },
+      // Supprimer une livraison, c'est supprimer le CLIENT LIVRÉ : l'environnement, ses
+      // espaces et leurs données partent avec — en archive, et avec un ticket de fermeture.
+      // Retirer la fiche seule laissait l'environnement tourner sans que personne ne le voie.
+      deleteProject(id, { reason = '' } = {}) {
+        const p = (db.projects || []).find(x => x.id === id)
+        if (!p || !this.canEditProject(p)) return null
+        let entry = null
+        setDb(d => {
+          entry = archiveDelivery(d, { projectId: id, reason, actorId: account?.id || null, actorName })
+          return d
+        })
+        this.logStaff({
+          type: 'Projet', cat: 'projet', action: 'Projet et environnement archivés',
+          details: `${p.name || p.clientName || ''}${reason ? ` · ${reason}` : ''}`,
+          envId: p.envId || p.sourceEnvId || null,
+        })
+        return entry
+      },
+      // Ce que la suppression emportera : à montrer AVANT de la demander. Personne ne peut
+      // consentir à effacer « 3 espaces et 4 membres » sans qu'on le lui ait dit.
+      deliveryImpact({ projectId, envId } = {}) {
+        const project = projectId
+          ? (db.projects || []).find(p => p.id === projectId)
+          : (db.projects || []).find(p => p.sourceEnvId === envId || p.envId === envId)
+        const eid = envId || project?.envId || project?.sourceEnvId || null
+        const env = eid ? db.environments.find(e => e.id === eid) : null
+        const subenvs = eid ? db.subenvs.filter(s => s.envId === eid) : []
+        return { project: project || null, env, spaces: subenvs.length, members: eid ? this.envMembers(eid).length : 0 }
+      },
+      // Environnements sans livraison : ceux qui « se baladent ». On ne les supprime JAMAIS
+      // tout seul — une migration qui efface des données client est pire que le désordre
+      // qu'elle corrige. On les montre, et le staff tranche : archiver ou rouvrir la livraison.
+      orphanEnvs() {
+        return db.environments.filter(e => e.id !== 'env-demo'
+          && !(db.projects || []).some(p => p.envId === e.id || p.sourceEnvId === e.id))
+      },
+      // Rouvre une livraison pour un environnement qui n'en a plus : l'autre issue, quand
+      // l'environnement doit vivre.
+      recreateDelivery(envId) {
+        if (!accountHasPerm(account, 'projects.manage', db)) return null
+        const env = db.environments.find(e => e.id === envId); if (!env) return null
+        let made = null
+        setDb(d => {
+          const e = d.environments.find(x => x.id === envId); if (!e) return d
+          if ((d.projects || []).some(p => p.envId === envId || p.sourceEnvId === envId)) return d
+          made = makeProjectFromEnv(e)
+          d.projects = [made, ...(d.projects || [])]
+          return d
+        })
+        this.logStaff({ type: 'Projet', cat: 'projet', action: 'Livraison rouverte', details: env.name, envId })
+        return made
+      },
       // ----- Prise en charge d'un projet
       // Un projet sans preneur est à tout le monde, c'est-à-dire à personne : les demandes
       // s'accumulent et chacun suppose que le voisin s'en occupe. Le prendre en charge, c'est

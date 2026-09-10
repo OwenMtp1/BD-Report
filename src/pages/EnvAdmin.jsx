@@ -33,7 +33,7 @@ export default function EnvAdmin({ envId, store }) {
     if (kind === 'wipe') { store.wipeSpaceData(m.sub.id); toast('Données de l\'espace effacées') }
     if (kind === 'remove') { store.removeEnvMember(envId, m.account.id); toast('Membre retiré de l\'environnement') }
     if (kind === 'block') { store.blockEnv(envId); toast('Accès du client bloqué') }
-    if (kind === 'delEnv') { store.deleteClientEnv(envId); toast('Environnement supprimé') }
+    if (kind === 'delEnv') { store.deleteClientEnv(envId); toast('Environnement archivé — restaurable 30 jours') }
     setConfirm(null)
   }
   const confirmText = () => {
@@ -41,7 +41,10 @@ export default function EnvAdmin({ envId, store }) {
     if (kind === 'wipe') return `Effacer TOUTES les données de l'espace de ${m.sub?.prenom} ? Action irréversible.`
     if (kind === 'remove') return `Retirer ${m.account.pseudo} de l'environnement (avec ses espaces et données) ?`
     if (kind === 'block') return `Bloquer l'environnement « ${env?.name} » ? Son accès passera en lecture seule.`
-    return `Supprimer définitivement l'environnement « ${env?.name} » et toutes ses données ? Le client sera classé en « Anciens clients ».`
+    // Supprimer un environnement, c'est supprimer sa livraison : les deux partent ensemble,
+    // en archive. Promettre une suppression « définitive » était faux — et surtout, laisser
+    // croire qu'il n'y a pas de retour en arrière change la décision qu'on prend.
+    return `Supprimer l'environnement « ${env?.name} », sa livraison et toutes ses données ? Tout part en archive 30 jours (corbeille support), un ticket de fermeture est ouvert, et le client est classé en « Anciens clients ».`
   }
 
   return (

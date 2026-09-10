@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Trash2, RotateCcw, Inbox, LifeBuoy } from 'lucide-react'
+import { Trash2, RotateCcw, Inbox, LifeBuoy, FolderKanban } from 'lucide-react'
 import { useStore } from '../store.jsx'
 import { Empty, Confirm, toast } from '../ui.jsx'
 
@@ -19,9 +19,23 @@ export default function SupportTrash() {
     setConfirm(null)
   }
 
-  const label = (it) => it.kind === 'request'
-    ? { icon: <Inbox size={15} className="text-brand" />, title: it.data.name || 'Demande', sub: it.data.email || '' }
-    : { icon: <LifeBuoy size={15} className="text-brand" />, title: it.data.category || 'Ticket', sub: it.data.userName || '' }
+  // Une livraison archivée n'est pas une ligne de plus : c'est un environnement entier,
+  // ses espaces et leurs données. On dit ce qui reviendrait, sinon « Restaurer » demande
+  // un acte de foi.
+  const label = (it) => {
+    if (it.kind === 'request') return { icon: <Inbox size={15} className="text-brand" />, title: it.data.name || 'Demande', sub: it.data.email || '', tag: 'Demande' }
+    if (it.kind === 'project') {
+      const n = (it.data?.subenvs || []).length
+      const env = it.data?.env?.name || ''
+      return {
+        icon: <FolderKanban size={15} className="text-brand" />,
+        title: it.data?.project?.name || env || 'Livraison',
+        sub: `${env ? env + ' · ' : ''}${n} ${n > 1 ? 'espaces' : 'espace'}${it.deletedBy ? ' · par ' + it.deletedBy : ''}${it.reason ? ' · ' + it.reason : ''}`,
+        tag: 'Projet & environnement',
+      }
+    }
+    return { icon: <LifeBuoy size={15} className="text-brand" />, title: it.data.category || 'Ticket', sub: it.data.userName || '', tag: 'Ticket' }
+  }
 
   return (
     <div className="space-y-4">
@@ -29,7 +43,7 @@ export default function SupportTrash() {
         <h2 className="text-xl font-extrabold flex items-center gap-2"><Trash2 size={20} className="text-brand" /> Corbeille support</h2>
         {items.length > 0 && <button className="btn-ghost text-xs text-red-500" onClick={() => setConfirm({ kind: 'all' })}>Vider la corbeille</button>}
       </div>
-      <p className="text-xs text-muted -mt-2">Demandes et tickets supprimés, restaurables pendant 30 jours puis purgés automatiquement.</p>
+      <p className="text-xs text-muted -mt-2">Demandes, tickets et livraisons supprimés — restaurables pendant 30 jours, puis purgés automatiquement. Restaurer une livraison remet en place son environnement, ses espaces et leurs données.</p>
 
       {items.length === 0 ? <Empty text="La corbeille support est vide." /> : (
         <div className="space-y-2">
@@ -39,7 +53,7 @@ export default function SupportTrash() {
               <div key={it.id} className="card p-3 flex items-center gap-3 flex-wrap">
                 <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center shrink-0">{l.icon}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm truncate">{l.title} <span className="chip bg-surface text-muted ml-1">{it.kind === 'request' ? 'Demande' : 'Ticket'}</span></div>
+                  <div className="font-bold text-sm truncate">{l.title} <span className="chip bg-surface text-muted ml-1">{l.tag}</span></div>
                   <div className="text-xs text-muted truncate">{l.sub} · supprimé le {fmtTs(it.deletedAt)}</div>
                 </div>
                 <span className="text-xs text-muted shrink-0">expire dans {daysLeft(it.deletedAt)} j</span>

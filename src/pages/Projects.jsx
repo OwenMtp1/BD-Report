@@ -1,8 +1,60 @@
 import React, { useState } from 'react'
-import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Network, UserCheck, Hand, Wrench, Hammer } from 'lucide-react'
+import { FolderKanban, Plus, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarRange, GanttChartSquare, X, Network, UserCheck, Hand, Wrench, Hammer, AlertTriangle, Archive, RotateCcw } from 'lucide-react'
 import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, todayISO } from '../store.jsx'
-import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
+import { Modal, Field, Empty, toast } from '../ui.jsx'
 import ProjectOrgChart from './ProjectOrgChart.jsx'
+
+/**
+ * Suppression d'une livraison — ce qu'elle emporte, dit AVANT de la demander.
+ *
+ * Un projet est la livraison d'un environnement : supprimer l'un supprime l'autre, avec
+ * les espaces de l'équipe et leurs données. Une simple question « Supprimer ce projet ? »
+ * ne décrivait pas le dixième de ce qui allait disparaître — on ne peut pas consentir à
+ * ce qu'on ignore. Le même écran sert à archiver un environnement resté sans livraison :
+ * c'est le même geste, vu de l'autre côté.
+ */
+function DeleteDelivery({ target, store, onClose }) {
+  const impact = store.deliveryImpact(target)
+  const [reason, setReason] = useState('')
+  const env = impact.env
+  const name = impact.project?.name || env?.name || 'cette livraison'
+  const go = () => {
+    if (target.projectId) store.deleteProject(target.projectId, { reason })
+    else store.deleteClientEnv(target.envId, { reason })
+    toast('Archivé — restaurable 30 jours depuis la corbeille support')
+    onClose()
+  }
+  return (
+    <Modal title="Supprimer la livraison et son environnement" onClose={onClose}>
+      <div className="space-y-3">
+        <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 p-3 space-y-2">
+          <div className="text-sm font-bold text-red-700 dark:text-red-300 flex items-center gap-2">
+            <AlertTriangle size={15} /> <span>{name}</span>
+          </div>
+          <ul className="text-xs text-red-700 dark:text-red-300 space-y-1 list-disc pl-4">
+            {env && <li>L'environnement <b>{env.name}</b> et tous ses accès</li>}
+            <li><b>{impact.spaces}</b> {impact.spaces > 1 ? 'espaces' : 'espace'} et leurs données (RDV, contacts, notes, primes)</li>
+            <li><b>{impact.members}</b> {impact.members > 1 ? 'membres perdront l\'accès' : 'membre perdra l\'accès'}</li>
+          </ul>
+        </div>
+        <p className="text-xs text-muted">
+          Tout part en archive pendant 30 jours : la corbeille support restaure l'ensemble d'un geste. Passé ce délai, la suppression est définitive.
+        </p>
+        <Field label="Motif de la fermeture (visible dans le ticket)">
+          <textarea className="input" rows={2} value={reason} onChange={e => setReason(e.target.value)}
+            placeholder="Fin de contrat, doublon, environnement de test…" />
+        </Field>
+        <p className="text-xs text-muted">
+          Un ticket « Fermeture de projet » est ouvert automatiquement : le propriétaire du projet y a accès pour en discuter en cas de litige.
+        </p>
+        <div className="flex justify-end gap-2 pt-1">
+          <button className="btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn-danger" onClick={go}><Archive size={14} /> Supprimer et archiver</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 // Liste de libellés éditable : on ajoute, on retire, rien d'autre. Suffisant pour un
 // vocabulaire — et surtout impossible à casser depuis un champ texte libre.
@@ -287,8 +339,11 @@ export default function Projects({ embedded, onOpenWorkshop }) {
   const clients = store.db.clients || []
   const [view, setView] = useState('gantt') // 'gantt' | 'calendar'
   const [form, setForm] = useState(null) // {mode, data}
-  const [confirmDel, setConfirmDel] = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null) // { projectId } | { envId }
   const [orgFor, setOrgFor] = useState(null)     // projet dont on ouvre l'organigramme
+  // Environnements qui « se baladent » : plus rattachés à aucune livraison, donc suivis
+  // par personne. On ne les efface jamais d'office — on les met sous les yeux.
+  const orphans = store.orphanEnvs()
 
   const save = (data) => {
     // Créer une livraison sans environnement laissait une coquille : ni modules, ni rôles,
@@ -325,6 +380,31 @@ export default function Projects({ embedded, onOpenWorkshop }) {
       </div>
       <p className="text-xs text-muted -mt-2">Planifiez les implémentations clients : phases datées (cadrage, implémentation, formation, go-live…), suivi d'avancement et calendrier.</p>
 
+      {/* Un environnement sans livraison n'apparaît nulle part : ni ici, ni dans le suivi.
+          Il continue pourtant d'exister pour son équipe. Plutôt qu'une purge automatique —
+          une migration qui efface des données client est pire que le désordre qu'elle
+          corrige — on les montre, et le staff tranche. */}
+      {orphans.length > 0 && store.hasPerm('projects.manage') && (
+        <div className="card p-3 border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 space-y-2">
+          <div className="text-sm font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+            <AlertTriangle size={15} /> <span>Environnements sans livraison</span>
+          </div>
+          <p className="text-xs text-amber-800/80 dark:text-amber-300/80">
+            Ces environnements clients existent toujours mais ne sont rattachés à aucune livraison : personne ne les suit. Rouvrez la livraison, ou archivez-les.
+          </p>
+          <div className="space-y-1.5">
+            {orphans.map(e => (
+              <div key={e.id} className="flex items-center gap-2 flex-wrap rounded-lg bg-card px-2.5 py-1.5">
+                <span className="text-sm font-semibold flex-1 min-w-0 truncate">{e.name}</span>
+                <span className="text-xs text-muted">{store.envMembers(e.id).length} {store.envMembers(e.id).length > 1 ? 'membres' : 'membre'}</span>
+                <button className="btn-ghost !py-1 text-xs" onClick={() => { store.recreateDelivery(e.id); toast('Livraison rouverte') }}><RotateCcw size={12} /> Rouvrir la livraison</button>
+                <button className="btn-danger !py-1 text-xs" onClick={() => setConfirmDel({ envId: e.id })}><Archive size={12} /> Archiver</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {projects.length === 0 ? (
         <Empty text="Aucun projet. Créez votre premier projet d'implémentation avec « Nouveau projet »." />
       ) : (
@@ -357,7 +437,10 @@ export default function Projects({ embedded, onOpenWorkshop }) {
                       {store.canEditProject(p) && (
                         <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setForm({ mode: 'edit', data: structuredClone(p) })}><Pencil size={14} /></button>
                       )}
-                      <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" onClick={() => setConfirmDel(p.id)}><Trash2 size={14} /></button>
+                      {store.canEditProject(p) && (
+                        <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer le projet et son environnement"
+                          onClick={() => setConfirmDel({ projectId: p.id })}><Trash2 size={14} /></button>
+                      )}
                     </div>
                   </div>
 
@@ -418,7 +501,7 @@ export default function Projects({ embedded, onOpenWorkshop }) {
             isCreate={form.mode === 'create'} onSave={save} onClose={() => setForm(null)} />
         </Modal>
       )}
-      {confirmDel && <Confirm message="Supprimer ce projet ?" onYes={() => { store.deleteProject(confirmDel); setConfirmDel(null); toast('Projet supprimé') }} onNo={() => setConfirmDel(null)} />}
+      {confirmDel && <DeleteDelivery target={confirmDel} store={store} onClose={() => setConfirmDel(null)} />}
     </div>
   )
 }
