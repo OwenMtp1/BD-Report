@@ -5,7 +5,7 @@ import {
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
   AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Radio, Trophy, ShieldCheck, Star, GraduationCap,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER, isElevatedRole, ENV_MODULES, defaultEnvModules } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER, isElevatedRole, ENV_MODULES, defaultEnvModules, STATEMENT_MODES } from './store.jsx'
 import { NAV_GROUPS, NAV } from './nav.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
@@ -342,6 +342,32 @@ function EnvPicker() {
                 ))}
               </div>
             </div>
+
+            {/* Délivrance du relevé de primes. Réglé ici parce que c'est une règle de
+                fonctionnement de l'entreprise cliente, pas une préférence individuelle —
+                et modifiable ensuite par l'équipe BD Report depuis l'atelier. */}
+            {form.modules?.statements !== false && (
+              <div className="rounded-xl border border-line p-3">
+                <div className="font-bold text-sm mb-1">Comment le relevé de primes est délivré</div>
+                <div className="space-y-1.5">
+                  {STATEMENT_MODES.map(m => (
+                    <label key={m.id} className="flex items-start gap-2 text-sm p-1.5 rounded-lg hover:bg-surface cursor-pointer">
+                      <input type="radio" name="statementMode" className="mt-1"
+                        checked={(form.statementMode || 'onRequest') === m.id}
+                        onChange={() => setForm(f => ({ ...f, statementMode: m.id }))} />
+                      <span className="min-w-0">
+                        <span className="font-semibold">{m.label}</span>
+                        <span className="block text-[11px] text-muted">{m.desc}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted mt-1.5">
+                  Dans les deux cas, le manager SIGNE : « automatique » automatise la demande et la
+                  remise, jamais la signature — un document signé sans être lu ne prouve rien.
+                </p>
+              </div>
+            )}
 
             {/* Qui tranchera les passations. Le manager de l'environnement et, à défaut de
                 manager, son propriétaire, l'ont d'office : on ne délègue ici qu'en plus.

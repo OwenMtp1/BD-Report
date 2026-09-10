@@ -1580,6 +1580,22 @@ export function monthlyPaidPrimes(data, env, subId, mKey) {
 // ⚠️ Le contenu est GELÉ au moment de la signature. Si le relevé se recalculait après coup, un
 // document signé pourrait changer sans que personne ne s'en aperçoive — c'est exactement ce
 // qu'un relevé est censé empêcher.
+// ---------------------------------------------------------------- Délivrance du relevé
+// Deux façons d'obtenir son relevé, réglées par environnement :
+//  · `onRequest` : le salarié le demande. Convient aux équipes où tout le monde ne le veut pas.
+//  · `automatic` : la demande est ouverte pour tout le monde, chaque mois, sans rien réclamer.
+//
+// ⚠️ Dans les DEUX cas, le manager SIGNE. « Automatique » automatise la demande et la
+// remise, jamais la signature : celle-ci s'accompagne d'une confirmation explicite de la
+// véracité des montants, et la signer sans la lire ferait de cette confirmation un mensonge
+// — c'est-à-dire retirerait au document la seule chose qui en fait une preuve.
+export const STATEMENT_MODES = [
+  { id: 'onRequest', label: 'À la demande du salarié', desc: "Le collaborateur demande son relevé ; le manager est prévenu et le signe." },
+  { id: 'automatic', label: 'Automatique chaque mois', desc: "La demande est ouverte pour tout le monde au début de chaque mois. Le manager signe, le relevé part." },
+]
+export const statementMode = (env) => (env?.statementMode === 'automatic' ? 'automatic' : 'onRequest')
+export const envStatementRequests = (env) => (env?.statementRequests || {})
+
 export const statementKey = (subId, monthKey) => `${subId}|${monthKey}`
 export const envStatements = (env) => (env?.statements || {})
 
@@ -3374,6 +3390,20 @@ export function migrate(db) {
       db._autoSeed.reqClients.push(req.id)
     }
   })
+  // Relevés en mode automatique : la demande s'ouvre d'elle-même, chaque mois, pour chaque
+  // personne — le salarié n'a rien à réclamer. Une seule fois par personne et par mois
+  // (la clé du relevé suffit à le garantir), et seulement pour le mois ÉCOULÉ : un relevé de
+  // mois en cours porterait sur une paie qui n'est pas encore arrêtée.
+  ;(db.environments || []).forEach(env => {
+    if (statementMode(env) !== 'automatic') return
+    const prev = new Date(); prev.setDate(1); prev.setMonth(prev.getMonth() - 1)
+    const mKey = monthKey(prev)
+    env.statementRequests = env.statementRequests || {}
+    ;(db.subenvs || []).filter(s => s.envId === env.id).forEach(s => {
+      const k = statementKey(s.id, mKey)
+      if (!env.statementRequests[k]) env.statementRequests[k] = { at: new Date().toISOString(), by: 'Règle mensuelle', auto: true }
+    })
+  })
   // Rattrapage, une seule fois, pour les bases déjà en service. Un environnement créé avant
   // la correction n'avait pas de repère de semis : au prochain chargement, la migration
   // l'aurait pris pour un environnement neuf et aurait recréé le projet supprimé — une
@@ -4075,7 +4105,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // pipeline, issues, barèmes, règles de prime, services et rôles. Jamais les données
       // du client d'origine : ouvrir un espace ne doit pas y recopier les rendez-vous,
       // contacts ou notes de quelqu'un d'autre.
-      createEnv({ name, logo, templateOf, modules, closerServices }) {
+      createEnv({ name, logo, templateOf, modules, closerServices, statementMode: stMode }) {
         // L'environnement hérite de l'offre de son créateur (Starter reste limité).
         const plan = account?.plan || 'starter'
         const src = templateOf ? db.environments.find(e => e.id === templateOf) : null
@@ -4084,6 +4114,8 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           // Modules optionnels retenus à l'installation. Repris du modèle quand il y en a un :
           // dupliquer une configuration sans ses modules livrerait un espace différent.
           modules: { ...defaultEnvModules(), ...(src?.modules || {}), ...(modules || {}) },
+          // Délivrance du relevé : réglée à la création, reprise d'un modèle sinon.
+          statementMode: stMode || src?.statementMode || 'onRequest',
           departments: src ? [...(src.departments || [])] : ['Marketing', 'Sales'],
           services: src ? (src.services || []).map(sv => ({ ...sv, id: uid() })) : undefined,
           roles: src ? (src.roles || []).map(r => ({ ...r, id: uid() })) : undefined,
@@ -4512,6 +4544,46 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           // On n'inscrit rien quand le bénéficiaire est le propriétaire : une valeur vide se
           // lit « la règle s'applique », ce qui reste vrai si l'affaire change de mains.
           r.primeTo = (!toSubId || toSubId === subId) ? '' : toSubId
+          return d
+        })
+      },
+      // ----- Relevé de primes : demande et délivrance
+      statementMode() { return statementMode(db.environments.find(e => e.id === session?.envId)) },
+      setStatementMode(envId, mode) {
+        if (!accountHasPerm(account, 'env.modules', db) && !accountHasPerm(account, 'clients.manage', db)
+          && !this.hasClientPerm?.('primes.sign')) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === envId); if (!env) return d
+          env.statementMode = mode === 'automatic' ? 'automatic' : 'onRequest'
+          return d
+        })
+      },
+      statementRequested(subId, mKey) {
+        const env = db.environments.find(e => e.id === session?.envId)
+        return !!envStatementRequests(env)[statementKey(subId, mKey)]
+      },
+      /** Le salarié demande son relevé : le manager en est prévenu, et la demande est datée. */
+      requestStatement(subId, mKey) {
+        if (roBlocked()) return
+        setDb(d => {
+          const env = d.environments.find(e => e.id === session?.envId); if (!env) return d
+          const k = statementKey(subId, mKey)
+          if (env.statementRequests?.[k]) return d      // déjà demandé : on ne réveille personne deux fois
+          env.statementRequests = { ...(env.statementRequests || {}), [k]: { at: new Date().toISOString(), by: actorName } }
+          // Le manager doit l'apprendre sans avoir à surveiller un écran.
+          const meSub = d.subenvs.find(s => s.id === subId)
+          // Le manager du binôme, à défaut le propriétaire de l'environnement : une demande
+          // qui n'atteint personne équivaut à ne pas l'avoir faite.
+          const mgrSub = meSub ? managerSubOf(d, meSub) : null
+          const owner = d.subenvs.find(s => s.envId === env.id && s.ownerId === env.createdBy)
+          const target = mgrSub?.id || owner?.id
+          if (target && d.data[target]) {
+            d.data[target].notifs = [{
+              id: uid(), ts: new Date().toISOString(), read: false, type: 'statement', page: 'teamlead',
+              title: 'Relevé de primes demandé',
+              text: `${actorName} demande son relevé — il attend votre signature.`,
+            }, ...(d.data[target].notifs || [])].slice(0, 100)
+          }
           return d
         })
       },

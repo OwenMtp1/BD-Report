@@ -114,9 +114,7 @@ function Line({ e, store, mine, canDecide, closers, onRefuse, members }) {
           <select className="input !w-auto !py-1 text-xs" value={beneficiary}
             onChange={ev => { store.setPrimeBeneficiary(e.subId, e.rdv.id, ev.target.value); toast('Bénéficiaire de la prime modifié') }}>
             {(members || []).map(m => (
-              <option key={m.id} value={m.id}>
-                {m.prenom} {m.nom}{m.id === e.subId ? ' (demandeur)' : ''}
-              </option>
+              <option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>
             ))}
           </select>
         </label>

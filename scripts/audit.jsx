@@ -400,6 +400,34 @@ async function main() {
     })
   }
 
+  // 6 terdecies. Relevé de primes : « automatique » automatise la DEMANDE et la remise,
+  //   JAMAIS la signature. Un relevé signé sans avoir été lu ne prouve rien — c'est-à-dire
+  //   qu'il perd la seule chose qui en fait un document opposable.
+  {
+    const d = s.buildDemoDb({})
+    const e = d.environments.find(x => x.id === 'env-demo')
+    e.statementMode = 'automatic'
+    delete e.statementRequests
+    s.migrate(d)
+    const prev = new Date(); prev.setDate(1); prev.setMonth(prev.getMonth() - 1)
+    const mk = s.monthKey(prev)
+    const subs = d.subenvs.filter(x => x.envId === 'env-demo')
+    ok(subs.every(x => !!s.envStatementRequests(e)[s.statementKey(x.id, mk)]),
+      'Mode automatique : la demande du mois écoulé ne s\'ouvre pas pour toute l\'équipe')
+    // Le mois EN COURS ne doit pas être demandé : la paie n'est pas arrêtée.
+    ok(!s.envStatementRequests(e)[s.statementKey(subs[0].id, s.monthKey(new Date()))],
+      'Mode automatique : un relevé du mois en cours porterait sur une paie non arrêtée')
+    // Et surtout : AUCUNE signature n'a été posée automatiquement.
+    ok(subs.every(x => !(e.statements || {})[s.statementKey(x.id, mk)]?.signature),
+      'Mode automatique : un relevé a été SIGNÉ sans manager — le document ne prouve plus rien')
+    // Idempotence : repasser la migration ne réécrit pas les demandes existantes.
+    const before = JSON.stringify(e.statementRequests)
+    s.migrate(d)
+    ok(JSON.stringify(e.statementRequests) === before, 'Mode automatique : les demandes sont réécrites à chaque chargement')
+    // Le mode par défaut reste « à la demande » : on n'impose pas une règle à qui n'a rien choisi.
+    ok(s.statementMode({}) === 'onRequest', 'Le mode par défaut doit rester « à la demande »')
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.

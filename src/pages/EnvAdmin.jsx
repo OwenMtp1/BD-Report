@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 import React, { useState } from 'react'
 import { ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Unlock, ShieldAlert, Rocket, LogIn, Trash2, Eye } from 'lucide-react'
-import { ENV_MODULES } from '../store.jsx'
+import { ENV_MODULES, STATEMENT_MODES, statementMode } from '../store.jsx'
 import { Field, Empty, Confirm, toast } from '../ui.jsx'
 import { ChipEditor } from './Projects.jsx'
 
@@ -145,6 +145,32 @@ export default function EnvAdmin({ envId, store }) {
               })}
             </div>
             <p className="text-[11px] text-muted">Retirer un module masque ses écrans sans supprimer les données déjà saisies.</p>
+          </div>
+        )}
+
+        {/* Délivrance du relevé de primes : une règle de fonctionnement du client, réglée à
+            la création et modifiable ici. Sans ce réglage, le salarié dépendait entièrement
+            de l'initiative de son manager. */}
+        {env && store.envModules(envId).statements && (
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <div className="text-sm font-bold">Relevé de primes — comment il est délivré</div>
+            <div className="space-y-1.5">
+              {STATEMENT_MODES.map(m => (
+                <label key={m.id} className="flex items-start gap-2 text-sm p-1.5 rounded-lg hover:bg-surface cursor-pointer">
+                  <input type="radio" name={`stmode-${envId}`} className="mt-1"
+                    checked={statementMode(env) === m.id}
+                    onChange={() => { store.setStatementMode(envId, m.id); toast(`Relevés : ${m.label.toLowerCase()}`) }} />
+                  <span className="min-w-0">
+                    <span className="font-semibold">{m.label}</span>
+                    <span className="block text-[11px] text-muted">{m.desc}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted">
+              Dans les deux cas, le manager signe : « automatique » automatise la demande et la
+              remise, jamais la signature.
+            </p>
           </div>
         )}
 

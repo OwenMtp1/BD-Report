@@ -111,6 +111,14 @@ export function StatementsManager() {
         <div>
           <h3 className="font-bold flex items-center gap-2"><FileSignature size={17} className="text-brand" /> Relevés de primes</h3>
           <p className="text-xs text-muted -mt-0.5">Tant que vous ne l'avez pas signé, le relevé reste un brouillon : le collaborateur ne peut pas le télécharger.</p>
+          {/* Le mode est réglé à la création de l'environnement et modifiable par l'équipe
+              BD Report. On le rappelle ici : sans cela, un manager en mode automatique
+              attendrait des demandes qui n'arriveront jamais, puisqu'elles sont déjà ouvertes. */}
+          <p className="text-[11px] text-muted mt-0.5">
+            {store.statementMode() === 'automatic'
+              ? 'Règle en vigueur : la demande est ouverte automatiquement chaque mois pour toute l\'équipe. Il ne manque que votre signature.'
+              : 'Règle en vigueur : chacun demande son relevé. Vous êtes prévenu à chaque demande.'}
+          </p>
         </div>
         <select className="input !w-auto !py-1.5 text-xs" value={mKey} onChange={e => setMKey(e.target.value)}>
           {months.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
@@ -131,6 +139,11 @@ export function StatementsManager() {
                 {signed
                   ? <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 flex items-center gap-1"><ShieldCheck size={11} /> signé</span>
                   : <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 flex items-center gap-1"><Clock size={11} /> à valider</span>}
+                {/* Une demande explicite se distingue d'un relevé simplement pas encore signé :
+                    quelqu'un attend, et il faut que cela se voie du premier coup d'œil. */}
+                {!signed && store.statementRequested(s.id, mKey) && (
+                  <span className="chip bg-brand/15 text-brand flex items-center gap-1">demandé</span>
+                )}
               </div>
               <div className="flex gap-1.5 mt-2 flex-wrap">
                 <button className="btn-ghost !py-1 text-xs" onClick={() => setOpen(open === s.id ? null : s.id)}>
@@ -234,10 +247,24 @@ export function MyStatement() {
           </button>
           <span className="text-[11px] text-muted">Signé par {st.signature.by} le {new Date(st.signature.at).toLocaleString('fr-FR')}.</span>
         </div>
-      ) : (
+      ) : store.statementMode() === 'automatic' ? (
         <p className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-          <Clock size={13} /> En attente de validation par votre manager — le relevé n'est pas encore téléchargeable.
+          <Clock size={13} /> Envoyé automatiquement chaque mois : il attend la signature de votre manager.
         </p>
+      ) : store.statementRequested(subId, mKey) ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+          <Clock size={13} /> Demande envoyée — votre manager doit signer avant que le relevé soit téléchargeable.
+        </p>
+      ) : (
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Sans ce bouton, le salarié dépendait entièrement de l'initiative de son manager :
+              il voyait ses montants mais n'avait aucun moyen d'en réclamer la trace signée. */}
+          <button className="btn-primary !py-1.5 text-xs"
+            onClick={() => { store.requestStatement(subId, mKey); toast('Demande envoyée à votre manager') }}>
+            <FileSignature size={14} /> Demander mon relevé
+          </button>
+          <span className="text-[11px] text-muted">Votre manager sera prévenu et signera le document.</span>
+        </div>
       )}
     </div>
   )
