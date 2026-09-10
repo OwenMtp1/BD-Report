@@ -4296,6 +4296,22 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
        * L'entrée reste TRACÉE : c'est le journal, pas un chiffre à quatre chiffres, qui rend
        * une intervention chez un client vérifiable.
        */
+      /**
+       * Les environnements que CE compte peut ouvrir depuis le sélecteur.
+       *
+       * ⚠️ Le sélecteur décidait seul, sur un ancien drapeau de compte (`account.developer`)
+       * qui n'a rien à voir avec le rôle : un Fondateur sans ce drapeau ne voyait que les
+       * environnements qu'il avait créés ou rejoints. Il voyait pourtant les autres partout
+       * ailleurs — fiche client, livraisons, atelier, « voir en situation » — et tout le
+       * reste du store le laisse déjà y entrer (`skipsPin`, `enterEnv` qui journalise
+       * l'intervention). Un client visible dans la console et introuvable au moment d'y
+       * entrer : la même question répondue à deux endroits, forcément de deux façons.
+       * Elle se décide donc ICI, une fois, avec le MÊME critère que ces deux méthodes.
+       */
+      selectableEnvs() {
+        if (isSupportRole(account?.role) || account?.developer) return db.environments
+        return db.environments.filter(e => e.createdBy === account?.id || (e.members || []).includes(account?.id))
+      },
       skipsPin(envId) {
         if (!isSupportRole(account?.role)) return false
         const env = db.environments.find(e => e.id === (envId || session?.envId))

@@ -381,6 +381,16 @@ async function main() {
       "store.skipsPin : l'exception n'est pas bornée au rôle support")
     ok(/env\.createdBy !== account\?\.id/.test(st),
       'store.skipsPin : un membre du staff doit rester soumis au code dans SON PROPRE environnement')
+    // Et la porte doit seulement EXISTER : le sélecteur tranchait sur `account.developer`,
+    // un drapeau que seul le compte d'origine porte. Tout autre compte staff voyait ses
+    // clients dans la console et n'en trouvait aucun au moment d'entrer. Une seule réponse,
+    // au même endroit que `skipsPin` et `enterEnv`.
+    ok(/store\.selectableEnvs\(\)/.test(app),
+      "App : le sélecteur d'environnements décide seul de ce qu'il montre")
+    ok(!/developer\s*\n?\s*\?\s*store\.db\.environments/.test(app),
+      "App : le sélecteur filtre encore les environnements sur le drapeau `developer`")
+    ok(/selectableEnvs\(\) \{\s*\n\s*if \(isSupportRole/.test(st),
+      "store.selectableEnvs : la liste n'est pas ouverte au rôle support")
   }
 
   // 6 duodecies. « Voir en situation » : CHAQUE brique doit savoir dire où elle se montre.

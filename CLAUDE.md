@@ -89,6 +89,11 @@ npm run dev        # serveur de dev
   dans `roles`, et court-circuite la garde par brique). `MANAGER_TABS` = les items `inManagerHub`. **Deux items ne doivent
   jamais partager la même brique** : `GRANTABLE_TABS` la prend pour clé et React signalerait un doublon.
 - **`src/App.jsx`** — routing par `NAV_GROUPS` (importé de nav.jsx) + `pageEl` (switch d'id). `MainApp` = sidebar + header.
+  **`EnvPicker`** liste `store.selectableEnvs()` — jamais sa propre règle. ⚠️ Il tranchait sur `account.developer`,
+  un drapeau que seul le compte d'origine ('01') porte : tout autre compte **Fondateur ou Support** voyait les
+  environnements clients partout (fiche client, livraisons, atelier, « voir en situation ») et n'en trouvait
+  **aucun** au moment d'entrer. `selectableEnvs` applique le MÊME critère que `skipsPin` et `enterEnv`
+  (`isSupportRole`) : la même question ne peut pas recevoir deux réponses selon l'écran qui la pose.
   **`SubEnvPicker`** : sans droit d'encadrement (`team.view`/`team.manage`), seul SON espace est ouvrable — ceux des
   collègues portent un cadenas et sont inertes. Le code PIN protège d'un regard, il n'autorisait pas à entrer chez
   un autre. Avec le droit, tous les espaces restent accessibles, PIN demandé.

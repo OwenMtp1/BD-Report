@@ -1327,6 +1327,34 @@ async function main() {
   raw.projects = raw.projects.filter(p => p.sourceEnvId !== 'env-peoplespheres')
   win.localStorage.setItem('bdrflow_db_v1', JSON.stringify(raw))
   win.sessionStorage.clear()
+  // ---- LE SÉLECTEUR D'ENVIRONNEMENTS DOIT MONTRER LES MÊMES QUE LA CONSOLE.
+  //      Il tranchait sur `account.developer`, un drapeau que seul le compte d'origine
+  //      porte : tout autre compte Fondateur ou Support voyait ses clients partout — fiche
+  //      client, livraisons, atelier — et ne pouvait entrer chez aucun. On monte donc un
+  //      compte staff SANS ce drapeau, le seul cas où le défaut se voit.
+  {
+    const raw3 = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+    raw3.accounts.push({
+      id: 'staff-sansdev', email: 'sylvie@bdreport.fr', pseudo: 'Sylvie',
+      role: 'Support BD Report', plan: 'beta', bricks: [], // pas de `developer`
+    })
+    win.localStorage.setItem('bdrflow_db_v1', JSON.stringify(raw3))
+    win.sessionStorage.setItem('bdrflow_session_v1', JSON.stringify({ accountId: 'staff-sansdev', envId: null, subEnvId: null, welcomed: true }))
+    win.sessionStorage.setItem('bdr_splashed', '1')
+    const ce = win.document.createElement('div')
+    win.document.body.appendChild(ce)
+    const roote = createRoot(ce)
+    await act(async () => { roote.render(Root(React.createElement(App))) })
+    const te = () => ce.textContent || ''
+    const envsNow = JSON.parse(win.localStorage.getItem('bdrflow_db_v1')).environments
+    const hidden = envsNow.filter(e => !te().includes(e.name))
+    if (hidden.length) {
+      throw new Error(`Environnements invisibles au sélecteur pour un compte staff : ${hidden.map(e => e.name).join(', ')}`)
+    }
+    await act(async () => { roote.unmount() })
+    win.sessionStorage.removeItem('bdrflow_session_v1')
+  }
+
   // ---- L'ÉCRAN DU PROPRIÉTAIRE D'UN PROJET FERMÉ. Il peut encore se connecter, mais
   //      l'application ne lui ouvre QUE la discussion de fermeture — et cette discussion
   //      ne lui montre ni le nom du collègue qui a fermé l'accès, ni le motif interne.

@@ -255,11 +255,11 @@ function EnvPicker() {
   const [form, setForm] = useState({ name: '', logo: '', modules: defaultEnvModules() })
   const [pinFor, setPinFor] = useState(null)
 
-  // Owen (développeur) voit tous les environnements ; les autres, ceux qu'ils ont créés
+  // L'équipe BD Report voit tous les environnements ; les autres, ceux qu'ils ont créés
   // ou ceux auxquels un administrateur / manager les a ajoutés (membres).
-  const envs = me.developer
-    ? store.db.environments
-    : store.db.environments.filter(e => e.createdBy === me.id || (e.members || []).includes(me.id))
+  // Le critère vit dans le store (`selectableEnvs`), avec `skipsPin` et `enterEnv` : la
+  // même question ne peut pas recevoir deux réponses selon l'écran qui la pose.
+  const envs = store.selectableEnvs()
 
   const enter = (env) => {
     // L'équipe BD Report n'a pas de code à donner chez un client : voir `store.skipsPin`.
