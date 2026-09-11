@@ -407,6 +407,22 @@ npm run dev        # serveur de dev
       interdit `/company/`. Le lien vit de toute façon sur le site de l'entreprise, qui le
       publie pour être suivi — accueil, puis « contact »/« à propos ». Le test refuse tout
       appel vers linkedin.com.
+    🔑 **CE QUE LA FICHE SAIT DÉJÀ ALIMENTE LA RECHERCHE** (`known`, transmis par
+    `enrich.js` ET `signals.js`). Deux « Acme » à l'annuaire, l'un à Lyon et l'autre à
+    Brest : si le commercial a saisi « Lyon », il a tranché sans le savoir. Ignorer ce
+    qu'il a renseigné, c'était lui redemander ce qu'il avait déjà écrit.
+    · `officialRegistry(company, known)` — `hintScore` ORDONNE les candidats sur la ville
+      et le secteur connus. ⚠️ Un indice n'AJOUTE jamais un candidat, il ne fait que les
+      classer : sans correspondance de nom ET sans indice, on s'abstient toujours.
+    · `wikidata(company, known)` — le secteur départage deux homonymes que la garde
+      « c'est une organisation » laisse tous deux passer (« Alan » l'assureur et « Alan »
+      le studio de jeu).
+    · `findWebsite(company, known)` — le NOM reste obligatoire : une ville seule ne prouve
+      rien, des milliers de sites lyonnais ne sont pas celui d'Acme.
+    · **Signaux** : `collectSignals` et `analyzeSignals` reçoivent la fiche. L'analyse
+      juge autrement l'ampleur d'un fait selon qu'il s'agit d'une PME lyonnaise ou d'un
+      groupe international — sans la fiche, le modèle l'ignore. ⚠️ Une fiche VIDE n'ajoute
+      pas de rubrique creuse au prompt.
     ⚠️ **L'ordre reste : bases publiques d'abord, IA en dernier.** L'enrichissement passait par l'outil de
     recherche Google de Gemini, dont le quota gratuit est le plus serré de toute l'API : en
     pratique la fonctionnalité ne répondait presque jamais (« Quota Google atteint »). On a

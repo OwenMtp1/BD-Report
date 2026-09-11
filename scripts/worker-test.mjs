@@ -327,6 +327,85 @@ const callTok = (path, body) => worker.fetch(new Request('https://relay.test' + 
   method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' },
 }), withToken)
 
+console.log("Ce que la FICHE sait déjà alimente la recherche")
+{
+  // ⚠️ DEUX « ACME » À L'ANNUAIRE. Le commercial a saisi « Lyon » sur sa fiche : il a
+  // tranché sans le savoir. L'ignorer, c'était lui redemander ce qu'il avait déjà écrit.
+  stubFetch([
+    [REGISTRY, () => ({ body: { total_results: 2, results: [
+      { siren: '111', nom_complet: 'ACME', siege: { libelle_commune: 'BREST', code_postal: '29200' }, libelle_activite_principale: 'Pêche' },
+      { siren: '222', nom_complet: 'ACME', siege: { libelle_commune: 'LYON', code_postal: '69002' }, libelle_activite_principale: 'Édition de logiciels' },
+    ] } })],
+    [WIKIDATA, () => ({ body: { search: [] } })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: {
+    company: 'Acme', fields: ['secteur'], known: { localisation: 'Lyon, France' },
+  } })).json()
+  ok(b.found?.secteur?.value === 'Édition de logiciels',
+    `la ville saisie doit départager deux homonymes (reçu : ${b.found?.secteur?.value})`)
+}
+{
+  // Sans indice, deux homonymes restent deux homonymes : on s'abstient.
+  stubFetch([
+    [REGISTRY, () => ({ body: { total_results: 2, results: [
+      { siren: '111', nom_complet: 'ACME', siege: { libelle_commune: 'BREST' }, libelle_activite_principale: 'Pêche' },
+      { siren: '222', nom_complet: 'ACME', siege: { libelle_commune: 'LYON' }, libelle_activite_principale: 'Édition de logiciels' },
+    ] } })],
+    [WIKIDATA, () => ({ body: { search: [] } })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+    [/robots\.txt/, () => ({ status: 404, body: '' })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: {} } })).json()
+  // Le nom correspond aux deux : c'est `bestMatch` qui tranche, et il prend le premier à
+  // score égal — ce qui reste un choix, pas une certitude. On vérifie seulement qu'aucun
+  // indice n'a été inventé pour justifier ce choix.
+  ok(!b.registryError, "l'absence d'indice n'est pas une erreur")
+}
+{
+  // Le secteur saisi départage deux entreprises homonymes sur Wikidata — la garde
+  // « c'est une organisation » les laisse toutes deux passer.
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })],
+    [WIKIDATA, (u) => ({ body: u.includes('wbsearchentities')
+      ? { search: [
+          { id: 'Q1', label: 'Alan', description: 'studio de jeu vidéo, entreprise' },
+          { id: 'Q42', label: 'Alan', description: "entreprise d'assurance santé" },
+        ] }
+      : { entities: { Q42: { claims: { P856: [{ mainsnak: { datavalue: { value: 'https://alan.com' } } }] } } } } })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+    [/robots\.txt/, () => ({ status: 404, body: '' })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: {
+    company: 'Alan', fields: ['site'], known: { secteur: 'Assurance santé' },
+  } })).json()
+  ok(b.found?.site?.value === 'https://alan.com', `le secteur saisi doit départager (reçu : ${b.found?.site?.value})`)
+}
+{
+  // SIGNAUX : l'analyse reçoit la fiche. Sans elle, le modèle juge l'ampleur d'un fait
+  // sans savoir s'il parle d'une PME lyonnaise ou d'un groupe international.
+  let prompt = ''
+  stubFetch([[GEMINI, (u, init) => {
+    prompt = JSON.parse(init.body).contents[0].parts[0].text
+    return { body: geminiBody({ signals: [{ type: 'growth', title: 'x', evidence: [0], importance: 1, relevance: 1, confidence: 1 }] }) }
+  }]])
+  await call('/signals/analyze', { method: 'POST', body: {
+    company: 'Acme', items: [{ kind: 'news', title: 'x', sourceUrl: 'u' }],
+    known: { secteur: 'Logiciel RH', localisation: 'Lyon, France', effectif: '120' },
+  } })
+  ok(/Logiciel RH/.test(prompt) && /Lyon/.test(prompt),
+    "la fiche doit être transmise à l'analyse : elle écarte les homonymes et situe l'ampleur d'un fait")
+}
+{
+  // Et une fiche vide ne pollue pas le prompt d'une rubrique creuse.
+  let prompt = ''
+  stubFetch([[GEMINI, (u, init) => {
+    prompt = JSON.parse(init.body).contents[0].parts[0].text
+    return { body: geminiBody({ signals: [] }) }
+  }]])
+  await call('/signals/analyze', { method: 'POST', body: { company: 'Acme', items: [{ kind: 'news', title: 'x', sourceUrl: 'u' }], known: {} } })
+  ok(!/CE QUE L'ÉQUIPE SAIT DÉJÀ/.test(prompt), "une fiche vide ne doit pas ajouter de rubrique creuse au prompt")
+}
+
 console.log("Enrichissement — retrouver la BONNE fiche à l'annuaire")
 {
   // ⚠️ LA CAUSE LA PLUS PROBABLE D'UN ENRICHISSEMENT VIDE. On demandait UN résultat et on

@@ -99,7 +99,7 @@ export default function Signals() {
     for (const name of targets) {
       setBusy(name)
       const info = (sub.companies || {})[name] || {}
-      const col = await collectEvidence(name, info.site, ctx, store.db)
+      const col = await collectEvidence(name, info.site, ctx, store.db, { known: info })
       if (col.outdated) { stop = col.error; break }
       if (col.error) { lines.push({ name, state: 'error', why: col.error }); continue }
       if (!(col.items || []).length) {
@@ -116,7 +116,7 @@ export default function Signals() {
         lines.push({ name, state: 'cached', why: `${cached.signals.length} signal(s), analyse déjà faite sur ces mêmes preuves.` })
         continue
       }
-      const res = await analyzeEvidence(name, col.items, ctx, store.db)
+      const res = await analyzeEvidence(name, col.items, ctx, store.db, info)
       if (res.quota) { stop = res.error; break }
       if (res.error) { lines.push({ name, state: 'error', why: res.error }); continue }
       store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok', model: res.model })

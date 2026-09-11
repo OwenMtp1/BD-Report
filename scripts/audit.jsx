@@ -922,8 +922,8 @@ async function main() {
     //    Et l'IA ne travaille QUE sur ce que les bases publiques n'ont pas donné.
     ok(/const missing = fields\.filter\(f => !out\[f\]\)/.test(enrichSrc),
       "Relais : l'IA est appelée pour des champs déjà trouvés gratuitement")
-    ok(/officialRegistry\(company\)/.test(enrichSrc) && /wikidata\(company\)/.test(enrichSrc),
-      'Relais : les deux sources publiques ne sont pas toutes deux interrogées')
+    ok(/officialRegistry\(company, known\)/.test(enrichSrc) && /wikidata\(company, known\)/.test(enrichSrc),
+      'Relais : les deux sources publiques ne sont pas interrogées AVEC ce que la fiche sait déjà')
     // ⚠️ PAPPERS EST FACULTATIF, et doit le rester : sans token il s'éteint proprement au
     //    lieu d'échouer, sinon un réglage absent passerait pour une panne.
     const papSrc = worker.slice(worker.indexOf('async function pappers('), worker.indexOf('async function enrich('))

@@ -72,7 +72,7 @@ export function icpSummary(rules, profiles) {
 }
 
 /** Ramasse les preuves publiques. Gratuit : aucune IA n'est appelée ici. */
-export async function collectEvidence(company, site, rules, db, { force = false } = {}) {
+export async function collectEvidence(company, site, rules, db, { force = false, known = {} } = {}) {
   const name = String(company || '').trim()
   if (!name) return { error: "Aucun nom d'entreprise." }
   if (!force) {
@@ -85,7 +85,9 @@ export async function collectEvidence(company, site, rules, db, { force = false 
     try {
       const res = await fetch(`${base}/signals/collect`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company: name, site: site || '', types: rules.types, sources: rules.sources || {} }),
+        // ⚠️ La FICHE part avec la demande : secteur, ville et effectif écartent les
+        // homonymes et permettent de retrouver le site quand il n'est pas renseigné.
+        body: JSON.stringify({ company: name, site: site || '', types: rules.types, sources: rules.sources || {}, known }),
       })
       const body = await res.json().catch(() => null)
       // ⚠️ 404 sur cette route = le relais déployé est une version ANTÉRIEURE au moteur.
@@ -112,7 +114,7 @@ export async function collectEvidence(company, site, rules, db, { force = false 
  * et il n'est jamais automatique : ni à l'ouverture d'un écran, ni sur des preuves
  * inchangées depuis la dernière analyse.
  */
-export async function analyzeEvidence(company, items, rules, db) {
+export async function analyzeEvidence(company, items, rules, db, known = {}) {
   const name = String(company || '').trim()
   const base = newsRelayUrl(db)
   if (!base) return { error: "Le relais n'est pas configuré." }
@@ -123,7 +125,7 @@ export async function analyzeEvidence(company, items, rules, db) {
     try {
       const res = await fetch(`${base}/signals/analyze`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company: name, items, rules: rules.forAi, icp: rules.icp || '' }),
+        body: JSON.stringify({ company: name, items, rules: rules.forAi, icp: rules.icp || '', known }),
       })
       const body = await res.json().catch(() => null)
       const quota = res.status === 429 || body?.code === 429

@@ -448,7 +448,7 @@ async function collectNews(company, types) {
 const fingerprint = (company, it) =>
   `${normTitle(company)}|${(it.date || '').slice(0, 10)}|${normTitle(it.title).slice(0, 80)}`
 
-async function collectSignals({ company, site, types, sources }) {
+async function collectSignals({ company, site, types, sources, known = {} }) {
   const on = (id) => sources?.[id] !== false
   // ⚠️ SANS SITE, DEUX SOURCES SUR TROIS SONT MORTES — et c'est la première cause de
   // « 0 preuve publique ». Or nous savons maintenant le trouver sans IA ni quota : Wikidata
@@ -457,8 +457,14 @@ async function collectSignals({ company, site, types, sources }) {
   let foundSite = ''
   if (!site) {
     try {
-      const w = await wikidata(company)
+      const w = await wikidata(company, known)
       if (w.found?.site?.value && isHttp(w.found.site.value)) foundSite = w.found.site.value
+      // ⚠️ Et si Wikidata ne connaît pas l'entreprise, on VÉRIFIE des domaines — le même
+      // chemin que l'enrichissement. Sans site, deux sources sur trois restent muettes.
+      if (!foundSite) {
+        const f = await findWebsite(company, known).catch(() => ({ found: {} }))
+        if (f.found?.site?.value) foundSite = f.found.site.value
+      }
     } catch (e) { /* une source muette ne doit rien emporter */ }
   }
   const useSite = site || foundSite
@@ -508,7 +514,7 @@ async function collectSignals({ company, site, types, sources }) {
 // l'IA de RASSEMBLER plusieurs preuves autour d'un même fait — « 8 nouvelles offres + un
 // nouveau DRH + un nouveau bureau » devient UN signal de structuration, pas trois lignes.
 // C'est aussi ce qui rend le coût tenable.
-const SIGNAL_PROMPT = ({ company, rules, items, icp }) => `Tu es analyste commercial pour une équipe de prospection B2B.
+const SIGNAL_PROMPT = ({ company, rules, items, icp, known }) => `Tu es analyste commercial pour une équipe de prospection B2B.
 
 CONTEXTE DE L'ÉQUIPE QUI VEND — c'est lui qui décide de ce qui est pertinent :
 · Son activité : ${rules.activite || '(non précisée)'}
@@ -519,6 +525,8 @@ CONTEXTE DE L'ÉQUIPE QUI VEND — c'est lui qui décide de ce qui est pertinent
 ${rules.consignes ? `· Consignes : ${rules.consignes}` : ''}
 
 ENTREPRISE ANALYSÉE : « ${company} »
+${known && Object.keys(known).length ? `CE QUE L'ÉQUIPE SAIT DÉJÀ D'ELLE (fiche client — sert à écarter les homonymes et à juger l'ampleur d'un fait) :
+${Object.entries(known).filter(([, v]) => v).map(([k, v]) => `· ${k} : ${v}`).join('\n')}` : ''}
 
 RÈGLES ABSOLUES :
 · Tu ne t'appuies QUE sur les preuves ci-dessous. Aucune information venue d'ailleurs, aucune déduction sur ce qui n'y figure pas.
@@ -550,9 +558,9 @@ source: ${it.publisher || 'inconnue'} — ${it.sourceUrl}
 date: ${it.date || 'inconnue'}
 extrait: ${(it.content || '').slice(0, 500)}`).join('\n\n')}`
 
-async function analyzeSignals({ company, rules, items, icp }, env) {
+async function analyzeSignals({ company, rules, items, icp, known }, env) {
   const { body, model } = await callGemini({
-    contents: [{ parts: [{ text: SIGNAL_PROMPT({ company, rules, items, icp }) }] }],
+    contents: [{ parts: [{ text: SIGNAL_PROMPT({ company, rules, items, icp, known }) }] }],
     generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
   }, env)
   const text = body?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
@@ -651,7 +659,22 @@ function bestMatch(cands, wanted, labelOf) {
   return best ? best.c : null
 }
 
-async function officialRegistry(company) {
+/**
+ * ⚠️ CE QUE LA FICHE SAIT DÉJÀ SERT À DÉPARTAGER. Deux « Acme » à l'annuaire, l'un à Lyon
+ * et l'autre à Brest : si le commercial a saisi « Lyon », il a tranché sans le savoir.
+ * Ignorer ce qu'il a renseigné, c'était lui redemander de choisir ce qu'il avait déjà écrit.
+ * `hints` n'ajoute JAMAIS un candidat — il ne fait que les ordonner.
+ */
+const hintScore = (cand, hints) => {
+  let n = 0
+  const place = coNorm([cand.siege?.libelle_commune, cand.siege?.code_postal, cand.siege?.departement].filter(Boolean).join(' '))
+  const naf = coNorm(cand.libelle_activite_principale || '')
+  if (hints.localisation && place && coNorm(hints.localisation).split(' ').some(w => w.length > 2 && place.includes(w))) n += 2
+  if (hints.secteur && naf && coNorm(hints.secteur).split(' ').some(w => w.length > 3 && naf.includes(w))) n += 1
+  return n
+}
+
+async function officialRegistry(company, hints = {}) {
   const name = String(company || '').trim()
   if (!name) return { found: {}, raw: null }
   // ⚠️ CINQ RÉSULTATS, PAS UN. Avec `per_page=1` on prenait le premier venu sans vérifier
@@ -662,11 +685,15 @@ async function officialRegistry(company) {
   })
   if (!res.ok) throw new Error(`Annuaire des entreprises : ${res.status}`)
   const body = await res.json()
-  const cands = body?.results || []
+  const all = body?.results || []
+  // Ce que la fiche sait déjà passe en tête : à correspondance de nom égale, la société
+  // dont la ville ou le secteur colle à la fiche est la bonne.
+  const cands = [...all].sort((a, b) => hintScore(b, hints) - hintScore(a, hints))
   const r = bestMatch(cands, name, (x) => x.nom_complet || x.nom_raison_sociale || '')
-    // À défaut d'une correspondance de nom, le premier résultat reste le meilleur pari de
-    // l'annuaire lui-même — mais seulement s'il n'y en a qu'un : au-delà, on s'abstient.
-    || (cands.length === 1 ? cands[0] : null)
+    // À défaut d'une correspondance de nom, un indice de la fiche suffit à trancher ;
+    // sinon le premier résultat n'est un pari acceptable que s'il est seul.
+    || cands.find(x => hintScore(x, hints) >= 2)
+    || (all.length === 1 ? all[0] : null)
   if (!r) {
     return { found: {}, raw: { total: body?.total_results ?? 0, candidats: cands.map(x => x.nom_complet).slice(0, 5) } }
   }
@@ -713,7 +740,7 @@ const wdClaim = (claims, prop) => (claims?.[prop] || [])
  * remplirait la fiche d'un client avec les données de quelqu'un d'autre, ce qui est pire
  * que ne rien trouver.
  */
-async function wikidata(company) {
+async function wikidata(company, hints = {}) {
   const name = String(company || '').trim()
   if (!name) return { found: {}, raw: null }
   const search = await fetch(`${WD_API}?action=wbsearchentities&search=${encodeURIComponent(name)}&language=fr&uselang=fr&type=item&limit=5&format=json`,
@@ -724,7 +751,16 @@ async function wikidata(company) {
   // « BD Report » contre « BD-Report »… On réutilise le même rapprochement que pour l'annuaire,
   // la garde « c'est bien une organisation » restant, elle, entière.
   const orgs = hits.filter(h => WD_ORG.test(h.description || ''))
-  const hit = bestMatch(orgs, name, (h) => h.label || '')
+  // Le secteur connu départage deux homonymes que la seule garde « organisation » laisse
+  // passer — « Alan » l'assureur et « Alan » le studio de jeu sont tous deux des entreprises.
+  const ranked = hints.secteur
+    ? [...orgs].sort((a, b) => {
+        const w = coNorm(hints.secteur).split(' ').filter(x => x.length > 3)
+        const hit2 = (h) => w.some(x => coNorm(h.description || '').includes(x)) ? 1 : 0
+        return hit2(b) - hit2(a)
+      })
+    : orgs
+  const hit = bestMatch(ranked, name, (h) => h.label || '')
   if (!hit) return { found: {}, raw: { candidats: hits.map(h => `${h.label} — ${h.description || ''}`).slice(0, 3) } }
 
   const ent = await fetch(`${WD_API}?action=wbgetentities&ids=${encodeURIComponent(hit.id)}&props=claims&format=json`,
@@ -824,7 +860,7 @@ const siteCandidates = (company) => {
   return names.flatMap(n => TLDS.map(t => `https://www.${n}.${t}`)).slice(0, 8)
 }
 
-async function findWebsite(company) {
+async function findWebsite(company, hints = {}) {
   const cands = siteCandidates(company)
   if (!cands.length) return { found: {}, why: 'Nom trop court pour proposer un domaine.' }
   const want = coNorm(company).replace(/\s+/g, '')
@@ -838,7 +874,15 @@ async function findWebsite(company) {
     // Le contrôle qui distingue « vérifier » de « deviner » : la page doit nommer l'entreprise.
     const title = textOf((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '')
     const head = textOf(html).slice(0, 3000)
-    if (!coNorm(title + ' ' + head).replace(/\s+/g, '').includes(want)) continue
+    const flat = coNorm(title + ' ' + head)
+    const named = flat.replace(/\s+/g, '').includes(want)
+    // ⚠️ Le nom reste OBLIGATOIRE : la ville seule ne prouve rien (des milliers de sites
+    // lyonnais ne sont pas celui d'Acme). Elle ne fait que confirmer un nom déjà trouvé.
+    if (!named) continue
+    if (hints.localisation && !coNorm(hints.localisation).split(' ').some(w => w.length > 2 && flat.includes(w))) {
+      // Nom présent mais ville connue absente : on garde, en le notant — c'est un indice
+      // contraire, pas une preuve. Un site national ne cite pas forcément son siège.
+    }
     return {
       found: { site: { value: origin, publisher: hostOf(origin), url: origin, confidence: 'medium' } },
       html, origin,
@@ -1014,8 +1058,8 @@ async function enrich(company, fields, env, known = {}) {
   let pappersError = ''
   let pappersOff = false
   const [reg, wiki] = await Promise.all([
-    officialRegistry(company).catch(e => { registryError = (e && e.message) || String(e); return { found: {} } }),
-    wikidata(company).catch(e => { wikiError = (e && e.message) || String(e); return { found: {} } }),
+    officialRegistry(company, known).catch(e => { registryError = (e && e.message) || String(e); return { found: {} } }),
+    wikidata(company, known).catch(e => { wikiError = (e && e.message) || String(e); return { found: {} } }),
   ])
 
   // ⚠️ PAPPERS VIENT APRÈS, parce qu'il a besoin du SIREN que l'annuaire vient de rendre.
@@ -1060,7 +1104,7 @@ async function enrich(company, fields, env, known = {}) {
   let site = known.site || out.site?.value || ''
   if (!site) {
     try {
-      const w = await findWebsite(company)
+      const w = await findWebsite(company, known)
       if (w.found.site) { out.site = w.found.site; site = w.found.site.value; homeHtml = w.html || '' }
       else siteError = w.why || ''
     } catch (e) { siteError = (e && e.message) || String(e) }
@@ -1136,7 +1180,7 @@ export default {
         const articles = Array.isArray(body?.articles) ? body.articles.slice(0, MAX_ARTICLES) : []
         if (!company || !articles.length) return json({ error: 'Entreprise ou articles manquants.' }, request, env, 400)
         return json(await analyzeSignals({
-          company, rules: body?.rules || {}, items: articles.map(articleToEvidence), icp: body?.icp || '',
+          company, rules: body?.rules || {}, items: articles.map(articleToEvidence), icp: body?.icp || '', known: body?.known || {},
         }, env), request, env)
       }
 
@@ -1145,7 +1189,7 @@ export default {
         const company = String(b?.company || '').trim()
         if (!company) return json({ error: "Nom d'entreprise manquant." }, request, env, 400)
         return json(await collectSignals({
-          company, site: String(b?.site || ''), types: b?.types || [], sources: b?.sources || {},
+          company, site: String(b?.site || ''), types: b?.types || [], sources: b?.sources || {}, known: b?.known || {},
         }), request, env)
       }
 
@@ -1154,7 +1198,7 @@ export default {
         const company = String(b?.company || '').trim()
         const items = Array.isArray(b?.items) ? b.items.slice(0, MAX_ARTICLES) : []
         if (!company || !items.length) return json({ error: 'Entreprise ou preuves manquantes.' }, request, env, 400)
-        return json(await analyzeSignals({ company, rules: b?.rules || {}, items, icp: b?.icp || '' }, env), request, env)
+        return json(await analyzeSignals({ company, rules: b?.rules || {}, items, icp: b?.icp || '', known: b?.known || {} }, env), request, env)
       }
 
       if (url.pathname === '/enrich' && request.method === 'POST') {

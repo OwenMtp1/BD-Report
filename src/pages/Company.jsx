@@ -56,7 +56,9 @@ function SignalsPanel({ name, info, store, onClose }) {
   const chercher = async (force) => {
     setError('')
     setBusy('collect')
-    const col = await collectEvidence(name, info.site, ctx, store.db, { force })
+    // ⚠️ La FICHE alimente la recherche : ce que l'équipe a saisi écarte les homonymes
+    // et permet de retrouver le site quand il n'est pas renseigné.
+    const col = await collectEvidence(name, info.site, ctx, store.db, { force, known: info })
     if (col.error) { setBusy(''); setError(col.error); return }
     setState({ items: col.items || [], stats: col.stats || {} })
     if (!(col.items || []).length) {
@@ -73,7 +75,7 @@ function SignalsPanel({ name, info, store, onClose }) {
       return
     }
     setBusy('ai')
-    const r = await analyzeEvidence(name, col.items, ctx, store.db)
+    const r = await analyzeEvidence(name, col.items, ctx, store.db, info)
     setBusy('')
     if (r.error) {
       if (!r.quota) store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' })
