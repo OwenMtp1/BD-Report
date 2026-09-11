@@ -273,26 +273,41 @@ npm run dev        # serveur de dev
   - **Objectifs & quotas** (`Quotas.jsx`, onglet ManagerHub, module `quotas`) — `env.quotas`
     {period, metrics, ramp, defaults, byMember}. `memberQuota/rampFactor/quotaAchieved`. Le quota du
     manager REMPLACE la cible auto-fixée sur le Dashboard.
-  - **Actualités d'une entreprise** — action **📰 Actualités** DANS la fiche entreprise (`Company.jsx`,
-    `NewsPanel`) : dépêches Google News des 30 derniers jours, puis **✨ Analyser avec l'IA** à la demande.
-    Aucune page ni onglet de navigation ajoutés — c'est une action de fiche, et `npm run audit` le fige.
+  - **Signaux d'une entreprise** — action **📡 Signaux** DANS la fiche entreprise (`Company.jsx`,
+    `SignalsPanel`). Aucune page ni onglet de navigation ajoutés — c'est une action de fiche, et
+    `npm run audit` le fige.
+    ⚠️ **« Actualités » A FUSIONNÉ ICI, il n'existe plus.** C'était la même fonctionnalité arrêtée à
+    mi-chemin : elle ramenait des dépêches qu'il fallait faire analyser d'un SECOND clic. Personne ne
+    veut une liste de dépêches — on veut savoir s'il y a une raison d'appeler ce compte. **Un seul
+    geste** va donc de la collecte jusqu'à l'analyse, et c'est le RÉSULTAT DE L'IA qui s'affiche.
+    ⚠️ **Les sources ne s'étalent plus : elles se DÉPLIENT** (« Sources (n) »). Un signal sans ses
+    preuves est une affirmation — elles restent atteignables — mais elles noyaient l'analyse qu'elles
+    servent à vérifier. Le dépliant montre aussi ce que CHAQUE source a donné, et pourquoi elle n'a
+    rien donné : « rien trouvé » et « pas de site renseigné » ne se corrigent pas de la même façon.
+    ⚠️ **UNE SEULE ANALYSE dans le relais** — celle des signaux, contextualisée par `env.newsRules`.
+    L'analyse « actualités » avait son propre prompt, sans le contexte de l'équipe : elle jugeait
+    l'intérêt commercial d'un fait sans savoir ce que l'équipe vend. Deux prompts pour une même
+    question, c'est aussi deux endroits à corriger — et c'est ainsi que l'un a fini par appeler un
+    `PROMPT` supprimé (« PROMPT is not defined » à l'écran). `/analyze` reste servie pour un
+    navigateur qui exécute encore une version en cache, mais passe par l'analyse unique.
     ⚠️ **Tout passe par un RELAIS** (`news/worker.js`, Cloudflare Worker, `news/SETUP.md`), comme HubSpot,
     et pour deux raisons également dirimantes dans une app 100 % front : le flux RSS de Google News n'a
     aucun en-tête CORS, et une **clé Gemini dans le bundle serait publique** donc facturable par n'importe
     quel visiteur. L'application ne connaît qu'une URL (`db.integrations.news.relayUrl`, publiée par le
     staff dans Paramètres → Intégrations, `store.newsRelay/setNewsRelay/testNewsRelay`).
     ⚠️ **L'IA ne part JAMAIS toute seule** : elle coûte un appel et une attente. Le relais borne ce qu'elle
-    renvoie (score 0-100, urgence parmi trois, 5 signaux max) et **retire toute URL absente des articles
-    envoyés** — une source inventée enverrait un commercial vers un lien mort. Cache 24 h en `localStorage`
-    (`src/news.js`), volontairement hors de l'état synchronisé : des dépêches sont une vue, pas une donnée
+    renvoie (scores 0-100, 5 signaux max) et **résout les preuves citées sur les nôtres** — un signal sans
+    preuve, ou dont la preuve est inventée, n'a aucun chemin vers l'écran. Cache 24 h en `localStorage`
+    (`src/signals.js`), volontairement hors de l'état synchronisé : des dépêches sont une vue, pas une donnée
     d'équipe, et les y écrire déclencherait une synchro à chaque ouverture de fiche.
     Sans relais publié, le panneau le dit et rien d'autre ne change.
-    ⚠️ **UN CLIC = UN APPEL** (`src/aiGuard.js`). Mesuré à DEUX avant correction : le panneau
-    lance sa recherche au MONTAGE, et il se remonte (mode strict de React, et la fiche
-    entreprise se remonte quand l'URL partageable change). Une demande identique déjà en vol
-    est désormais PARTAGÉE, et le délai annoncé par Google est retenu avant de réessayer.
-    C'est cela qui faisait atteindre le quota gratuit en quelques clics — pas le volume.
-    Le smoke compte les appels et refuse tout doublon.
+    ⚠️ **RIEN NE PART AU MONTAGE — pas même la collecte, pourtant gratuite.** Le panneau lançait sa
+    recherche dans un `useEffect`, et il se remonte (mode strict de React, et la fiche entreprise se
+    remonte quand l'URL partageable change) : chaque remontage valait un appel. C'est cela qui faisait
+    atteindre le quota gratuit en quelques clics — pas le volume. S'y ajoute le partage des demandes
+    déjà en vol (`src/aiGuard.js`) et le respect du délai annoncé par Google. Le smoke ouvre le panneau
+    et exige ZÉRO appel, puis compte un appel de chaque sorte par clic ; `npm run audit` refuse tout
+    `useEffect` qui collecte.
     ⚠️ **Quota (429) : ROTATION DE MODÈLES.** Chaque modèle a son propre compteur —
     `GEMINI_MODELS` est essayé dans l'ordre, et le 429 d'un modèle fait passer au suivant.
     Le modèle qui a RÉELLEMENT répondu est celui qu'on enregistre dans le compteur.

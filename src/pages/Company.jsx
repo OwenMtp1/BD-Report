@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2, Newspaper, Sparkles, RefreshCw, ExternalLink, X, Flame, Factory, Radar } from 'lucide-react'
+import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2, Sparkles, RefreshCw, X, Factory, Radar, ChevronDown, ChevronRight } from 'lucide-react'
 import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, SIGNAL_TYPES, signalType } from '../store.jsx'
 import { Modal, Field, Empty, toast } from '../ui.jsx'
-import { fetchCompanyNews, analyzeCompanyNews, cachedNews, newsRelayUrl } from '../news.js'
+import { newsRelayUrl } from '../news.js'
 import { enrichCompany, cachedEnrichment, enrichmentDiff, ENRICHABLE } from '../enrich.js'
 import { collectEvidence, analyzeEvidence, buildContext, cachedCollect } from '../signals.js'
 
@@ -11,11 +11,6 @@ const CONF_CLASS = {
   medium: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
   low: 'bg-surface text-muted',
 }
-const URGENCY_CLASS = {
-  HIGH: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
-  MEDIUM: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
-  LOW: 'bg-surface text-muted',
-}
 const fmtNewsDate = (iso) => {
   if (!iso) return ''
   const d = new Date(iso)
@@ -23,41 +18,75 @@ const fmtNewsDate = (iso) => {
 }
 
 
+// Ce que chaque source a donné, en une phrase. Le relais renvoie le motif ; l'écran
+// n'en invente aucun — « rien trouvé » et « pas de site renseigné » sont deux situations
+// différentes, et seule la seconde se corrige.
+const SOURCE_LABELS = { news: 'Presse', website: 'Site de l\'entreprise', careers: 'Page carrière' }
+
 /**
- * VUE SIGNAUX D'UNE ENTREPRISE — le détail, là où vit le compte.
+ * SIGNAUX D'UNE ENTREPRISE — ex-« Actualités », fusionnés en une seule rubrique.
  *
- * L'onglet Signaux donne le résumé et le tri ; ici on voit le raisonnement complet et,
- * surtout, LES PREUVES. Un signal sans ses sources est une affirmation : on doit pouvoir
- * remonter à ce sur quoi l'analyse s'est appuyée, et juger soi-même.
+ * ⚠️ UN SEUL GESTE. Il y avait deux panneaux et deux boutons : « chercher les
+ * actualités », puis « analyser avec l'IA ». Personne ne veut une liste de dépêches —
+ * on veut savoir s'il y a une raison d'appeler ce compte. La recherche va donc
+ * directement jusqu'au bout, et c'est le RÉSULTAT DE L'IA qui s'affiche.
+ *
+ * ⚠️ LES SOURCES NE S'ÉTALENT PLUS : elles se dépliENT. Un signal sans ses preuves est
+ * une affirmation, elles doivent donc rester atteignables — mais les lire n'est pas ce
+ * qu'on vient faire, et elles noyaient l'analyse qu'elles servaient à vérifier.
+ *
+ * ⚠️ L'IA NE PART JAMAIS SEULE : aucune collecte ni analyse au montage. Le panneau
+ * s'ouvre sur ce qu'on sait déjà, et n'appelle le relais que sur un clic.
  */
 function SignalsPanel({ name, info, store, onClose }) {
   const rules = store.envNewsRules()
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
-  const [items, setItems] = useState(() => cachedCollect(name)?.items || null)
+  const [openSources, setOpenSources] = useState(false)
+  const [state, setState] = useState(() => { const c = cachedCollect(name); return c ? { items: c.items || [], stats: c.stats || {} } : null })
   const mine = (store.sub?.signals || []).filter(s => s.company === name)
   const ctx = buildContext(rules, SIGNAL_TYPES, store.envIcpProfiles())
+  const relay = newsRelayUrl(store.db)
+  const items = state?.items || []
 
-  const collect = async (force) => {
-    setBusy('collect'); setError('')
-    const r = await collectEvidence(name, info.site, ctx, store.db, { force })
+  /**
+   * Chercher = collecter PUIS analyser. La collecte ne coûte rien ; seule l'analyse
+   * consomme, et on ne la lance pas sur des preuves inexistantes.
+   */
+  const chercher = async (force) => {
+    setError('')
+    setBusy('collect')
+    const col = await collectEvidence(name, info.site, ctx, store.db, { force })
+    if (col.error) { setBusy(''); setError(col.error); return }
+    setState({ items: col.items || [], stats: col.stats || {} })
+    if (!(col.items || []).length) {
+      setBusy(''); setOpenSources(true)
+      setError('Aucune preuve publique trouvée — voir le détail par source ci-dessous.')
+      return
+    }
+    // Plafond INTERNE atteint : les preuves restent consultables, seule l'analyse s'arrête.
+    // Une fonctionnalité qui s'éteint entièrement punit l'utilisateur d'une limite qui
+    // n'est pas la sienne.
+    if (store.aiQuotaReached()) {
+      setBusy(''); setOpenSources(true)
+      setError(`Plafond interne atteint (${store.aiUsageToday().limit} appels aujourd'hui). Les sources restent consultables.`)
+      return
+    }
+    setBusy('ai')
+    const r = await analyzeEvidence(name, col.items, ctx, store.db)
     setBusy('')
-    if (r.error) { setError(r.error); return }
-    setItems(r.items)
-  }
-  const analyse = async () => {
-    const evidence = items || cachedCollect(name)?.items
-    if (!evidence?.length) { setError('Aucune preuve collectée pour le moment.'); return }
-    setBusy('ai'); setError('')
-    const r = await analyzeEvidence(name, evidence, ctx, store.db)
-    setBusy('')
-    if (r.error) { if (!r.quota) store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' }); setError(r.error); return }
+    if (r.error) {
+      if (!r.quota) store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' })
+      setOpenSources(true) // l'analyse manque : ce qu'on a trouvé doit au moins se lire
+      setError(r.error); return
+    }
     store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok', model: r.model })
     store.saveCompanySignals(name, r.signals)
+    store.logAction('Lead', 'Signaux analysés', name)
     toast(r.signals.length ? `${r.signals.length} signal(s) détecté(s)` : 'Aucun signal commercial détecté.')
   }
 
-  useEffect(() => { if (!items) collect(false) }, []) // eslint-disable-line
+  const label = busy === 'collect' ? 'Recherche des sources…' : busy === 'ai' ? 'Analyse en cours…' : mine.length ? 'Relancer la recherche' : 'Chercher des signaux'
 
   return (
     <div className="rounded-xl border border-line bg-surface/60 p-3 space-y-3">
@@ -65,37 +94,24 @@ function SignalsPanel({ name, info, store, onClose }) {
         <span className="font-bold text-sm flex items-center gap-1.5"><Radar size={15} className="text-brand" /> Signaux commerciaux</span>
         <button className="btn-ghost !p-1" onClick={onClose} title="Fermer les signaux"><X size={14} /></button>
       </div>
+
+      {!relay && <p className="text-xs text-muted">Le relais n'est pas configuré. L'équipe BD Report doit publier son URL dans Paramètres → Intégrations.</p>}
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-muted">
-          {busy === 'collect' ? 'Collecte des preuves…' : `${(items || []).length} preuve${(items || []).length > 1 ? 's' : ''} publique${(items || []).length > 1 ? 's' : ''}`}
-        </span>
-        <button className="btn-primary !py-1 text-xs" disabled={!!busy || !(items || []).length} onClick={analyse}>
-          <Sparkles size={13} /> {busy === 'ai' ? 'Analyse en cours…' : 'Analyser avec l\'IA'}
-        </button>
-        <button className="btn-ghost !py-1 text-xs ml-auto" disabled={!!busy} onClick={() => collect(true)}>
-          <RefreshCw size={12} /> Actualiser les preuves
-        </button>
-      </div>
-
-      {/* Ce qui a été trouvé, AVANT de payer l'analyse. On doit pouvoir juger de la matière
-          disponible — et constater qu'il n'y en a pas, plutôt que de lancer l'IA pour rien. */}
-      {(items || []).length > 0 && mine.length === 0 && (
-        <div className="space-y-1 border-t border-line pt-2">
-          <div className="text-[11px] uppercase tracking-wide text-muted">Preuves collectées</div>
-          {items.map((it, i) => (
-            <div key={i} className="text-xs">
-              <a href={it.sourceUrl} target="_blank" rel="noreferrer" className="hover:text-brand">{it.title}</a>
-              <span className="text-muted"> — {it.publisher || it.kind}</span>
-            </div>
-          ))}
+      {relay && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button className="btn-primary !py-1 text-xs" disabled={!!busy} onClick={() => chercher(!!mine.length)}>
+            <Sparkles size={13} /> {label}
+          </button>
+          {mine.length > 0 && !busy && <span className="text-xs text-muted">{mine.length} signal(s) en mémoire</span>}
         </div>
       )}
 
-      {mine.length === 0 ? (
-        <p className="text-sm text-muted">Aucun signal détecté pour ce compte. Lancez l'analyse quand des preuves sont collectées.</p>
-      ) : mine.map(s => {
+      {/* LES SIGNAUX, directement — c'est ce qu'on est venu chercher. */}
+      {mine.length === 0 && !busy && !error && (
+        <p className="text-sm text-muted">Aucun signal pour ce compte. Lancez une recherche : les sources publiques sont ramassées, puis analysées avec le contexte commercial de votre environnement.</p>
+      )}
+      {mine.map(s => {
         const t = signalType(s.type)
         return (
           <div key={s.id} className="rounded-xl border border-brand/30 bg-brand/5 p-3 space-y-1.5">
@@ -125,6 +141,40 @@ function SignalsPanel({ name, info, store, onClose }) {
           </div>
         )
       })}
+
+      {/* LES SOURCES — repliées. Elles restent atteignables (un signal sans ses preuves
+          est une affirmation), mais ne s'étalent plus par-dessus l'analyse qu'elles servent
+          à vérifier. Le détail par source dit POURQUOI une recherche n'a rien donné :
+          « rien trouvé » et « pas de site renseigné » ne se corrigent pas de la même façon. */}
+      {(items.length > 0 || (state?.stats?.bySource || []).length > 0) && (
+        <div className="border-t border-line pt-2">
+          <button className="text-xs text-muted hover:text-brand flex items-center gap-1" onClick={() => setOpenSources(o => !o)}>
+            {openSources ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            Sources{items.length ? ` (${items.length})` : ''}
+          </button>
+          {openSources && (
+            <div className="mt-2 space-y-2">
+              {(state?.stats?.bySource || []).map(s => (
+                <div key={s.kind} className="text-[11px] text-muted">
+                  <b className="text-ink">{SOURCE_LABELS[s.kind] || s.kind}</b>
+                  {' — '}{s.n > 0 ? <span>{s.n} élément(s)</span> : <span>{s.why || 'Aucun résultat.'}</span>}
+                </div>
+              ))}
+              {items.length > 0 && (
+                <div className="space-y-1 border-t border-line pt-2">
+                  {items.map((it, i) => (
+                    <div key={i} className="text-xs">
+                      {it.date && <span className="text-[11px] text-muted">{fmtNewsDate(it.date)} · </span>}
+                      <a href={it.sourceUrl} target="_blank" rel="noreferrer" className="hover:text-brand">{it.title}</a>
+                      <span className="text-muted"> — {it.publisher || SOURCE_LABELS[it.kind] || it.kind}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -247,150 +297,6 @@ function EnrichPanel({ name, info, store, onApply, onClose }) {
             </div>
           </div>
           <p className="text-[11px] text-muted">Informations publiques sur l'entreprise uniquement — jamais sur les personnes qui y travaillent.</p>
-        </>
-      )}
-    </div>
-  )
-}
-
-/**
- * 📰 ACTUALITÉS — panneau ouvert DANS la fiche entreprise.
- *
- * Deux temps, volontairement séparés : on récupère d'abord les dépêches (gratuit,
- * mis en cache 24 h), et l'analyse par l'IA ne part QUE sur demande. Analyser
- * automatiquement à chaque ouverture d'une fiche reviendrait à payer un appel pour
- * des articles que personne ne lira, et à faire attendre l'utilisateur sans qu'il
- * l'ait demandé.
- *
- * L'IA ne travaille que sur les articles récupérés : le relais retire toute URL
- * qu'elle aurait inventée, plutôt que d'envoyer un commercial vers une page vide.
- */
-function NewsPanel({ name, store, onClose }) {
-  const [state, setState] = useState(() => {
-    const hit = cachedNews(name)
-    return hit ? { articles: hit.articles || [], signals: hit.signals || null, at: hit.at } : null
-  })
-  const [busy, setBusy] = useState('')     // '' | 'news' | 'ai'
-  const [error, setError] = useState('')
-  const relay = newsRelayUrl(store.db)
-
-  const load = async (force) => {
-    setBusy('news'); setError('')
-    const r = await fetchCompanyNews(name, store.db, { force })
-    setBusy('')
-    if (r.error) { setError(r.error); return }
-    setState({ articles: r.articles, signals: r.signals, at: r.cachedAt })
-  }
-  const analyse = async () => {
-    // Plafond interne atteint : les actualités RESTENT lisibles, seule l'analyse s'arrête.
-    // Une fonctionnalité qui s'éteint entièrement parce que l'IA n'est plus disponible
-    // punit l'utilisateur d'une limite qui n'est pas la sienne.
-    if (store.aiQuotaReached()) {
-      const q = store.aiUsageToday()
-      setError(`Plafond interne atteint (${q.limit} appels aujourd'hui). Les actualités restent consultables.`)
-      return
-    }
-    setBusy('ai'); setError('')
-    const r = await analyzeCompanyNews(name, state?.articles || [], store.db)
-    setBusy('')
-    if (r.error) {
-      if (!r.quota) store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' })
-      setError(r.error); return
-    }
-    store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok', model: r.model })
-    setState(s => ({ ...s, signals: r.signals }))
-    store.logAction('Lead', 'Actualités analysées', name)
-    toast(r.signals.length ? `${r.signals.length} signal(s) commercial(aux)` : 'Aucun signal commercial détecté.')
-  }
-
-  // Première ouverture sans cache : on va chercher les dépêches, pas l'IA.
-  useEffect(() => { if (!state && relay) load(false) }, []) // eslint-disable-line
-
-  const articles = state?.articles || []
-  const signals = state?.signals
-
-  return (
-    <div className="rounded-xl border border-line bg-surface/60 p-3 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-bold text-sm flex items-center gap-1.5"><Newspaper size={15} className="text-brand" /> Actualités</span>
-        <button className="btn-ghost !p-1" onClick={onClose} title="Fermer les actualités"><X size={14} /></button>
-      </div>
-
-      {!relay && (
-        <p className="text-xs text-muted">
-          Le relais Actualités n'est pas configuré. L'équipe BD Report doit publier son URL dans Paramètres → Intégrations.
-        </p>
-      )}
-      {error && <p className="text-xs text-red-600">{error}</p>}
-
-      {relay && (
-        <>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted">
-              {busy === 'news' ? 'Recherche en cours…' : `${articles.length} actualité${articles.length > 1 ? 's' : ''} trouvée${articles.length > 1 ? 's' : ''}`}
-            </span>
-            {articles.length > 0 && !signals && (
-              <button className="btn-primary !py-1 text-xs" disabled={busy === 'ai'} onClick={analyse}>
-                <Sparkles size={13} /> {busy === 'ai' ? 'Analyse en cours…' : 'Analyser avec l\'IA'}
-              </button>
-            )}
-            <button className="btn-ghost !py-1 text-xs ml-auto" disabled={!!busy} onClick={() => load(true)}>
-              <RefreshCw size={12} /> Actualiser les actualités
-            </button>
-          </div>
-
-          {/* Résultat de l'analyse, quand elle a eu lieu. */}
-          {signals && signals.length === 0 && (
-            <p className="text-sm text-muted">Aucun signal commercial détecté.</p>
-          )}
-          {signals && signals.length > 0 && (
-            <div className="space-y-2">
-              {signals.map((s, i) => (
-                <div key={i} className="rounded-xl border border-brand/30 bg-brand/5 p-3 space-y-1.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="chip bg-brand/15 text-brand flex items-center gap-1"><Flame size={11} /> Signal commercial</span>
-                    {s.type && <span className="chip bg-surface text-muted">{s.type}</span>}
-                  </div>
-                  <div className="font-bold text-sm">{s.title}</div>
-                  <div className="flex items-center gap-2 flex-wrap text-xs">
-                    <span className="text-muted">Pertinence <b className="text-ink">{s.score}/100</b></span>
-                    <span className={`chip ${URGENCY_CLASS[s.urgency] || URGENCY_CLASS.LOW}`}>{s.urgency}</span>
-                  </div>
-                  {s.summary && <p className="text-sm text-ink/90">{s.summary}</p>}
-                  {s.why_now && (
-                    <p className="text-sm"><span className="text-muted text-xs uppercase tracking-wide">Pourquoi maintenant — </span>{s.why_now}</p>
-                  )}
-                  {(s.targets || []).length > 0 && (
-                    <div className="text-sm"><span className="text-muted text-xs uppercase tracking-wide">Cibles — </span>{s.targets.join(' · ')}</div>
-                  )}
-                  {s.angle && (
-                    <p className="text-sm italic">« {s.angle} »</p>
-                  )}
-                  <div className="text-[11px] text-muted flex items-center gap-1.5 flex-wrap">
-                    <span>{[s.source, fmtNewsDate(s.date)].filter(Boolean).join(' · ')}</span>
-                    {s.url && <a href={s.url} target="_blank" rel="noreferrer" className="text-brand hover:underline flex items-center gap-0.5">Lire <ExternalLink size={10} /></a>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Les dépêches elles-mêmes : elles restent visibles sous l'analyse, pour
-              qu'on puisse vérifier ce sur quoi l'IA s'est appuyée. */}
-          {articles.length > 0 && (
-            <div className="space-y-1.5 border-t border-line pt-2">
-              {articles.map((a, i) => (
-                <div key={i} className="text-sm">
-                  <div className="text-[11px] text-muted">{fmtNewsDate(a.date)}</div>
-                  <a href={a.url} target="_blank" rel="noreferrer" className="hover:text-brand font-medium">{a.title}</a>
-                  {a.source && <div className="text-[11px] text-muted">{a.source}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-          {!busy && !articles.length && !error && (
-            <p className="text-sm text-muted">Aucune actualité trouvée pour cette entreprise ces 30 derniers jours.</p>
-          )}
         </>
       )}
     </div>
@@ -536,15 +442,14 @@ function CommentThread({ name, store }) {
 export default function CompanyModal() {
   const store = useStore()
   const [name, setName] = useState(null)
-  const [news, setNews] = useState(false)     // panneau Actualités, replié par défaut
   const [enrich, setEnrich] = useState(false) // panneau Enrichir, replié par défaut
-  const [sig, setSig] = useState(false)       // vue Signaux — ouverte depuis l'onglet Signaux
+  const [sig, setSig] = useState(false)       // panneau Signaux (ex-Actualités), replié par défaut
   const prevHash = useRef(null) // hash de l'onglet avant ouverture, pour le restaurer à la fermeture
 
   useEffect(() => {
-    // Changer d'entreprise referme le panneau : il montrerait sinon les actualités
+    // Changer d'entreprise referme le panneau : il montrerait sinon les signaux
     // de la société précédente sous le nom de la nouvelle.
-    const h = (e) => { setNews(false); setEnrich(false); setSig(false); setName(e.detail) }
+    const h = (e) => { setEnrich(false); setSig(false); setName(e.detail) }
     // L'onglet Signaux ouvre la fiche DIRECTEMENT sur le détail : « Analyse détaillée… »
     // doit mener à l'analyse, pas à une fiche où il faudrait encore chercher.
     const v = (e) => { if (e.detail === 'signals') setSig(true) }
@@ -586,25 +491,25 @@ export default function CompanyModal() {
   return (
     <Modal title={<span className="flex items-center gap-2"><Building2 size={18} className="text-brand" /> {name}</span>} onClose={() => setName(null)} wide>
       <div className="space-y-5">
-        {/* Actions de la fiche. Une seule pour l'instant : elle vit ici plutôt que dans une
-            page à part — on consulte les actualités d'une entreprise en la regardant. */}
-        {/* Les deux actions relèvent d'une seule brique : elles partagent le relais, la clé
+        {/* Actions de la fiche : elles vivent ici plutôt que dans une page à part — on
+            regarde les signaux d'une entreprise en la regardant, elle.
+            ⚠️ « Actualités » a DISPARU : c'était la même fonctionnalité, arrêtée à
+            mi-chemin. Elle ramenait des dépêches qu'il fallait ensuite faire analyser
+            d'un second clic ; « Signaux » va jusqu'au bout en un seul geste, et range
+            les dépêches là où elles servent — dans les sources, dépliables.
+            Les deux actions relèvent d'une seule brique : elles partagent le relais, la clé
             et le compteur. Un client qui n'a pas pris l'analyse IA ne voit ni l'une ni l'autre. */}
         {store.hasModule('aiInsights') && (
           <div className="flex items-center gap-2 flex-wrap">
-            <button className={`btn-ghost !py-1 text-xs ${news ? 'text-brand' : ''}`} onClick={() => setNews(v => !v)}>
-              <Newspaper size={13} /> Actualités
+            <button className={`btn-ghost !py-1 text-xs ${sig ? 'text-brand' : ''}`} onClick={() => setSig(v => !v)}>
+              <Radar size={13} /> Signaux
             </button>
             <button className={`btn-ghost !py-1 text-xs ${enrich ? 'text-brand' : ''}`} onClick={() => setEnrich(v => !v)}>
               <Sparkles size={13} /> Enrichir
             </button>
-            <button className={`btn-ghost !py-1 text-xs ${sig ? 'text-brand' : ''}`} onClick={() => setSig(v => !v)}>
-              <Radar size={13} /> Signaux
-            </button>
           </div>
         )}
         {sig && <SignalsPanel name={name} info={info} store={store} onClose={() => setSig(false)} />}
-        {news && <NewsPanel name={name} store={store} onClose={() => setNews(false)} />}
         {enrich && (
           <EnrichPanel name={name} info={info} store={store} onClose={() => setEnrich(false)}
             onApply={(list) => {

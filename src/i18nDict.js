@@ -1919,4 +1919,19 @@ export const UI_DICT = [
   ['Interlocuteur', 'Contact', 'Interlocutor'],
   ['correspond à', 'matches', 'coincide con'],
   ['s\'écarte de', 'differs from', 'se aparta de'],
+
+  // ---- Signaux : l'ex-rubrique « Actualités », fusionnée ----
+  ['Aucun signal pour ce compte. Lancez une recherche : les sources publiques sont ramassées, puis analysées avec le contexte commercial de votre environnement.', 'No signal for this account. Start a search: public sources are gathered, then analysed against your workspace\'s commercial context.', 'Ninguna señal para esta cuenta. Lanza una búsqueda: se recogen las fuentes públicas y se analizan con el contexto comercial de tu entorno.'],
+  ['Chercher des signaux', 'Search for signals', 'Buscar señales'],
+  ['Relancer la recherche', 'Run the search again', 'Relanzar la búsqueda'],
+  ['Recherche des sources…', 'Searching sources…', 'Buscando fuentes…'],
+  ['Aucune preuve publique trouvée — voir le détail par source ci-dessous.', 'No public evidence found — see the per-source detail below.', 'No se ha encontrado ninguna prueba pública: consulta el detalle por fuente más abajo.'],
+  ['Sources', 'Sources', 'Fuentes'],
+  ['Presse', 'Press', 'Prensa'],
+  ['Site de l\'entreprise', 'Company website', 'Sitio de la empresa'],
+  ['Page carrière', 'Careers page', 'Página de empleo'],
+  ['Aucun résultat.', 'No result.', 'Sin resultados.'],
+  ['Source désactivée dans la règle de cet environnement.', 'Source turned off in this workspace\'s rule.', 'Fuente desactivada en la regla de este entorno.'],
+  ['Aucun site web n\'est renseigné sur la fiche.', 'No website is filled in on the sheet.', 'No hay ninguna web indicada en la ficha.'],
+  ['Le relais n\'est pas configuré. L\'équipe BD Report doit publier son URL dans Paramètres → Intégrations.', 'The relay is not configured. The BD Report team must publish its URL under Settings → Integrations.', 'El relé no está configurado. El equipo de BD Report debe publicar su URL en Ajustes → Integraciones.'],
 ]

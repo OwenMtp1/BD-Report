@@ -827,8 +827,9 @@ async function main() {
     if ((envNow.oneToOneTemplate || []).length !== 3) throw new Error("La trame n'est pas enregistrée sur l'environnement")
   }
 
-  // 6a ter. ACTUALITÉS dans la fiche entreprise. Le relais est simulé : ce qu'on teste ici,
-  // c'est le parcours réel — dépêches, puis analyse À LA DEMANDE, jamais automatique.
+  // 6a ter. SIGNAUX dans la fiche entreprise (ex-« Actualités », fusionnés).
+  // Le relais est simulé : ce qu'on teste ici, c'est le parcours réel — UN clic qui va
+  // de la collecte jusqu'à l'analyse, des sources REPLIÉES, et l'IA qui ne part jamais seule.
   {
     const st = () => win.__bdrStore
     const db0 = () => { win.__bdrFlushSave?.(); return JSON.parse(win.localStorage.getItem('bdrflow_db_v1')) }
@@ -840,7 +841,11 @@ async function main() {
         return { ok: true, status: 200, json: async () => ({ items: [
           { kind: 'careers', sourceUrl: 'https://zephyr.example/jobs', publisher: 'zephyr.example', title: '14 offres publiées', content: 'DRH · HRBP · Commercial', date: '', jobCount: 14, hrCount: 2, fingerprint: 'fp1' },
           { kind: 'news', sourceUrl: 'https://ex.fr/a1', publisher: 'Les Échos', title: 'Zephyr nomme un DRH', content: 'Nomination.', date: new Date().toISOString(), fingerprint: 'fp2' },
-        ], stats: { collected: 2, kept: 2, duplicates: 0 } }) }
+        ], stats: { collected: 2, kept: 2, duplicates: 0, bySource: [
+          { kind: 'news', n: 1, why: '' },
+          { kind: 'website', n: 0, why: "Aucun site web n'est renseigné sur la fiche." },
+          { kind: 'careers', n: 1, why: '' },
+        ] } }) }
       }
       if (String(url).includes('/signals/analyze')) {
         return { ok: true, status: 200, json: async () => ({ model: 'gemini-test', signals: [{
@@ -863,85 +868,82 @@ async function main() {
           ca: null,
         } }) }
       }
-      if (String(url).includes('/news')) {
-        return { ok: true, status: 200, json: async () => ({ articles: [
-          { title: 'Nouveau directeur RH chez Zephyr', url: 'https://ex.fr/a1', source: 'Les Échos', date: new Date().toISOString(), summary: 'Nomination.' },
-          { title: 'Zephyr lève 12 M€', url: 'https://ex.fr/a2', source: 'BFM', date: new Date().toISOString(), summary: 'Série A.' },
-        ] }) }
-      }
-      return { ok: true, status: 200, json: async () => ({ signals: [{
-        type: 'recrutement', title: 'Nouveau directeur RH', summary: 'Nomination récente.', score: 87,
-        urgency: 'HIGH', why_now: 'Remise à plat probable des outils RH.', targets: ['DRH', 'Head of People'],
-        angle: "J'ai vu que vous veniez de renforcer votre direction RH.", source: 'Les Échos',
-        date: new Date().toISOString(), url: 'https://ex.fr/a1',
-      }] }) }
+      return { ok: false, status: 404, json: async () => ({ error: 'Route inconnue.' }) }
     }
     try {
       await act(async () => { st().setNewsRelay('https://relais.test') })
       // L'analyse IA est une brique optionnelle : chez un client qui ne l'a pas prise,
       // les deux actions n'existent pas. On l'installe donc avant de la tester.
       await act(async () => { st().setEnvModules('env-peoplespheres', { aiInsights: true }) })
-      win.localStorage.removeItem('bdrflow_news_v1')
+      win.localStorage.removeItem('bdrflow_signals_v1')
       await act(async () => { win.dispatchEvent(new win.CustomEvent('open-company', { detail: 'Zephyr' })) })
       await act(async () => { await new Promise(r => setTimeout(r, 80)) })
       if (!text().includes('Zephyr')) throw new Error("La fiche entreprise ne s'ouvre pas")
-      const newsBtn = find('button', 'Actualités')
-      if (!newsBtn) throw new Error("L'action « Actualités » est absente de la fiche entreprise")
-      if (!find('button', 'Enrichir')) throw new Error("L'action « Enrichir » est absente de la fiche entreprise")
-      await click(newsBtn)
-      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
-      if (!text().includes('Nouveau directeur RH chez Zephyr')) { console.error('DEBUG calls', calls); console.error('DEBUG panel', text().slice(Math.max(0, text().indexOf('Actualités') - 50), text().indexOf('Actualités') + 500)); throw new Error('Les dépêches ne sont pas affichées') }
-      if (!text().includes('2 actualités trouvées')) throw new Error('Le compte des actualités est faux ou absent')
-      // ⚠️ L'IA ne part JAMAIS toute seule : elle coûte un appel et une attente.
-      if (calls.some(u => u.includes('/analyze'))) throw new Error("L'analyse IA est lancée sans qu'on l'ait demandée")
-      const aiBtn = find('button', "Analyser avec l'IA")
-      if (!aiBtn) throw new Error("Le bouton « Analyser avec l'IA » est absent")
-      await click(aiBtn)
-      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
-      if (!calls.some(u => u.includes('/analyze'))) throw new Error("« Analyser avec l'IA » n'appelle pas le relais")
-      for (const k of ['Signal commercial', 'Pertinence', 'HIGH', 'Pourquoi maintenant', 'DRH', 'Les Échos']) {
-        if (!text().includes(k)) throw new Error('Analyse : « ' + k + ' » manquant à l\'écran')
-      }
-      // Les dépêches restent sous l'analyse : on doit pouvoir vérifier sur quoi elle s'appuie.
-      if (!text().includes('Zephyr lève 12 M€')) throw new Error('Les articles disparaissent une fois analysés')
-      // Cache : rouvrir la fiche ne relance aucun appel.
-      const before = calls.length
-      await act(async () => { win.dispatchEvent(new win.CustomEvent('open-company', { detail: 'Zephyr' })) })
-      const again = find('button', 'Actualités')
-      if (!again) throw new Error("L'action « Actualités » a disparu à la réouverture")
-      await click(again)
-      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
-      if (calls.length !== before) throw new Error('Le cache de 24 h ne sert à rien : le relais est rappelé à chaque ouverture')
-      // ---- SIGNAUX. Un signal n'est PAS un article : plusieurs preuves de sources
-      // différentes se rassemblent en UN fait, avec ses preuves visibles.
-      // ⚠️ On cherche DANS LA FICHE : « Signaux » est aussi un onglet de navigation, et
-      // cliquer celui-là quitterait la fiche au lieu d'ouvrir la vue.
+
+      // ⚠️ « Actualités » n'existe PLUS : c'était la même fonctionnalité arrêtée à mi-chemin.
+      // On cherche DANS LA FICHE : « Signaux » est aussi un onglet de navigation.
       const inSheet = (label) => [...container.querySelectorAll('.fixed.z-50 button')].find(b => b.textContent.trim() === label)
+      if (inSheet('Actualités')) throw new Error("« Actualités » doit avoir fusionné dans « Signaux », pas cohabiter avec")
+      if (!find('button', 'Enrichir')) throw new Error("L'action « Enrichir » est absente de la fiche entreprise")
       const sigBtn = inSheet('Signaux')
       if (!sigBtn) throw new Error("L'action « Signaux » est absente de la fiche entreprise")
       await click(sigBtn)
       await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+
+      // ⚠️ RIEN NE PART AU MONTAGE — ni la collecte, ni a fortiori l'IA.
+      if (calls.length) throw new Error("Ouvrir le panneau ne doit appeler le relais pour rien : " + calls.join(', '))
+
+      // UN SEUL GESTE : la recherche va de la collecte jusqu'à l'analyse.
+      const chercher = [...container.querySelectorAll('.fixed.z-50 button')].find(b => b.textContent.includes('Chercher des signaux'))
+      if (!chercher) throw new Error("Le bouton « Chercher des signaux » est absent")
+      await click(chercher)
+      await act(async () => { await new Promise(r => setTimeout(r, 80)) })
       if (!calls.some(u => u.includes('/signals/collect'))) throw new Error('Les preuves ne sont pas collectées')
-      // ⚠️ La collecte est gratuite ; l'ANALYSE ne part jamais toute seule.
-      if (calls.some(u => u.includes('/signals/analyze'))) throw new Error("L'analyse IA part sans qu'on l'ait demandée")
-      if (!text().includes('14 offres publiées')) throw new Error("Les preuves collectées ne sont pas affichées")
-      const aiSig = [...container.querySelectorAll('.fixed.z-50 button')].find(b => b.textContent.includes("Analyser avec l'IA"))
-      if (!aiSig) throw new Error("Le bouton d'analyse des signaux est absent")
-      await click(aiSig)
-      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
-      for (const k of ['Structuration RH en cours', 'Pourquoi maintenant', 'Pourquoi c\'est pertinent', 'Opportunité', 'DRH', 'Preuves']) {
+      if (!calls.some(u => u.includes('/signals/analyze'))) throw new Error("Un seul clic doit aller jusqu'à l'analyse")
+      // ⚠️ UN CLIC = UN APPEL de chaque sorte.
+      for (const route of ['/signals/collect', '/signals/analyze']) {
+        const n = calls.filter(u => u.includes(route)).length
+        if (n !== 1) throw new Error(`${route} : ${n} appels pour un seul clic`)
+      }
+
+      // LE RETOUR DE L'IA S'AFFICHE DIRECTEMENT.
+      for (const k of ['Structuration RH en cours', 'Pourquoi maintenant', "Pourquoi c'est pertinent", 'Opportunité', 'DRH', 'Preuves']) {
         if (!text().includes(k)) throw new Error('Signal : « ' + k + ' » manquant à l\'écran')
       }
       // Les DEUX preuves sont citées : c'est ce qui distingue un signal d'un article.
       if (!text().includes('Les Échos') || !text().includes('zephyr.example')) {
         throw new Error('Un signal doit montrer toutes ses preuves, de toutes ses sources')
       }
+
+      // ⚠️ LES SOURCES NE S'ÉTALENT PAS : elles se déplient. Le détail par source ne
+      // doit apparaître qu'au clic — sinon il noie l'analyse qu'il sert à vérifier.
+      if (text().includes("Aucun site web n'est renseigné sur la fiche.")) {
+        throw new Error("Le détail des sources s'affiche spontanément au lieu d'attendre le clic")
+      }
+      const srcBtn = [...container.querySelectorAll('.fixed.z-50 button')].find(b => b.textContent.trim().startsWith('Sources'))
+      if (!srcBtn) throw new Error("Le dépliant « Sources » est absent")
+      await click(srcBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      if (!text().includes('Page carrière')) throw new Error('Les sources dépliées ne disent pas ce que chaque source a donné')
+      if (!text().includes("Aucun site web n'est renseigné sur la fiche.")) {
+        throw new Error("Une source muette doit dire POURQUOI, pas disparaître")
+      }
+      await click(srcBtn) // on referme
+
       {
         const saved = (db0().data[win.__bdrStore.session.subEnvId].signals || []).filter(x => x.company === 'Zephyr')
         if (saved.length !== 1) throw new Error(`Signaux enregistrés : ${saved.length} au lieu d'un seul`)
         if ((saved[0].evidence || []).length !== 2) throw new Error('Le signal enregistré perd ses preuves')
         if (saved[0].status !== 'new') throw new Error('Un signal neuf doit être « non traité »')
       }
+      // Rouvrir la fiche montre les signaux MÉMORISÉS, sans rappeler le relais.
+      const before = calls.length
+      await act(async () => { win.dispatchEvent(new win.CustomEvent('open-company', { detail: 'Zephyr' })) })
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      await click(inSheet('Signaux'))
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      if (calls.length !== before) throw new Error('Rouvrir la fiche relance le relais : les signaux mémorisés ne servent à rien')
+      if (!text().includes('Structuration RH en cours')) throw new Error('Les signaux mémorisés ne sont pas réaffichés')
       await click(inSheet('Signaux'))
 
       // ---- LE BALAYAGE DOIT DIRE POURQUOI il n'a rien trouvé. Il avalait chaque erreur
@@ -987,8 +989,6 @@ async function main() {
       // C'est ce qui faisait atteindre le quota gratuit en quelques clics.
       const nEnrich = calls.filter(u => u.includes('/enrich')).length
       if (nEnrich !== 1) throw new Error(`Enrichissement : ${nEnrich} appels au relais pour un seul clic`)
-      const nNews = calls.filter(u => u.includes('/news')).length
-      if (nNews !== 1) throw new Error(`Actualités : ${nNews} appels au relais pour une seule ouverture`)
       // Le champ VIDE est proposé et coché d'avance ; le champ en conflit est proposé, décoché.
       if (!text().includes('https://zephyr.example')) throw new Error('La valeur trouvée pour un champ vide n\'est pas proposée')
       if (!text().includes('Lyon, France')) throw new Error('La valeur en conflit n\'est pas montrée')
@@ -1015,7 +1015,7 @@ async function main() {
         const usage = db0().aiUsage || []
         const feats = usage.filter(c => c.status === 'ok').map(c => c.feature)
         if (!feats.includes('company_enrichment')) throw new Error("L'enrichissement n'est pas décompté dans l'utilisation IA")
-        if (!feats.includes('news_analysis')) throw new Error("L'analyse d'actualités n'est pas décomptée dans l'utilisation IA")
+        if (!feats.includes('news_analysis')) throw new Error("L'analyse de signaux n'est pas décomptée dans l'utilisation IA")
         if (usage.some(c => !c.date || !c.ts || !c.userName)) throw new Error('Un appel IA est enregistré sans date ni auteur')
       }
 
@@ -1023,7 +1023,7 @@ async function main() {
       // facturée au client ne doit pas rester visible quand il ne l'a pas prise.
       await act(async () => { st().setEnvModules('env-peoplespheres', { aiInsights: false }) })
       await act(async () => { await new Promise(r => setTimeout(r, 40)) })
-      if (find('button', 'Enrichir') || [...container.querySelectorAll('.fixed.z-50 button')].some(b => b.textContent.trim() === 'Actualités')) {
+      if (find('button', 'Enrichir') || [...container.querySelectorAll('.fixed.z-50 button')].some(b => b.textContent.trim() === 'Signaux')) {
         throw new Error("Sans la brique « Analyse IA », les actions de la fiche restent visibles")
       }
       await act(async () => { st().setEnvModules('env-peoplespheres', { aiInsights: true }) })

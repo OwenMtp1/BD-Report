@@ -807,25 +807,40 @@ async function main() {
       'Offres : jamais publiées si la base commune ne change rien au démarrage')
   }
 
-  // 6 septdecies. ACTUALITÉS D'UNE ENTREPRISE — la clé Gemini ne doit JAMAIS descendre
-  //   dans le navigateur. L'application est 100 % front : une clé dans le bundle est une
-  //   clé publique, lisible et facturable par n'importe quel visiteur. Elle vit donc chez
-  //   le relais, et l'application ne connaît qu'une URL.
+  // 6 septdecies. SIGNAUX D'UNE ENTREPRISE (ex-« Actualités ») — la clé Gemini ne doit
+  //   JAMAIS descendre dans le navigateur. L'application est 100 % front : une clé dans le
+  //   bundle est une clé publique, lisible et facturable par n'importe quel visiteur. Elle
+  //   vit donc chez le relais, et l'application ne connaît qu'une URL.
   {
-    const src = ['news.js'].map(f => fs.default.readFileSync(path.default.join(process.cwd(), 'src', f), 'utf8')).join('\n')
+    const src = ['news.js', 'signals.js'].map(f => fs.default.readFileSync(path.default.join(process.cwd(), 'src', f), 'utf8')).join('\n')
     const comp = fs.default.readFileSync(path.default.join(dir, 'Company.jsx'), 'utf8')
     ok(!/generativelanguage|GEMINI_API_KEY|news\.google\.com/.test(src + comp),
-      "Actualités : l'application appelle Gemini ou Google News en direct — clé exposée, et CORS de toute façon")
-    ok(/newsRelayUrl|relayUrl/.test(src), "Actualités : l'application n'utilise pas l'URL du relais")
-    // L'analyse coûte un appel : elle ne part que sur demande explicite.
-    ok(!/analyzeCompanyNews\(/.test(comp.slice(0, comp.indexOf('const analyse'))),
-      "Actualités : l'analyse IA est appelée avant l'action de l'utilisateur")
-    // Le relais, lui, doit refuser les URL que l'IA aurait inventées.
+      "Signaux : l'application appelle Gemini ou Google News en direct — clé exposée, et CORS de toute façon")
+    ok(/newsRelayUrl|relayUrl/.test(src), "Signaux : l'application n'utilise pas l'URL du relais")
+    // ⚠️ L'IA NE PART JAMAIS SEULE. Le panneau se montait en lançant sa recherche : c'est
+    // ce qui doublait les appels et vidait le quota. Plus aucun `useEffect` ici.
+    ok(!/useEffect\(\(\) => \{ if \(!items\) collect/.test(comp),
+      'Signaux : une collecte part au montage du panneau au lieu d\'attendre un clic')
+    ok(!/analyzeEvidence\(/.test(comp.slice(0, comp.indexOf('const chercher'))),
+      "Signaux : l'analyse IA est appelée avant l'action de l'utilisateur")
+    // ⚠️ UNE SEULE FONCTIONNALITÉ. « Actualités » s'arrêtait à mi-chemin (des dépêches
+    // qu'il fallait faire analyser d'un second clic) ; la laisser vivre à côté de
+    // « Signaux » remettrait deux boutons pour une même question.
+    ok(!/>\s*Actualités\s*</.test(comp), 'Signaux : l\'ancienne action « Actualités » cohabite encore avec')
+    // Le relais, lui, doit refuser les preuves que l'IA aurait inventées.
     const worker = fs.default.readFileSync(path.default.join(process.cwd(), 'news', 'worker.js'), 'utf8')
-    ok(/urls\.has\(s\.url\)/.test(worker),
-      "Relais : une URL inventée par l'IA est renvoyée telle quelle — le commercial suivra un lien mort")
+    ok(/\.map\(i => items\[Number\(i\)\]\)\.filter\(Boolean\)/.test(worker),
+      "Relais : une preuve inventée par l'IA passe telle quelle — le commercial suivra un lien mort")
+    ok(/filter\(sg => sg\.title && sg\.evidence\.length\)/.test(worker),
+      'Relais : un signal sans aucune preuve est accepté')
     ok(/Math\.max\(0, Math\.min\(100/.test(worker), 'Relais : le score renvoyé par l\'IA n\'est pas borné')
-    ok(/slice\(0, MAX_SIGNALS\)/.test(worker), 'Relais : le nombre de signaux renvoyés n\'est pas borné')
+    ok(/slice\(0, 5\)/.test(worker), 'Relais : le nombre de signaux renvoyés n\'est pas borné')
+    // ⚠️ LA PRESSE PASSE PAR LE CHEMIN QUI MARCHE — repli Bing compris. Sept requêtes
+    // composées envoyées à Google sans repli revenaient toutes vides, et « 0 preuve
+    // publique » ne disait pas qu'aucune source n'avait vraiment répondu.
+    ok(/await getNews\(company\)/.test(worker.slice(worker.indexOf('async function collectNews'))),
+      'Relais : la collecte de presse des signaux se prive du repli qui la fait marcher')
+    ok(/bySource: report\.map/.test(worker), 'Relais : les sources ne rendent pas compte de ce qu\'elles ont donné')
     ok(!/GEMINI_API_KEY\s*=\s*['"][^'"]/.test(worker), 'Relais : une clé Gemini est écrite en dur dans le code')
     // Un modèle retiré par Google ne doit pas arrêter le produit : il DIT lequel prend la
     // relève, on rejoue une fois avec celui-là plutôt que de rendre un 404 à l'utilisateur.
@@ -842,16 +857,16 @@ async function main() {
     const guard = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'aiGuard.js'), 'utf8')
     ok(/inflight\.has\(key\)/.test(guard), 'Aucun partage des appels IA déjà en vol — un remontage relance tout')
     const enr2 = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'enrich.js'), 'utf8')
-    const nws2 = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'news.js'), 'utf8')
-    ok(/once\('enrich:/.test(enr2) && /once\('analyze:/.test(nws2) && /once\('news:/.test(nws2),
+    const sig2 = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'signals.js'), 'utf8')
+    ok(/once\('enrich:/.test(enr2) && /once\('signals:/.test(sig2) && /once\('collect:/.test(sig2),
       'Un appel IA peut encore partir en double')
     // Et quand Google dit « trop de requêtes », on le retient : inutile de redemander avant.
-    ok(/cooldownLeft\(\)/.test(enr2) && /cooldownLeft\(\)/.test(nws2),
+    ok(/cooldownLeft\(\)/.test(enr2) && /cooldownLeft\(\)/.test(sig2),
       'Le délai d\'attente annoncé par Google n\'est pas respecté — on rappelle pour rien')
 
     // La fiche entreprise intègre l'action, elle ne crée pas de page ni de navigation.
     const navSrc = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'nav.jsx'), 'utf8')
-    ok(!/actualit/i.test(navSrc), 'Actualités : un onglet de navigation a été créé au lieu d\'une action de fiche')
+    ok(!/actualit/i.test(navSrc), 'Signaux : un onglet « Actualités » a été créé au lieu d\'une action de fiche')
   }
 
   // 6 novodecies. ENRICHISSEMENT — deux promesses, et elles ne se vérifient pas à l'œil.
@@ -938,7 +953,11 @@ async function main() {
 
     // d. L'ANALYSE NE PART JAMAIS SEULE, et un signal cite ses preuves.
     const comp = fs.default.readFileSync(path.default.join(dir, 'Company.jsx'), 'utf8')
-    ok(/if \(!items\) collect\(false\)/.test(comp), "La vue Signaux lance l'analyse IA à l'ouverture")
+    // ⚠️ PLUS RIEN ne part au montage — même pas la collecte, pourtant gratuite. Le
+    // panneau se remonte (mode strict de React, et la fiche se remonte quand l'URL
+    // partageable change) : chaque remontage valait un appel au relais.
+    ok(!/useEffect\([^)]*collect\(/.test(comp), "La vue Signaux appelle le relais à l'ouverture au lieu d'attendre un clic")
+    ok(/const chercher = async/.test(comp), 'La recherche de signaux ne se fait plus en un seul geste')
     const worker = fs.default.readFileSync(path.default.join(process.cwd(), 'news', 'worker.js'), 'utf8')
     ok(/items\[Number\(i\)\]/.test(worker),
       'Relais : les preuves citées par l\'IA ne sont pas résolues sur les nôtres — une source inventée passerait')
