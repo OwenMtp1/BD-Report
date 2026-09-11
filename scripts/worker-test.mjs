@@ -378,23 +378,66 @@ console.log('Enrichissement — Wikidata comble ce que l\'annuaire ignore')
   ok(!/quota/i.test(JSON.stringify(b.found)), "le quota ne doit pas contaminer les valeurs rendues")
 }
 
+// ⚠️ LE NOM DE L'OUTIL DE RECHERCHE dépend de la génération du modèle : `google_search`
+// depuis Gemini 2.0, `google_search_retrieval` avant. Un nom inconnu du modèle donne un
+// 400 — pas un quota — et l'écran annonçait « recherche indisponible » pour une simple
+// incompatibilité de vocabulaire.
+console.log("Enrichissement — les deux noms de l'outil de recherche")
+{
+  const seen = []
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })], wdRoute('Zeta', 'personnage de fiction'),
+    [GEMINI, (u, init) => {
+      const body = JSON.parse(init.body)
+      const tool = Object.keys(body.tools?.[0] || {})[0] || 'aucun'
+      seen.push(tool)
+      if (tool === 'google_search') return { status: 400, body: JSON.stringify({ error: { message: 'Unknown name "google_search"' } }) }
+      return { body: geminiBody({ site: { value: 'https://zeta.fr', publisher: 'Zeta', url: 'https://zeta.fr', confidence: 'high' } }) }
+    }],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Zeta', fields: ['site'], known: {} } })).json()
+  ok(seen.includes('google_search_retrieval'), `le second nom d'outil doit être tenté (essayés : ${seen.join(', ') || 'aucun'})`)
+  ok(b.found?.site?.value === 'https://zeta.fr', "une incompatibilité de nom d'outil ne doit pas passer pour une panne de recherche")
+}
+{
+  // Et un 400 sur LES DEUX noms retombe sur nos propres pages — la cause importe peu,
+  // le remède est le même : lire ce qu'on sait lire.
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })], wdRoute('Zeta', 'personnage de fiction'),
+    [GEMINI, (u, init) => (JSON.parse(init.body).tools
+      ? { status: 400, body: JSON.stringify({ error: { message: 'Unknown tool' } }) }
+      : { body: geminiBody({ secteur: { value: 'Logiciel RH', publisher: 'zeta.fr', url: 'https://zeta.fr/a-propos', confidence: 'high' } }) })],
+    [/zeta\.fr\/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/zeta\.fr/, () => ({ body: '<html><head><title>Zeta — à propos</title></head><body><a href="/a-propos">À propos</a><p>Zeta édite un logiciel RH.</p></body></html>' })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Zeta', fields: ['secteur'], known: { site: 'https://zeta.fr' } } })).json()
+  ok(b.found?.secteur?.value === 'Logiciel RH', "un outil de recherche refusé doit basculer sur nos pages, pas échouer")
+  ok(b.fallback === true, 'le repli doit être signalé')
+}
+
 // ⚠️ /diag — LE RELAIS SE TESTE LUI-MÊME. Trois causes de panne se corrigent différemment ;
 // tant qu'on les devinait depuis un message d'erreur, on cherchait au mauvais endroit.
 console.log('Diagnostic — le relais dit lui-même ce qui bloque')
 {
   stubFetch([
     [REGISTRY, () => ({ body: REGISTRY_BODY })], [GOOGLE, () => ({ body: rss(['Doctolib lève']) })],
+    [BING, () => ({ body: rss([]) })], wdRoute('Doctolib', 'entreprise française de santé'),
     [GEMINI, (u, init) => (JSON.parse(init.body).tools
       ? { status: 429, body: GROUNDING_429 }
       : { body: geminiBody({ ok: true }) })],
   ])
   const b = await (await call('/diag')).json()
-  ok(b.steps?.length === 6, `le diagnostic doit couvrir les six briques (reçu : ${b.steps?.length})`)
+  ok(b.steps?.length === 7, `le diagnostic doit couvrir les sept briques (reçu : ${b.steps?.length})`)
   const by = Object.fromEntries(b.steps.map(s => [s.id, s]))
   ok(by.registry?.ok && by.news?.ok && by.gemini_text?.ok, 'les briques qui répondent doivent être vertes')
   ok(by.gemini_search?.ok === false, 'la brique en échec doit être rouge')
-  ok(/recherche/i.test(b.verdict || '') && /annuaire/i.test(b.verdict || ''),
-    'le verdict doit NOMMER la limite atteinte et dire ce qui fonctionne encore')
+  // ⚠️ LE VERDICT DOIT PARTIR DE CE QUI MARCHE. Voir « recherche Google indisponible »
+  // n'apprend rien tant qu'on ignore si l'enrichissement fonctionne malgré ça.
+  ok(/FONCTIONNE/.test(b.verdict || '') && /pas bloquant/i.test(b.verdict || ''),
+    `le verdict doit dire que l'enrichissement marche malgré la brique en rouge (reçu : ${b.verdict})`)
+  ok(by.enrich?.ok === true, "le diagnostic doit vérifier l'enrichissement de bout en bout")
+  ok((by.enrich?.detail?.champs || []).length >= 3, "le test de bout en bout doit rendre des champs réels")
   ok(!JSON.stringify(b).includes('test-key'), '⚠️ le diagnostic ne doit jamais laisser fuir la clé')
 }
 {

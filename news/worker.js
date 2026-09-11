@@ -221,7 +221,11 @@ async function callGemini(payload, env) {
       if (isGroundingQuota(text)) break
       continue
     }
-    throw new Error(`Gemini a répondu ${res.status}${text ? ' — ' + text.slice(0, 200) : ''}`)
+    // Le code HTTP est conservé : l'appelant doit pouvoir distinguer « outil refusé »
+    // (400) de « modèle en panne » (5xx) — ils n'appellent pas le même remède.
+    const httpErr = new Error(`Gemini a répondu ${res.status}${text ? ' — ' + text.slice(0, 200) : ''}`)
+    httpErr.status = res.status
+    throw httpErr
   }
 
   // Plus de modèle à essayer : c'est un vrai plafond. La chose utile à dire est LAQUELLE
@@ -754,6 +758,31 @@ async function wikidata(company) {
   }
 }
 
+// ⚠️ LE NOM DE L'OUTIL DE RECHERCHE DÉPEND DE LA GÉNÉRATION DU MODÈLE : `google_search`
+// depuis Gemini 2.0, `google_search_retrieval` avant. Un nom que le modèle ne connaît pas
+// donne un 400 — pas un quota — et l'écran annonçait « recherche indisponible » pour une
+// simple incompatibilité de vocabulaire. On essaie donc les deux, une seule fois chacun.
+const SEARCH_TOOLS = [{ google_search: {} }, { google_search_retrieval: {} }]
+
+async function callGrounded(prompt, env) {
+  let last = null
+  for (const tool of SEARCH_TOOLS) {
+    try {
+      return await callGemini({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [tool],
+        generationConfig: { temperature: 0 },
+      }, env)
+    } catch (e) {
+      last = e
+      // 400 = ce modèle ne connaît pas CET outil : l'autre nom vaut d'être tenté.
+      // Tout le reste (quota, panne) se comporte pareil quel que soit le nom.
+      if (e?.status !== 400) throw e
+    }
+  }
+  throw last
+}
+
 async function enrich(company, fields, known, env, site) {
   // ---- PASSE 1 : l'annuaire officiel. Gratuite, factuelle, aucun quota, aucune IA.
   // Son échec n'arrête rien : elle complète, elle ne commande pas.
@@ -788,11 +817,7 @@ async function enrich(company, fields, known, env, site) {
   try {
     // Recherche Google : sans elle, le modèle répondrait de mémoire — c'est-à-dire
     // qu'il inventerait. La consigne « ne rien inventer » n'a de sens qu'avec une source.
-    ;({ body, model } = await callGemini({
-      contents: [{ parts: [{ text: ENRICH_PROMPT(company, fields, known) }] }],
-      tools: [{ google_search: {} }],
-      generationConfig: { temperature: 0 },
-    }, env))
+    ;({ body, model } = await callGrounded(ENRICH_PROMPT(company, fields, known), env))
   } catch (e) {
     // ⚠️ LE QUOTA DE RECHERCHE EST LA VRAIE LIMITE de l'enrichissement, et il est bien plus
     // serré que celui du texte. Quand il tombe, la fonctionnalité s'arrêtait entièrement —
@@ -806,9 +831,8 @@ async function enrich(company, fields, known, env, site) {
       if (!Object.keys(official).length) throw err
       return { found: official, model: '', source: 'public', registryError, wikiError, aiError: err.message, fallback: false, inputTokens: 0, outputTokens: 0 }
     }
-    if (!(e && e.code === 429 && e.grounding)) return keep(e)
-    const docs = await ownSources(company, site)
-    if (!docs.length) return keep(e)   // aucune source à lire : le quota reste la bonne réponse
+    const docs = await ownSources(company, site).catch(() => [])
+    if (!docs.length) return keep(e)   // aucune source à lire : l'erreur reste la bonne réponse
     ;({ body, model } = await callGemini({
       contents: [{ parts: [{ text: ENRICH_FROM_SOURCES(company, fields, known, docs) }] }],
       generationConfig: { temperature: 0 },
@@ -959,17 +983,28 @@ export default {
         // Recherche Google : LE quota serré, celui qui bloquait l'enrichissement.
         await step('gemini_search', 'Gemini — recherche Google (grounding)', async () => {
           if (!env.GEMINI_API_KEY) throw new Error('Sans clé, rien à tester.')
-          const { model } = await callGemini({
-            contents: [{ parts: [{ text: `Cite en une ligne le site officiel de « ${q} ».` }] }],
-            tools: [{ google_search: {} }],
-            generationConfig: { temperature: 0 },
-          }, env)
+          const { model } = await callGrounded(`Cite en une ligne le site officiel de « ${q} ».`, env)
           return { model }
         })
+        // ⚠️ LA BRIQUE QUI RÉPOND VRAIMENT À LA QUESTION. Voir « recherche Google
+        // indisponible » n'apprend rien tant qu'on ignore si l'enrichissement fonctionne
+        // MALGRÉ ça — et c'est justement tout l'objet du correctif. On le fait donc pour
+        // de vrai, sur l'entreprise de test, et on dit combien de champs en sortent.
+        await step('enrich', `Enrichissement de bout en bout (« ${q} »)`, async () => {
+          const r = await enrich(q, ['site', 'linkedin', 'localisation', 'ca', 'effectif', 'secteur'], {}, env, '')
+          const got = Object.keys(r.found || {}).filter(k => r.found[k])
+          if (!got.length) throw new Error(`Aucun champ trouvé. Annuaire : ${r.registryError || 'ok'} · Wikidata : ${r.wikiError || 'ok'} · IA : ${r.aiError || 'ok'}`)
+          return { champs: got, source: r.source, valeurs: Object.fromEntries(got.map(k => [k, r.found[k].value])) }
+        })
+
         const ko = steps.filter(s => !s.ok)
         // Le verdict est écrit ici, pas laissé à interpréter : c'est tout l'objet de la route.
+        const enrichOk = steps.find(s => s.id === 'enrich')?.ok
         let verdict = 'Tout répond : enrichissement et signaux sont opérationnels.'
         if (ko.some(s => s.id === 'key')) verdict = "Le relais n'a pas de clé Gemini. Ajoutez le secret GEMINI_API_KEY dans Cloudflare, puis redéployez."
+        // ⚠️ Un service tiers en panne n'est PAS une panne du produit tant que le résultat
+        // sort quand même. Le dire dans cet ordre évite de chercher un problème réglé.
+        else if (enrichOk && ko.length) verdict = `L'enrichissement FONCTIONNE (${(steps.find(s => s.id === 'enrich')?.detail?.champs || []).length} champs trouvés sans passer par la recherche Google). Ce qui est en rouge ci-dessous n'est pas bloquant.`
         else if (ko.some(s => s.id === 'gemini_search') && ko.some(s => s.id === 'gemini_text')) verdict = 'Gemini refuse tout : quota de texte atteint. Réessayez plus tard — les signaux comme l\'enrichissement sont concernés.'
         else if (ko.some(s => s.id === 'gemini_search')) verdict = "Seule la RECHERCHE Google est épuisée. Les signaux fonctionnent ; l'enrichissement se rabat sur l'annuaire officiel et sur le site de l'entreprise — plus étroit, mais pas bloqué."
         else if (ko.some(s => s.id === 'registry') && ko.some(s => s.id === 'wikidata')) verdict = "Les deux sources publiques sont muettes : l'enrichissement dépendra entièrement de l'IA, donc du quota de recherche."

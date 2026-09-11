@@ -347,12 +347,24 @@ npm run dev        # serveur de dev
     bonne réponse. `found.fallback` remonte à l'écran : la couverture est plus étroite
     (un site donne rarement le chiffre d'affaires), et cela doit s'expliquer autrement
     que par « l'IA n'a rien trouvé ».
+    ⚠️ **LE NOM DE L'OUTIL DE RECHERCHE dépend de la génération du modèle** :
+    `google_search` depuis Gemini 2.0, `google_search_retrieval` avant. Un nom inconnu du
+    modèle donne un **400**, pas un quota — et l'écran annonçait « recherche indisponible »
+    pour une simple incompatibilité de vocabulaire. `callGrounded` essaie les deux
+    (`SEARCH_TOOLS`), une fois chacun.
+    ⚠️ **Le repli ne dépend plus de la CAUSE** : quota, refus, outil inconnu — le remède est
+    le même, lire nos propres pages. Distinguer les causes ici ne servait qu'à échouer plus
+    précisément.
     🔎 **`/diag` — LE RELAIS SE TESTE LUI-MÊME**, et `store.diagNewsRelay()` l'affiche dans
     Paramètres → Intégrations (« Diagnostic complet »). Une panne d'enrichissement a trois
     causes qui ne se corrigent PAS de la même façon — clé absente, quota de texte, quota de
     RECHERCHE — et tant qu'on les devinait depuis un message d'erreur, on cherchait au mauvais
     endroit. La route interroge les cinq briques POUR DE VRAI (clé, annuaire, presse, Gemini
     texte, Gemini recherche) et rend un **verdict écrit**, pas un état à interpréter.
+    ⚠️ **Une brique fait l'ENRICHISSEMENT EN ENTIER** et dit combien de champs en sortent :
+    voir « recherche Google indisponible » n'apprend rien tant qu'on ignore si le résultat
+    tombe quand même. Le verdict part donc de CE QUI MARCHE — « l'enrichissement FONCTIONNE
+    (N champs), ce qui est en rouge n'est pas bloquant » — au lieu d'énumérer les pannes.
     ⚠️ Aucun secret n'en sort : on dit si la clé existe, jamais ce qu'elle vaut — le test le fige.
     ⚠️ **Un compteur d'attente PAR FONCTIONNALITÉ** (`aiGuard.cooldownLeft(scope)`). Avec une
     clé commune, un enrichissement refusé mettait AUSSI les signaux au repos — alors que
