@@ -273,8 +273,29 @@ npm run dev        # serveur de dev
   - **Objectifs & quotas** (`Quotas.jsx`, onglet ManagerHub, module `quotas`) — `env.quotas`
     {period, metrics, ramp, defaults, byMember}. `memberQuota/rampFactor/quotaAchieved`. Le quota du
     manager REMPLACE la cible auto-fixée sur le Dashboard.
+  - **Actualités d'une entreprise** — action **📰 Actualités** DANS la fiche entreprise (`Company.jsx`,
+    `NewsPanel`) : dépêches Google News des 30 derniers jours, puis **✨ Analyser avec l'IA** à la demande.
+    Aucune page ni onglet de navigation ajoutés — c'est une action de fiche, et `npm run audit` le fige.
+    ⚠️ **Tout passe par un RELAIS** (`news/worker.js`, Cloudflare Worker, `news/SETUP.md`), comme HubSpot,
+    et pour deux raisons également dirimantes dans une app 100 % front : le flux RSS de Google News n'a
+    aucun en-tête CORS, et une **clé Gemini dans le bundle serait publique** donc facturable par n'importe
+    quel visiteur. L'application ne connaît qu'une URL (`db.integrations.news.relayUrl`, publiée par le
+    staff dans Paramètres → Intégrations, `store.newsRelay/setNewsRelay/testNewsRelay`).
+    ⚠️ **L'IA ne part JAMAIS toute seule** : elle coûte un appel et une attente. Le relais borne ce qu'elle
+    renvoie (score 0-100, urgence parmi trois, 5 signaux max) et **retire toute URL absente des articles
+    envoyés** — une source inventée enverrait un commercial vers un lien mort. Cache 24 h en `localStorage`
+    (`src/news.js`), volontairement hors de l'état synchronisé : des dépêches sont une vue, pas une donnée
+    d'équipe, et les y écrire déclencherait une synchro à chaque ouverture de fiche.
+    Sans relais publié, le panneau le dit et rien d'autre ne change.
   - **Entretiens 1:1** (module `oneToOne`) — un canal par binôme (`channel.oneToOne`), semé par
-    `seedOneToOneChannels` d'après `account.teamOf`. Un changement de manager **archive** l'ancien fil
+    `seedOneToOneChannels` d'après `account.teamOf`.
+    **Trame composée par le manager** : `env.oneToOneTemplate = [{id,label,type,hint}]`
+    (`ONE_TO_ONE_FIELD_TYPES` : ligne, texte libre, note sur 5, case à cocher),
+    `store.oneToOneTemplate/saveOneToOneTemplate/canEditOneToOneTemplate` (droit `team.manage`).
+    Ses rubriques s'AJOUTENT aux trois blocs communs et sont redemandées à chaque entretien —
+    c'est ce qui rend deux comptes rendus comparables d'un mois sur l'autre. Portée par
+    l'ENVIRONNEMENT : une trame que chacun verrait autrement n'en est pas une. ⚠️ Le compte rendu
+    fige le LIBELLÉ avec la valeur (`report.fields`) : renommer la trame ne réécrit pas le passé. Un changement de manager **archive** l'ancien fil
     (`channel.archived`, renommé « — ancien binôme », rangé en bas) au lieu de le supprimer : l'historique
     des entretiens est ce qui fait la valeur de la brique. ⚠️ Aussi privé qu'un DM : `canSeeChannel` le réserve
     aux deux membres, même pour qui administre les canaux. Compte rendu = message porteur d'un `report`.
@@ -408,6 +429,10 @@ npm run dev        # serveur de dev
   Ces deux gestes sur l'environnement **ont quitté la fiche Clients** (qui n'affiche plus que l'état et y renvoie) :
   toute l'administration d'un client tient au même endroit plutôt qu'à deux.
   Manager (Gestion Administration mode `teams`) : périmètre strict (son équipe, jamais le staff).
+- ⚠️ **Une demande CLOSE quitte le tableau Clients.** La carte née d'une demande du site
+  (`client.key = 'req:<id>'`) suit son sort : traitée ou archivée, `syncClientFromRequest` la
+  RANGE (`client.archived`) — elle n'est jamais supprimée, et un interrupteur la rend. Sans cela
+  le tableau cessait de dire ce qu'il reste à faire pour ne raconter que ce qui est arrivé un jour.
 - Catégorie menu **« Support Client BD Report »** réservée à `SUPPORT_ROLES`. Onglet **Support** ouvert à tous.
 - Tickets : priorité, assignation, SLA (1re réponse cible par priorité), CSAT à la clôture. Réponses types + base de connaissances.
 - **Résiliation** (Paramètres → Gérer mes environnements → Résilier) : ouvre un ticket + passe l'env en `subState='cancelling'`

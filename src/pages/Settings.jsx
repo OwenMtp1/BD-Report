@@ -1,6 +1,6 @@
 import { deob } from '../obf.js'
 import React, { useRef, useState, useEffect } from 'react'
-import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock, Cloud, GraduationCap } from 'lucide-react'
+import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock, Cloud, GraduationCap, Newspaper } from 'lucide-react'
 import { useStore, hashPw, isElevatedRole } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
 import { Modal, Field, Confirm, toast, CommitInput } from '../ui.jsx'
@@ -101,6 +101,58 @@ function SupabaseCard() {
         <div className={`text-sm rounded-xl p-3 ${res.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
           {res.msg}
         </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Relais « Actualités » — réglage de l'ÉDITEUR, publié à tous les clients.
+ *
+ * BD Report n'a pas de serveur : ni le flux Google News (aucun en-tête CORS) ni la clé
+ * Gemini (elle serait publique dans le bundle) ne peuvent vivre dans le navigateur. Un
+ * relais est déployé une fois — `news/SETUP.md` — et son URL se publie ici, exactement
+ * comme celle du connecteur HubSpot.
+ */
+function NewsRelayCard({ store }) {
+  const url = store.newsRelay()
+  const canEdit = store.canSetNewsRelay()
+  const [busy, setBusy] = useState(false)
+  const [res, setRes] = useState(null)
+  const test = async () => {
+    setBusy(true); setRes(null)
+    setRes(await store.testNewsRelay())
+    setBusy(false)
+  }
+  return (
+    <div className="card p-4 space-y-3 max-w-2xl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold flex items-center gap-2"><Newspaper size={17} className="text-brand" /> Actualités des entreprises</h3>
+        <span className={`chip !text-[10px] ${url ? 'bg-emerald-100 text-emerald-700' : 'bg-surface text-muted'}`}>
+          {url ? 'Configuré' : 'Non configuré'}
+        </span>
+      </div>
+      <p className="text-sm text-muted">
+        Alimente le bouton <b>Actualités</b> de chaque fiche entreprise : dépêches Google News des 30 derniers jours, puis analyse des signaux commerciaux à la demande.
+      </p>
+      {canEdit ? (
+        <>
+          <Field label="URL du relais">
+            <CommitInput className="input" value={url} onCommit={v => { store.setNewsRelay(v); toast('Relais Actualités enregistré') }}
+              placeholder="https://bdr-news.votre-compte.workers.dev" />
+          </Field>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button className="btn-ghost !py-1 text-xs" disabled={busy || !url} onClick={test}>
+              {busy ? 'Test en cours…' : 'Tester le relais'}
+            </button>
+            {res && <span className={`text-xs ${res.ok ? 'text-emerald-600' : 'text-red-600'}`}>{res.msg}</span>}
+          </div>
+          <p className="text-xs text-muted">
+            La clé Gemini reste chez le relais et ne descend jamais dans le navigateur. Déploiement : <b>news/SETUP.md</b>.
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-muted">{url ? 'Relais publié par l\'équipe BD Report.' : 'À configurer par l\'équipe BD Report.'}</p>
       )}
     </div>
   )
@@ -348,6 +400,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
         <div className="space-y-3">
         <SupabaseCard />
         <HubspotSummaryCard store={store} />
+        <NewsRelayCard store={store} />
         </div>
       )}
 

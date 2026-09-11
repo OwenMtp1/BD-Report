@@ -7,11 +7,16 @@ const fmtTs = (ts) => ts ? new Date(ts).toLocaleDateString('fr-FR', { day: '2-di
 
 export default function Clients() {
   const store = useStore()
-  const clients = store.db.clients || []
+  const all = store.db.clients || []
   const tickets = store.db.tickets || []
   const [dragId, setDragId] = useState(null)
   const [detail, setDetail] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
+  // Les cartes nées d'une demande close sont rangées, pas supprimées : le tableau dit ce
+  // qu'il reste à faire, et l'interrupteur rend l'historique quand on le cherche.
+  const [showArchived, setShowArchived] = useState(false)
+  const archivedCount = all.filter(c => c.archived).length
+  const clients = showArchived ? all : all.filter(c => !c.archived)
 
   const ticketsOf = (c) => tickets.filter(t => c.envId ? t.envId === c.envId : t.userAccountId === c.accountId)
   const stats = (c) => {
@@ -40,7 +45,15 @@ export default function Clients() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-extrabold flex items-center gap-2"><Users2 size={20} className="text-brand" /> Clients</h2>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-extrabold flex items-center gap-2"><Users2 size={20} className="text-brand" /> Clients</h2>
+        {archivedCount > 0 && (
+          <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+            <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />
+            <span>Demandes closes</span> <span className="chip bg-surface text-muted">{archivedCount}</span>
+          </label>
+        )}
+      </div>
       <p className="text-xs text-muted -mt-2">Chaque client est enrichi automatiquement dès qu'une demande arrive au service technique. Glissez-déposez une carte pour la reclasser.</p>
 
       {clients.length === 0 ? (
@@ -68,6 +81,7 @@ export default function Clients() {
                           <Building2 size={13} className="text-muted shrink-0" /> {c.name}
                         </button>
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          {c.archived && <span className="chip bg-surface text-muted">Demande close</span>}
                           {c.blocked && <span className="chip bg-red-100 text-red-700 flex items-center gap-0.5"><ShieldAlert size={10} /> Bloqué</span>}
                           {s.open > 0 && <span className="chip bg-amber-100 text-amber-700 flex items-center gap-0.5"><MessageSquare size={10} /> {s.open} ouvert{s.open > 1 ? 's' : ''}</span>}
                           <span className="chip bg-surface text-muted">{s.total} ticket{s.total > 1 ? 's' : ''}</span>

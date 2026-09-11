@@ -792,6 +792,54 @@ async function main() {
       'Offres : jamais publiées si la base commune ne change rien au démarrage')
   }
 
+  // 6 septdecies. ACTUALITÉS D'UNE ENTREPRISE — la clé Gemini ne doit JAMAIS descendre
+  //   dans le navigateur. L'application est 100 % front : une clé dans le bundle est une
+  //   clé publique, lisible et facturable par n'importe quel visiteur. Elle vit donc chez
+  //   le relais, et l'application ne connaît qu'une URL.
+  {
+    const src = ['news.js'].map(f => fs.default.readFileSync(path.default.join(process.cwd(), 'src', f), 'utf8')).join('\n')
+    const comp = fs.default.readFileSync(path.default.join(dir, 'Company.jsx'), 'utf8')
+    ok(!/generativelanguage|GEMINI_API_KEY|news\.google\.com/.test(src + comp),
+      "Actualités : l'application appelle Gemini ou Google News en direct — clé exposée, et CORS de toute façon")
+    ok(/newsRelayUrl|relayUrl/.test(src), "Actualités : l'application n'utilise pas l'URL du relais")
+    // L'analyse coûte un appel : elle ne part que sur demande explicite.
+    ok(!/analyzeCompanyNews\(/.test(comp.slice(0, comp.indexOf('const analyse'))),
+      "Actualités : l'analyse IA est appelée avant l'action de l'utilisateur")
+    // Le relais, lui, doit refuser les URL que l'IA aurait inventées.
+    const worker = fs.default.readFileSync(path.default.join(process.cwd(), 'news', 'worker.js'), 'utf8')
+    ok(/urls\.has\(s\.url\)/.test(worker),
+      "Relais : une URL inventée par l'IA est renvoyée telle quelle — le commercial suivra un lien mort")
+    ok(/Math\.max\(0, Math\.min\(100/.test(worker), 'Relais : le score renvoyé par l\'IA n\'est pas borné')
+    ok(/slice\(0, MAX_SIGNALS\)/.test(worker), 'Relais : le nombre de signaux renvoyés n\'est pas borné')
+    ok(!/GEMINI_API_KEY\s*=\s*['"][^'"]/.test(worker), 'Relais : une clé Gemini est écrite en dur dans le code')
+
+    // La fiche entreprise intègre l'action, elle ne crée pas de page ni de navigation.
+    const navSrc = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'nav.jsx'), 'utf8')
+    ok(!/actualit/i.test(navSrc), 'Actualités : un onglet de navigation a été créé au lieu d\'une action de fiche')
+  }
+
+  // 6 octodecies. Une demande CLOSE quitte le tableau Clients. Le tableau doit dire ce
+  //   qu'il reste à faire ; une demande traitée qui y reste à vie le transforme en journal.
+  {
+    const d = s.buildDemoDb({}); s.migrate(d)
+    d.supportRequests = [{ id: 'req-z', name: 'Zed', email: 'z@z.fr', message: 'Bonjour', status: 'new', createdAt: new Date().toISOString() }]
+    d.clients.unshift({ id: 'cli-z', key: 'req:req-z', name: 'Zed', status: 'demandes', envId: null, accountId: null })
+    const card = () => d.clients.find(c => c.id === 'cli-z')
+    ok(!card().archived, 'Une demande NEUVE ne doit pas être rangée')
+    // Les deux gestes de clôture — traitée et archivée — rangent la carte.
+    s.syncClientFromRequest(d, { ...d.supportRequests[0], status: 'handled' })
+    ok(card().archived === true, 'Une demande traitée reste sur le tableau Clients')
+    s.syncClientFromRequest(d, { ...d.supportRequests[0], status: 'new', archived: false })
+    ok(card().archived === false, 'Rouvrir une demande ne la remet pas sur le tableau')
+    s.syncClientFromRequest(d, { ...d.supportRequests[0], archived: true })
+    ok(card().archived === true, 'Une demande archivée reste sur le tableau Clients')
+    // ⚠️ Ranger n'est pas supprimer : l'histoire du client ne se perd jamais.
+    ok(!!card(), 'La carte a été SUPPRIMÉE au lieu d\'être rangée')
+    const cli = fs.default.readFileSync(path.default.join(dir, 'Clients.jsx'), 'utf8')
+    ok(/all\.filter\(c => !c\.archived\)/.test(cli), 'Le tableau Clients n\'écarte pas les demandes closes')
+    ok(/showArchived/.test(cli), 'Aucun moyen de retrouver les demandes closes : elles seraient perdues')
+  }
+
   // 7. RETIRER un module doit être sans danger. Le staff décoche une brique à la création
   //    d'un environnement : les écrans concernés disparaissent, mais RIEN ne s'efface et
   //    aucun calcul voisin ne tombe. On vérifie les deux, module par module.

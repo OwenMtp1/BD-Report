@@ -1,7 +1,151 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2 } from 'lucide-react'
+import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2, Newspaper, Sparkles, RefreshCw, ExternalLink, X, Flame } from 'lucide-react'
 import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor } from '../store.jsx'
-import { Modal, Field, Empty } from '../ui.jsx'
+import { Modal, Field, Empty, toast } from '../ui.jsx'
+import { fetchCompanyNews, analyzeCompanyNews, cachedNews, newsRelayUrl } from '../news.js'
+
+const URGENCY_CLASS = {
+  HIGH: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+  MEDIUM: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  LOW: 'bg-surface text-muted',
+}
+const fmtNewsDate = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/**
+ * 📰 ACTUALITÉS — panneau ouvert DANS la fiche entreprise.
+ *
+ * Deux temps, volontairement séparés : on récupère d'abord les dépêches (gratuit,
+ * mis en cache 24 h), et l'analyse par l'IA ne part QUE sur demande. Analyser
+ * automatiquement à chaque ouverture d'une fiche reviendrait à payer un appel pour
+ * des articles que personne ne lira, et à faire attendre l'utilisateur sans qu'il
+ * l'ait demandé.
+ *
+ * L'IA ne travaille que sur les articles récupérés : le relais retire toute URL
+ * qu'elle aurait inventée, plutôt que d'envoyer un commercial vers une page vide.
+ */
+function NewsPanel({ name, store, onClose }) {
+  const [state, setState] = useState(() => {
+    const hit = cachedNews(name)
+    return hit ? { articles: hit.articles || [], signals: hit.signals || null, at: hit.at } : null
+  })
+  const [busy, setBusy] = useState('')     // '' | 'news' | 'ai'
+  const [error, setError] = useState('')
+  const relay = newsRelayUrl(store.db)
+
+  const load = async (force) => {
+    setBusy('news'); setError('')
+    const r = await fetchCompanyNews(name, store.db, { force })
+    setBusy('')
+    if (r.error) { setError(r.error); return }
+    setState({ articles: r.articles, signals: r.signals, at: r.cachedAt })
+  }
+  const analyse = async () => {
+    setBusy('ai'); setError('')
+    const r = await analyzeCompanyNews(name, state?.articles || [], store.db)
+    setBusy('')
+    if (r.error) { setError(r.error); return }
+    setState(s => ({ ...s, signals: r.signals }))
+    store.logAction('Lead', 'Actualités analysées', name)
+    toast(r.signals.length ? `${r.signals.length} signal(s) commercial(aux)` : 'Aucun signal commercial détecté.')
+  }
+
+  // Première ouverture sans cache : on va chercher les dépêches, pas l'IA.
+  useEffect(() => { if (!state && relay) load(false) }, []) // eslint-disable-line
+
+  const articles = state?.articles || []
+  const signals = state?.signals
+
+  return (
+    <div className="rounded-xl border border-line bg-surface/60 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-bold text-sm flex items-center gap-1.5"><Newspaper size={15} className="text-brand" /> Actualités</span>
+        <button className="btn-ghost !p-1" onClick={onClose} title="Fermer les actualités"><X size={14} /></button>
+      </div>
+
+      {!relay && (
+        <p className="text-xs text-muted">
+          Le relais Actualités n'est pas configuré. L'équipe BD Report doit publier son URL dans Paramètres → Intégrations.
+        </p>
+      )}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      {relay && (
+        <>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted">
+              {busy === 'news' ? 'Recherche en cours…' : `${articles.length} actualité${articles.length > 1 ? 's' : ''} trouvée${articles.length > 1 ? 's' : ''}`}
+            </span>
+            {articles.length > 0 && !signals && (
+              <button className="btn-primary !py-1 text-xs" disabled={busy === 'ai'} onClick={analyse}>
+                <Sparkles size={13} /> {busy === 'ai' ? 'Analyse en cours…' : 'Analyser avec l\'IA'}
+              </button>
+            )}
+            <button className="btn-ghost !py-1 text-xs ml-auto" disabled={!!busy} onClick={() => load(true)}>
+              <RefreshCw size={12} /> Actualiser les actualités
+            </button>
+          </div>
+
+          {/* Résultat de l'analyse, quand elle a eu lieu. */}
+          {signals && signals.length === 0 && (
+            <p className="text-sm text-muted">Aucun signal commercial détecté.</p>
+          )}
+          {signals && signals.length > 0 && (
+            <div className="space-y-2">
+              {signals.map((s, i) => (
+                <div key={i} className="rounded-xl border border-brand/30 bg-brand/5 p-3 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="chip bg-brand/15 text-brand flex items-center gap-1"><Flame size={11} /> Signal commercial</span>
+                    {s.type && <span className="chip bg-surface text-muted">{s.type}</span>}
+                  </div>
+                  <div className="font-bold text-sm">{s.title}</div>
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <span className="text-muted">Pertinence <b className="text-ink">{s.score}/100</b></span>
+                    <span className={`chip ${URGENCY_CLASS[s.urgency] || URGENCY_CLASS.LOW}`}>{s.urgency}</span>
+                  </div>
+                  {s.summary && <p className="text-sm text-ink/90">{s.summary}</p>}
+                  {s.why_now && (
+                    <p className="text-sm"><span className="text-muted text-xs uppercase tracking-wide">Pourquoi maintenant — </span>{s.why_now}</p>
+                  )}
+                  {(s.targets || []).length > 0 && (
+                    <div className="text-sm"><span className="text-muted text-xs uppercase tracking-wide">Cibles — </span>{s.targets.join(' · ')}</div>
+                  )}
+                  {s.angle && (
+                    <p className="text-sm italic">« {s.angle} »</p>
+                  )}
+                  <div className="text-[11px] text-muted flex items-center gap-1.5 flex-wrap">
+                    <span>{[s.source, fmtNewsDate(s.date)].filter(Boolean).join(' · ')}</span>
+                    {s.url && <a href={s.url} target="_blank" rel="noreferrer" className="text-brand hover:underline flex items-center gap-0.5">Lire <ExternalLink size={10} /></a>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Les dépêches elles-mêmes : elles restent visibles sous l'analyse, pour
+              qu'on puisse vérifier ce sur quoi l'IA s'est appuyée. */}
+          {articles.length > 0 && (
+            <div className="space-y-1.5 border-t border-line pt-2">
+              {articles.map((a, i) => (
+                <div key={i} className="text-sm">
+                  <div className="text-[11px] text-muted">{fmtNewsDate(a.date)}</div>
+                  <a href={a.url} target="_blank" rel="noreferrer" className="hover:text-brand font-medium">{a.title}</a>
+                  {a.source && <div className="text-[11px] text-muted">{a.source}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+          {!busy && !articles.length && !error && (
+            <p className="text-sm text-muted">Aucune actualité trouvée pour cette entreprise ces 30 derniers jours.</p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
 
 // Ouvre la fiche entreprise depuis n'importe quelle page (événement global).
 export function openCompany(name) {
@@ -142,10 +286,13 @@ function CommentThread({ name, store }) {
 export default function CompanyModal() {
   const store = useStore()
   const [name, setName] = useState(null)
+  const [news, setNews] = useState(false) // panneau Actualités, replié par défaut
   const prevHash = useRef(null) // hash de l'onglet avant ouverture, pour le restaurer à la fermeture
 
   useEffect(() => {
-    const h = (e) => setName(e.detail)
+    // Changer d'entreprise referme le panneau : il montrerait sinon les actualités
+    // de la société précédente sous le nom de la nouvelle.
+    const h = (e) => { setNews(false); setName(e.detail) }
     window.addEventListener('open-company', h)
     return () => window.removeEventListener('open-company', h)
   }, [])
@@ -183,6 +330,15 @@ export default function CompanyModal() {
   return (
     <Modal title={<span className="flex items-center gap-2"><Building2 size={18} className="text-brand" /> {name}</span>} onClose={() => setName(null)} wide>
       <div className="space-y-5">
+        {/* Actions de la fiche. Une seule pour l'instant : elle vit ici plutôt que dans une
+            page à part — on consulte les actualités d'une entreprise en la regardant. */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button className={`btn-ghost !py-1 text-xs ${news ? 'text-brand' : ''}`} onClick={() => setNews(v => !v)}>
+            <Newspaper size={13} /> Actualités
+          </button>
+        </div>
+        {news && <NewsPanel name={name} store={store} onClose={() => setNews(false)} />}
+
         {/* Infos société (enrichissement manuel) */}
         <div className="rounded-xl bg-surface p-3">
           <p className="label">Infos société</p>

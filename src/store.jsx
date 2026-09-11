@@ -1046,6 +1046,17 @@ function defaultKbArticles() {
 // La montée en charge n'est pas un détail de confort : sans elle, un arrivant est rouge partout
 // pendant son premier trimestre, le classement l'enfonce, et le quota devient un objet de
 // découragement au lieu d'un repère.
+// Rubriques qu'un manager peut ajouter à sa trame de 1:1. Volontairement peu nombreuses :
+// un formulaire d'entretien qui offre douze types de champs devient un formulaire à remplir,
+// et l'entretien se perd. Une note sur 5 suffit à suivre un moral, une case à cocher à
+// constater un fait, deux tailles de texte à écrire ce qui s'est dit.
+export const ONE_TO_ONE_FIELD_TYPES = [
+  { id: 'text', label: 'Ligne de texte' },
+  { id: 'long', label: 'Texte libre' },
+  { id: 'rating', label: 'Note sur 5' },
+  { id: 'check', label: 'Case à cocher' },
+]
+
 export const QUOTA_METRICS = [
   { id: 'rdvPris', label: 'RDV pris', hint: 'Rendez-vous décrochés sur la période' },
   { id: 'rdvTenus', label: 'RDV tenus', hint: 'Rendez-vous réellement réalisés (no-shows exclus)' },
@@ -1894,6 +1905,19 @@ function enrichClientFromTicket(d, ticket) {
     client.lastActivity = now
   }
   return client
+}
+
+// Une demande du site a produit une carte sur le tableau Clients ; son sort suit celui de la
+// demande. Traitée ou archivée, elle n'est plus « en cours » : la carte quitte le tableau.
+// Sans cela, une demande close restait à vie dans la colonne, et le tableau cessait de dire
+// ce qu'il reste à faire — il ne disait plus que ce qui est arrivé un jour.
+// ⚠️ La carte n'est pas SUPPRIMÉE, seulement rangée (`archived`) : rouvrir la demande la
+// remet en place, et son histoire n'est jamais perdue.
+export function syncClientFromRequest(d, req) {
+  if (!req?.id) return
+  const c = (d.clients || []).find(x => x.key === 'req:' + req.id)
+  if (!c) return
+  c.archived = !!(req.archived || req.status === 'handled')
 }
 
 // Le statut du projet d'implémentation suit le statut du client (clients & gestion de projet liés).
@@ -5314,6 +5338,31 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         })
         return out
       },
+      // ----- Modèle de compte rendu de 1:1, composé par le manager
+      // Les trois blocs d'origine (points, axe, engagements) conviennent à une trame
+      // générale — pas à une équipe qui suit toujours les mêmes six sujets. Le manager
+      // ajoute donc SES rubriques, une fois, et le formulaire les redemande à chaque
+      // entretien : c'est ce qui rend deux comptes rendus comparables d'un mois sur l'autre.
+      // Porté par l'ENVIRONNEMENT : une trame que chacun verrait autrement n'est pas une trame.
+      oneToOneTemplate() {
+        const env = db.environments.find(e => e.id === session?.envId)
+        return Array.isArray(env?.oneToOneTemplate) ? env.oneToOneTemplate : []
+      },
+      // Réservé à qui encadre : la trame engage les entretiens de toute l'équipe.
+      canEditOneToOneTemplate() { return this.hasClientPerm('team.manage') || isSupportRole(account?.role) },
+      saveOneToOneTemplate(fields) {
+        if (!this.canEditOneToOneTemplate()) return false
+        const clean = (Array.isArray(fields) ? fields : [])
+          .map(f => ({
+            id: f.id || uid(),
+            label: String(f.label || '').trim(),
+            type: ONE_TO_ONE_FIELD_TYPES.some(t => t.id === f.type) ? f.type : 'text',
+            hint: String(f.hint || '').trim(),
+          }))
+          .filter(f => f.label)
+        setDb(d => { const e = d.environments.find(x => x.id === session?.envId); if (e) e.oneToOneTemplate = clean; return d })
+        return true
+      },
       postOneToOneReport(channelId, report) {
         if (roBlocked()) return
         const sub = db.subenvs.find(s => s.id === session?.subEnvId)
@@ -5701,6 +5750,39 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // Config effective de l'ENTREPRISE courante (connecteur de l'éditeur + portail relié).
       hubspot() { return hsCfg },
       // Réglages « éditeur » : l'URL du connecteur publiée à tous les clients.
+      // ----- Relais « Actualités » (Google News + Gemini), publié par l'éditeur
+      // Même modèle que le connecteur HubSpot : l'application n'a pas de serveur, donc ni
+      // le flux Google News (aucun en-tête CORS) ni la clé Gemini (elle serait publique
+      // dans le bundle) ne peuvent y vivre. Une URL, publiée une fois, pour tout le monde.
+      newsRelay() { return String(db.integrations?.news?.relayUrl || '') },
+      canSetNewsRelay() { return isSupportRole(account?.role) },
+      setNewsRelay(url) {
+        if (!this.canSetNewsRelay()) return false
+        const clean = String(url || '').trim().replace(/\/+$/, '')
+        setDb(d => {
+          d.integrations = d.integrations || {}
+          d.integrations.news = { ...(d.integrations.news || {}), relayUrl: clean }
+          return d
+        })
+        this.logStaff({ type: 'Module', cat: 'client', action: clean ? 'Relais Actualités publié' : 'Relais Actualités retiré', details: clean })
+        return true
+      },
+      async testNewsRelay() {
+        const base = this.newsRelay()
+        if (!base) return { ok: false, msg: 'Aucune URL renseignée.' }
+        try {
+          const res = await fetch(base + '/health')
+          const body = await res.json().catch(() => null)
+          if (!res.ok || !body?.ok) return { ok: false, msg: `Le relais a répondu ${res.status}.` }
+          // Un relais qui répond mais sans clé ne sait faire que la moitié du travail :
+          // le dire tout de suite évite de chercher l'erreur au premier « Analyser ».
+          return body.gemini
+            ? { ok: true, msg: 'Relais joignable ✓ — actualités et analyse IA disponibles.' }
+            : { ok: false, msg: 'Relais joignable, mais sans clé Gemini : l\'analyse IA ne fonctionnera pas.' }
+        } catch (e) {
+          return { ok: false, msg: 'Relais injoignable (URL, CORS ou réseau).' }
+        }
+      },
       hubspotPlatform() { return { ...defaultHubspotConfig(), ...(db.integrations?.hubspot || {}) } },
       setHubspotPlatformConfig(patch) {
         if (!isSupportRole(account?.role)) return
@@ -6139,13 +6221,22 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         } catch (e) { /* inbox illisible : on ignore */ }
       },
       updateSupportRequest(id, patch) {
-        setDb(d => { const r = (d.supportRequests || []).find(x => x.id === id); if (r) Object.assign(r, patch); return d })
+        setDb(d => {
+          const r = (d.supportRequests || []).find(x => x.id === id)
+          if (r) { Object.assign(r, patch); syncClientFromRequest(d, r) }
+          return d
+        })
       },
       deleteSupportRequest(id) {
         // Suppression douce : la demande part dans la corbeille du back-office support.
         setDb(d => {
           const r = (d.supportRequests || []).find(x => x.id === id)
-          if (r) { d.supportTrash = d.supportTrash || []; d.supportTrash.unshift({ id: uid(), kind: 'request', deletedAt: new Date().toISOString(), data: r }) }
+          if (r) {
+            d.supportTrash = d.supportTrash || []
+            d.supportTrash.unshift({ id: uid(), kind: 'request', deletedAt: new Date().toISOString(), data: r })
+            // La demande n'existe plus : sa carte n'a plus rien à faire sur le tableau.
+            syncClientFromRequest(d, { ...r, archived: true })
+          }
           d.supportRequests = (d.supportRequests || []).filter(x => x.id !== id)
           return d
         })

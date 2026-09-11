@@ -3,9 +3,9 @@ import {
   MessagesSquare, Plus, Hash, Radio, Send, ImagePlus, Smile, Trash2, Settings2, Users2,
   Lock, Globe, X, ChevronLeft, Bell, BellOff, Paperclip, MoreVertical, Reply, Forward,
   Pin, PinOff, MailOpen, FileText, Download, CornerUpLeft, User, LogOut, Search, CheckCheck,
-  ClipboardList, ChevronDown, ChevronRight, UserCheck, Archive,
+  ClipboardList, ChevronDown, ChevronUp, ChevronRight, UserCheck, Archive,
 } from 'lucide-react'
-import { useStore, reportEventsFor, PRESENCE_META, QUOTA_METRICS, fmtMoney, fmtDate, todayISO, uid } from '../store.jsx'
+import { useStore, reportEventsFor, PRESENCE_META, QUOTA_METRICS, ONE_TO_ONE_FIELD_TYPES, fmtMoney, fmtDate, todayISO, uid } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 import { uploadAttachment, attachmentUrl, humanSize } from '../attachments.js'
 
@@ -441,22 +441,72 @@ function ReportEditor({ channel, store, onClose }) {
   const [points, setPoints] = useState('')
   const [axis, setAxis] = useState('')
   const [engagements, setEngagements] = useState([{ id: uid(), text: '', done: false }])
+  // Trame composée par le manager : ses rubriques sont redemandées à chaque entretien,
+  // c'est ce qui rend deux comptes rendus comparables d'un mois sur l'autre.
+  const template = store.oneToOneTemplate()
+  const [values, setValues] = useState({})
+  const [editTpl, setEditTpl] = useState(false)
   const snapshot = useMemo(() => store.oneToOneSnapshot(memberSubId), [memberSubId]) // eslint-disable-line
   const sub = store.db.subenvs.find(s => s.id === memberSubId)
 
   const save = () => {
     const eng = engagements.filter(e => e.text.trim()).map(e => ({ ...e, text: e.text.trim() }))
-    if (!points.trim() && !axis.trim() && !eng.length) return
-    store.postOneToOneReport(channel.id, { date, points: points.trim(), axis: axis.trim(), engagements: eng, snapshot })
+    // On ne garde que les rubriques réellement renseignées, et on fige leur LIBELLÉ avec la
+    // valeur : renommer la trame plus tard ne doit pas réécrire les comptes rendus passés.
+    const fields = template
+      .map(f => ({ id: f.id, label: f.label, type: f.type, value: values[f.id] }))
+      .filter(f => f.type === 'check' ? f.value === true : String(f.value ?? '').trim() !== '')
+    if (!points.trim() && !axis.trim() && !eng.length && !fields.length) return
+    store.postOneToOneReport(channel.id, { date, points: points.trim(), axis: axis.trim(), engagements: eng, fields, snapshot })
     store.logAction('1:1', 'Compte rendu enregistré', sub ? `${sub.prenom} ${sub.nom}` : '')
     toast('Compte rendu publié dans le fil')
     onClose()
   }
 
+  if (editTpl) return <TemplateEditor store={store} onClose={() => setEditTpl(false)} />
+
   return (
     <Modal title={`Compte rendu du 1:1 — ${sub ? `${sub.prenom} ${sub.nom}` : ''}`} onClose={onClose} wide>
       <div className="space-y-3">
-        <Field label="Date de l'entretien"><input type="date" className="input !w-auto" value={date} onChange={e => setDate(e.target.value)} /></Field>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <Field label="Date de l'entretien"><input type="date" className="input !w-auto" value={date} onChange={e => setDate(e.target.value)} /></Field>
+          {store.canEditOneToOneTemplate() && (
+            <button className="btn-ghost !py-1 text-xs" onClick={() => setEditTpl(true)}>
+              <ClipboardList size={13} /> Personnaliser la trame
+            </button>
+          )}
+        </div>
+
+        {/* Rubriques du manager, avant les blocs communs : c'est sa trame qui mène l'entretien. */}
+        {template.length > 0 && (
+          <div className="rounded-xl border border-line p-3 space-y-2.5">
+            <div className="text-[11px] uppercase tracking-wide text-muted">Trame de l'équipe</div>
+            {template.map(f => (
+              <Field key={f.id} label={f.label}>
+                {f.type === 'long' ? (
+                  <textarea className="input min-h-[80px]" placeholder={f.hint} value={values[f.id] || ''}
+                    onChange={e => setValues(v => ({ ...v, [f.id]: e.target.value }))} />
+                ) : f.type === 'rating' ? (
+                  <div className="flex gap-1.5">
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button key={n} type="button"
+                        className={`w-9 h-9 rounded-lg border text-sm font-bold ${Number(values[f.id]) === n ? 'bg-brand text-white border-brand' : 'border-line hover:bg-surface'}`}
+                        onClick={() => setValues(v => ({ ...v, [f.id]: Number(v[f.id]) === n ? '' : n }))}>{n}</button>
+                    ))}
+                  </div>
+                ) : f.type === 'check' ? (
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={!!values[f.id]} onChange={e => setValues(v => ({ ...v, [f.id]: e.target.checked }))} />
+                    <span>{f.hint || 'Oui'}</span>
+                  </label>
+                ) : (
+                  <input className="input" placeholder={f.hint} value={values[f.id] || ''}
+                    onChange={e => setValues(v => ({ ...v, [f.id]: e.target.value }))} />
+                )}
+              </Field>
+            ))}
+          </div>
+        )}
         <Field label="Points abordés">
           <textarea className="input min-h-[110px]" value={points} onChange={e => setPoints(e.target.value)}
             placeholder="Ce qui a été dit, dans l'ordre où ça compte." />
@@ -502,6 +552,65 @@ function ReportEditor({ channel, store, onClose }) {
   )
 }
 
+/**
+ * Composition de la trame de 1:1 — une fois, par le manager.
+ *
+ * Les trois blocs d'origine conviennent à une trame générale, pas à une équipe qui suit
+ * toujours les mêmes sujets. Ici le manager déclare SES rubriques ; le formulaire les
+ * redemande à chaque entretien, et c'est ce qui rend deux comptes rendus comparables.
+ * La trame appartient à l'ENVIRONNEMENT : une trame que chacun verrait autrement n'en est pas une.
+ */
+function TemplateEditor({ store, onClose }) {
+  const [fields, setFields] = useState(() => store.oneToOneTemplate().map(f => ({ ...f })))
+  const set = (id, patch) => setFields(l => l.map(f => (f.id === id ? { ...f, ...patch } : f)))
+  const move = (i, dir) => setFields(l => {
+    const j = i + dir
+    if (j < 0 || j >= l.length) return l
+    const out = [...l]; const [x] = out.splice(i, 1); out.splice(j, 0, x); return out
+  })
+  const save = () => {
+    store.saveOneToOneTemplate(fields)
+    toast('Trame enregistrée — elle s\'appliquera aux prochains comptes rendus')
+    onClose()
+  }
+  return (
+    <Modal title="Trame des entretiens 1:1" onClose={onClose} wide>
+      <div className="space-y-3">
+        <p className="text-xs text-muted">
+          Ces rubriques s'ajoutent aux blocs communs (points abordés, axe de progrès, engagements) et sont redemandées à chaque entretien de l'équipe.
+        </p>
+        {fields.length === 0 && <Empty text="Aucune rubrique. Ajoutez-en une pour composer votre trame." />}
+        <div className="space-y-2">
+          {fields.map((f, i) => (
+            <div key={f.id} className="rounded-xl border border-line p-2.5 space-y-2">
+              <div className="flex gap-2 flex-wrap items-center">
+                <input className="input !py-1.5 text-sm flex-1 min-w-[10rem]" placeholder="Intitulé de la rubrique"
+                  value={f.label} onChange={e => set(f.id, { label: e.target.value })} />
+                <select className="input !w-auto !py-1.5 text-sm" value={f.type} onChange={e => set(f.id, { type: e.target.value })}>
+                  {ONE_TO_ONE_FIELD_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+                <button className="btn-ghost !p-1.5" title="Monter" onClick={() => move(i, -1)}><ChevronUp size={14} /></button>
+                <button className="btn-ghost !p-1.5" title="Descendre" onClick={() => move(i, 1)}><ChevronDown size={14} /></button>
+                <button className="btn-ghost !p-1.5 !text-red-500" title="Retirer la rubrique"
+                  onClick={() => setFields(l => l.filter(x => x.id !== f.id))}><X size={14} /></button>
+              </div>
+              <input className="input !py-1.5 text-xs" placeholder="Indication pour celui qui remplit (facultatif)"
+                value={f.hint || ''} onChange={e => set(f.id, { hint: e.target.value })} />
+            </div>
+          ))}
+        </div>
+        <button className="btn-ghost !py-1 text-xs" onClick={() => setFields(l => [...l, { id: uid(), label: '', type: 'text', hint: '' }])}>
+          <Plus size={13} /> Ajouter une rubrique
+        </button>
+        <div className="flex justify-end gap-2 pt-1">
+          <button className="btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn-primary" onClick={save}>Enregistrer la trame</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // Compte rendu de 1:1. Rendu en pleine largeur plutôt qu'en bulle : ce n'est pas une réplique
 // de conversation, c'est le document que les deux relisent avant le prochain entretien.
 function ReportCard({ m, channel, store }) {
@@ -513,6 +622,18 @@ function ReportCard({ m, channel, store }) {
         <span className="font-bold text-sm flex items-center gap-1.5"><ClipboardList size={15} className="text-brand" /> Compte rendu du {fmtDate(r.date)}</span>
         <span className="text-[11px] text-muted">par {m.authorName} · {timeStr(m.ts)}</span>
       </div>
+      {/* Rubriques de la trame : leur libellé est figé dans le compte rendu, pour qu'un
+          renommage ultérieur de la trame ne réécrive pas les entretiens passés. */}
+      {(r.fields || []).length > 0 && (
+        <div className="mb-2 space-y-1">
+          {r.fields.map(f => (
+            <div key={f.id} className="text-sm">
+              <span className="text-muted text-xs uppercase tracking-wide">{f.label} — </span>
+              {f.type === 'rating' ? <b>{f.value}/5</b> : f.type === 'check' ? <b>Oui</b> : <span className="whitespace-pre-wrap">{f.value}</span>}
+            </div>
+          ))}
+        </div>
+      )}
       {r.points && <p className="text-sm whitespace-pre-wrap mb-2">{r.points}</p>}
       {r.axis && (
         <p className="text-sm mb-2"><span className="text-muted text-xs uppercase tracking-wide">Axe de progrès — </span>{r.axis}</p>

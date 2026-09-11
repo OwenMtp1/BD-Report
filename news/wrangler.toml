@@ -1,0 +1,18 @@
+# Relais « Actualités » de BD Report — configuration Cloudflare Workers.
+# Déploiement complet : voir news/SETUP.md
+#
+#   npx wrangler secret put GEMINI_API_KEY
+#   npx wrangler deploy
+
+name = "bdr-news"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+[vars]
+# Origines autorisées à appeler le relais (l'app BD Report).
+ALLOWED_ORIGINS = "https://bdreport.js.org,https://owenmtp1.github.io,http://localhost:5173"
+# Modèle Gemini. Laisser vide pour le défaut (gemini-2.0-flash, offre gratuite).
+# GEMINI_MODEL = "gemini-2.0-flash"
+
+# Secret (JAMAIS dans ce fichier — `wrangler secret put`) :
+#   GEMINI_API_KEY

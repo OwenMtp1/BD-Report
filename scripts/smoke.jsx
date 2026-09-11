@@ -774,6 +774,94 @@ async function main() {
   await click(find('button', 'Supprimer pour moi'))
   if ([...container.querySelectorAll('button')].some(b => b.textContent.trim() === 'Canal Smoke')) throw new Error('Channel not hidden after delete-for-me')
 
+  // 6a bis. TRAME DE 1:1 composée par le manager. Ses rubriques s'ajoutent aux blocs
+  // communs et sont redemandées à chaque entretien : c'est ce qui rend deux comptes
+  // rendus comparables d'un mois sur l'autre.
+  {
+    const st = () => win.__bdrStore
+    if (!st().canEditOneToOneTemplate()) throw new Error('Le manager ne peut pas composer la trame de 1:1')
+    await act(async () => {
+      st().saveOneToOneTemplate([
+        { label: 'Moral', type: 'rating', hint: '' },
+        { label: 'Sujet à traiter', type: 'long', hint: 'Ce qui bloque' },
+        { label: '', type: 'text' },                       // sans intitulé : doit être écarté
+        { label: 'Formation demandée', type: 'zzz' },      // type inconnu : ramené au texte
+      ])
+    })
+    const tpl = st().oneToOneTemplate()
+    if (tpl.length !== 3) throw new Error(`Trame : ${tpl.length} rubriques au lieu de 3 (une rubrique sans intitulé ne doit pas être retenue)`)
+    if (tpl[0].type !== 'rating' || tpl[2].type !== 'text') throw new Error('Trame : type de rubrique non normalisé')
+    if (!tpl.every(f => f.id)) throw new Error('Trame : une rubrique sans identifiant ne peut pas porter de réponse')
+    // La trame vit sur l'ENVIRONNEMENT : une trame que chacun verrait autrement n'en est pas une.
+    win.__bdrFlushSave?.()
+    const envNow = JSON.parse(win.localStorage.getItem('bdrflow_db_v1')).environments.find(e => e.id === 'env-peoplespheres')
+    if ((envNow.oneToOneTemplate || []).length !== 3) throw new Error("La trame n'est pas enregistrée sur l'environnement")
+  }
+
+  // 6a ter. ACTUALITÉS dans la fiche entreprise. Le relais est simulé : ce qu'on teste ici,
+  // c'est le parcours réel — dépêches, puis analyse À LA DEMANDE, jamais automatique.
+  {
+    const st = () => win.__bdrStore
+    const realFetch = globalThis.fetch
+    let calls = []
+    globalThis.fetch = async (url, opts) => {
+      calls.push(String(url))
+      if (String(url).includes('/news')) {
+        return { ok: true, status: 200, json: async () => ({ articles: [
+          { title: 'Nouveau directeur RH chez Zephyr', url: 'https://ex.fr/a1', source: 'Les Échos', date: new Date().toISOString(), summary: 'Nomination.' },
+          { title: 'Zephyr lève 12 M€', url: 'https://ex.fr/a2', source: 'BFM', date: new Date().toISOString(), summary: 'Série A.' },
+        ] }) }
+      }
+      return { ok: true, status: 200, json: async () => ({ signals: [{
+        type: 'recrutement', title: 'Nouveau directeur RH', summary: 'Nomination récente.', score: 87,
+        urgency: 'HIGH', why_now: 'Remise à plat probable des outils RH.', targets: ['DRH', 'Head of People'],
+        angle: "J'ai vu que vous veniez de renforcer votre direction RH.", source: 'Les Échos',
+        date: new Date().toISOString(), url: 'https://ex.fr/a1',
+      }] }) }
+    }
+    try {
+      await act(async () => { st().setNewsRelay('https://relais.test') })
+      win.localStorage.removeItem('bdrflow_news_v1')
+      await act(async () => { win.dispatchEvent(new win.CustomEvent('open-company', { detail: 'Zephyr' })) })
+      await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+      if (!text().includes('Zephyr')) throw new Error("La fiche entreprise ne s'ouvre pas")
+      const newsBtn = find('button', 'Actualités')
+      if (!newsBtn) throw new Error("L'action « Actualités » est absente de la fiche entreprise")
+      await click(newsBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      if (!text().includes('Nouveau directeur RH chez Zephyr')) { console.error('DEBUG calls', calls); console.error('DEBUG panel', text().slice(Math.max(0, text().indexOf('Actualités') - 50), text().indexOf('Actualités') + 500)); throw new Error('Les dépêches ne sont pas affichées') }
+      if (!text().includes('2 actualités trouvées')) throw new Error('Le compte des actualités est faux ou absent')
+      // ⚠️ L'IA ne part JAMAIS toute seule : elle coûte un appel et une attente.
+      if (calls.some(u => u.includes('/analyze'))) throw new Error("L'analyse IA est lancée sans qu'on l'ait demandée")
+      const aiBtn = find('button', "Analyser avec l'IA")
+      if (!aiBtn) throw new Error("Le bouton « Analyser avec l'IA » est absent")
+      await click(aiBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      if (!calls.some(u => u.includes('/analyze'))) throw new Error("« Analyser avec l'IA » n'appelle pas le relais")
+      for (const k of ['Signal commercial', 'Pertinence', 'HIGH', 'Pourquoi maintenant', 'DRH', 'Les Échos']) {
+        if (!text().includes(k)) throw new Error('Analyse : « ' + k + ' » manquant à l\'écran')
+      }
+      // Les dépêches restent sous l'analyse : on doit pouvoir vérifier sur quoi elle s'appuie.
+      if (!text().includes('Zephyr lève 12 M€')) throw new Error('Les articles disparaissent une fois analysés')
+      // Cache : rouvrir la fiche ne relance aucun appel.
+      const before = calls.length
+      await act(async () => { win.dispatchEvent(new win.CustomEvent('open-company', { detail: 'Zephyr' })) })
+      const again = find('button', 'Actualités')
+      if (!again) throw new Error("L'action « Actualités » a disparu à la réouverture")
+      await click(again)
+      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      if (calls.length !== before) throw new Error('Le cache de 24 h ne sert à rien : le relais est rappelé à chaque ouverture')
+      // On referme la fiche : une fenêtre laissée ouverte capterait les clics des tests suivants.
+      const closeBtn = [...container.querySelectorAll('.fixed.z-50 .rounded-t-2xl button')].pop()
+      if (!closeBtn) throw new Error('Bouton de fermeture de la fiche entreprise introuvable')
+      await click(closeBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      if (text().includes('Infos société')) throw new Error("La fiche entreprise ne se referme pas")
+      await act(async () => { st().setNewsRelay('') })
+      win.localStorage.removeItem('bdrflow_news_v1')
+    } finally { globalThis.fetch = realFetch }
+  }
+
   // 6b. Support : créer un ticket, vérifier la conversation, le côté support et l'enrichissement client
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Support'))
   await click(find('button', 'Nouveau ticket'))
@@ -929,9 +1017,41 @@ async function main() {
   // Chaque environnement existant est forcément un client (PeopleSpheres + Test).
   if (!text().includes('PeopleSpheres') || !text().includes('Test')) throw new Error('Environments not turned into clients')
   if (!text().includes('Clients non aboutis')) throw new Error('« Clients non aboutis » column missing from client kanban')
+  // La demande du site a produit une carte sur le tableau Clients...
+  if (!text().includes('ACME Corp')) throw new Error("La demande du site n'apparaît pas sur le tableau Clients")
   // La demande du site est arrivée dans « Demandes »...
   await click(hubTab('Demandes'))
   if (!text().includes('ACME Corp')) throw new Error('Contact request not ingested into Demandes')
+
+  // ...et la CLORE la retire du tableau : une demande traitée n'est plus « en cours ».
+  // Sans cela le tableau cessait de dire ce qu'il reste à faire, pour ne raconter que
+  // ce qui est arrivé un jour.
+  {
+    const card = [...container.querySelectorAll('main .card')].find(c => c.textContent.includes('ACME Corp'))
+    const done = card && [...card.querySelectorAll('button')].find(b => b.textContent.includes('Marquer traitée'))
+    if (!done) throw new Error('Bouton « Marquer traitée » introuvable sur la demande')
+    await click(done)
+    if (!dbNow().clients.some(c => c.key.startsWith('req:') && c.archived)) {
+      throw new Error("Clore une demande ne range pas sa carte du tableau Clients")
+    }
+    await click(hubTab('Clients'))
+    if (text().includes('ACME Corp')) throw new Error('La demande close reste sur le tableau Clients')
+    // Rien n'est perdu : l'interrupteur rend l'historique.
+    const box = [...container.querySelectorAll('main input[type="checkbox"]')][0]
+    if (!box) throw new Error("L'accès aux demandes closes n'est pas proposé")
+    await click(box)
+    if (!text().includes('ACME Corp')) throw new Error('Les demandes closes sont introuvables, donc perdues')
+    await click(box)
+    // Rouvrir la demande la remet sur le tableau : le rangement se défait.
+    await click(hubTab('Demandes'))
+    const card2 = [...container.querySelectorAll('main .card')].find(c => c.textContent.includes('ACME Corp'))
+    const reopen = card2 && [...card2.querySelectorAll('button')].find(b => b.textContent.includes('Rouvrir'))
+    if (!reopen) throw new Error('Impossible de rouvrir une demande traitée')
+    await click(reopen)
+    if (dbNow().clients.some(c => c.key.startsWith('req:') && c.archived)) {
+      throw new Error('Rouvrir une demande ne la remet pas sur le tableau')
+    }
+  }
   // ...et a généré automatiquement un projet ; chaque environnement a aussi son projet d'implémentation.
   await click(hubTab('Projets & atelier'))
   // Organigramme d'un projet : organisation des personnes et rôles de l'entreprise.
