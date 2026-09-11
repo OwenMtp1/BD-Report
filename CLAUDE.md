@@ -317,6 +317,18 @@ npm run dev        # serveur de dev
     faisait que collectionner trois fois le même refus, et l'écran annonçait « sur tous les
     modèles » pour un plafond situé ailleurs. `quotaMetricOf`/`isGroundingQuota` lisent la
     limite que Google nomme dans l'erreur ; la rotation s'arrête, et le message la désigne.
+    ⚠️ **L'IA EST DEVENUE FACULTATIVE, ET C'EST TOUT LE CORRECTIF.** Deux sources publiques
+    tournent EN PARALLÈLE avant elle, gratuites, sans clé et sans quota : l'**annuaire des
+    entreprises** (implantation, effectif, secteur — officiel, donc prioritaire) et
+    **Wikidata** (site, LinkedIn, chiffre d'affaires — base CC0 faite pour être interrogée).
+    À elles deux elles couvrent les six champs : Gemini n'est appelé que pour ce qui reste,
+    et un refus total ne fait PLUS échouer l'enrichissement — on rend ce qu'on a et on dit ce
+    qui a manqué (`registryError`, `wikiError`, `aiError`, `source`).
+    ⚠️ **L'homonymie est le vrai danger de Wikidata** : « Orange » est aussi un fruit. Une
+    entité n'est retenue que si son nom correspond ET que sa description désigne une
+    organisation (`WD_ORG`) — remplir la fiche d'un client avec les données d'autre chose est
+    pire que ne rien trouver. Wikidata reste en confiance « medium » : une base collaborative
+    ne vaut pas une source d'État.
     ⚠️ **TROIS DES SIX CHAMPS N'ONT JAMAIS EU BESOIN D'UNE IA.** L'implantation, l'effectif
     et le secteur d'une société française sont publiés par l'État — **annuaire des entreprises**
     (`recherche-entreprises.api.gouv.fr`), gratuit, sans clé, sans quota. Les faire chercher par

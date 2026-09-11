@@ -281,7 +281,7 @@ console.log("Enrichissement — l'annuaire officiel d'abord, l'IA pour le reste"
   ok(b.found?.secteur?.value === 'Programmation informatique', "le secteur doit venir de l'annuaire")
   ok(b.found?.localisation?.confidence === 'high', 'une donnée officielle mérite une confiance haute')
   ok(/annuaire-entreprises\.data\.gouv\.fr/.test(b.found?.secteur?.url || ''), 'la source officielle doit être citable')
-  ok(b.source === 'registry', "la provenance doit être dite à l'application")
+  ok(b.source === 'public', "la provenance doit être dite à l'application")
 }
 {
   // L'IA ne travaille que sur ce que l'annuaire ne couvre pas.
@@ -293,7 +293,7 @@ console.log("Enrichissement — l'annuaire officiel d'abord, l'IA pour le reste"
   const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['site', 'secteur'], known: {} } })).json()
   ok(asked && asked.includes('site') && !/·\s*secteur/.test(asked), "l'IA ne doit plus se voir demander ce que l'annuaire a déjà donné")
   ok(b.found?.site?.value === 'https://doctolib.fr' && b.found?.secteur?.value === 'Programmation informatique', "les deux sources doivent se rejoindre dans le résultat")
-  ok(b.source === 'registry+ai', 'la provenance mixte doit être dite')
+  ok(b.source === 'public+ai', 'la provenance mixte doit être dite')
 }
 {
   // ⚠️ LE QUOTA NE DOIT PLUS EFFACER CE QUI EST DÉJÀ ACQUIS. Une donnée officielle obtenue
@@ -321,6 +321,63 @@ console.log("Enrichissement — l'annuaire officiel d'abord, l'IA pour le reste"
   ok(/503/.test(b.registryError || ''), "la panne de l'annuaire doit être signalée, pas avalée")
 }
 
+// ⚠️ WIKIDATA couvre ce que l'annuaire ignore — site, LinkedIn, chiffre d'affaires —
+// c'est-à-dire exactement les champs qui restaient à la charge de l'IA, donc du quota.
+const WIKIDATA = /wikidata\.org/
+const wdSearch = (label, description) => ({ search: [{ id: 'Q42', label, description }] })
+const wdEntity = {
+  entities: { Q42: { claims: {
+    P856: [{ mainsnak: { datavalue: { value: 'https://acme.fr' } } }],
+    P4264: [{ mainsnak: { datavalue: { value: 'acme-sa' } } }],
+    P2139: [{ mainsnak: { datavalue: { value: { amount: '+12000000', unit: 'http://www.wikidata.org/entity/Q4916' } } } }],
+  } } },
+}
+const wdRoute = (label = 'Acme', desc = 'entreprise française de logiciels') => [WIKIDATA, (u) =>
+  ({ body: u.includes('wbsearchentities') ? wdSearch(label, desc) : wdEntity })]
+
+console.log('Enrichissement — Wikidata comble ce que l\'annuaire ignore')
+{
+  let gemini = 0
+  stubFetch([[GEMINI, () => { gemini++; return { body: geminiBody({}) } }], [REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute()])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site', 'linkedin', 'ca', 'secteur'], known: {} } })).json()
+  ok(gemini === 0, `les sources publiques doivent suffire à ces quatre champs (${gemini} appel(s) Gemini de trop)`)
+  ok(b.found?.site?.value === 'https://acme.fr', 'le site officiel doit venir de Wikidata')
+  ok(/linkedin\.com\/company\/acme-sa/.test(b.found?.linkedin?.value || ''), "l'URL LinkedIn doit être reconstruite depuis l'identifiant")
+  ok(/12\s?000\s?000/.test((b.found?.ca?.value || '').replace(/ | /g, ' ')), `le chiffre d'affaires doit être lisible (reçu : ${b.found?.ca?.value})`)
+  ok(b.found?.secteur?.value === 'Programmation informatique', "l'annuaire officiel garde la main sur ce qu'il couvre")
+  ok(b.found?.site?.confidence === 'medium', 'une base collaborative ne vaut pas une source officielle')
+}
+{
+  // ⚠️ L'HOMONYMIE EST LE VRAI DANGER de Wikidata : « Orange » est aussi un fruit, et
+  // remplir la fiche d'un client avec les données d'autre chose est pire que ne rien trouver.
+  stubFetch([[GEMINI, () => ({ body: geminiBody({}) })], [REGISTRY, () => ({ body: { results: [] } })],
+    wdRoute('Orange', 'fruit du genre Citrus')])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Orange', fields: ['site'], known: {} } })).json()
+  ok(!b.found?.site, "une entité qui n'est pas une organisation ne doit jamais être retenue")
+}
+{
+  // Nom qui ne correspond pas exactement : on s'abstient.
+  stubFetch([[GEMINI, () => ({ body: geminiBody({}) })], [REGISTRY, () => ({ body: { results: [] } })],
+    wdRoute('Acme Corporation International', 'entreprise')])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site'], known: {} } })).json()
+  ok(!b.found?.site, 'une entité au nom différent ne doit pas être prise pour la bonne')
+}
+{
+  // ⚠️ LE CAS QUI COMPTE POUR L'UTILISATEUR : Gemini refuse TOUT, sur tous les modèles.
+  // L'enrichissement doit quand même rendre un résultat — il ne dépend plus de l'IA.
+  stubFetch([
+    [GEMINI, () => ({ status: 429, body: JSON.stringify({ error: { message: 'quota' } }) })],
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute(),
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  const res = await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site', 'secteur', 'localisation', 'effectif', 'linkedin', 'ca'], known: {} } })
+  const b = await res.json()
+  ok(res.status === 200, "un quota Gemini total ne doit plus faire échouer l'enrichissement")
+  const got = Object.keys(b.found || {}).filter(k => b.found[k])
+  ok(got.length >= 5, `les sources publiques doivent rendre l'essentiel sans IA (reçu : ${got.join(', ')})`)
+  ok(!/quota/i.test(JSON.stringify(b.found)), "le quota ne doit pas contaminer les valeurs rendues")
+}
+
 // ⚠️ /diag — LE RELAIS SE TESTE LUI-MÊME. Trois causes de panne se corrigent différemment ;
 // tant qu'on les devinait depuis un message d'erreur, on cherchait au mauvais endroit.
 console.log('Diagnostic — le relais dit lui-même ce qui bloque')
@@ -332,7 +389,7 @@ console.log('Diagnostic — le relais dit lui-même ce qui bloque')
       : { body: geminiBody({ ok: true }) })],
   ])
   const b = await (await call('/diag')).json()
-  ok(b.steps?.length === 5, 'le diagnostic doit couvrir les cinq briques')
+  ok(b.steps?.length === 6, `le diagnostic doit couvrir les six briques (reçu : ${b.steps?.length})`)
   const by = Object.fromEntries(b.steps.map(s => [s.id, s]))
   ok(by.registry?.ok && by.news?.ok && by.gemini_text?.ok, 'les briques qui répondent doivent être vertes')
   ok(by.gemini_search?.ok === false, 'la brique en échec doit être rouge')

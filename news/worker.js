@@ -696,15 +696,83 @@ async function officialRegistry(company) {
   }
 }
 
+// ---------------------------------------------------------------- Wikidata
+// ⚠️ L'ANNUAIRE NE DONNE NI SITE, NI LINKEDIN, NI CHIFFRE D'AFFAIRES — et ce sont
+// précisément les trois champs qui restaient à la charge de l'IA, donc du quota.
+// Wikidata les publie : base libre (CC0), sans clé, sans quota, et explicitement faite
+// pour être interrogée par des programmes. Aucun contournement, aucune page scrapée.
+const WD_API = 'https://www.wikidata.org/w/api.php'
+const WD_PROPS = { site: 'P856', linkedin: 'P4264', ca: 'P2139', effectif: 'P1128' }
+// Ce qui désigne une organisation dans la description d'une entité. Sans ce filtre,
+// chercher « Orange » ramène le fruit — et l'enrichissement irait remplir la fiche
+// d'un client avec les données d'un agrume.
+const WD_ORG = /entreprise|société|societe|company|corporation|organisation|organization|groupe|group|firm|éditeur|editor|startup|banque|bank|assurance/i
+const wdNorm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '')
+
+const wdClaim = (claims, prop) => (claims?.[prop] || [])
+  .map(c => c.mainsnak?.datavalue?.value).filter(v => v != null)[0]
+
+/**
+ * Cherche l'entreprise dans Wikidata. ⚠️ On ne retient une entité que si son nom
+ * CORRESPOND et que sa description parle d'une organisation : une homonymie silencieuse
+ * remplirait la fiche d'un client avec les données de quelqu'un d'autre, ce qui est pire
+ * que ne rien trouver.
+ */
+async function wikidata(company) {
+  const name = String(company || '').trim()
+  if (!name) return { found: {}, raw: null }
+  const search = await fetch(`${WD_API}?action=wbsearchentities&search=${encodeURIComponent(name)}&language=fr&uselang=fr&type=item&limit=5&format=json`,
+    { headers: { Accept: 'application/json' }, cf: { cacheTtl: 86400, cacheEverything: true } })
+  if (!search.ok) throw new Error(`Wikidata : ${search.status}`)
+  const hits = (await search.json())?.search || []
+  const target = wdNorm(name)
+  const hit = hits.find(h => wdNorm(h.label) === target && WD_ORG.test(h.description || ''))
+  if (!hit) return { found: {}, raw: { candidats: hits.map(h => `${h.label} — ${h.description || ''}`).slice(0, 3) } }
+
+  const ent = await fetch(`${WD_API}?action=wbgetentities&ids=${encodeURIComponent(hit.id)}&props=claims&format=json`,
+    { headers: { Accept: 'application/json' }, cf: { cacheTtl: 86400, cacheEverything: true } })
+  if (!ent.ok) throw new Error(`Wikidata : ${ent.status}`)
+  const claims = (await ent.json())?.entities?.[hit.id]?.claims || {}
+  const url = `https://www.wikidata.org/wiki/${hit.id}`
+  // Wikidata est une source SECONDAIRE, tenue par des contributeurs : « medium », jamais « high ».
+  const src = (value) => (value ? { value: String(value).slice(0, 300), publisher: 'Wikidata', url, confidence: 'medium' } : null)
+
+  const money = wdClaim(claims, WD_PROPS.ca)
+  const emp = wdClaim(claims, WD_PROPS.effectif)
+  const li = wdClaim(claims, WD_PROPS.linkedin)
+  const web = wdClaim(claims, WD_PROPS.site)
+  const amount = money?.amount ? String(money.amount).replace(/^\+/, '') : ''
+
+  return {
+    found: {
+      site: typeof web === 'string' ? src(web) : null,
+      linkedin: typeof li === 'string' ? src(`https://www.linkedin.com/company/${li}`) : null,
+      ca: amount ? src(`${Number(amount).toLocaleString('fr-FR')} ${/Q4916$/.test(money.unit || '') ? '€' : ''}`.trim()) : null,
+      effectif: emp?.amount ? src(String(emp.amount).replace(/^\+/, '')) : null,
+    },
+    raw: { id: hit.id, label: hit.label },
+  }
+}
+
 async function enrich(company, fields, known, env, site) {
   // ---- PASSE 1 : l'annuaire officiel. Gratuite, factuelle, aucun quota, aucune IA.
   // Son échec n'arrête rien : elle complète, elle ne commande pas.
+  // ⚠️ LES DEUX SOURCES TOURNENT EN PARALLÈLE et se complètent : l'annuaire est officiel
+  // (implantation, effectif, secteur), Wikidata couvre ce qu'il ignore (site, LinkedIn,
+  // chiffre d'affaires). Ni l'une ni l'autre ne coûte un appel d'IA ni ne touche un quota.
+  // L'échec de l'une n'arrête rien : elles complètent, elles ne commandent pas.
   const official = {}
   let registryError = ''
-  try {
-    const reg = await officialRegistry(company)
-    for (const f of fields) if (reg.found[f]) official[f] = reg.found[f]
-  } catch (e) { registryError = (e && e.message) || String(e) }
+  let wikiError = ''
+  const [reg, wiki] = await Promise.all([
+    officialRegistry(company).catch(e => { registryError = (e && e.message) || String(e); return { found: {} } }),
+    wikidata(company).catch(e => { wikiError = (e && e.message) || String(e); return { found: {} } }),
+  ])
+  // L'annuaire PRIME : une donnée d'État l'emporte sur une fiche collaborative.
+  for (const f of fields) {
+    const v = reg.found[f] || wiki.found[f]
+    if (v) official[f] = v
+  }
 
   // ⚠️ L'IA NE TRAVAILLE QUE SUR CE QUI RESTE. C'est le cœur du correctif : demander à un
   // modèle une information que l'État publie gratuitement, c'était dépenser le quota le
@@ -712,7 +780,7 @@ async function enrich(company, fields, known, env, site) {
   // appel n'est fait du tout — l'enrichissement devient gratuit et instantané.
   const remaining = fields.filter(f => !official[f])
   if (!remaining.length) {
-    return { found: official, model: '', source: 'registry', registryError, fallback: false, inputTokens: 0, outputTokens: 0 }
+    return { found: official, model: '', source: 'public', registryError, wikiError, fallback: false, inputTokens: 0, outputTokens: 0 }
   }
   fields = remaining
 
@@ -736,7 +804,7 @@ async function enrich(company, fields, known, env, site) {
     // qu'on a, en disant ce qui a manqué.
     const keep = (err) => {
       if (!Object.keys(official).length) throw err
-      return { found: official, model: '', source: 'registry', registryError, aiError: err.message, fallback: false, inputTokens: 0, outputTokens: 0 }
+      return { found: official, model: '', source: 'public', registryError, wikiError, aiError: err.message, fallback: false, inputTokens: 0, outputTokens: 0 }
     }
     if (!(e && e.code === 429 && e.grounding)) return keep(e)
     const docs = await ownSources(company, site)
@@ -783,7 +851,7 @@ async function enrich(company, fields, known, env, site) {
   // ⚠️ L'annuaire PRIME sur l'IA : une donnée officielle ne se fait pas corriger par un modèle.
   return {
     found: { ...out, ...official }, model, fallback: !!fallback,
-    source: Object.keys(official).length ? 'registry+ai' : 'ai', registryError,
+    source: Object.keys(official).length ? 'public+ai' : 'ai', registryError, wikiError,
     inputTokens: usage.promptTokenCount || 0, outputTokens: usage.candidatesTokenCount || 0,
   }
 }
@@ -869,6 +937,12 @@ export default {
           if (!got.length) throw new Error(`Joignable, mais aucun champ exploité. Réponse : ${JSON.stringify(r.raw)}`)
           return { champs: got, valeurs: Object.fromEntries(got.map(k => [k, r.found[k].value])) }
         })
+        await step('wikidata', `Wikidata (« ${q} »)`, async () => {
+          const w = await wikidata(q)
+          const got = Object.keys(w.found).filter(k => w.found[k])
+          if (!got.length) throw new Error(`Joignable, mais aucune fiche d'entreprise reconnue. ${JSON.stringify(w.raw)}`)
+          return { champs: got }
+        })
         await step('news', `Presse (« ${q} »)`, async () => {
           const n = await getNews(q)
           return { articles: n.articles.length, source: n.source }
@@ -898,7 +972,8 @@ export default {
         if (ko.some(s => s.id === 'key')) verdict = "Le relais n'a pas de clé Gemini. Ajoutez le secret GEMINI_API_KEY dans Cloudflare, puis redéployez."
         else if (ko.some(s => s.id === 'gemini_search') && ko.some(s => s.id === 'gemini_text')) verdict = 'Gemini refuse tout : quota de texte atteint. Réessayez plus tard — les signaux comme l\'enrichissement sont concernés.'
         else if (ko.some(s => s.id === 'gemini_search')) verdict = "Seule la RECHERCHE Google est épuisée. Les signaux fonctionnent ; l'enrichissement se rabat sur l'annuaire officiel et sur le site de l'entreprise — plus étroit, mais pas bloqué."
-        else if (ko.some(s => s.id === 'registry')) verdict = "L'annuaire officiel ne répond pas : l'enrichissement dépendra entièrement de l'IA, donc du quota de recherche."
+        else if (ko.some(s => s.id === 'registry') && ko.some(s => s.id === 'wikidata')) verdict = "Les deux sources publiques sont muettes : l'enrichissement dépendra entièrement de l'IA, donc du quota de recherche."
+        else if (ko.some(s => s.id === 'registry' || s.id === 'wikidata')) verdict = "Une source publique sur deux répond : l'enrichissement fonctionne, avec une couverture un peu plus étroite."
         else if (ko.length) verdict = 'Une source secondaire ne répond pas ; le reste fonctionne.'
         return json({ ok: !ko.length, verdict, steps }, request, env)
       }
