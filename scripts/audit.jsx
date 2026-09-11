@@ -516,7 +516,13 @@ async function main() {
       .replace(/(^|[^:'"\\])\/\/.*$/, '$1')           // commentaires de fin de ligne
       .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")          // chaînes simples, sans franchir la ligne
       .replace(/"(?:[^"\\\n]|\\.)*"/g, '""'))
-    const start = lines.findIndex((l, i) => l.trim() === 'return {' && i > 3400)
+    // ⚠️ ANCRAGE PAR LE CONTENU, PAS PAR UN NUMÉRO DE LIGNE. Le repère était « le premier
+    // `return {` après la ligne 3400 » : il suffisait d'ajouter du code plus haut pour que
+    // le détecteur parte d'un AUTRE bloc, y voie des `setTimeout` et crie au loup. On cherche
+    // donc la ligne d'ouverture réelle de l'objet du store, reconnue à sa première propriété.
+    const header = lines.findIndex(l => /^\s*db, setDb, session, setSession,/.test(l))
+    const start = header > 0 ? lines.lastIndexOf('    return {', header) : -1
+    ok(start > 0, "Détecteur d'appels nus : l'objet du store est introuvable — le contrôle ne cherche nulle part")
     const methods = new Set()
     lines.slice(start).forEach(l => { const m = /^ {6}([a-zA-Z_$][\w$]*)\s*\(/.exec(l); if (m) methods.add(m[1]) })
     // Ce qui existe AUSSI comme fonction/variable/import est appelable sans `this.`.

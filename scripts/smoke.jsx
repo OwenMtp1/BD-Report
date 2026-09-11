@@ -1358,11 +1358,20 @@ async function main() {
     const nameInput = [...container.querySelectorAll('main input')].find(i => !i.placeholder && i.type !== 'checkbox' && i.type !== 'radio')
     if (!nameInput) throw new Error("Le champ du nom manque à la première étape de l'assistant")
     await type(nameInput, 'Client Atelier')
-    for (let i = 0; i < 4; i++) {
-      const next = find('button', 'Suivant')
-      if (!next) throw new Error(`Étape ${i + 1} : bouton « Suivant » introuvable`)
-      await click(next)
+    // On avance jusqu'au bout plutôt que de compter les étapes : le nombre change dès
+    // qu'on en ajoute une, et le test tomberait pour une raison qui n'en est pas une.
+    // On avance jusqu'au bout plutôt que de compter les étapes : le nombre change dès
+    // qu'on en ajoute une, et le test tomberait pour une raison qui n'en est pas une.
+    let steps = 0
+    let sawRules = false
+    while (find('button', 'Suivant') && steps < 12) {
+      await click(find('button', 'Suivant'))
+      steps++
+      // On reconnaît l'étape à son CONTENU, pas au fil d'Ariane qui affiche tous les titres.
+      if (text().includes('Décrivez votre activité') && text().includes('Signaux recherchés')) sawRules = true
     }
+    if (steps < 4) throw new Error(`L'assistant n'a parcouru que ${steps} étapes`)
+    if (!sawRules) throw new Error("L'étape « Règle Actualité IA » manque à l'assistant, ou elle est vide")
     const createBtn = find('button', "Créer l'environnement")
     if (!createBtn) throw new Error("Le bouton « Créer l'environnement » manque à la dernière étape")
     await click(createBtn)
@@ -1373,6 +1382,13 @@ async function main() {
     if (!(st.projects || []).some(p => p.sourceEnvId === made.id)) {
       throw new Error("L'environnement créé n'a pas de livraison — il serait invisible dans « Projets & atelier »")
     }
+    // La règle Actualité IA est ENREGISTRÉE sur l'environnement créé, sinon l'étape
+    // n'aurait servi qu'à faire perdre du temps au staff.
+    if (!made.newsRules) throw new Error("La règle Actualité IA n'est pas enregistrée à la création")
+    if (!Array.isArray(made.newsRules.signals) || made.newsRules.signals.length === 0) {
+      throw new Error('La règle enregistrée ne porte aucun type de signal')
+    }
+    if (!Array.isArray(made.newsRules.icpProfileIds)) throw new Error("La règle n'a pas de place pour les profils ICP")
     // Et son repère de semis est posé, sinon le projet ressusciterait après suppression.
     if (!(st._autoSeed?.envProjects || []).includes(made.id)) {
       throw new Error('Le repère de semis manque : le projet supprimé reviendrait au rechargement')

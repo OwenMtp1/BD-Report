@@ -6,8 +6,10 @@ import {
 import {
   useStore, uid, ENV_MODULES, defaultEnvModules, CLIENT_PERMISSION_GROUPS, previewTabs,
   DEFAULT_PHASES, fmtMoney, envModuleOn,
+  defaultNewsRules,
 } from '../store.jsx'
 import { Field, Empty, Confirm, toast } from '../ui.jsx'
+import NewsRules from './NewsRules.jsx'
 import EnvAdmin from './EnvAdmin.jsx'
 
 // ATELIER D'ENVIRONNEMENT — console éditeur.
@@ -20,6 +22,9 @@ const STEPS = [
   { id: 'identite', label: 'Identité & modèle' },
   { id: 'modules', label: 'Modules' },
   { id: 'roles', label: 'Rôles & onglets' },
+  // Le contexte commercial qui pilote le moteur de signaux. Il vient APRÈS les modules :
+  // le régler avant de savoir si la brique est installée n'aurait pas de sens.
+  { id: 'signaux', label: 'Règle Actualité IA' },
   { id: 'equipe', label: 'Équipe' },
   { id: 'recap', label: 'Récapitulatif' },
 ]
@@ -161,6 +166,7 @@ function Wizard({ store, onDone, onCancel }) {
     modules: defaultEnvModules(),
     services: ['Sales', 'Marketing'],
     people: [],
+    newsRules: defaultNewsRules(),
   })
   const [roles, setRoles] = useState([
     { id: 'erole-manager', name: 'Manager', builtin: true, color: 'amber', tabs: [], perms: [] },
@@ -202,6 +208,7 @@ function Wizard({ store, onDone, onCancel }) {
       departments: [...form.services],
     })
     store.saveEnvRoles(env.id, roles)
+    store.saveEnvNewsRules(env.id, form.newsRules)
     let created = 0
     form.people.forEach(p => {
       if (!p.email.trim() || !p.pseudo.trim() || !p.password) return
@@ -305,6 +312,18 @@ function Wizard({ store, onDone, onCancel }) {
 
       {step === 3 && (
         <div className="space-y-3">
+          <p className="text-xs text-muted">
+            Le contexte commercial de ce client : c'est lui qui décide qu'une actualité est un signal ici, et du bruit ailleurs. Modifiable ensuite depuis la fiche de l'environnement.
+          </p>
+          {form.modules?.aiInsights === false && (
+            <p className="text-xs text-amber-600">La brique « Analyse IA des entreprises » n'est pas cochée à l'étape Modules : la règle sera enregistrée, mais le moteur restera éteint.</p>
+          )}
+          <NewsRules store={store} value={form.newsRules} onChange={v => setForm(f => ({ ...f, newsRules: v }))} />
+        </div>
+      )}
+
+      {step === 4 && (
+        <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-xs text-muted">
               Les accès ouverts à la livraison. Le propriétaire est celui qui répond de l'espace :
@@ -346,7 +365,7 @@ function Wizard({ store, onDone, onCancel }) {
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div className="space-y-3">
           <div className="rounded-xl border border-line p-3 text-sm space-y-1">
             <div><b>{form.name || '— sans nom —'}</b> · offre {offers.find(o => o.id === form.plan)?.name || form.plan}</div>

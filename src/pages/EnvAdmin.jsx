@@ -11,11 +11,12 @@
 //  chemin d'accès, jamais le sujet.
 // ---------------------------------------------------------------------------
 import React, { useState } from 'react'
-import { ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Unlock, ShieldAlert, Rocket, LogIn, Trash2, Eye, LayoutList, ChevronUp, ChevronDown, X, Plus } from 'lucide-react'
+import { ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Unlock, ShieldAlert, Rocket, LogIn, Trash2, Eye, LayoutList, ChevronUp, ChevronDown, X, Plus, Sparkles } from 'lucide-react'
 import { ENV_MODULES, STATEMENT_MODES, statementMode } from '../store.jsx'
 import { defaultNavLayout, GRANTABLE_TABS } from '../nav.jsx'
 import { Field, Empty, Confirm, toast } from '../ui.jsx'
 import { ChipEditor } from './Projects.jsx'
+import NewsRules from './NewsRules.jsx'
 
 // Libellé lisible de chaque onglet, pour l'éditeur de menu.
 const ALL_NAV_ITEMS = GRANTABLE_TABS
@@ -116,6 +117,16 @@ export default function EnvAdmin({ envId, store }) {
               Entrer chez un client fait passer son projet en <b>Maintenance</b> : le reste de l'équipe
               voit qu'une intervention est en cours et n'y touche pas en même temps.
             </p>
+          </div>
+        )}
+
+        {/* Le contexte commercial qui pilote le moteur de signaux. Réglable ici ET dans
+            l'assistant : une règle qu'on ne pourrait fixer qu'à la livraison serait fausse
+            au bout d'un trimestre. */}
+        {env && store.canEditNewsRules() && (
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <div className="text-sm font-bold flex items-center gap-2"><Sparkles size={15} className="text-brand" /> Règle Actualité IA</div>
+            <NewsRules store={store} envId={envId} />
           </div>
         )}
 

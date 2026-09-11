@@ -315,6 +315,20 @@ npm run dev        # serveur de dev
     refuse toute valeur qui ressemble à une donnée personnelle.
     ⚠️ **Rien n'est écrasé sans décision** : champ vide → proposé coché ; valeur différente →
     montrée EN REGARD de l'actuelle, décochée. Sans source vérifiable, la confiance retombe à « low ».
+  - **Sales Signals — LOT 1 : le contexte commercial de l'environnement.** `env.newsRules`
+    (`activite`, `offre`, `icpProfileIds[]`, `personas[]`, `signals[{id,on,priority}]`, `consignes`,
+    `sources{}`), réglé dans `NewsRules.jsx` — **étape de l'assistant ET panneau de la fiche**
+    d'environnement : une règle qu'on ne pourrait fixer qu'à la livraison serait fausse au bout
+    d'un trimestre. `store.envNewsRules/saveEnvNewsRules/canEditNewsRules` (droit `env.build`).
+    ⚠️ **L'ICP N'EST PAS RECOPIÉ** : `icpProfileIds` RÉFÉRENCE les profils existants
+    (`data.icpProfiles`, agrégés par `store.envIcpProfiles`). Deux définitions du même client
+    finiraient par diverger sans que personne ne sache laquelle fait foi.
+    `SIGNAL_TYPES` (16), `SIGNAL_PRIORITIES` (la priorité PÈSE dans le score — sans elle tous les
+    signaux se vaudraient), `SIGNAL_SOURCES` (publiques : presse, site, page carrière — aucune clé,
+    aucun compte), `SOURCE_QUALITY`, et `signalScore()` qui n'est PAS une moyenne : importance,
+    pertinence, confiance, fraîcheur, corroboration entre sources indépendantes, priorité du staff.
+    ⚠️ `saveEnvNewsRules` repart du CATALOGUE : un type retiré du code ne survit pas dans un
+    réglage, un type ajouté apparaît éteint plutôt que de manquer.
   - **Brique `aiInsights`** (`MODULES_V3`) — les DEUX actions relèvent d'une seule case à cocher :
     même relais, même clé, même compteur. Deux cases auraient donné deux réglages pour une seule
     décision (« met-on de l'IA chez ce client ? »). Éteinte chez l'existant, comme `MODULES_V2`.

@@ -1066,6 +1066,101 @@ function defaultKbArticles() {
 // La montée en charge n'est pas un détail de confort : sans elle, un arrivant est rouge partout
 // pendant son premier trimestre, le classement l'enfonce, et le quota devient un objet de
 // découragement au lieu d'un repère.
+
+// ---------------------------------------------------------------- Sales Signals
+//  « Actualités » ne doit plus afficher des articles mais des SIGNAUX COMMERCIAUX : un fait
+//  qui donne une raison d'appeler ce compte maintenant. Une même dépêche est déterminante
+//  pour un client et sans intérêt pour un autre — c'est le CONTEXTE de l'environnement qui
+//  en décide, et c'est lui que le staff règle ici.
+//
+//  ⚠️ Un signal n'est PAS un article : il peut s'appuyer sur plusieurs preuves de sources
+//  différentes (des offres d'emploi, une page « implantations », une dépêche) rassemblées
+//  autour du même événement.
+export const SIGNAL_TYPES = [
+  { id: 'growth', emoji: '🚀', label: 'Forte croissance' },
+  { id: 'hiring_mass', emoji: '👥', label: 'Recrutement massif' },
+  { id: 'hiring_hr', emoji: '👤', label: 'Recrutement RH' },
+  { id: 'new_site', emoji: '🏢', label: 'Ouverture / création de site' },
+  { id: 'international', emoji: '🌍', label: 'Expansion internationale' },
+  { id: 'fundraising', emoji: '💰', label: 'Levée de fonds' },
+  { id: 'ma', emoji: '🤝', label: 'Acquisition / fusion' },
+  { id: 'exec_change', emoji: '👔', label: "Nomination d'un dirigeant" },
+  { id: 'transformation', emoji: '🔄', label: 'Transformation / réorganisation' },
+  { id: 'hr_lead_change', emoji: '🧑‍💼', label: 'Changement de DRH' },
+  { id: 'tech_change', emoji: '💻', label: "Changement / déploiement d'une technologie" },
+  { id: 'financial_growth', emoji: '📈', label: 'Forte croissance financière' },
+  { id: 'industrial', emoji: '🏭', label: 'Investissement / développement industriel' },
+  { id: 'strategy', emoji: '📰', label: 'Annonce stratégique' },
+  { id: 'distress', emoji: '⚠️', label: 'Difficulté / restructuration' },
+  { id: 'other', emoji: '•', label: 'Autre' },
+]
+export const SIGNAL_TYPE_IDS = SIGNAL_TYPES.map(t => t.id)
+export const signalType = (id) => SIGNAL_TYPES.find(t => t.id === id) || SIGNAL_TYPES[SIGNAL_TYPES.length - 1]
+
+// La priorité dit au moteur ce qui compte POUR CE CLIENT. Elle pèse dans le score final :
+// sans elle, tous les signaux se vaudraient et la liste ne trierait rien.
+export const SIGNAL_PRIORITIES = [
+  { id: 'low', label: 'Faible', weight: 0.5 },
+  { id: 'medium', label: 'Moyenne', weight: 0.8 },
+  { id: 'high', label: 'Haute', weight: 1 },
+  { id: 'critical', label: 'Critique', weight: 1.25 },
+]
+export const priorityWeight = (id) => (SIGNAL_PRIORITIES.find(p => p.id === id) || SIGNAL_PRIORITIES[1]).weight
+
+// Sources publiques, sans clé ni compte. Chacune s'active indépendamment : une source qui
+// ne répond pas ne doit jamais emporter la fonctionnalité entière.
+export const SIGNAL_SOURCES = [
+  { id: 'news', label: 'Presse & Google News', desc: "Requêtes ciblées composées à partir des signaux cochés, pas un flux générique." },
+  { id: 'website', label: "Site de l'entreprise", desc: 'Pages actualités, presse, à propos, implantations — publiques uniquement.' },
+  { id: 'careers', label: 'Page carrière', desc: "Offres publiées : volume, métiers, localisations. Le signal de croissance le plus direct." },
+]
+export const SIGNAL_SOURCE_IDS = SIGNAL_SOURCES.map(s => s.id)
+
+// Fiabilité d'une source : deux sources indépendantes qui disent la même chose valent mieux
+// qu'une seule, et une source officielle vaut mieux qu'un agrégateur.
+export const SOURCE_QUALITY = { website: 1, careers: 0.95, press: 0.8, news: 0.7, unknown: 0.4 }
+
+export const defaultNewsRules = () => ({
+  activite: '',
+  offre: '',
+  icpProfileIds: [],                  // ⚠️ RÉFÉRENCE les profils ICP existants (data.icpProfiles)
+  personas: [],
+  signals: SIGNAL_TYPES.map(t => ({ id: t.id, on: false, priority: 'medium' })),
+  consignes: '',
+  sources: Object.fromEntries(SIGNAL_SOURCE_IDS.map(id => [id, true])),
+})
+
+export const envNewsRules = (env) => ({ ...defaultNewsRules(), ...(env?.newsRules || {}) })
+// Les signaux réellement recherchés, avec leur priorité. Aucun coché = aucun filtre, on
+// prend tout : mieux vaut du bruit qu'un écran vide qu'on ne comprend pas.
+export function activeSignalTypes(rules) {
+  const on = (rules?.signals || []).filter(s => s.on)
+  return (on.length ? on : SIGNAL_TYPES.map(t => ({ id: t.id, priority: 'medium' })))
+    .map(s => ({ ...signalType(s.id), priority: s.priority || 'medium' }))
+}
+
+/**
+ * Score final d'un signal. ⚠️ PAS une moyenne : chaque facteur répond à une question
+ * différente, et deux d'entre eux peuvent à eux seuls disqualifier un signal.
+ *  · importance     — l'événement est-il notable en soi ?
+ *  · pertinence     — parle-t-il à CETTE offre, à CET ICP ?
+ *  · confiance      — sait-on que c'est vrai, et que c'est bien cette entreprise ?
+ *  · fraîcheur      — un fait de trois mois n'est plus une raison d'appeler maintenant.
+ *  · sources        — deux sources indépendantes valent mieux qu'une.
+ *  · priorité staff — ce que le client a déclaré vouloir voir en premier.
+ */
+export function signalScore({ importance = 0, relevance = 0, confidence = 0, date, sources = [], priority = 'medium', matchConfidence = 1 }) {
+  const days = date ? Math.max(0, (Date.now() - new Date(date).getTime()) / 86400000) : 30
+  const freshness = days <= 7 ? 1 : days <= 30 ? 0.85 : days <= 90 ? 0.6 : 0.35
+  const kinds = [...new Set(sources.map(x => x.kind || 'unknown'))]
+  const quality = kinds.length ? Math.max(...kinds.map(k => SOURCE_QUALITY[k] ?? SOURCE_QUALITY.unknown)) : SOURCE_QUALITY.unknown
+  const corroboration = Math.min(1.15, 1 + 0.15 * (kinds.length - 1))
+  const base = (Number(importance) * 0.35 + Number(relevance) * 0.65)
+  const raw = base * freshness * quality * corroboration * priorityWeight(priority)
+    * (0.5 + 0.5 * Math.min(1, Number(confidence) / 100)) * Math.min(1, matchConfidence)
+  return Math.max(0, Math.min(100, Math.round(raw)))
+}
+
 // ---------------------------------------------------------------- Consommation Gemini
 // Deux fonctionnalités appellent l'IA, et l'offre gratuite se consomme. On compte donc les
 // appels RÉELS — une réponse servie par le cache n'en est pas un — pour que le staff voie
@@ -6877,6 +6972,45 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (!accountHasPerm(account, 'accounts.role', db)) return
         setDb(d => { const e = d.environments.find(x => x.id === envId); if (e) e.createdBy = accId; return d })
         this.logStaff({ type: 'Compte', cat: 'acces', action: "Propriétaire de l'environnement modifié", envId, targetId: accId })
+      },
+      // ----- Règle Actualité IA : le contexte commercial de CET environnement
+      // C'est ce qui fait qu'une même dépêche est déterminante ici et sans intérêt ailleurs.
+      // ⚠️ L'ICP n'est pas recopié : on RÉFÉRENCE les profils existants (`data.icpProfiles`),
+      // sinon deux définitions du même client finiraient par diverger.
+      envNewsRules(envId) {
+        return envNewsRules(db.environments.find(e => e.id === (envId || session?.envId)))
+      },
+      canEditNewsRules() { return accountHasPerm(account, 'env.build', db) },
+      saveEnvNewsRules(envId, rules) {
+        if (!this.canEditNewsRules()) return false
+        const base = defaultNewsRules()
+        const clean = {
+          activite: String(rules?.activite || '').slice(0, 2000),
+          offre: String(rules?.offre || '').slice(0, 2000),
+          icpProfileIds: [...new Set((rules?.icpProfileIds || []).map(String))],
+          personas: [...new Set((rules?.personas || []).map(x => String(x).trim()).filter(Boolean))].slice(0, 20),
+          // On repart du catalogue : un type retiré du code ne doit pas survivre dans un
+          // réglage, et un type ajouté doit apparaître éteint plutôt que manquer.
+          signals: base.signals.map(d => {
+            const found = (rules?.signals || []).find(x => x.id === d.id)
+            return { id: d.id, on: !!found?.on, priority: SIGNAL_PRIORITIES.some(p => p.id === found?.priority) ? found.priority : 'medium' }
+          }),
+          consignes: String(rules?.consignes || '').slice(0, 2000),
+          sources: Object.fromEntries(SIGNAL_SOURCE_IDS.map(id => [id, rules?.sources?.[id] !== false])),
+        }
+        setDb(d => { const e = d.environments.find(x => x.id === envId); if (e) e.newsRules = clean; return d })
+        this.logStaff({ type: 'Module', cat: 'client', action: 'Règle Actualité IA enregistrée', envId })
+        return true
+      },
+      // Les profils ICP de l'environnement, pour que le staff les COCHE au lieu de les ressaisir.
+      // Ils vivent dans les espaces : on les rassemble, dédoublonnés par nom.
+      envIcpProfiles(envId) {
+        const subs = db.subenvs.filter(s => s.envId === (envId || session?.envId))
+        const seen = new Map()
+        subs.forEach(sub => (db.data[sub.id]?.icpProfiles || []).forEach(p => {
+          if (!seen.has(p.name)) seen.set(p.name, p)
+        }))
+        return [...seen.values()]
       },
       // ----- Disposition du menu, composée par le staff pour CE client
       // ⚠️ Ranger n'est pas accorder : la disposition s'applique APRÈS le filtrage par
