@@ -637,7 +637,85 @@ ${docs.map((d, i) => `[${i}] ${d.title || '(sans titre)'}
 url: ${d.sourceUrl}
 extrait: ${(d.content || '').slice(0, 1200)}`).join('\n\n')}`
 
+// ---------------------------------------------------------------- Annuaire officiel
+// ⚠️ TROIS DES SIX CHAMPS N'ONT JAMAIS EU BESOIN D'UNE IA. L'implantation, l'effectif et le
+// secteur d'une société française sont publiés par l'État, gratuitement, sans clé et sans
+// quota : c'est l'annuaire des entreprises (data.gouv). Les faire chercher par un modèle
+// coûtait un appel, consommait le quota le plus serré du produit, et rendait une réponse
+// moins sûre qu'une donnée officielle.
+// On interroge donc l'annuaire D'ABORD. Ce qu'il donne est FACTUEL, daté et sourçable ;
+// l'IA ne s'occupe plus que de ce qu'il ne couvre pas (site, LinkedIn, chiffre d'affaires).
+const REGISTRY = 'https://recherche-entreprises.api.gouv.fr/search'
+const REGISTRY_PAGE = (siren) => `https://annuaire-entreprises.data.gouv.fr/entreprise/${siren}`
+
+// Codes INSEE de tranche d'effectif. L'annuaire rend un code, pas un nombre : le traduire
+// ici évite d'afficher « 42 » là où l'utilisateur attend un ordre de grandeur.
+const INSEE_TRANCHES = {
+  '00': '0 salarié', '01': '1 à 2', '02': '3 à 5', '03': '6 à 9', '11': '10 à 19',
+  '12': '20 à 49', '21': '50 à 99', '22': '100 à 199', '31': '200 à 249', '32': '250 à 499',
+  '41': '500 à 999', '42': '1 000 à 1 999', '51': '2 000 à 4 999', '52': '5 000 à 9 999',
+  '53': '10 000 et plus',
+}
+
+/**
+ * Cherche l'entreprise dans l'annuaire officiel. Renvoie `{found, raw}` — `raw` sert au
+ * diagnostic : si la forme de la réponse changeait, on veut le VOIR plutôt que de rendre
+ * silencieusement un résultat vide.
+ * ⚠️ Tolérant par construction : plusieurs noms de champs sont acceptés, et tout ce qui
+ * manque vaut simplement « non trouvé ». Une API publique qui évolue ne doit jamais faire
+ * tomber l'enrichissement entier.
+ */
+async function officialRegistry(company) {
+  const name = String(company || '').trim()
+  if (!name) return { found: {}, raw: null }
+  const res = await fetch(`${REGISTRY}?q=${encodeURIComponent(name)}&per_page=1`, {
+    headers: { Accept: 'application/json' }, cf: { cacheTtl: 86400, cacheEverything: true },
+  })
+  if (!res.ok) throw new Error(`Annuaire des entreprises : ${res.status}`)
+  const body = await res.json()
+  const r = (body?.results || [])[0]
+  if (!r) return { found: {}, raw: { total: body?.total_results ?? 0 } }
+
+  const siren = String(r.siren || '')
+  const url = siren ? REGISTRY_PAGE(siren) : 'https://annuaire-entreprises.data.gouv.fr/'
+  const src = (value) => (value ? { value: String(value).slice(0, 300), publisher: 'Annuaire des entreprises (INSEE)', url, confidence: 'high' } : null)
+
+  const siege = r.siege || {}
+  const ville = siege.libelle_commune || siege.commune || ''
+  const cp = siege.code_postal || ''
+  const lieu = ville ? `${ville}${cp ? ` (${cp})` : ''}, France` : ''
+
+  const code = String(r.tranche_effectif_salarie ?? '').padStart(2, '0')
+  const tranche = INSEE_TRANCHES[code] || ''
+
+  const naf = r.libelle_activite_principale || siege.libelle_activite_principale || ''
+
+  return {
+    found: { localisation: src(lieu), effectif: src(tranche), secteur: src(naf) },
+    raw: { siren, nom: r.nom_complet || r.nom_raison_sociale || '', keys: Object.keys(r).slice(0, 20) },
+  }
+}
+
 async function enrich(company, fields, known, env, site) {
+  // ---- PASSE 1 : l'annuaire officiel. Gratuite, factuelle, aucun quota, aucune IA.
+  // Son échec n'arrête rien : elle complète, elle ne commande pas.
+  const official = {}
+  let registryError = ''
+  try {
+    const reg = await officialRegistry(company)
+    for (const f of fields) if (reg.found[f]) official[f] = reg.found[f]
+  } catch (e) { registryError = (e && e.message) || String(e) }
+
+  // ⚠️ L'IA NE TRAVAILLE QUE SUR CE QUI RESTE. C'est le cœur du correctif : demander à un
+  // modèle une information que l'État publie gratuitement, c'était dépenser le quota le
+  // plus serré du produit pour une réponse moins sûre. Si l'annuaire a tout couvert, aucun
+  // appel n'est fait du tout — l'enrichissement devient gratuit et instantané.
+  const remaining = fields.filter(f => !official[f])
+  if (!remaining.length) {
+    return { found: official, model: '', source: 'registry', registryError, fallback: false, inputTokens: 0, outputTokens: 0 }
+  }
+  fields = remaining
+
   let body, model, fallback = false
   try {
     // Recherche Google : sans elle, le modèle répondrait de mémoire — c'est-à-dire
@@ -653,9 +731,16 @@ async function enrich(company, fields, known, env, site) {
     // alors que nous savons lire nous-mêmes les sources publiques de cette entreprise.
     // On repasse donc par NOS pages. ⚠️ Jamais par la mémoire du modèle : un enrichissement
     // sans source est une invention, et mieux vaut ne rien répondre que se tromper.
-    if (!(e && e.code === 429 && e.grounding)) throw e
+    // ⚠️ CE QUE L'ANNUAIRE A DÉJÀ TROUVÉ EST ACQUIS. Un refus de Gemini ne doit pas
+    // emporter des données officielles obtenues gratuitement avant lui : on rend ce
+    // qu'on a, en disant ce qui a manqué.
+    const keep = (err) => {
+      if (!Object.keys(official).length) throw err
+      return { found: official, model: '', source: 'registry', registryError, aiError: err.message, fallback: false, inputTokens: 0, outputTokens: 0 }
+    }
+    if (!(e && e.code === 429 && e.grounding)) return keep(e)
     const docs = await ownSources(company, site)
-    if (!docs.length) throw e     // aucune source à lire : le quota reste la bonne réponse
+    if (!docs.length) return keep(e)   // aucune source à lire : le quota reste la bonne réponse
     ;({ body, model } = await callGemini({
       contents: [{ parts: [{ text: ENRICH_FROM_SOURCES(company, fields, known, docs) }] }],
       generationConfig: { temperature: 0 },
@@ -695,8 +780,10 @@ async function enrich(company, fields, known, env, site) {
   // `fallback` est dit à l'application : sans recherche Google, la couverture est plus
   // étroite (le site d'une entreprise donne rarement son chiffre d'affaires). L'écran doit
   // pouvoir expliquer un résultat maigre autrement que par « l'IA n'a rien trouvé ».
+  // ⚠️ L'annuaire PRIME sur l'IA : une donnée officielle ne se fait pas corriger par un modèle.
   return {
-    found: out, model, fallback: !!fallback,
+    found: { ...out, ...official }, model, fallback: !!fallback,
+    source: Object.keys(official).length ? 'registry+ai' : 'ai', registryError,
     inputTokens: usage.promptTokenCount || 0, outputTokens: usage.candidatesTokenCount || 0,
   }
 }
@@ -758,11 +845,69 @@ export default {
         return json(await enrich(company, fields, body?.known || {}, env, site), request, env)
       }
 
+      // ⚠️ /diag — LE RELAIS SE TESTE LUI-MÊME, ET LE DIT.
+      // Une panne d'enrichissement a trois causes possibles (clé absente, quota de texte,
+      // quota de RECHERCHE) et elles se corrigent différemment. Tant qu'on en était réduit
+      // à les deviner depuis un message d'erreur, on cherchait au mauvais endroit. Cette
+      // route interroge chaque brique POUR DE VRAI et rend un compte rendu lisible.
+      // ⚠️ Aucun secret n'en sort : on dit si la clé existe, jamais ce qu'elle vaut.
+      if (url.pathname === '/diag') {
+        const q = (url.searchParams.get('q') || 'Doctolib').trim()
+        const steps = []
+        const step = async (id, label, fn) => {
+          const t = Date.now()
+          try { const detail = await fn(); steps.push({ id, label, ok: true, ms: Date.now() - t, detail }) }
+          catch (e) { steps.push({ id, label, ok: false, ms: Date.now() - t, error: (e && e.message) || String(e), code: e?.code }) }
+        }
+        await step('key', 'Clé Gemini configurée', async () => {
+          if (!env.GEMINI_API_KEY) throw new Error('Aucune clé : ajoutez le secret GEMINI_API_KEY dans Cloudflare.')
+          return { models: modelList(env) }
+        })
+        await step('registry', `Annuaire des entreprises (« ${q} »)`, async () => {
+          const r = await officialRegistry(q)
+          const got = Object.keys(r.found).filter(k => r.found[k])
+          if (!got.length) throw new Error(`Joignable, mais aucun champ exploité. Réponse : ${JSON.stringify(r.raw)}`)
+          return { champs: got, valeurs: Object.fromEntries(got.map(k => [k, r.found[k].value])) }
+        })
+        await step('news', `Presse (« ${q} »)`, async () => {
+          const n = await getNews(q)
+          return { articles: n.articles.length, source: n.source }
+        })
+        // Texte SANS outil : c'est le quota le plus large, celui des signaux.
+        await step('gemini_text', 'Gemini — génération de texte', async () => {
+          if (!env.GEMINI_API_KEY) throw new Error('Sans clé, rien à tester.')
+          const { model } = await callGemini({
+            contents: [{ parts: [{ text: 'Réponds exactement : {"ok":true}' }] }],
+            generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+          }, env)
+          return { model }
+        })
+        // Recherche Google : LE quota serré, celui qui bloquait l'enrichissement.
+        await step('gemini_search', 'Gemini — recherche Google (grounding)', async () => {
+          if (!env.GEMINI_API_KEY) throw new Error('Sans clé, rien à tester.')
+          const { model } = await callGemini({
+            contents: [{ parts: [{ text: `Cite en une ligne le site officiel de « ${q} ».` }] }],
+            tools: [{ google_search: {} }],
+            generationConfig: { temperature: 0 },
+          }, env)
+          return { model }
+        })
+        const ko = steps.filter(s => !s.ok)
+        // Le verdict est écrit ici, pas laissé à interpréter : c'est tout l'objet de la route.
+        let verdict = 'Tout répond : enrichissement et signaux sont opérationnels.'
+        if (ko.some(s => s.id === 'key')) verdict = "Le relais n'a pas de clé Gemini. Ajoutez le secret GEMINI_API_KEY dans Cloudflare, puis redéployez."
+        else if (ko.some(s => s.id === 'gemini_search') && ko.some(s => s.id === 'gemini_text')) verdict = 'Gemini refuse tout : quota de texte atteint. Réessayez plus tard — les signaux comme l\'enrichissement sont concernés.'
+        else if (ko.some(s => s.id === 'gemini_search')) verdict = "Seule la RECHERCHE Google est épuisée. Les signaux fonctionnent ; l'enrichissement se rabat sur l'annuaire officiel et sur le site de l'entreprise — plus étroit, mais pas bloqué."
+        else if (ko.some(s => s.id === 'registry')) verdict = "L'annuaire officiel ne répond pas : l'enrichissement dépendra entièrement de l'IA, donc du quota de recherche."
+        else if (ko.length) verdict = 'Une source secondaire ne répond pas ; le reste fonctionne.'
+        return json({ ok: !ko.length, verdict, steps }, request, env)
+      }
+
       // La racine répond comme /health : ouvrir l'URL du relais dans un navigateur doit
       // suffire à savoir s'il est vivant. Renvoyer « Route inconnue » à la seule adresse
       // qu'on pense à essayer envoyait chercher une panne là où il n'y en avait pas.
       if (url.pathname === '/health' || url.pathname === '/' || url.pathname === '') {
-        return json({ ok: true, gemini: !!env.GEMINI_API_KEY, service: 'bdr-news' }, request, env)
+        return json({ ok: true, gemini: !!env.GEMINI_API_KEY, service: 'bdr-news', diag: '/diag' }, request, env)
       }
     } catch (e) {
       // Un quota atteint n'est pas une panne du relais : on le dit avec son propre code,

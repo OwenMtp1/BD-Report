@@ -255,5 +255,98 @@ const GROUNDING_429 = JSON.stringify({ error: { code: 429, message: 'Quota excee
   ok(b.found?.site?.value === 'https://acme.fr', 'la rotation de modèles doit rester efficace')
 }
 
+// ⚠️ TROIS DES SIX CHAMPS N'ONT JAMAIS EU BESOIN D'UNE IA. L'État publie l'implantation,
+// l'effectif et le secteur gratuitement, sans clé et sans quota. Les faire chercher par un
+// modèle dépensait le quota le plus serré du produit pour une réponse moins sûre.
+const REGISTRY = /recherche-entreprises\.api\.gouv\.fr/
+const REGISTRY_BODY = {
+  total_results: 1,
+  results: [{
+    siren: '794598813', nom_complet: 'DOCTOLIB',
+    siege: { libelle_commune: 'LEVALLOIS-PERRET', code_postal: '92300' },
+    tranche_effectif_salarie: '52',
+    libelle_activite_principale: 'Programmation informatique',
+  }],
+}
+
+console.log("Enrichissement — l'annuaire officiel d'abord, l'IA pour le reste")
+{
+  // Les trois champs couverts par l'annuaire ne doivent déclencher AUCUN appel Gemini.
+  let gemini = 0
+  stubFetch([[GEMINI, () => { gemini++; return { body: geminiBody({}) } }], [REGISTRY, () => ({ body: REGISTRY_BODY })]])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['localisation', 'effectif', 'secteur'], known: {} } })).json()
+  ok(gemini === 0, `l'annuaire doit suffire pour ses trois champs (${gemini} appel(s) Gemini de trop)`)
+  ok(/LEVALLOIS-PERRET/.test(b.found?.localisation?.value || ''), "l'implantation doit venir de l'annuaire")
+  ok(b.found?.effectif?.value === '5 000 à 9 999', `le code INSEE doit être traduit en ordre de grandeur (reçu : ${b.found?.effectif?.value})`)
+  ok(b.found?.secteur?.value === 'Programmation informatique', "le secteur doit venir de l'annuaire")
+  ok(b.found?.localisation?.confidence === 'high', 'une donnée officielle mérite une confiance haute')
+  ok(/annuaire-entreprises\.data\.gouv\.fr/.test(b.found?.secteur?.url || ''), 'la source officielle doit être citable')
+  ok(b.source === 'registry', "la provenance doit être dite à l'application")
+}
+{
+  // L'IA ne travaille que sur ce que l'annuaire ne couvre pas.
+  let asked = null
+  stubFetch([
+    [GEMINI, (u, init) => { asked = JSON.parse(init.body).contents[0].parts[0].text; return { body: geminiBody({ site: { value: 'https://doctolib.fr', publisher: 'x', url: 'https://doctolib.fr', confidence: 'high' } }) } }],
+    [REGISTRY, () => ({ body: REGISTRY_BODY })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['site', 'secteur'], known: {} } })).json()
+  ok(asked && asked.includes('site') && !/·\s*secteur/.test(asked), "l'IA ne doit plus se voir demander ce que l'annuaire a déjà donné")
+  ok(b.found?.site?.value === 'https://doctolib.fr' && b.found?.secteur?.value === 'Programmation informatique', "les deux sources doivent se rejoindre dans le résultat")
+  ok(b.source === 'registry+ai', 'la provenance mixte doit être dite')
+}
+{
+  // ⚠️ LE QUOTA NE DOIT PLUS EFFACER CE QUI EST DÉJÀ ACQUIS. Une donnée officielle obtenue
+  // gratuitement ne se perd pas parce que Gemini a refusé l'appel qui la suivait.
+  stubFetch([
+    [GEMINI, () => ({ status: 429, body: GROUNDING_429 })],
+    [REGISTRY, () => ({ body: REGISTRY_BODY })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  const res = await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['secteur', 'ca'], known: {} } })
+  const b = await res.json()
+  ok(res.status === 200, "un quota ne doit plus faire échouer un enrichissement partiellement réussi")
+  ok(b.found?.secteur?.value === 'Programmation informatique', "ce que l'annuaire a trouvé doit survivre au refus de Gemini")
+  ok(!b.found?.ca, "ce que personne n'a trouvé reste vide, jamais deviné")
+  ok(/quota|recherche/i.test(b.aiError || ''), "la raison du manque doit être dite")
+}
+{
+  // L'annuaire en panne ne casse rien : l'IA reprend tout à sa charge.
+  stubFetch([
+    [REGISTRY, () => ({ status: 503, body: 'nope' })],
+    [GEMINI, () => ({ body: geminiBody({ secteur: { value: 'Logiciel', publisher: 'x', url: 'https://ex.fr', confidence: 'medium' } }) })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Inconnue SARL', fields: ['secteur'], known: {} } })).json()
+  ok(b.found?.secteur?.value === 'Logiciel', "une panne de l'annuaire ne doit pas arrêter l'enrichissement")
+  ok(/503/.test(b.registryError || ''), "la panne de l'annuaire doit être signalée, pas avalée")
+}
+
+// ⚠️ /diag — LE RELAIS SE TESTE LUI-MÊME. Trois causes de panne se corrigent différemment ;
+// tant qu'on les devinait depuis un message d'erreur, on cherchait au mauvais endroit.
+console.log('Diagnostic — le relais dit lui-même ce qui bloque')
+{
+  stubFetch([
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], [GOOGLE, () => ({ body: rss(['Doctolib lève']) })],
+    [GEMINI, (u, init) => (JSON.parse(init.body).tools
+      ? { status: 429, body: GROUNDING_429 }
+      : { body: geminiBody({ ok: true }) })],
+  ])
+  const b = await (await call('/diag')).json()
+  ok(b.steps?.length === 5, 'le diagnostic doit couvrir les cinq briques')
+  const by = Object.fromEntries(b.steps.map(s => [s.id, s]))
+  ok(by.registry?.ok && by.news?.ok && by.gemini_text?.ok, 'les briques qui répondent doivent être vertes')
+  ok(by.gemini_search?.ok === false, 'la brique en échec doit être rouge')
+  ok(/recherche/i.test(b.verdict || '') && /annuaire/i.test(b.verdict || ''),
+    'le verdict doit NOMMER la limite atteinte et dire ce qui fonctionne encore')
+  ok(!JSON.stringify(b).includes('test-key'), '⚠️ le diagnostic ne doit jamais laisser fuir la clé')
+}
+{
+  // Sans clé, le verdict doit désigner le geste exact — pas « erreur Gemini ».
+  globalThis.fetch = async () => new Response('{}', { status: 200 })
+  const res = await worker.fetch(new Request('https://relay.test/diag'), {})
+  const b = await res.json()
+  ok(/GEMINI_API_KEY/.test(b.verdict || ''), 'sans clé, le verdict doit nommer le secret à créer')
+}
+
 if (failures) { console.error(`\nRELAIS : ${failures} vérification(s) en échec`); process.exit(1) }
 console.log('relais OK ✓ — routes, replis, quotas et garde-fous')

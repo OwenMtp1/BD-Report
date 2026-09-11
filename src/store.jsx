@@ -6088,6 +6088,27 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         this.logStaff({ type: 'Module', cat: 'client', action: clean ? 'Relais Actualités publié' : 'Relais Actualités retiré', details: clean })
         return true
       },
+      /**
+       * Diagnostic complet du relais. ⚠️ Le test de connexion dit seulement « il répond » ;
+       * il ne distinguait pas les trois pannes possibles de l'enrichissement — clé absente,
+       * quota de texte, quota de RECHERCHE — qui ne se corrigent pas de la même façon. Le
+       * relais sait, lui : il interroge chaque brique pour de vrai et rend son verdict.
+       */
+      async diagNewsRelay() {
+        const base = this.newsRelay()
+        if (!base) return { ok: false, verdict: 'Aucune URL renseignée.', steps: [] }
+        try {
+          const res = await fetch(base + '/diag')
+          const body = await res.json().catch(() => null)
+          if (res.status === 404) {
+            return { ok: false, steps: [], verdict: "Le relais déployé ne connaît pas encore le diagnostic : recollez news/worker.js dans Cloudflare, puis redéployez." }
+          }
+          if (!body || !Array.isArray(body.steps)) return { ok: false, steps: [], verdict: `Réponse inattendue du relais (${res.status}).` }
+          return body
+        } catch (e) {
+          return { ok: false, steps: [], verdict: 'Relais injoignable (URL, CORS ou réseau).' }
+        }
+      },
       async testNewsRelay() {
         const base = this.newsRelay()
         if (!base) return { ok: false, msg: 'Aucune URL renseignée.' }

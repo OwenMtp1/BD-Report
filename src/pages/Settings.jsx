@@ -117,12 +117,21 @@ function SupabaseCard() {
 function NewsRelayCard({ store }) {
   const url = store.newsRelay()
   const canEdit = store.canSetNewsRelay()
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState('')
   const [res, setRes] = useState(null)
+  const [diag, setDiag] = useState(null)
   const test = async () => {
-    setBusy(true); setRes(null)
+    setBusy('test'); setRes(null); setDiag(null)
     setRes(await store.testNewsRelay())
-    setBusy(false)
+    setBusy('')
+  }
+  // ⚠️ « Il répond » ne suffisait pas. L'enrichissement peut échouer pour trois raisons qui
+  // se corrigent différemment — clé absente, quota de texte, quota de RECHERCHE — et on en
+  // était réduit à les deviner depuis un message d'erreur. Le relais les teste et tranche.
+  const run = async () => {
+    setBusy('diag'); setRes(null); setDiag(null)
+    setDiag(await store.diagNewsRelay())
+    setBusy('')
   }
   return (
     <div className="card p-4 space-y-3 max-w-2xl">
@@ -133,7 +142,7 @@ function NewsRelayCard({ store }) {
         </span>
       </div>
       <p className="text-sm text-muted">
-        Alimente le bouton <b>Actualités</b> de chaque fiche entreprise : dépêches Google News des 30 derniers jours, puis analyse des signaux commerciaux à la demande.
+        Alimente les boutons <b>Signaux</b> et <b>Enrichir</b> de chaque fiche entreprise : sources publiques des 30 derniers jours, analysées avec le contexte commercial de l'environnement.
       </p>
       {canEdit ? (
         <>
@@ -142,11 +151,28 @@ function NewsRelayCard({ store }) {
               placeholder="https://bdr-news.votre-compte.workers.dev" />
           </Field>
           <div className="flex items-center gap-2 flex-wrap">
-            <button className="btn-ghost !py-1 text-xs" disabled={busy || !url} onClick={test}>
-              {busy ? 'Test en cours…' : 'Tester le relais'}
+            <button className="btn-ghost !py-1 text-xs" disabled={!!busy || !url} onClick={test}>
+              {busy === 'test' ? 'Test en cours…' : 'Tester le relais'}
+            </button>
+            <button className="btn-ghost !py-1 text-xs" disabled={!!busy || !url} onClick={run}>
+              {busy === 'diag' ? 'Diagnostic en cours…' : 'Diagnostic complet'}
             </button>
             {res && <span className={`text-xs ${res.ok ? 'text-emerald-600' : 'text-red-600'}`}>{res.msg}</span>}
           </div>
+          {diag && (
+            <div className="rounded-xl border border-line bg-surface/60 p-3 space-y-2">
+              {/* Le verdict d'abord : c'est la seule ligne qui dit quoi faire. */}
+              <p className={`text-xs font-semibold ${diag.ok ? 'text-emerald-600' : 'text-amber-600'}`}>{diag.verdict}</p>
+              {diag.steps.map(st => (
+                <div key={st.id} className="text-[11px] flex items-start gap-1.5">
+                  <span className="shrink-0">{st.ok ? '✅' : '⚠️'}</span>
+                  <span><b className="text-ink">{st.label}</b>{st.ok
+                    ? <span className="text-muted"> — {st.ms} ms</span>
+                    : <span className="text-muted"> — {st.error}</span>}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-muted">
             La clé Gemini reste chez le relais et ne descend jamais dans le navigateur. Déploiement : <b>news/SETUP.md</b>.
           </p>

@@ -317,6 +317,16 @@ npm run dev        # serveur de dev
     faisait que collectionner trois fois le même refus, et l'écran annonçait « sur tous les
     modèles » pour un plafond situé ailleurs. `quotaMetricOf`/`isGroundingQuota` lisent la
     limite que Google nomme dans l'erreur ; la rotation s'arrête, et le message la désigne.
+    ⚠️ **TROIS DES SIX CHAMPS N'ONT JAMAIS EU BESOIN D'UNE IA.** L'implantation, l'effectif
+    et le secteur d'une société française sont publiés par l'État — **annuaire des entreprises**
+    (`recherche-entreprises.api.gouv.fr`), gratuit, sans clé, sans quota. Les faire chercher par
+    un modèle dépensait le quota le PLUS SERRÉ du produit pour une réponse moins sûre qu'une
+    donnée officielle. `officialRegistry()` tourne donc EN PREMIER, et **l'IA ne traite que ce
+    qui reste** (`remaining`) : si l'annuaire couvre tout, aucun appel Gemini n'est fait.
+    Le code INSEE de tranche d'effectif est traduit en ordre de grandeur (`INSEE_TRANCHES`) —
+    afficher « 42 » là où on attend une taille n'apprend rien. ⚠️ **Ce que l'annuaire a trouvé
+    est ACQUIS** : un refus de Gemini ne l'efface plus (`keep()`), on rend ce qu'on a et on dit
+    ce qui a manqué (`registryError`, `aiError`, `source`).
     ⚠️ **Le quota de recherche n'arrête plus l'enrichissement** : le relais repasse par NOS
     propres pages (`ownSources` = site de l'entreprise + presse, les collecteurs des signaux)
     et rappelle Gemini SANS outil, avec ces pages pour seule matière. Jamais depuis la
@@ -325,6 +335,13 @@ npm run dev        # serveur de dev
     bonne réponse. `found.fallback` remonte à l'écran : la couverture est plus étroite
     (un site donne rarement le chiffre d'affaires), et cela doit s'expliquer autrement
     que par « l'IA n'a rien trouvé ».
+    🔎 **`/diag` — LE RELAIS SE TESTE LUI-MÊME**, et `store.diagNewsRelay()` l'affiche dans
+    Paramètres → Intégrations (« Diagnostic complet »). Une panne d'enrichissement a trois
+    causes qui ne se corrigent PAS de la même façon — clé absente, quota de texte, quota de
+    RECHERCHE — et tant qu'on les devinait depuis un message d'erreur, on cherchait au mauvais
+    endroit. La route interroge les cinq briques POUR DE VRAI (clé, annuaire, presse, Gemini
+    texte, Gemini recherche) et rend un **verdict écrit**, pas un état à interpréter.
+    ⚠️ Aucun secret n'en sort : on dit si la clé existe, jamais ce qu'elle vaut — le test le fige.
     ⚠️ **Un compteur d'attente PAR FONCTIONNALITÉ** (`aiGuard.cooldownLeft(scope)`). Avec une
     clé commune, un enrichissement refusé mettait AUSSI les signaux au repos — alors que
     leur quota était intact, puisque ce n'est pas le même.

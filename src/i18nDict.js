@@ -1960,4 +1960,17 @@ export const UI_DICT = [
   ['Nom (A→Z)', 'Name (A→Z)', 'Nombre (A→Z)'],
   ['Nombre de rendez-vous', 'Number of meetings', 'Número de citas'],
   ['Informations manquantes', 'Missing information', 'Información que falta'],
+
+  // ---- Relais IA : diagnostic ----
+  ['Alimente les boutons', 'Powers the', 'Alimenta los botones'],
+  ['de chaque fiche entreprise : sources publiques des 30 derniers jours, analysées avec le contexte commercial de l\'environnement.', 'buttons on every company sheet: public sources from the last 30 days, analysed against the workspace\'s commercial context.', 'de cada ficha de empresa: fuentes públicas de los últimos 30 días, analizadas con el contexto comercial del entorno.'],
+  ['Diagnostic complet', 'Full diagnostic', 'Diagnóstico completo'],
+  ['Diagnostic en cours…', 'Running diagnostic…', 'Diagnóstico en curso…'],
+  ['Clé Gemini configurée', 'Gemini key configured', 'Clave Gemini configurada'],
+  ['Annuaire des entreprises', 'Official company registry', 'Registro oficial de empresas'],
+  ['Gemini — génération de texte', 'Gemini — text generation', 'Gemini — generación de texto'],
+  ['Gemini — recherche Google (grounding)', 'Gemini — Google Search (grounding)', 'Gemini — búsqueda de Google (grounding)'],
+  ['Le relais déployé ne connaît pas encore le diagnostic : recollez news/worker.js dans Cloudflare, puis redéployez.', 'The deployed relay does not know about the diagnostic yet: paste news/worker.js into Cloudflare again, then redeploy.', 'El relé desplegado aún no conoce el diagnóstico: vuelve a pegar news/worker.js en Cloudflare y redespliega.'],
+  ['Relais injoignable (URL, CORS ou réseau).', 'Relay unreachable (URL, CORS or network).', 'Relé inaccesible (URL, CORS o red).'],
+  ['Aucune URL renseignée.', 'No URL filled in.', 'Ninguna URL indicada.'],
 ]

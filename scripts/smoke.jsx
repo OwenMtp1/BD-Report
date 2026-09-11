@@ -1039,6 +1039,51 @@ async function main() {
     } finally { globalThis.fetch = realFetch }
   }
 
+  // DIAGNOSTIC DU RELAIS. ⚠️ « Il répond » ne suffisait pas : l'enrichissement peut échouer
+  // pour trois raisons qui se corrigent différemment (clé absente, quota de texte, quota de
+  // RECHERCHE), et on en était réduit à les deviner depuis un message d'erreur.
+  {
+    const realFetch2 = globalThis.fetch
+    globalThis.fetch = async (u) => (String(u).includes('/diag')
+      ? { ok: true, status: 200, json: async () => ({
+          ok: false,
+          verdict: "Seule la RECHERCHE Google est épuisée. Les signaux fonctionnent ; l'enrichissement se rabat sur l'annuaire officiel.",
+          steps: [
+            { id: 'key', label: 'Clé Gemini configurée', ok: true, ms: 1 },
+            { id: 'registry', label: 'Annuaire des entreprises', ok: true, ms: 40 },
+            { id: 'news', label: 'Presse', ok: true, ms: 60 },
+            { id: 'gemini_text', label: 'Gemini — génération de texte', ok: true, ms: 300 },
+            { id: 'gemini_search', label: 'Gemini — recherche Google (grounding)', ok: false, ms: 200, error: 'Quota de recherche Google atteint (offre gratuite).' },
+          ],
+        }) }
+      : { ok: true, status: 200, json: async () => ({ ok: true, gemini: true }) })
+    try {
+      await act(async () => { win.__bdrStore.setNewsRelay('https://relais.test') })
+      // ⚠️ Les Paramètres s'ouvrent par l'icône du header, pas par la barre latérale.
+      const gear = [...container.querySelectorAll('button[title="Paramètres"]')][0]
+      if (!gear) throw new Error("L'accès aux Paramètres est introuvable dans l'en-tête")
+      await click(gear)
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      const integ = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Intégrations')
+      if (integ) { await click(integ); await act(async () => { await new Promise(r => setTimeout(r, 50)) }) }
+      const diagBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Diagnostic complet'))
+      if (!diagBtn) throw new Error("Le bouton « Diagnostic complet » est absent des Intégrations")
+      await click(diagBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+      // Le VERDICT d'abord : c'est la seule ligne qui dit quoi faire.
+      if (!text().includes('Seule la RECHERCHE Google est épuisée')) {
+        throw new Error("Le diagnostic n'affiche pas le verdict du relais")
+      }
+      // Et le détail brique par brique, pour qu'on voie ce qui marche encore.
+      for (const k of ['Annuaire des entreprises', 'Gemini — génération de texte', 'Gemini — recherche Google']) {
+        if (!text().includes(k)) throw new Error(`Le diagnostic n'affiche pas la brique « ${k} »`)
+      }
+      if (!text().includes('Quota de recherche Google atteint')) {
+        throw new Error("Le motif de l'échec d'une brique n'est pas affiché")
+      }
+    } finally { globalThis.fetch = realFetch2 }
+  }
+
   // MES ENTREPRISES : la liste des comptes de l'espace, et ce qu'on sait d'eux. L'écran
   // n'invente rien — il agrège rendez-vous, contacts et fiche entreprise.
   {
