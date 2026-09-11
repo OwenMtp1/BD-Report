@@ -364,7 +364,21 @@ npm run dev        # serveur de dev
     refuse toute valeur qui ressemble à une donnée personnelle.
     ⚠️ **Rien n'est écrasé sans décision** : champ vide → proposé coché ; valeur différente →
     montrée EN REGARD de l'actuelle, décochée. Sans source vérifiable, la confiance retombe à « low ».
-  - **ICP — DEUX profils, parce qu'il y a DEUX QUESTIONS** (`Icp.jsx`, `ICP_KINDS`) :
+  - **ICP — DEUX PÉRIMÈTRES, et dans chacun deux profils.** Bascule en tête de page, même
+    mécanique que le pipeline de `Leads` : **« Mon ICP »** (mes affaires) et **« ICP de
+    l'entreprise »** (tous les comptes de tous les espaces de l'environnement). ⚠️ Un seul
+    portefeuille n'a presque jamais assez de signatures pour qu'un taux veuille dire quelque
+    chose ; l'équipe, si — ne montrer que le premier, c'était conclure sur dix affaires.
+    En vue équipe : `deals` ET `companies` sont AGRÉGÉS (une fiche remplie par un collègue
+    vaut pour tout le monde, sinon le compte serait classé « secteur inconnu »), chaque deal
+    porte son `_owner`, et les profils des collègues s'affichent avec leur auteur — un
+    enseignement anonyme ne se vérifie pas.
+    ⚠️ **On n'écrit JAMAIS chez un collègue** : `_mine` commande la suppression et la
+    séparation ; enregistrer une proposition depuis la vue équipe la range dans SON espace.
+    ⚠️ Le **pipeline de référence reste celui de mon espace** (`ref = sub`) : les phases, la
+    qualification et le jalon sont un vocabulaire d'environnement, pas une donnée de deal.
+    `companies` est donc passé À PART de `data` aux cartes.
+  - **ICP — DEUX profils dans chaque périmètre, parce qu'il y a DEUX QUESTIONS** (`ICP_KINDS`) :
     **ICP entreprise** (`kind:'company'` — `secteurs[]`, `effMin/effMax`, `localisations[]`) répond
     à « quel compte vaut mon temps ? » ; **ICP personnel** (`kind:'person'` — `postes[]`, `roles[]`,
     `relations[]`, ces deux derniers venant du module `committee`) répond à « à qui parler dedans ? ».

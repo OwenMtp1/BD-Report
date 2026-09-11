@@ -1973,4 +1973,13 @@ export const UI_DICT = [
   ['Le relais déployé ne connaît pas encore le diagnostic : recollez news/worker.js dans Cloudflare, puis redéployez.', 'The deployed relay does not know about the diagnostic yet: paste news/worker.js into Cloudflare again, then redeploy.', 'El relé desplegado aún no conoce el diagnóstico: vuelve a pegar news/worker.js en Cloudflare y redespliega.'],
   ['Relais injoignable (URL, CORS ou réseau).', 'Relay unreachable (URL, CORS or network).', 'Relé inaccesible (URL, CORS o red).'],
   ['Aucune URL renseignée.', 'No URL filled in.', 'Ninguna URL indicada.'],
+
+  // ---- ICP : deux périmètres (mon espace / tout l'environnement) ----
+  ['Mon ICP', 'My ICP', 'Mi ICP'],
+  ['ICP de l\'entreprise', 'Company-wide ICP', 'ICP de la empresa'],
+  ['Moyenne de l\'entreprise (référence)', 'Company-wide average (reference)', 'Media de la empresa (referencia)'],
+  ['Ce que TOUTE l\'équipe a appris : tous les comptes de tous les espaces de l\'environnement. Un seul portefeuille a rarement assez de signatures pour qu\'un taux veuille dire quelque chose — celui-ci, si. Sur', 'What the WHOLE team has learnt: every account across every workspace. A single book of business rarely holds enough signed deals for a rate to mean anything — this one does. Over', 'Lo que ha aprendido TODO el equipo: todas las cuentas de todos los espacios del entorno. Una sola cartera rara vez tiene suficientes firmas para que una tasa signifique algo; esta sí. Sobre'],
+  ['deal(s).', 'deal(s).', 'oportunidad(es).'],
+  ['espace(s).', 'workspace(s).', 'espacio(s).'],
+  ['Les profils de vos collègues sont lisibles, jamais modifiables ici — enregistrer une proposition la range dans VOTRE espace.', 'Your teammates\' profiles are readable, never editable here — saving a suggestion files it in YOUR workspace.', 'Los perfiles de tus compañeros se pueden leer, nunca editar aquí: guardar una propuesta la archiva en TU espacio.'],
 ]

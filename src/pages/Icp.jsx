@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Target, Plus, Trash2, Building2, Users2, Briefcase, Sparkles, Save, CalendarDays, MapPin, Handshake, Scissors } from 'lucide-react'
+import { Target, Plus, Trash2, Building2, Users2, Briefcase, Sparkles, Save, CalendarDays, MapPin, Handshake, Scissors, UserRound, Users } from 'lucide-react'
 import { useStore, uid, todayISO, fmtDate, phaseRank, isWonPhase, qualifyPhase, milestonePhase, icpMatches, icpKindOf, ICP_KINDS, ICP_COMPANY_KEYS, ICP_PERSON_KEYS, committeeRoles, committeeRelations, companyKey } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 
@@ -70,8 +70,12 @@ function chipsOf(profile) {
   return chips
 }
 
-function ProfileCard({ profile, deals, global, data, onSave, onDelete, onSplit }) {
-  const matched = deals.filter(d => icpMatches(d, profile, { data }))
+function ProfileCard({ profile, deals, global, data, companies, onSave, onDelete, onSplit }) {
+  // ⚠️ `companies` est passé À PART de `data` : les statistiques se lisent avec le pipeline
+  // de MON espace (les phases sont un vocabulaire d'environnement), mais les traits
+  // d'entreprise avec les fiches DU PÉRIMÈTRE — celle qu'un collègue a remplie fait foi.
+  const withSheets = { ...data, companies }
+  const matched = deals.filter(d => icpMatches(d, profile, { data: withSheets }))
   const s = statsFor(matched, data)
   const delta = s.r1ToSql - global.r1ToSql
   const share = pct(matched.length, global.total)
@@ -86,7 +90,10 @@ function ProfileCard({ profile, deals, global, data, onSave, onDelete, onSplit }
     <div className="card p-4 space-y-3 fade-in">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="font-bold flex items-center gap-2">{profile.proposed && <Sparkles size={14} className="text-amber-500" />}{profile.name}</div>
+          <div className="font-bold flex items-center gap-2">
+            {profile.proposed && <Sparkles size={14} className="text-amber-500" />}{profile.name}
+            {profile._owner && <span className="chip bg-brand/10 text-brand font-normal">{profile._owner}</span>}
+          </div>
           <div className="flex flex-wrap gap-1.5 mt-1">
             {chips.length ? chips.map((c, i) => <span key={i} className="chip bg-surface text-muted flex items-center gap-1">{c.icon}{c.txt}</span>)
               : <span className="chip bg-surface text-muted">Aucun filtre</span>}
@@ -128,7 +135,7 @@ function ProfileCard({ profile, deals, global, data, onSave, onDelete, onSplit }
 // Une famille d'ICP : son titre, la question à laquelle elle répond, ses propositions
 // et ses profils enregistrés. Les deux natures s'affichent avec la même mécanique —
 // une seule implémentation, donc une correction vaut pour les deux.
-function KindSection({ kind, proposed, saved, deals, global, data, onCreate, onSave, onDelete }) {
+function KindSection({ kind, proposed, saved, deals, global, data, companies, onCreate, onSave, onDelete }) {
   const meta = ICP_KINDS.find(k => k.id === kind)
   return (
     <div className="space-y-2">
@@ -145,12 +152,13 @@ function KindSection({ kind, proposed, saved, deals, global, data, onCreate, onS
       )}
       {proposed.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {proposed.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={data} onSave={onSave} />)}
+          {proposed.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={data} companies={companies} onSave={onSave} />)}
         </div>
       )}
       {saved.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {saved.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={data} onDelete={onDelete} />)}
+          {saved.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={data} companies={companies}
+            onDelete={p._mine === false ? null : onDelete} />)}
         </div>
       )}
     </div>
@@ -161,18 +169,50 @@ export default function Icp() {
   const store = useStore()
   const sub = store.sub
   const env = store.env
+  const [scope, setScope] = useState('me') // 'me' = mon espace | 'org' = tout l'environnement
   const [creating, setCreating] = useState(null) // 'company' | 'person' | null
   const [confirmDel, setConfirmDel] = useState(null)
   const committeeOn = store.hasModule('committee')
 
-  // Un deal = un RDV racine (on évite de compter les sous-RDV de suivi en double).
-  const deals = useMemo(() => (sub.rdvs || []).filter(r => !r.parentId), [sub.rdvs])
-  const global = useMemo(() => statsFor(deals, sub), [deals, sub])
+  // ⚠️ DEUX PÉRIMÈTRES, exactement comme le pipeline de Leads. « Mon ICP » est ce que MES
+  // affaires m'apprennent ; l'ICP de l'environnement est ce que TOUTE l'équipe a appris —
+  // et les deux diffèrent presque toujours. Un commercial seul n'a jamais assez de deals
+  // signés pour qu'un taux veuille dire quelque chose ; l'équipe, si. Ne montrer que le
+  // premier, c'était tirer des conclusions sur dix affaires.
+  const envSubs = useMemo(
+    () => store.db.subenvs.filter(x => x.envId === store.session?.envId),
+    [store.db.subenvs, store.session?.envId],
+  )
+  const org = scope === 'org'
+
+  // Les données du périmètre courant. En vue équipe, chaque deal porte son propriétaire :
+  // un enseignement anonyme ne se vérifie pas, et ne se transmet pas.
+  const deals = useMemo(() => {
+    if (!org) return (sub.rdvs || []).filter(r => !r.parentId)
+    return envSubs.flatMap(x => ((store.db.data[x.id]?.rdvs) || [])
+      .filter(r => !r.parentId)
+      .map(r => ({ ...r, _owner: `${x.prenom} ${x.nom}`, _subId: x.id })))
+  }, [org, sub.rdvs, envSubs, store.db.data])
+
+  // ⚠️ Les fiches entreprise aussi sont agrégées : secteur, effectif et implantation vivent
+  // sur la fiche, et une fiche remplie par un collègue vaut pour tout le monde.
+  const companies = useMemo(() => {
+    if (!org) return sub.companies || {}
+    const all = {}
+    envSubs.forEach(x => Object.assign(all, store.db.data[x.id]?.companies || {}))
+    return all
+  }, [org, sub.companies, envSubs, store.db.data])
+
+  // ⚠️ Le pipeline de référence reste celui de MON espace : les phases, les étapes de
+  // qualification et de jalon sont un vocabulaire d'environnement, pas une donnée de deal.
+  const ref = sub
+
   // Les valeurs proposées viennent des DONNÉES, jamais d'une liste inventée : un critère
   // qu'aucun deal ne porte ne sélectionnerait rien, et on ne saurait pas pourquoi.
-  const sheetOf = (d) => sub.companies?.[companyKey(d.entreprise)] || null
-  const secteurs = useMemo(() => [...new Set(deals.map(d => sheetOf(d)?.secteur || d.secteur).filter(Boolean))].sort(), [deals, sub.companies]) // eslint-disable-line
-  const localisations = useMemo(() => [...new Set(deals.map(d => sheetOf(d)?.localisation).filter(Boolean))].sort(), [deals, sub.companies]) // eslint-disable-line
+  const sheetOf = (d) => companies[companyKey(d.entreprise)] || null
+  const global = useMemo(() => statsFor(deals, ref), [deals, ref])
+  const secteurs = useMemo(() => [...new Set(deals.map(d => sheetOf(d)?.secteur || d.secteur).filter(Boolean))].sort(), [deals, companies]) // eslint-disable-line
+  const localisations = useMemo(() => [...new Set(deals.map(d => sheetOf(d)?.localisation).filter(Boolean))].sort(), [deals, companies]) // eslint-disable-line
   const postes = useMemo(() => [...new Set(deals.flatMap(d => (d.contacts || []).map(c => c.poste)).filter(Boolean))].sort(), [deals])
   const roles = useMemo(() => (committeeOn ? committeeRoles(env) : []), [committeeOn, env])
   const relations = useMemo(() => (committeeOn ? committeeRelations(env) : []), [committeeOn, env])
@@ -185,8 +225,8 @@ export default function Icp() {
     // 1) Profils idéaux : traits dominants des deals ayant atteint SQL (sinon MQL).
     //    Un pour l'entreprise, un pour l'interlocuteur — ce sont deux enseignements
     //    distincts, et les réunir dans une carte empêchait de n'en retenir qu'un.
-    const atMilestone = deals.filter(d => reached(d, sub, milestonePhase(sub)))
-    const winners = atMilestone.length ? atMilestone : deals.filter(d => reached(d, sub, qualifyPhase(sub)))
+    const atMilestone = deals.filter(d => reached(d, ref, milestonePhase(ref)))
+    const winners = atMilestone.length ? atMilestone : deals.filter(d => reached(d, ref, qualifyPhase(ref)))
     if (winners.length) {
       const sec = mode(winners.map(d => sheetOf(d)?.secteur || d.secteur))
       const bandId = mode(winners.map(d => bandOf(Number(sheetOf(d)?.effectif || d.effectif) || 0)?.id).filter(Boolean))
@@ -204,7 +244,7 @@ export default function Icp() {
       values.forEach(v => {
         const m = deals.filter(d => keyFn(d, v))
         if (!m.length) return
-        const st = statsFor(m, sub)
+        const st = statsFor(m, ref)
         if (!best || st.r1ToSql > best.st.r1ToSql || (st.r1ToSql === best.st.r1ToSql && m.length > best.n)) best = { v, st, n: m.length }
       })
       if (best) { const p = toProfile(best.v); p.id = 'icp-' + label; p.kind = kind; p.proposed = true; p.name = label; out.push(p) }
@@ -215,9 +255,20 @@ export default function Icp() {
     bestBy(postes, v => ({ postes: [v] }), (d, v) => (d.contacts || []).some(c => c.poste === v), 'Meilleur poste', 'person')
     if (committeeOn) bestBy(roles, v => ({ roles: [v] }), (d, v) => (d.contacts || []).some(c => c.role === v), "Meilleur rôle d'achat", 'person')
     return out
-  }, [deals, secteurs, localisations, postes, roles, committeeOn, sub])
+  }, [deals, secteurs, localisations, postes, roles, committeeOn, ref])
 
-  const saved = sub.icpProfiles || []
+  // Les profils ENREGISTRÉS du périmètre. En vue équipe on montre ceux de tout le monde,
+  // chacun avec son auteur : un profil est un enseignement, et savoir de qui il vient
+  // permet d'aller lui demander pourquoi.
+  // ⚠️ `_mine` commande la suppression : on ne touche jamais au profil d'un collègue.
+  const saved = useMemo(() => {
+    const mine = (sub.icpProfiles || []).map(p => ({ ...p, _mine: true }))
+    if (!org) return mine
+    const mySubId = store.session?.subEnvId
+    const others = envSubs.filter(x => x.id !== mySubId).flatMap(x =>
+      ((store.db.data[x.id]?.icpProfiles) || []).map(p => ({ ...p, _owner: `${x.prenom} ${x.nom}`, _mine: false })))
+    return [...mine, ...others]
+  }, [org, sub.icpProfiles, envSubs, store.db.data, store.session?.subEnvId])
   const byKind = (list, k) => list.filter(p => icpKindOf(p) === k)
   const legacy = byKind(saved, 'mixed')
 
@@ -249,12 +300,26 @@ export default function Icp() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold flex items-center gap-2"><Target size={20} className="text-brand" /> ICP — Profils clients idéaux</h2>
+        {/* Deux périmètres, même bascule que le pipeline de Leads : on lit son portefeuille,
+            ou celui de toute l'équipe, sans changer d'écran. */}
+        <div className="flex rounded-lg border border-line overflow-hidden">
+          <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${!org ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
+            onClick={() => setScope('me')}><UserRound size={13} /> Mon ICP</button>
+          <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${org ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
+            onClick={() => setScope('org')}><Users size={13} /> ICP de l'entreprise</button>
+        </div>
       </div>
-      <p className="text-xs text-muted -mt-2">Deux questions, deux profils : quelles entreprises viser, et à qui parler dedans. Conversions R1 → MQL → SQL en pourcentages, sur {global.total} deal(s).</p>
+      <p className="text-xs text-muted -mt-2">
+        {org
+          ? <>Ce que TOUTE l'équipe a appris : tous les comptes de tous les espaces de l'environnement. Un seul portefeuille a rarement assez de signatures pour qu'un taux veuille dire quelque chose — celui-ci, si. Sur <b className="text-ink">{global.total}</b> deal(s), {envSubs.length} espace(s).</>
+          : <>Deux questions, deux profils : quelles entreprises viser, et à qui parler dedans. Conversions R1 → MQL → SQL en pourcentages, sur <b className="text-ink">{global.total}</b> deal(s).</>}
+      </p>
 
       {/* Référence globale */}
       <div className="card p-4">
-        <div className="text-xs font-bold uppercase tracking-wide text-muted mb-2">Moyenne globale (référence)</div>
+        <div className="text-xs font-bold uppercase tracking-wide text-muted mb-2">
+          {org ? "Moyenne de l'entreprise (référence)" : 'Moyenne globale (référence)'}
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
           {[['R1 → MQL', global.r1ToMql], ['MQL → SQL', global.mqlToSql], ['R1 → SQL', global.r1ToSql], ['Signature', global.signRate]].map(([l, v]) => (
             <div key={l}><div className="text-2xl font-extrabold">{v}%</div><div className="text-xs text-muted">{l}</div></div>
@@ -263,9 +328,10 @@ export default function Icp() {
       </div>
 
       {deals.length === 0 && <Empty text="Aucun deal pour analyser des profils ICP. Créez des rendez-vous pour alimenter l'analyse." />}
+      {org && <p className="text-xs text-muted">Les profils de vos collègues sont lisibles, jamais modifiables ici — enregistrer une proposition la range dans VOTRE espace.</p>}
 
       {ICP_KINDS.map(k => (
-        <KindSection key={k.id} kind={k.id} deals={deals} global={global} data={sub}
+        <KindSection key={k.id} kind={k.id} deals={deals} global={global} data={ref} companies={companies}
           proposed={byKind(proposed, k.id)} saved={byKind(saved, k.id)}
           onCreate={() => setCreating(k.id)} onSave={saveProfile} onDelete={setConfirmDel} />
       ))}
@@ -275,7 +341,7 @@ export default function Icp() {
           <h3 className="text-sm font-bold">Profils mixtes</h3>
           <p className="text-xs text-muted">Créés avant la séparation, ils filtrent à la fois sur l'entreprise et sur l'interlocuteur. Ils continuent de fonctionner tels quels ; « Séparer » en fait deux profils, un par question.</p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {legacy.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={sub} onDelete={setConfirmDel} onSplit={splitProfile} />)}
+            {legacy.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={ref} companies={companies} onDelete={p._mine === false ? null : setConfirmDel} onSplit={p._mine === false ? null : splitProfile} />)}
           </div>
         </div>
       )}

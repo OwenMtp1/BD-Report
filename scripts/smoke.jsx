@@ -1805,6 +1805,76 @@ async function main() {
     const profs = dbNow().data['sub-owen'].icpProfiles || []
     if (!profs.some(p => p.name === 'Comptes cibles' && p.kind === 'company')) throw new Error("La nature 'company' doit être enregistrée")
     if (!profs.some(p => p.name === 'Bonnes portes' && p.kind === 'person')) throw new Error("La nature 'person' doit être enregistrée")
+
+    // ---- DEUX PÉRIMÈTRES. « Mon ICP » est ce que MES affaires m'apprennent ; l'ICP de
+    // l'entreprise, ce que TOUTE l'équipe a appris. Un portefeuille seul n'a presque jamais
+    // assez de signatures pour qu'un taux veuille dire quelque chose.
+    {
+      const meBtn = [...container.querySelectorAll('main button')].find(b => b.textContent.trim() === 'Mon ICP')
+      const orgBtn = [...container.querySelectorAll('main button')].find(b => b.textContent.trim() === "ICP de l'entreprise")
+      if (!meBtn || !orgBtn) throw new Error("La bascule de périmètre est absente de l'ICP")
+
+      // On CRÉE un collègue — la base semée n'en a pas — et on lui pose un profil ICP.
+      // Il ne doit apparaître qu'en vue entreprise.
+      await act(async () => {
+        win.__bdrStore.createSubEnv('env-peoplespheres', { prenom: 'Camille', nom: 'Collegue', poste: 'BDR', service: '', pin: '' })
+      })
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      const mates = dbNow().subenvs.filter(x => x.envId === 'env-peoplespheres' && x.id !== 'sub-owen')
+      if (!mates.length) throw new Error("L'espace du collègue n'a pas été créé")
+      const mate = mates[0]
+      await act(async () => {
+        win.__bdrStore.setSubData(mate.id, d => ({ ...d, icpProfiles: [...(d.icpProfiles || []), { id: 'icp-mate', kind: 'company', name: 'Profil du collègue', secteurs: ['SaaS'], createdAt: '2026-01-01' }] }))
+      })
+      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      if (text().includes('Profil du collègue')) throw new Error("Mon ICP montre le profil d'un collègue : les périmètres ne sont pas séparés")
+
+      await click(orgBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      if (!text().includes('Profil du collègue')) throw new Error("La vue entreprise ne montre pas les profils des collègues")
+      // ⚠️ L'auteur est nommé : un enseignement anonyme ne se vérifie pas.
+      if (!text().includes(`${mate.prenom} ${mate.nom}`)) throw new Error("Un profil d'équipe doit dire de qui il vient")
+      if (!text().includes("Moyenne de l'entreprise")) throw new Error("La référence affichée doit être celle du périmètre")
+      // ⚠️ ON N'ÉCRIT JAMAIS CHEZ UN COLLÈGUE : aucune suppression sur son profil.
+      const mateCard = [...container.querySelectorAll('main .card')].find(c => c.textContent.includes('Profil du collègue'))
+      if (!mateCard) throw new Error("La carte du profil collègue est introuvable")
+      if (mateCard.querySelector('button[title="Supprimer"]')) {
+        throw new Error("Le profil d'un collègue ne doit pas être supprimable depuis la vue entreprise")
+      }
+      // Les miens le restent.
+      const mineCard = [...container.querySelectorAll('main .card')].find(c => c.textContent.includes('Comptes cibles'))
+      if (mineCard && !mineCard.querySelector('button[title="Supprimer"]')) {
+        throw new Error("Mes propres profils doivent rester supprimables en vue entreprise")
+      }
+      // ⚠️ La vue entreprise doit compter PLUS de deals que la mienne — sinon la bascule
+      // change l'étiquette sans changer l'analyse, et ne sert à rien.
+      const dealCount = () => Number((text().match(/sur\s+(\d+)\s+deal/i) || [])[1] || -1)
+      // ⚠️ Le RDV du collègue ne porte PAS le secteur : il vit sur SA fiche entreprise.
+      // C'est le cas qui compte — une fiche remplie par un collègue vaut pour tout le monde,
+      // et la vue équipe qui l'ignorerait classerait le compte « secteur inconnu ».
+      await act(async () => {
+        win.__bdrStore.setSubData(mate.id, d => ({
+          ...d,
+          rdvs: [{ id: 'rdv-mate-1', entreprise: 'Compte du collègue', phase: (win.__bdrStore.sub.phases || [])[0] || 'R1', dateRdv: '2026-06-01', contacts: [{ poste: 'DRH' }] }],
+          companies: { ...(d.companies || {}), 'compte du collègue': { secteur: 'SaaS', effectif: '120' } },
+        }))
+      })
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      const nOrg = dealCount()
+      // Le profil du collègue filtre sur « SaaS ». Son deal ne le porte que via SA FICHE :
+      // si les fiches ne sont pas agrégées, la carte annonce « aucun deal ne correspond ».
+      const mateCard2 = [...container.querySelectorAll('main .card')].find(c => c.textContent.includes('Profil du collègue'))
+      if (!mateCard2) throw new Error("La carte du profil collègue a disparu")
+      if (mateCard2.textContent.includes('Aucun deal ne correspond')) {
+        throw new Error("Les fiches entreprise des collègues ne sont pas agrégées : le secteur qu'elles portent est ignoré")
+      }
+      await click(meBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      const nMe = dealCount()
+      if (nOrg < 0 || nMe < 0) throw new Error("Le nombre de deals analysés n'est affiché dans aucune des deux vues")
+      if (nOrg !== nMe + 1) throw new Error(`La vue entreprise doit inclure les deals des collègues (${nOrg} contre ${nMe} + 1 attendu)`)
+      if (text().includes('Profil du collègue')) throw new Error("Revenir à « Mon ICP » doit remasquer les profils des collègues")
+    }
   }
 
   // 9. Organigramme + paramètres
