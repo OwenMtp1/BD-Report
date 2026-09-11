@@ -701,6 +701,17 @@ npm run dev        # serveur de dev
   ⚠️ Les valeurs proposées viennent des DONNÉES ; un secteur qu'aucune entreprise ne porte ne sélectionnerait
   rien sans qu'on sache pourquoi. Chaque carte ouvre la fiche existante (`openCompany`) ; l'écran n'invente
   aucune donnée et ne crée aucun stockage.
+  **Enrichissement GROUPÉ** (`enrichAll`, brique `aiInsights`) — même mécanique que le balayage de
+  l'onglet Signaux, compte rendu compris.
+  ⚠️ **SEULS LES CHAMPS VIDES SONT REMPLIS.** La règle du produit est « rien n'est écrasé sans
+  décision » : en masse, personne ne décide rien. Une valeur DIFFÉRENTE de celle qu'un commercial
+  a saisie est SIGNALÉE dans le compte rendu et laissée intacte — c'est à la fiche, une par une,
+  qu'on tranche. `npm run smoke` pose une localisation à la main et exige qu'elle survive.
+  ⚠️ **Le balayage porte sur le PÉRIMÈTRE VISIBLE** (`list`, donc après filtres et recherche) et
+  ne retient que les fiches à trous : réinterroger une fiche complète n'apprend rien et sollicite
+  les sources pour rien. Plafond `MAX_BULK` (25), annoncé dans le compte rendu.
+  ⚠️ **UNE SEULE ÉCRITURE** à la fin : une écriture par société sérialiserait tout l'état autant
+  de fois, et l'interface se figerait le temps du balayage (cf. sauvegarde différée).
 - **Menu sur mesure par client** — `env.navLayout = [{id,label,items:[tabId]}]`, composé dans
   l'Atelier (`NavLayoutEditor` dans `EnvAdmin.jsx`, droit `env.build`), appliqué par
   `applyNavLayout` (nav.jsx) dans la barre latérale. ⚠️ **Ranger n'accorde AUCUN accès** : la

@@ -20,14 +20,18 @@
 //  la fiche entreprise et les signaux contiennent déjà, et ouvre la fiche existante.
 // ---------------------------------------------------------------------------
 import React, { useMemo, useState } from 'react'
-import { Building2, Users, CalendarDays, Search, Sparkles, Globe, Linkedin, LayoutGrid, LayoutList, MapPin, Radar, X } from 'lucide-react'
+import { Building2, Users, CalendarDays, Search, Sparkles, Globe, Linkedin, LayoutGrid, LayoutList, MapPin, Radar, X, RefreshCw } from 'lucide-react'
 import { useStore, phaseColor, companyKey } from '../store.jsx'
-import { Empty } from '../ui.jsx'
+import { Empty, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
-import { ENRICHABLE } from '../enrich.js'
+import { ENRICHABLE, enrichCompany, enrichmentDiff } from '../enrich.js'
+import { newsRelayUrl } from '../news.js'
 
 const norm = (s) => String(s || '').trim().toLowerCase()
 const DAY = 86400000
+// Plafond du balayage. Chaque fiche interroge plusieurs sources publiques : en traiter
+// deux cents d'un coup les solliciterait sans mesure, et l'attente deviendrait absurde.
+const MAX_BULK = 25
 
 // Bandes d'effectif. L'effectif est saisi à la main ou trouvé par l'enrichissement :
 // il arrive sous forme de texte (« 200-500 », « ~120 »). On lit le premier nombre —
@@ -144,6 +148,8 @@ export default function Companies() {
   const [sort, setSort] = useState('name')
   const [q, setQ] = useState('')
   const [f, setF] = useState({ knowledge: '', activity: '', signals: '', phase: '', secteur: '', taille: '', lieu: '' })
+  const [busy, setBusy] = useState('')
+  const [report, setReport] = useState(null)
   const set = (k, v) => setF(x => ({ ...x, [k]: v }))
   const reset = () => { setF({ knowledge: '', activity: '', signals: '', phase: '', secteur: '', taille: '', lieu: '' }); setQ('') }
 
@@ -220,6 +226,71 @@ export default function Companies() {
     return out.sort((a, b) => cmp(a, b) || a.name.localeCompare(b.name, 'fr'))
   }, [rows, q, f, sort])
 
+  /**
+   * ENRICHIR TOUT LE PÉRIMÈTRE VISIBLE, comme le balayage de l'onglet Signaux.
+   *
+   * ⚠️ SEULS LES CHAMPS VIDES SONT REMPLIS. La règle du produit est « rien n'est écrasé
+   * sans décision » : en masse, personne ne décide rien. Une valeur DIFFÉRENTE de celle
+   * qu'un commercial a saisie est donc signalée dans le compte rendu et laissée intacte —
+   * c'est à la fiche, une par une, qu'on tranche.
+   *
+   * ⚠️ UNE SEULE ÉCRITURE à la fin : une écriture par société sérialiserait tout l'état
+   * autant de fois, et l'interface se figerait le temps du balayage.
+   */
+  const enrichAll = async () => {
+    if (!store.hasModule('aiInsights')) { toast("La brique Analyse IA n'est pas installée."); return }
+    if (!newsRelayUrl(store.db)) { setReport({ lines: [], note: "Le relais n'est pas configuré. L'équipe BD Report doit publier son URL." }); return }
+    // On ne retravaille que ce qui a des trous : réinterroger une fiche complète
+    // n'apprendrait rien et solliciterait les sources pour rien.
+    const targets = list.filter(r => r.filled < r.total).slice(0, MAX_BULK)
+    if (!targets.length) {
+      setReport({ lines: [], note: list.length ? 'Toutes les fiches du périmètre sont déjà complètes.' : 'Aucune entreprise dans ce périmètre.' })
+      return
+    }
+    const lines = []
+    const patch = {}
+    let filled = 0
+    let stop = list.length > MAX_BULK ? `Limité aux ${MAX_BULK} premières fiches à compléter — relancez pour la suite.` : ''
+    for (const r of targets) {
+      setBusy(r.name)
+      const res = await enrichCompany(r.name, r.info, store.db)
+      if (res.error) {
+        // Relais injoignable ou non configuré : inutile de le redemander vingt fois.
+        if (/relais/i.test(res.error)) { stop = res.error; break }
+        lines.push({ name: r.name, state: 'error', why: res.error }); continue
+      }
+      const rows = enrichmentDiff(res.found, r.info)
+      const empty = rows.filter(x => x.state === 'empty')
+      const conflicts = rows.filter(x => x.state === 'conflict')
+      if (empty.length) {
+        patch[r.name] = { ...(patch[r.name] || {}) }
+        empty.forEach(x => { patch[r.name][x.id] = x.value })
+        filled += empty.length
+      }
+      const why = [
+        empty.length ? `${empty.length} champ(s) complété(s) : ${empty.map(x => x.label).join(', ')}` : '',
+        conflicts.length ? `${conflicts.length} valeur(s) différente(s) de la vôtre, laissée(s) intacte(s)` : '',
+      ].filter(Boolean).join(' · ')
+      lines.push({
+        name: r.name,
+        state: empty.length ? 'ok' : conflicts.length ? 'cached' : 'none',
+        why: why || "Rien de plus que ce que la fiche contient déjà.",
+      })
+    }
+    setBusy('')
+    // ⚠️ Une seule écriture pour tout le lot.
+    const names = Object.keys(patch)
+    if (names.length) {
+      store.setSub(d => {
+        const companies = { ...(d.companies || {}) }
+        names.forEach(n => { companies[n] = { ...(companies[n] || {}), ...patch[n] } })
+        return { ...d, companies }
+      })
+    }
+    setReport({ lines, note: stop })
+    toast(filled ? `${filled} information(s) ajoutée(s)` : 'Aucune information nouvelle — voir le détail.')
+  }
+
   if (!sub) return null
 
   const active = Object.values(f).filter(Boolean).length + (q.trim() ? 1 : 0)
@@ -235,6 +306,14 @@ export default function Companies() {
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
             <input className="input !py-1.5 !pl-8 text-sm !w-64" placeholder="Nom, secteur, ville, contact…" value={q} onChange={e => setQ(e.target.value)} />
           </div>
+          {/* Enrichir TOUT le périmètre visible, comme le balayage de l'onglet Signaux.
+              ⚠️ Seuls les champs VIDES sont remplis : en masse, personne ne décide rien,
+              et écraser une valeur saisie serait la remplacer sans que son auteur le sache. */}
+          {store.hasModule('aiInsights') && (
+            <button className="btn-primary !py-1.5 text-xs" disabled={!!busy} onClick={enrichAll}>
+              <Sparkles size={13} /> {busy ? `Enrichissement de ${busy}…` : 'Enrichir les fiches'}
+            </button>
+          )}
           <div className="flex rounded-lg border border-line overflow-hidden">
             {[['list', 'Liste', LayoutList], ['kanban', 'Kanban', LayoutGrid]].map(([id, label, Icon]) => (
               <button key={id} className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${view === id ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
@@ -319,6 +398,26 @@ export default function Companies() {
           {active > 0 && <button className="btn-ghost !py-1 text-xs" onClick={reset}><X size={12} /> Effacer les filtres</button>}
         </div>
       </div>
+
+      {/* ⚠️ LE COMPTE RENDU DIT CE QUI S'EST PASSÉ, FICHE PAR FICHE. Un balayage qui se
+          contente de « terminé » laisse croire à une panne quand il n'a rien trouvé, et
+          cache les valeurs qu'il a délibérément laissées intactes. */}
+      {report && (
+        <div className="card p-3 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold">Dernier enrichissement</span>
+            <button className="btn-ghost !p-1 ml-auto" title="Fermer le compte rendu" onClick={() => setReport(null)}><X size={13} /></button>
+          </div>
+          {report.note && <p className="text-xs text-amber-700 dark:text-amber-300">{report.note}</p>}
+          {report.lines.map((l, i) => (
+            <div key={i} className="text-xs flex items-start gap-2">
+              <span className="shrink-0">{l.state === 'ok' ? '✅' : l.state === 'cached' ? '✋' : l.state === 'error' ? '⚠️' : '◌'}</span>
+              <span className="font-semibold shrink-0">{l.name}</span>
+              <span className="text-muted">{l.why}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {list.length === 0 ? (
         <Empty text={active ? 'Aucune entreprise ne correspond à ces filtres.' : "Aucune entreprise pour l'instant. Elles apparaissent dès le premier rendez-vous."} />

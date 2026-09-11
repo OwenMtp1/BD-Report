@@ -1982,4 +1982,12 @@ export const UI_DICT = [
   ['deal(s).', 'deal(s).', 'oportunidad(es).'],
   ['espace(s).', 'workspace(s).', 'espacio(s).'],
   ['Les profils de vos collègues sont lisibles, jamais modifiables ici — enregistrer une proposition la range dans VOTRE espace.', 'Your teammates\' profiles are readable, never editable here — saving a suggestion files it in YOUR workspace.', 'Los perfiles de tus compañeros se pueden leer, nunca editar aquí: guardar una propuesta la archiva en TU espacio.'],
+
+  // ---- Mes entreprises : enrichissement groupé ----
+  ['Enrichir les fiches', 'Enrich the sheets', 'Enriquecer las fichas'],
+  ['Dernier enrichissement', 'Last enrichment', 'Último enriquecimiento'],
+  ['Toutes les fiches du périmètre sont déjà complètes.', 'Every sheet in this scope is already complete.', 'Todas las fichas de este ámbito ya están completas.'],
+  ['Aucune entreprise dans ce périmètre.', 'No company in this scope.', 'Ninguna empresa en este ámbito.'],
+  ['Rien de plus que ce que la fiche contient déjà.', 'Nothing beyond what the sheet already holds.', 'Nada más de lo que la ficha ya contiene.'],
+  ['Aucune information nouvelle — voir le détail.', 'No new information — see the details.', 'Ninguna información nueva: consulta el detalle.'],
 ]

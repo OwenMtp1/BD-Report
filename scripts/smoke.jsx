@@ -979,7 +979,10 @@ async function main() {
       await act(async () => {
         st().setSub(d => ({ ...d, companies: { ...(d.companies || {}), Zephyr: { localisation: 'Paris, France' } } }))
       })
-      const enrichBtn = find('button', 'Enrichir')
+      // ⚠️ DANS LA FICHE. « Mes entreprises » porte aussi un bouton « Enrichir les fiches »
+      // (le balayage groupé), et il apparaît AVANT dans le document : le chercher sans
+      // périmètre revenait à cliquer sur l'autre, et à compter ses 25 appels ici.
+      const enrichBtn = [...container.querySelectorAll('.fixed.z-50 button')].find(b => b.textContent.trim() === 'Enrichir')
       if (!enrichBtn) throw new Error("L'action « Enrichir » est absente de la fiche entreprise")
       await click(enrichBtn)
       await act(async () => { await new Promise(r => setTimeout(r, 60)) })
@@ -1026,7 +1029,7 @@ async function main() {
       // facturée au client ne doit pas rester visible quand il ne l'a pas prise.
       await act(async () => { st().setEnvModules('env-peoplespheres', { aiInsights: false }) })
       await act(async () => { await new Promise(r => setTimeout(r, 40)) })
-      if (find('button', 'Enrichir') || [...container.querySelectorAll('.fixed.z-50 button')].some(b => b.textContent.trim() === 'Signaux')) {
+      if ([...container.querySelectorAll('.fixed.z-50 button')].some(b => ['Enrichir', 'Signaux'].includes(b.textContent.trim()))) {
         throw new Error("Sans la brique « Analyse IA », les actions de la fiche restent visibles")
       }
       await act(async () => { st().setEnvModules('env-peoplespheres', { aiInsights: true }) })
@@ -1108,6 +1111,65 @@ async function main() {
     }
     if (!text().includes('à compléter') && !text().includes('fiche complète')) {
       throw new Error("La liste ne dit pas ce qu'il manque sur chaque fiche")
+    }
+
+    // ---- ENRICHIR TOUT LE PÉRIMÈTRE, comme le balayage de l'onglet Signaux.
+    // ⚠️ LA GARANTIE CENTRALE : seuls les champs VIDES sont remplis. En masse personne ne
+    // décide rien, et écraser une valeur saisie serait la remplacer sans que son auteur
+    // le sache. Une valeur différente est SIGNALÉE, jamais appliquée.
+    {
+      const realFetch3 = globalThis.fetch
+      let calls = 0
+      globalThis.fetch = async (u) => (String(u).includes('/enrich')
+        ? (calls++, { ok: true, status: 200, json: async () => ({ source: 'public', found: {
+            site: { value: 'https://trouve.example', publisher: 'Annuaire', url: 'https://annuaire.example', confidence: 'high' },
+            localisation: { value: 'Lyon, France', publisher: 'Annuaire', url: 'https://annuaire.example', confidence: 'high' },
+            linkedin: null, ca: null, effectif: null, secteur: null,
+          } }) })
+        : { ok: true, status: 200, json: async () => ({}) })
+      try {
+        await act(async () => { win.__bdrStore.setNewsRelay('https://relais.test') })
+        // Une société avec une localisation DÉJÀ saisie : c'est le cas qui compte.
+        await act(async () => {
+          win.__bdrStore.setSub(d => ({ ...d, companies: { ...(d.companies || {}), Zephyr: { localisation: 'Paris, France' } } }))
+        })
+        await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+        win.localStorage.removeItem('bdrflow_enrich_v1')
+
+        // ⚠️ LE BALAYAGE PORTE SUR LE PÉRIMÈTRE VISIBLE. On restreint donc à Zephyr : c'est
+        // la garantie qu'on vérifie ici, et sans elle le test dépendrait de l'ordre
+        // alphabétique (Zephyr sort du plafond de 25).
+        const search2 = [...container.querySelectorAll('main input')].find(i => (i.placeholder || '').includes('Nom, secteur'))
+        await type(search2, 'Zephyr')
+        await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+        const bulk = [...container.querySelectorAll('main button')].find(b => b.textContent.includes('Enrichir les fiches'))
+        if (!bulk) throw new Error("Le bouton d'enrichissement groupé est absent de « Mes entreprises »")
+        await click(bulk)
+        await act(async () => { await new Promise(r => setTimeout(r, 400)) })
+        if (!calls) throw new Error("L'enrichissement groupé n'appelle pas le relais")
+        if (!text().includes('Dernier enrichissement')) throw new Error("Le balayage ne rend aucun compte de ce qu'il a fait")
+
+        // `dbNow` n'est déclaré que plus bas : on relit ici, après avoir forcé l'écriture.
+        const read = () => { win.__bdrFlushSave?.(); return JSON.parse(win.localStorage.getItem('bdrflow_db_v1')) }
+        const comp = (read().data['sub-owen'].companies || {})
+        // Le champ VIDE est rempli.
+        if (calls !== 1) throw new Error(`Le balayage doit se limiter au périmètre visible (${calls} appels pour une seule entreprise)`)
+        if (comp.Zephyr?.site !== 'https://trouve.example') throw new Error("Un champ vide n'a pas été complété par le balayage")
+        // ⚠️ Le champ DÉJÀ SAISI est intact.
+        if (comp.Zephyr?.localisation !== 'Paris, France') {
+          throw new Error("Le balayage a écrasé une valeur saisie : en masse, personne n'a décidé de la remplacer")
+        }
+        // Et le compte rendu doit DIRE qu'il a laissé quelque chose de côté.
+        if (!text().includes('laissée(s) intacte(s)')) {
+          throw new Error("Le compte rendu ne signale pas les valeurs qu'il a délibérément laissées")
+        }
+        // ⚠️ AUCUN CHAMP CRÉÉ, même en masse.
+        const extra = Object.keys(comp.Zephyr || {}).filter(k => !['ca', 'site', 'linkedin', 'localisation', 'effectif', 'secteur'].includes(k))
+        if (extra.length) throw new Error('Champs inventés par le balayage : ' + extra.join(', '))
+        const clearBulk = [...container.querySelectorAll('main button')].find(b => b.textContent.includes('Effacer les filtres'))
+        if (clearBulk) await click(clearBulk)
+        await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      } finally { globalThis.fetch = realFetch3 }
     }
 
     // RECHERCHE : elle porte sur tout ce qui identifie un compte, pas seulement le nom.
