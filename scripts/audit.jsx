@@ -826,6 +826,22 @@ async function main() {
     ok(/res\.status === 404/.test(worker) && /Please update|models\\\//.test(worker),
       'Relais : un modèle Gemini retiré casse la fonctionnalité au lieu de basculer sur son successeur')
     ok(!/gemini-2\.0-flash'/.test(worker), 'Relais : le modèle par défaut est un modèle retiré')
+    // Chaque modèle a son propre compteur de quota : quand l'un refuse, le suivant répond
+    // souvent. C'est la seule façon d'étendre une offre gratuite sans la payer.
+    ok(/for \(let i = 0; i < models\.length/.test(worker) && /res\.status === 429\) \{ lastQuota/.test(worker),
+      'Relais : un quota atteint sur un modèle arrête tout au lieu d\'essayer le suivant')
+
+    // h. UN CLIC = UN APPEL. Deux demandes identiques ne doivent jamais partir ensemble :
+    //    c'est ce qui faisait atteindre le quota gratuit en quelques clics.
+    const guard = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'aiGuard.js'), 'utf8')
+    ok(/inflight\.has\(key\)/.test(guard), 'Aucun partage des appels IA déjà en vol — un remontage relance tout')
+    const enr2 = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'enrich.js'), 'utf8')
+    const nws2 = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'news.js'), 'utf8')
+    ok(/once\('enrich:/.test(enr2) && /once\('analyze:/.test(nws2) && /once\('news:/.test(nws2),
+      'Un appel IA peut encore partir en double')
+    // Et quand Google dit « trop de requêtes », on le retient : inutile de redemander avant.
+    ok(/cooldownLeft\(\)/.test(enr2) && /cooldownLeft\(\)/.test(nws2),
+      'Le délai d\'attente annoncé par Google n\'est pas respecté — on rappelle pour rien')
 
     // La fiche entreprise intègre l'action, elle ne crée pas de page ni de navigation.
     const navSrc = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'nav.jsx'), 'utf8')

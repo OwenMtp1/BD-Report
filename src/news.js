@@ -16,6 +16,8 @@
 //  ouverture d'une fiche entreprise.
 // ---------------------------------------------------------------------------
 
+import { once, cooldownLeft, startCooldown, quotaMessage } from './aiGuard.js'
+
 const CACHE_KEY = 'bdrflow_news_v1'
 const TTL = 24 * 3600 * 1000
 
@@ -64,6 +66,7 @@ export async function fetchCompanyNews(company, db, { force = false } = {}) {
   }
   const base = newsRelayUrl(db)
   if (!base) return { error: NO_RELAY }
+  return once('news:' + keyOf(name), async () => {
   try {
     const res = await fetch(`${base}/news?q=${encodeURIComponent(name)}`)
     const body = await res.json().catch(() => null)
@@ -77,6 +80,7 @@ export async function fetchCompanyNews(company, db, { force = false } = {}) {
   } catch (e) {
     return { error: 'Relais injoignable. Vérifiez la connexion ou l\'URL publiée.' }
   }
+  })
 }
 
 /** Analyse des articles DÉJÀ récupérés. Jamais lancée toute seule : elle coûte un appel IA. */
@@ -85,6 +89,9 @@ export async function analyzeCompanyNews(company, articles, db) {
   const base = newsRelayUrl(db)
   if (!base) return { error: NO_RELAY }
   if (!name || !(articles || []).length) return { error: 'Aucune actualité à analyser.' }
+  const left = cooldownLeft()
+  if (left) return { error: quotaMessage(left), quota: true }
+  return once('analyze:' + keyOf(name), async () => {
   try {
     const res = await fetch(`${base}/analyze`, {
       method: 'POST',
@@ -94,11 +101,14 @@ export async function analyzeCompanyNews(company, articles, db) {
     const body = await res.json().catch(() => null)
     // Un quota atteint n'est pas une erreur technique : l'application doit pouvoir le dire
     // autrement, et ne pas décompter un appel qui n'a rien consommé chez Google.
-    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota: res.status === 429 || body?.code === 429 }
+    const quota = res.status === 429 || body?.code === 429
+    if (quota) startCooldown(body?.retryAfter)
+    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota }
     const signals = Array.isArray(body.signals) ? body.signals : []
     patchCache(name, { signals, analyzedAt: Date.now() })
-    return { signals }
+    return { signals, model: body.model || '' }
   } catch (e) {
     return { error: 'Relais injoignable. Vérifiez la connexion ou l\'URL publiée.' }
   }
+  })
 }

@@ -287,6 +287,15 @@ npm run dev        # serveur de dev
     (`src/news.js`), volontairement hors de l'état synchronisé : des dépêches sont une vue, pas une donnée
     d'équipe, et les y écrire déclencherait une synchro à chaque ouverture de fiche.
     Sans relais publié, le panneau le dit et rien d'autre ne change.
+    ⚠️ **UN CLIC = UN APPEL** (`src/aiGuard.js`). Mesuré à DEUX avant correction : le panneau
+    lance sa recherche au MONTAGE, et il se remonte (mode strict de React, et la fiche
+    entreprise se remonte quand l'URL partageable change). Une demande identique déjà en vol
+    est désormais PARTAGÉE, et le délai annoncé par Google est retenu avant de réessayer.
+    C'est cela qui faisait atteindre le quota gratuit en quelques clics — pas le volume.
+    Le smoke compte les appels et refuse tout doublon.
+    ⚠️ **Quota (429) : ROTATION DE MODÈLES.** Chaque modèle a son propre compteur —
+    `GEMINI_MODELS` est essayé dans l'ordre, et le 429 d'un modèle fait passer au suivant.
+    Le modèle qui a RÉELLEMENT répondu est celui qu'on enregistre dans le compteur.
     ⚠️ **Modèle Gemini retiré (404)** : Google nomme son successeur dans le message d'erreur — le relais
     le lit et rejoue l'appel UNE fois (`callGemini`). Il n'invente jamais de remplaçant. Défaut :
     `gemini-3.6-flash`. ⚠️ **Quota Google (429)** : ce n'est ni une panne ni notre plafond. Le relais

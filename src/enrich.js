@@ -15,6 +15,7 @@
 //  doit pas consommer un appel de plus.
 // ---------------------------------------------------------------------------
 import { newsRelayUrl } from './news.js'
+import { once, cooldownLeft, startCooldown, quotaMessage } from './aiGuard.js'
 
 // LES CHAMPS DE LA FICHE, ET RIEN D'AUTRE. Toute addition ici doit correspondre à
 // un champ réellement présent dans `Company.jsx` — sinon on invente un champ,
@@ -63,6 +64,12 @@ export async function enrichCompany(company, known, db, { force = false } = {}) 
   }
   const base = newsRelayUrl(db)
   if (!base) return { error: "Le relais n'est pas configuré. L'équipe BD Report doit publier son URL." }
+  const left = cooldownLeft()
+  if (left) return { error: quotaMessage(left), quota: true }
+  // ⚠️ Une demande identique déjà en vol est PARTAGÉE. Sans cela, un remontage du
+  // panneau relançait une seconde recherche — et l'enrichissement, qui interroge la
+  // recherche Google, est la plus coûteuse des deux fonctionnalités.
+  return once('enrich:' + keyOf(name), async () => {
   try {
     const res = await fetch(`${base}/enrich`, {
       method: 'POST',
@@ -76,7 +83,9 @@ export async function enrichCompany(company, known, db, { force = false } = {}) 
     const body = await res.json().catch(() => null)
     // Un quota atteint n'est pas une erreur technique : l'application doit pouvoir le dire
     // autrement, et ne pas décompter un appel qui n'a rien consommé chez Google.
-    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota: res.status === 429 || body?.code === 429 }
+    const quota = res.status === 429 || body?.code === 429
+    if (quota) startCooldown(body?.retryAfter)
+    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota }
     // Dernière barrière côté application : on ne retient que nos propres champs.
     const found = {}
     ENRICHABLE_IDS.forEach(f => { found[f] = body.found?.[f] || null })
@@ -85,6 +94,7 @@ export async function enrichCompany(company, known, db, { force = false } = {}) 
   } catch (e) {
     return { error: 'Relais injoignable. Vérifiez la connexion ou l\'URL publiée.' }
   }
+  })
 }
 
 /**

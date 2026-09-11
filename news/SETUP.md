@@ -67,6 +67,22 @@ L'URL est publiée à tous les clients : personne d'autre n'a rien à configurer
 | `POST /enrich` | Cherche les informations publiques de l'entreprise pour les seuls champs que l'application demande |
 | `GET /health` (ou `/`) | Diagnostic : le relais répond-il, et a-t-il une clé ? |
 
+### Si Gemini répond 429 (quota)
+
+Ce n'est ni une panne ni le plafond interne de l'application : c'est la limite de l'offre
+gratuite, qui compte **par minute** autant que par jour.
+
+Deux parades sont en place :
+
+- **Rotation de modèles.** Chaque modèle a son propre compteur. Le relais essaie
+  `GEMINI_MODELS` dans l'ordre (défaut : `gemini-3.6-flash`, puis `gemini-flash-lite-latest`) :
+  quand l'un refuse, le suivant répond souvent.
+- **Un clic = un appel.** Côté application, deux demandes identiques ne partent jamais
+  ensemble, et le délai d'attente annoncé par Google est respecté avant de réessayer.
+
+Si le 429 persiste en usage normal, c'est le volume réel qui dépasse l'offre gratuite :
+activez la facturation chez Google, ou allongez `GEMINI_MODELS`.
+
 ### Si Gemini répond 404
 
 Google retire ses modèles sans préavis : `gemini-2.0-flash` a cessé de répondre du jour au

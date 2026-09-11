@@ -25,9 +25,10 @@
  *   GEMINI_API_KEY   requis — clé Google AI Studio (offre gratuite suffisante)
  *   ALLOWED_ORIGINS  origines autorisées, séparées par des virgules
  *                    ex : "https://bdreport.js.org,http://localhost:5173"
- *   GEMINI_MODEL     (optionnel) modèle à utiliser, défaut « gemini-3.6-flash ».
- *                    Un modèle retiré par Google est remplacé automatiquement par celui
- *                    que son message d'erreur désigne — voir callGemini().
+ *   GEMINI_MODELS    (optionnel) modèles à essayer DANS L'ORDRE, séparés par des virgules.
+ *                    Défaut : « gemini-3.6-flash,gemini-flash-lite-latest ». Chaque modèle a
+ *                    son propre quota : quand l'un refuse (429), le suivant répond souvent.
+ *                    Un modèle retiré (404) est remplacé par celui que Google désigne.
  */
 
 const RSS_BASE = 'https://news.google.com/rss/search'
@@ -161,90 +162,62 @@ async function getNews(company) {
 // d'erreur quel modèle prend la relève. On lit donc cette indication et on rejoue l'appel
 // une fois avec le modèle proposé : la prochaine mise à la retraite ne cassera rien, et le
 // relais signale le modèle réellement utilisé plutôt que celui qu'on croyait appeler.
-const DEFAULT_MODEL = 'gemini-3.6-flash'
+const DEFAULT_MODELS = ['gemini-3.6-flash', 'gemini-flash-lite-latest']
 
-async function callGemini(payload, env, model) {
+// Chaque modèle a son PROPRE compteur de quota. Quand l'un dit « trop de requêtes », le
+// suivant peut très bien répondre — c'est la seule façon d'étendre une offre gratuite sans
+// la payer. On les essaie donc dans l'ordre, du plus capable au plus économe.
+const modelList = (env) => String(env.GEMINI_MODELS || env.GEMINI_MODEL || DEFAULT_MODELS.join(','))
+  .split(',').map(x => x.trim()).filter(Boolean)
+
+const retryDelayOf = (text) => {
+  const m = text.match(/"retryDelay"\s*:\s*"(\d+)s"/)
+  return m ? Number(m[1]) : 0
+}
+
+async function callGemini(payload, env) {
   const key = env.GEMINI_API_KEY
   if (!key) throw new Error("Le relais n'a pas de clé Gemini configurée.")
-  const first = model || env.GEMINI_MODEL || DEFAULT_MODEL
+  const models = modelList(env)
   const once = async (m) => {
     const res = await fetch(`${GEMINI_BASE}/${m}:generateContent?key=${encodeURIComponent(key)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     })
     return { res, text: res.ok ? null : await res.text().catch(() => '') }
   }
-  let { res, text } = await once(first)
-  if (!res.ok && res.status === 404) {
-    // « Please update your code to use models/<x> » : on prend le modèle nommé, jamais un
-    // autre. S'il n'y en a pas, on n'invente pas de remplaçant — on remonte l'erreur.
-    const suggested = (text.match(/models\/([A-Za-z0-9._-]+)/g) || [])
-      .map(x => x.replace('models/', ''))
-      .filter(x => x !== first)[0]
-    if (suggested) {
-      const retry = await once(suggested)
-      if (retry.res.ok) return { body: await retry.res.json(), model: suggested }
-      res = retry.res; text = retry.text
+
+  let lastQuota = null
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i]
+    let { res, text } = await once(model)
+    if (res.ok) return { body: await res.json(), model }
+
+    // Modèle retiré : Google nomme son successeur dans l'erreur. On prend CELUI-LÀ, jamais
+    // un autre — et une seule fois, pour ne pas partir en cascade.
+    if (res.status === 404) {
+      const suggested = (text.match(/models\/([A-Za-z0-9._-]+)/g) || [])
+        .map(x => x.replace('models/', '')).filter(x => x !== model)[0]
+      if (suggested) {
+        const retry = await once(suggested)
+        if (retry.res.ok) return { body: await retry.res.json(), model: suggested }
+        res = retry.res; text = retry.text
+      }
     }
-  }
-  if (!res.ok) {
-    // 429 = quota Google atteint. Ce n'est ni une panne ni une erreur de code : c'est une
-    // limite, et la seule chose utile à dire est DANS COMBIEN DE TEMPS réessayer. Google le
-    // précise dans le corps de l'erreur ; rendre « 429 » tout seul laisserait chercher.
-    if (res.status === 429) {
-      const wait = (text.match(/"retryDelay"\s*:\s*"(\d+)s"/) || [])[1]
-      const err = new Error(wait
-        ? `Quota Google atteint. Réessayez dans ${wait} seconde${Number(wait) > 1 ? 's' : ''}.`
-        : "Quota Google atteint (offre gratuite). Réessayez dans une minute, ou demain si la limite quotidienne est atteinte.")
-      err.code = 429
-      err.retryAfter = wait ? Number(wait) : 60
-      throw err
-    }
+    // Quota atteint sur CE modèle : on tente le suivant de la liste avant d'abandonner.
+    if (res.status === 429) { lastQuota = { text, model }; continue }
     throw new Error(`Gemini a répondu ${res.status}${text ? ' — ' + text.slice(0, 200) : ''}`)
   }
-  return { body: await res.json(), model: first }
+
+  // Tous les modèles ont dit non : c'est un vrai plafond, et la seule chose utile à dire
+  // est DANS COMBIEN DE TEMPS réessayer. Google l'indique dans le corps de l'erreur.
+  const wait = lastQuota ? retryDelayOf(lastQuota.text) : 0
+  const err = new Error(wait
+    ? `Quota Google atteint sur tous les modèles. Réessayez dans ${wait} seconde${wait > 1 ? 's' : ''}.`
+    : "Quota Google atteint (offre gratuite) sur tous les modèles. Réessayez dans une minute, ou demain si la limite quotidienne est atteinte.")
+  err.code = 429
+  err.retryAfter = wait || 60
+  throw err
 }
-
-const SIGNAL_TYPES = [
-  'recrutement', 'changement de direction', 'levée de fonds', 'acquisition', 'fusion',
-  'croissance', 'expansion', 'ouverture de bureaux', 'lancement de produit',
-  'changement stratégique', 'restructuration', 'licenciements', 'changement technologique',
-  'transformation RH', 'partenariat',
-]
-
-const PROMPT = (company, articles) => `Tu es analyste commercial pour une équipe de prospection B2B (SDR/BDR).
-
-Voici des articles de presse récents concernant l'entreprise « ${company} ».
-
-RÈGLE ABSOLUE : tu ne t'appuies QUE sur les articles fournis ci-dessous. Tu n'ajoutes aucune information venue d'ailleurs, tu ne devines rien, tu n'extrapoles pas. Si un article ne dit pas quelque chose, cette chose n'existe pas.
-
-Identifie uniquement les faits qui constituent un SIGNAL COMMERCIAL, c'est-à-dire une raison concrète de contacter cette entreprise maintenant. Types recherchés : ${SIGNAL_TYPES.join(', ')}.
-
-Ignore : les articles sans rapport avec l'entreprise, les analyses de marché générales, les cours de bourse, les contenus purement promotionnels.
-
-Réponds en JSON strict, sans texte autour, avec cette forme :
-{"signals":[{"type":"...","title":"...","summary":"...","score":0,"urgency":"LOW|MEDIUM|HIGH","why_now":"...","targets":["..."],"angle":"...","source":"...","date":"...","url":"..."}]}
-
-· type : l'un des types ci-dessus
-· title : le fait, en une ligne
-· summary : deux phrases maximum, tirées de l'article
-· score : intérêt commercial de 0 à 100
-· urgency : LOW, MEDIUM ou HIGH
-· why_now : pourquoi ce moment précis est le bon
-· targets : les fonctions à contacter (3 maximum)
-· angle : une phrase d'accroche utilisable telle quelle par un commercial
-· source, date, url : repris EXACTEMENT de l'article d'origine
-
-${MAX_SIGNALS} signaux maximum, du plus pertinent au moins pertinent.
-Si aucun article ne constitue un signal commercial, réponds {"signals":[]}.
-
-ARTICLES :
-${articles.map((a, i) => `[${i + 1}] ${a.title}
-source: ${a.source || 'inconnue'}
-date: ${a.date || 'inconnue'}
-url: ${a.url}
-extrait: ${a.summary || '(aucun)'}`).join('\n\n')}`
-
-const URGENCIES = ['LOW', 'MEDIUM', 'HIGH']
 
 async function analyze(company, articles, env) {
   const { body, model } = await callGemini({
@@ -258,7 +231,7 @@ async function analyze(company, articles, env) {
   // On ne fait pas confiance à la forme renvoyée : un modèle peut inventer un champ,
   // en oublier un autre, ou rendre 12 signaux quand on en demandait 5.
   const urls = new Set(articles.map(a => a.url))
-  return (Array.isArray(parsed?.signals) ? parsed.signals : [])
+  const signals = (Array.isArray(parsed?.signals) ? parsed.signals : [])
     .map(s => ({
       type: String(s.type || '').slice(0, 60),
       title: String(s.title || '').slice(0, 200),
@@ -277,6 +250,9 @@ async function analyze(company, articles, env) {
     .filter(s => s.title)
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_SIGNALS)
+  // Le modèle qui a RÉELLEMENT répondu — pas celui qu'on croyait appeler : avec la rotation
+  // sur quota, ce n'est pas toujours le premier de la liste.
+  return { signals, model }
 }
 
 // ---------------------------------------------------------------- Enrichissement
@@ -377,7 +353,7 @@ export default {
         const company = String(body?.company || '').trim()
         const articles = Array.isArray(body?.articles) ? body.articles.slice(0, MAX_ARTICLES) : []
         if (!company || !articles.length) return json({ error: 'Entreprise ou articles manquants.' }, request, env, 400)
-        return json({ signals: await analyze(company, articles, env) }, request, env)
+        return json(await analyze(company, articles, env), request, env)
       }
 
       if (url.pathname === '/enrich' && request.method === 'POST') {

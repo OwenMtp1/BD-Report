@@ -189,7 +189,7 @@ function NewsPanel({ name, store, onClose }) {
       if (!r.quota) store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' })
       setError(r.error); return
     }
-    store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok' })
+    store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok', model: r.model })
     setState(s => ({ ...s, signals: r.signals }))
     store.logAction('Lead', 'Actualités analysées', name)
     toast(r.signals.length ? `${r.signals.length} signal(s) commercial(aux)` : 'Aucun signal commercial détecté.')

@@ -876,6 +876,13 @@ async function main() {
       await click(enrichBtn)
       await act(async () => { await new Promise(r => setTimeout(r, 60)) })
       if (!calls.some(u => u.includes('/enrich'))) throw new Error("« Enrichir » n'appelle pas le relais")
+      // ⚠️ UN CLIC = UN APPEL. Mesuré à 2 avant correction : le panneau relançait sa
+      // recherche à chaque remontage, et rien ne partageait une demande déjà en vol.
+      // C'est ce qui faisait atteindre le quota gratuit en quelques clics.
+      const nEnrich = calls.filter(u => u.includes('/enrich')).length
+      if (nEnrich !== 1) throw new Error(`Enrichissement : ${nEnrich} appels au relais pour un seul clic`)
+      const nNews = calls.filter(u => u.includes('/news')).length
+      if (nNews !== 1) throw new Error(`Actualités : ${nNews} appels au relais pour une seule ouverture`)
       // Le champ VIDE est proposé et coché d'avance ; le champ en conflit est proposé, décoché.
       if (!text().includes('https://zephyr.example')) throw new Error('La valeur trouvée pour un champ vide n\'est pas proposée')
       if (!text().includes('Lyon, France')) throw new Error('La valeur en conflit n\'est pas montrée')
