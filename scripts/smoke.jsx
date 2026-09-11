@@ -915,6 +915,32 @@ async function main() {
       }
       await click(inSheet('Signaux'))
 
+      // ---- LE BALAYAGE DOIT DIRE POURQUOI il n'a rien trouvé. Il avalait chaque erreur
+      // et concluait « aucun nouveau signal », le même message quelle que soit la cause :
+      // on ne pouvait donc rien corriger.
+      {
+        const closeSheet = [...container.querySelectorAll('.fixed.z-50 .rounded-t-2xl button')].pop()
+        if (closeSheet) await click(closeSheet)
+        await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+        await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Signaux'))
+        // Relais périmé : la route du moteur n'existe pas encore chez lui.
+        const realStub = globalThis.fetch
+        globalThis.fetch = async (u) => (String(u).includes('/signals/collect')
+          ? { ok: false, status: 404, json: async () => ({ error: 'Route inconnue.' }) }
+          : realStub(u))
+        await click(find('button', 'Analyser 5 comptes'))
+        await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+        globalThis.fetch = realStub
+        if (!text().includes('Dernier balayage')) throw new Error("Le balayage ne rend aucun compte de ce qu'il a fait")
+        if (!text().includes('recollez news/worker.js')) {
+          throw new Error("Un relais périmé n'est pas reconnu : l'utilisateur cherchera la panne ailleurs")
+        }
+      }
+
+      await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes entreprises'))
+      await act(async () => { win.dispatchEvent(new win.CustomEvent('open-company', { detail: 'Zephyr' })) })
+      await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+
       // ---- ENRICHIR. Deux règles absolues : aucun champ créé, et rien d'écrasé sans
       // que l'utilisateur l'ait décidé.
       // On pose une localisation à la main : c'est le cas qui compte — une donnée saisie

@@ -78,6 +78,11 @@ export async function collectEvidence(company, site, rules, db, { force = false 
         body: JSON.stringify({ company: name, site: site || '', types: rules.types, sources: rules.sources || {} }),
       })
       const body = await res.json().catch(() => null)
+      // ⚠️ 404 sur cette route = le relais déployé est une version ANTÉRIEURE au moteur.
+      // Le dire précisément évite de chercher la panne dans les règles ou dans les comptes.
+      if (res.status === 404) {
+        return { error: "Le relais déployé ne connaît pas encore le moteur de signaux : recollez news/worker.js dans Cloudflare, puis redéployez.", outdated: true }
+      }
       if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.` }
       const items = Array.isArray(body.items) ? body.items : []
       const out = { at: Date.now(), items, stats: body.stats || {} }

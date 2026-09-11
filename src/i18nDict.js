@@ -1885,4 +1885,11 @@ export const UI_DICT = [
   ['Tous les états', 'All states', 'Todos los estados'],
   ['Traité', 'Handled', 'Tratada'],
   ['Collecte des preuves…', 'Collecting evidence…', 'Recogiendo pruebas…'],
+  ['Dernier balayage', 'Last scan', 'Último barrido'],
+  ['Fermer le compte rendu', 'Close the report', 'Cerrar el informe'],
+  ['Le relais déployé ne connaît pas encore le moteur de signaux : recollez news/worker.js dans Cloudflare, puis redéployez.', 'The deployed relay does not know the signals engine yet: paste news/worker.js into Cloudflare again, then redeploy.', 'El relé desplegado aún no conoce el motor de señales: vuelve a pegar news/worker.js en Cloudflare y despliega.'],
+  ['Aucune entreprise à analyser : les comptes viennent de vos rendez-vous.', 'No company to analyse: accounts come from your meetings.', 'Ninguna empresa que analizar: las cuentas provienen de tus citas.'],
+  ['Aucun nouveau signal — voir le détail du balayage.', 'No new signal — see the scan report.', 'Ninguna señal nueva: consulta el informe del barrido.'],
+  ['Rien trouvé : ni presse, ni page du site, ni offre publiée.', 'Nothing found: no press, no site page, no published job.', 'No se ha encontrado nada: ni prensa, ni página del sitio, ni oferta publicada.'],
+  ['Rien trouvé — et aucun site web n\'est renseigné, donc deux sources sur trois sont inutilisables.', 'Nothing found — and no website is filled in, so two sources out of three are unusable.', 'No se ha encontrado nada, y no hay web indicada, así que dos de las tres fuentes son inservibles.'],
 ]

@@ -11,7 +11,7 @@
 //  en quota, et en confiance quand elle se trompe.
 // ---------------------------------------------------------------------------
 import React, { useMemo, useState } from 'react'
-import { Radar, Search, RefreshCw, ArrowRight, Check, EyeOff, Flame } from 'lucide-react'
+import { Radar, Search, RefreshCw, ArrowRight, Check, EyeOff, Flame, X } from 'lucide-react'
 import { useStore, SIGNAL_TYPES, signalType, signalScore, SIGNAL_PRIORITIES, fmtDate } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
@@ -42,6 +42,7 @@ export default function Signals() {
   const [status, setStatus] = useState('new')
   const [minScore, setMinScore] = useState(0)
   const [busy, setBusy] = useState('')
+  const [report, setReport] = useState(null) // compte rendu du dernier balayage
 
   // Le score est RECALCULÉ à l'affichage : la fraîcheur baisse avec les jours, et la
   // priorité du staff peut changer. Un score figé à la détection vieillirait en silence.
@@ -78,32 +79,60 @@ export default function Signals() {
     return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n)
   }, [sub?.rdvs])
 
+  /**
+   * ⚠️ UN BALAYAGE QUI NE TROUVE RIEN DOIT DIRE POURQUOI.
+   * Il avalait chaque erreur et concluait « aucun nouveau signal » — le même message que le
+   * relais soit périmé, l'entreprise sans site, la presse muette ou le quota atteint. On ne
+   * pouvait donc rien corriger. Chaque compte repart maintenant avec sa raison.
+   */
   const scan = async (limit) => {
     if (!store.hasModule('aiInsights')) { toast('La brique Analyse IA n\'est pas installée.'); return }
     const ctx = buildContext(rules, SIGNAL_TYPES, store.envIcpProfiles())
     const targets = companies.slice(0, limit)
+    if (!targets.length) {
+      setReport({ lines: [], note: "Aucune entreprise à analyser : les comptes viennent de vos rendez-vous." })
+      return
+    }
+    const lines = []
     let made = 0
+    let stop = ''
     for (const name of targets) {
       setBusy(name)
       const info = (sub.companies || {})[name] || {}
       const col = await collectEvidence(name, info.site, ctx, store.db)
-      if (col.error || !(col.items || []).length) continue
+      if (col.outdated) { stop = col.error; break }
+      if (col.error) { lines.push({ name, state: 'error', why: col.error }); continue }
+      if (!(col.items || []).length) {
+        lines.push({ name, state: 'empty', why: info.site
+          ? 'Rien trouvé : ni presse, ni page du site, ni offre publiée.'
+          : "Rien trouvé — et aucun site web n'est renseigné, donc deux sources sur trois sont inutilisables." })
+        continue
+      }
       // ⚠️ On n'analyse QUE si les preuves ont changé : re-payer pour un résultat identique
       // est la façon la plus sûre d'épuiser le quota sans rien apprendre.
       const cached = cachedCollect(name)
       if (cached?.signals && cached.print === evidencePrint(col.items)) {
         store.saveCompanySignals(name, cached.signals, { analyzedAt: cached.analyzedAt })
+        lines.push({ name, state: 'cached', why: `${cached.signals.length} signal(s), analyse déjà faite sur ces mêmes preuves.` })
         continue
       }
       const res = await analyzeEvidence(name, col.items, ctx, store.db)
-      if (res.quota) { toast(res.error); break }
-      if (res.error) continue
+      if (res.quota) { stop = res.error; break }
+      if (res.error) { lines.push({ name, state: 'error', why: res.error }); continue }
       store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok', model: res.model })
       store.saveCompanySignals(name, res.signals)
       made += res.signals.length
+      lines.push({
+        name,
+        state: res.signals.length ? 'ok' : 'none',
+        why: res.signals.length
+          ? `${res.signals.length} signal(s) — ${col.items.length} preuve(s) analysée(s).`
+          : `${col.items.length} preuve(s) analysée(s), aucune ne constitue un signal commercial.`,
+      })
     }
     setBusy('')
-    toast(made ? `${made} signal(s) détecté(s)` : 'Aucun nouveau signal.')
+    setReport({ lines, note: stop })
+    toast(made ? `${made} signal(s) détecté(s)` : 'Aucun nouveau signal — voir le détail du balayage.')
   }
 
   if (!sub) return null
@@ -149,6 +178,26 @@ export default function Signals() {
         </select>
         <span className="text-xs text-muted ml-auto">{list.length} signal{list.length > 1 ? 'aux' : ''}</span>
       </div>
+
+      {/* Compte rendu du dernier balayage : sans lui, « aucun signal » ne dit rien de ce
+          qu'il faudrait corriger — un relais périmé, un site manquant, ou simplement un
+          compte dont personne ne parle. */}
+      {report && (
+        <div className="card p-3 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold">Dernier balayage</span>
+            <button className="btn-ghost !p-1 ml-auto" title="Fermer le compte rendu" onClick={() => setReport(null)}><X size={13} /></button>
+          </div>
+          {report.note && <p className="text-xs text-amber-700 dark:text-amber-300">{report.note}</p>}
+          {report.lines.map((l, i) => (
+            <div key={i} className="text-xs flex items-start gap-2">
+              <span className="shrink-0">{l.state === 'ok' ? '✅' : l.state === 'cached' ? '💾' : l.state === 'error' ? '⚠️' : '◌'}</span>
+              <span className="font-semibold shrink-0">{l.name}</span>
+              <span className="text-muted">{l.why}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {list.length === 0 ? (
         <Empty text={rows.length
