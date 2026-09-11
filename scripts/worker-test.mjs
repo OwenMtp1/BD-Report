@@ -164,100 +164,16 @@ console.log('Analyse contextualisée — aucune preuve inventée ne passe')
   ok(b.model === 'gemini-flash-lite-latest', 'le modèle rendu doit être celui qui a répondu')
 }
 
-console.log('Enrichissement — la liste des champs vient de l\'application')
-{
-  stubFetch([[GEMINI, () => ({
-    body: geminiBody({ site: { value: 'https://acme.fr', publisher: 'Acme', url: 'https://acme.fr', confidence: 'high' },
-      effectif: { value: '120', publisher: 'Societe.com', url: 'https://societe.com/acme', confidence: 'medium' },
-      email: { value: 'contact@acme.fr', publisher: 'x', url: 'https://acme.fr', confidence: 'high' } }),
-  })]])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site', 'effectif'], known: {} } })).json()
-  ok(b.found && 'site' in b.found && 'effectif' in b.found, 'les champs demandés doivent être rendus')
-  ok(!('email' in (b.found || {})), "un champ que l'application n'a pas demandé ne doit jamais sortir du relais")
-}
-{
-  // Aucune donnée personnelle, même quand le modèle en propose une.
-  stubFetch([[GEMINI, () => ({
-    body: geminiBody({ localisation: { value: 'contact@acme.fr', publisher: 'x', url: 'https://acme.fr', confidence: 'high' } }),
-  })]])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['localisation'], known: {} } })).json()
-  ok(!b.found?.localisation, 'une valeur qui ressemble à une donnée personnelle doit être refusée')
-}
-
-// ⚠️ LE QUOTA QUI BLOQUAIT VRAIMENT L'ENRICHISSEMENT. Il ne porte pas sur le modèle mais
-// sur l'outil de RECHERCHE Google, dont le compteur est commun à tous les modèles : la
-// rotation ne pouvait donc rien y faire, et l'utilisateur lisait « sur tous les modèles »
-// alors qu'un seul plafond, ailleurs, était atteint.
-console.log('Enrichissement — quota de recherche Google')
-const GROUNDING_429 = JSON.stringify({ error: { code: 429, message: 'Quota exceeded', details: [{ violations: [{ quotaMetric: 'generativelanguage.googleapis.com/grounding_with_google_search_requests' }] }] } })
-{
-  let models = []
-  stubFetch([[GEMINI, (u) => { models.push(u.match(/models\/([^:]+):/)[1]); return { status: 429, body: GROUNDING_429 } }]])
-  const res = await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site'], known: {} } })
-  const b = await res.json()
-  ok(models.length === 1, `une limite commune à tous les modèles ne doit pas être retestée modèle par modèle (${models.length} essais)`)
-  ok(/recherche Google/i.test(b.error || ''), "le message doit nommer la limite atteinte, pas accuser « tous les modèles »")
-  ok(res.status === 429, 'le quota doit garder son code')
-}
-{
-  // Le repli : nos propres pages. Le quota de recherche tombe, mais nous savons lire le
-  // site de l'entreprise nous-mêmes — sans aucun outil Google.
-  let grounded = 0, plain = 0
-  stubFetch([
-    [GEMINI, (u, init) => {
-      const body = JSON.parse(init.body)
-      if (body.tools) { grounded++; return { status: 429, body: GROUNDING_429 } }
-      plain++
-      return { body: geminiBody({ secteur: { value: 'Logiciel RH (SaaS)', publisher: 'acme.fr', url: 'https://acme.fr/a-propos', confidence: 'high' } }) }
-    }],
-    [/acme\.fr\/robots\.txt/, () => ({ status: 404, body: '' })],
-    [/acme\.fr/, () => ({ body: '<html><head><title>Acme — à propos</title></head><body><a href="/a-propos">À propos</a><p>Acme édite un logiciel RH en SaaS.</p></body></html>' })],
-    [GOOGLE, () => ({ body: rss([]) })],
-    [BING, () => ({ body: rss([]) })],
-  ])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: { site: 'https://acme.fr' } } })).json()
-  ok(grounded === 1 && plain === 1, 'le quota de recherche doit déclencher UN repli, pas une cascade')
-  ok(b.found?.secteur?.value === 'Logiciel RH (SaaS)', "le repli sur nos propres pages doit rendre un résultat")
-  ok(b.fallback === true, "l'application doit savoir que la couverture est plus étroite")
-}
-{
-  // ⚠️ En repli, une URL qui n'est pas l'une des nôtres sort de la MÉMOIRE du modèle :
-  // elle est inventée, et une source inventée n'a aucun chemin vers l'écran.
-  stubFetch([
-    [GEMINI, (u, init) => (JSON.parse(init.body).tools
-      ? { status: 429, body: GROUNDING_429 }
-      : { body: geminiBody({ secteur: { value: 'Logiciel RH', publisher: 'inventé', url: 'https://source-inventee.example/x', confidence: 'high' } }) })],
-    [/acme\.fr\/robots\.txt/, () => ({ status: 404, body: '' })],
-    [/acme\.fr/, () => ({ body: '<html><head><title>Acme — à propos</title></head><body><a href="/a-propos">À propos</a><p>Acme édite un logiciel RH.</p></body></html>' })],
-    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
-  ])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: { site: 'https://acme.fr' } } })).json()
-  ok(b.found?.secteur?.url === '', 'une URL absente des pages fournies doit être retirée')
-  ok(b.found?.secteur?.confidence === 'low', 'sans source vérifiable, la confiance ne peut pas rester haute')
-}
-{
-  // Sans rien à lire, le quota reste la bonne réponse : on n'invente pas pour meubler.
-  stubFetch([
-    [GEMINI, () => ({ status: 429, body: GROUNDING_429 })],
-    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
-  ])
-  const res = await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: {} } })
-  ok(res.status === 429, "sans aucune source à lire, le repli ne doit pas répondre de mémoire")
-}
-{
-  // Un quota ORDINAIRE (par modèle) doit, lui, continuer d'essayer le modèle suivant.
-  let n = 0
-  stubFetch([[GEMINI, () => (++n === 1
-    ? { status: 429, body: JSON.stringify({ error: { message: 'quota', details: [{ violations: [{ quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests' }] }] } }) }
-    : { body: geminiBody({ site: { value: 'https://acme.fr', publisher: 'Acme', url: 'https://acme.fr', confidence: 'high' } }) })]])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site'], known: {} } })).json()
-  ok(n === 2, 'un quota par modèle doit toujours faire essayer le suivant')
-  ok(b.found?.site?.value === 'https://acme.fr', 'la rotation de modèles doit rester efficace')
-}
-
-// ⚠️ TROIS DES SIX CHAMPS N'ONT JAMAIS EU BESOIN D'UNE IA. L'État publie l'implantation,
-// l'effectif et le secteur gratuitement, sans clé et sans quota. Les faire chercher par un
-// modèle dépensait le quota le plus serré du produit pour une réponse moins sûre.
+// ---------------------------------------------------------------------------
+//  ENRICHISSEMENT — SOURCES PUBLIQUES UNIQUEMENT.
+//
+//  ⚠️ LE CONTRAT A CHANGÉ, ET C'EST LE FOND DU CORRECTIF. L'enrichissement passait par
+//  l'outil de recherche Google, dont le quota gratuit est le plus serré de l'API : en
+//  pratique la fonctionnalité ne répondait presque jamais. On a contourné, puis réduit,
+//  puis posé la vraie question — à quoi sert un modèle pour retrouver six champs que des
+//  bases publiques publient déjà, gratuitement et de façon citable ?
+//  Gemini a donc été RETIRÉ de ce chemin. Ces tests figent qu'il n'y revienne pas.
+// ---------------------------------------------------------------------------
 const REGISTRY = /recherche-entreprises\.api\.gouv\.fr/
 const REGISTRY_BODY = {
   total_results: 1,
@@ -268,177 +184,144 @@ const REGISTRY_BODY = {
     libelle_activite_principale: 'Programmation informatique',
   }],
 }
+const WIKIDATA = /wikidata\.org/
+const wdSearch = (label, description) => ({ search: [{ id: 'Q42', label, description }] })
+const wdEntity = {
+  entities: { Q42: { claims: {
+    P856: [{ mainsnak: { datavalue: { value: 'https://doctolib.fr' } } }],
+    P4264: [{ mainsnak: { datavalue: { value: 'doctolib' } } }],
+    P2139: [{ mainsnak: { datavalue: { value: { amount: '+12000000', unit: 'http://www.wikidata.org/entity/Q4916' } } } }],
+  } } },
+}
+const wdRoute = (label = 'Doctolib', desc = 'entreprise française de santé') => [WIKIDATA, (u) =>
+  ({ body: u.includes('wbsearchentities') ? wdSearch(label, desc) : wdEntity })]
 
-console.log("Enrichissement — l'annuaire officiel d'abord, l'IA pour le reste")
+console.log("Enrichissement — l'IA n'est plus jamais appelée")
 {
-  // Les trois champs couverts par l'annuaire ne doivent déclencher AUCUN appel Gemini.
+  // ⚠️ LA GARANTIE CENTRALE : quels que soient les champs demandés, ZÉRO appel Gemini.
   let gemini = 0
-  stubFetch([[GEMINI, () => { gemini++; return { body: geminiBody({}) } }], [REGISTRY, () => ({ body: REGISTRY_BODY })]])
+  stubFetch([
+    [GEMINI, () => { gemini++; return { body: geminiBody({}) } }],
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute(),
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: {
+    company: 'Doctolib', fields: ['site', 'linkedin', 'localisation', 'ca', 'effectif', 'secteur'], known: {},
+  } })).json()
+  ok(gemini === 0, `l'enrichissement ne doit plus appeler Gemini (${gemini} appel(s))`)
+  ok(b.source === 'public', "la provenance doit dire que rien ne vient d'une IA")
+  const got = Object.keys(b.found || {}).filter(k => b.found[k])
+  ok(got.length === 6, `les deux sources publiques doivent couvrir les six champs (reçu : ${got.join(', ')})`)
+}
+{
+  // L'annuaire (État) couvre implantation, effectif, secteur — et PRIME sur Wikidata.
+  stubFetch([[REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute()])
   const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['localisation', 'effectif', 'secteur'], known: {} } })).json()
-  ok(gemini === 0, `l'annuaire doit suffire pour ses trois champs (${gemini} appel(s) Gemini de trop)`)
   ok(/LEVALLOIS-PERRET/.test(b.found?.localisation?.value || ''), "l'implantation doit venir de l'annuaire")
   ok(b.found?.effectif?.value === '5 000 à 9 999', `le code INSEE doit être traduit en ordre de grandeur (reçu : ${b.found?.effectif?.value})`)
   ok(b.found?.secteur?.value === 'Programmation informatique', "le secteur doit venir de l'annuaire")
   ok(b.found?.localisation?.confidence === 'high', 'une donnée officielle mérite une confiance haute')
   ok(/annuaire-entreprises\.data\.gouv\.fr/.test(b.found?.secteur?.url || ''), 'la source officielle doit être citable')
-  ok(b.source === 'public', "la provenance doit être dite à l'application")
 }
 {
-  // L'IA ne travaille que sur ce que l'annuaire ne couvre pas.
-  let asked = null
-  stubFetch([
-    [GEMINI, (u, init) => { asked = JSON.parse(init.body).contents[0].parts[0].text; return { body: geminiBody({ site: { value: 'https://doctolib.fr', publisher: 'x', url: 'https://doctolib.fr', confidence: 'high' } }) } }],
-    [REGISTRY, () => ({ body: REGISTRY_BODY })],
-  ])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['site', 'secteur'], known: {} } })).json()
-  ok(asked && asked.includes('site') && !/·\s*secteur/.test(asked), "l'IA ne doit plus se voir demander ce que l'annuaire a déjà donné")
-  ok(b.found?.site?.value === 'https://doctolib.fr' && b.found?.secteur?.value === 'Programmation informatique', "les deux sources doivent se rejoindre dans le résultat")
-  ok(b.source === 'public+ai', 'la provenance mixte doit être dite')
-}
-{
-  // ⚠️ LE QUOTA NE DOIT PLUS EFFACER CE QUI EST DÉJÀ ACQUIS. Une donnée officielle obtenue
-  // gratuitement ne se perd pas parce que Gemini a refusé l'appel qui la suivait.
-  stubFetch([
-    [GEMINI, () => ({ status: 429, body: GROUNDING_429 })],
-    [REGISTRY, () => ({ body: REGISTRY_BODY })],
-    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
-  ])
-  const res = await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['secteur', 'ca'], known: {} } })
-  const b = await res.json()
-  ok(res.status === 200, "un quota ne doit plus faire échouer un enrichissement partiellement réussi")
-  ok(b.found?.secteur?.value === 'Programmation informatique', "ce que l'annuaire a trouvé doit survivre au refus de Gemini")
-  ok(!b.found?.ca, "ce que personne n'a trouvé reste vide, jamais deviné")
-  ok(/quota|recherche/i.test(b.aiError || ''), "la raison du manque doit être dite")
-}
-{
-  // L'annuaire en panne ne casse rien : l'IA reprend tout à sa charge.
-  stubFetch([
-    [REGISTRY, () => ({ status: 503, body: 'nope' })],
-    [GEMINI, () => ({ body: geminiBody({ secteur: { value: 'Logiciel', publisher: 'x', url: 'https://ex.fr', confidence: 'medium' } }) })],
-  ])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Inconnue SARL', fields: ['secteur'], known: {} } })).json()
-  ok(b.found?.secteur?.value === 'Logiciel', "une panne de l'annuaire ne doit pas arrêter l'enrichissement")
-  ok(/503/.test(b.registryError || ''), "la panne de l'annuaire doit être signalée, pas avalée")
-}
-
-// ⚠️ WIKIDATA couvre ce que l'annuaire ignore — site, LinkedIn, chiffre d'affaires —
-// c'est-à-dire exactement les champs qui restaient à la charge de l'IA, donc du quota.
-const WIKIDATA = /wikidata\.org/
-const wdSearch = (label, description) => ({ search: [{ id: 'Q42', label, description }] })
-const wdEntity = {
-  entities: { Q42: { claims: {
-    P856: [{ mainsnak: { datavalue: { value: 'https://acme.fr' } } }],
-    P4264: [{ mainsnak: { datavalue: { value: 'acme-sa' } } }],
-    P2139: [{ mainsnak: { datavalue: { value: { amount: '+12000000', unit: 'http://www.wikidata.org/entity/Q4916' } } } }],
-  } } },
-}
-const wdRoute = (label = 'Acme', desc = 'entreprise française de logiciels') => [WIKIDATA, (u) =>
-  ({ body: u.includes('wbsearchentities') ? wdSearch(label, desc) : wdEntity })]
-
-console.log('Enrichissement — Wikidata comble ce que l\'annuaire ignore')
-{
-  let gemini = 0
-  stubFetch([[GEMINI, () => { gemini++; return { body: geminiBody({}) } }], [REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute()])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site', 'linkedin', 'ca', 'secteur'], known: {} } })).json()
-  ok(gemini === 0, `les sources publiques doivent suffire à ces quatre champs (${gemini} appel(s) Gemini de trop)`)
-  ok(b.found?.site?.value === 'https://acme.fr', 'le site officiel doit venir de Wikidata')
-  ok(/linkedin\.com\/company\/acme-sa/.test(b.found?.linkedin?.value || ''), "l'URL LinkedIn doit être reconstruite depuis l'identifiant")
-  ok(/12\s?000\s?000/.test((b.found?.ca?.value || '').replace(/ | /g, ' ')), `le chiffre d'affaires doit être lisible (reçu : ${b.found?.ca?.value})`)
-  ok(b.found?.secteur?.value === 'Programmation informatique', "l'annuaire officiel garde la main sur ce qu'il couvre")
+  // Wikidata couvre ce que l'annuaire ignore : site, LinkedIn, chiffre d'affaires.
+  stubFetch([[REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute()])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['site', 'linkedin', 'ca'], known: {} } })).json()
+  ok(b.found?.site?.value === 'https://doctolib.fr', 'le site officiel doit venir de Wikidata')
+  ok(/linkedin\.com\/company\/doctolib/.test(b.found?.linkedin?.value || ''), "l'URL LinkedIn doit être reconstruite depuis l'identifiant")
+  ok(/12\s?000\s?000/.test((b.found?.ca?.value || '').replace(/ | /g, ' ')), `le chiffre d'affaires doit être lisible (reçu : ${b.found?.ca?.value})`)
   ok(b.found?.site?.confidence === 'medium', 'une base collaborative ne vaut pas une source officielle')
 }
 {
-  // ⚠️ L'HOMONYMIE EST LE VRAI DANGER de Wikidata : « Orange » est aussi un fruit, et
+  // ⚠️ L'HOMONYMIE est le vrai danger de Wikidata : « Orange » est aussi un fruit, et
   // remplir la fiche d'un client avec les données d'autre chose est pire que ne rien trouver.
-  stubFetch([[GEMINI, () => ({ body: geminiBody({}) })], [REGISTRY, () => ({ body: { results: [] } })],
-    wdRoute('Orange', 'fruit du genre Citrus')])
+  stubFetch([[REGISTRY, () => ({ body: { results: [] } })], wdRoute('Orange', 'fruit du genre Citrus')])
   const b = await (await call('/enrich', { method: 'POST', body: { company: 'Orange', fields: ['site'], known: {} } })).json()
   ok(!b.found?.site, "une entité qui n'est pas une organisation ne doit jamais être retenue")
 }
 {
-  // Nom qui ne correspond pas exactement : on s'abstient.
-  stubFetch([[GEMINI, () => ({ body: geminiBody({}) })], [REGISTRY, () => ({ body: { results: [] } })],
-    wdRoute('Acme Corporation International', 'entreprise')])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site'], known: {} } })).json()
+  stubFetch([[REGISTRY, () => ({ body: { results: [] } })], wdRoute('Doctolib International SA', 'entreprise')])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['site'], known: {} } })).json()
   ok(!b.found?.site, 'une entité au nom différent ne doit pas être prise pour la bonne')
 }
 {
-  // ⚠️ LE CAS QUI COMPTE POUR L'UTILISATEUR : Gemini refuse TOUT, sur tous les modèles.
-  // L'enrichissement doit quand même rendre un résultat — il ne dépend plus de l'IA.
+  // ⚠️ DEUX SOURCES MUETTES NE SONT PAS UNE PANNE : on rend des champs vides, avec les
+  // motifs — et surtout PAS un message de quota, puisqu'aucun quota n'est en jeu.
   stubFetch([
-    [GEMINI, () => ({ status: 429, body: JSON.stringify({ error: { message: 'quota' } }) })],
-    [REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute(),
-    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+    [REGISTRY, () => ({ status: 503, body: 'nope' })],
+    [WIKIDATA, () => ({ status: 503, body: 'nope' })],
   ])
-  const res = await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site', 'secteur', 'localisation', 'effectif', 'linkedin', 'ca'], known: {} } })
+  const res = await call('/enrich', { method: 'POST', body: { company: 'Inconnue SARL', fields: ['site', 'secteur'], known: {} } })
   const b = await res.json()
-  ok(res.status === 200, "un quota Gemini total ne doit plus faire échouer l'enrichissement")
-  const got = Object.keys(b.found || {}).filter(k => b.found[k])
-  ok(got.length >= 5, `les sources publiques doivent rendre l'essentiel sans IA (reçu : ${got.join(', ')})`)
-  ok(!/quota/i.test(JSON.stringify(b.found)), "le quota ne doit pas contaminer les valeurs rendues")
-}
-
-// ⚠️ LE NOM DE L'OUTIL DE RECHERCHE dépend de la génération du modèle : `google_search`
-// depuis Gemini 2.0, `google_search_retrieval` avant. Un nom inconnu du modèle donne un
-// 400 — pas un quota — et l'écran annonçait « recherche indisponible » pour une simple
-// incompatibilité de vocabulaire.
-console.log("Enrichissement — les deux noms de l'outil de recherche")
-{
-  const seen = []
-  stubFetch([
-    [REGISTRY, () => ({ body: { results: [] } })], wdRoute('Zeta', 'personnage de fiction'),
-    [GEMINI, (u, init) => {
-      const body = JSON.parse(init.body)
-      const tool = Object.keys(body.tools?.[0] || {})[0] || 'aucun'
-      seen.push(tool)
-      if (tool === 'google_search') return { status: 400, body: JSON.stringify({ error: { message: 'Unknown name "google_search"' } }) }
-      return { body: geminiBody({ site: { value: 'https://zeta.fr', publisher: 'Zeta', url: 'https://zeta.fr', confidence: 'high' } }) }
-    }],
-  ])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Zeta', fields: ['site'], known: {} } })).json()
-  ok(seen.includes('google_search_retrieval'), `le second nom d'outil doit être tenté (essayés : ${seen.join(', ') || 'aucun'})`)
-  ok(b.found?.site?.value === 'https://zeta.fr', "une incompatibilité de nom d'outil ne doit pas passer pour une panne de recherche")
+  ok(res.status === 200, "l'absence de résultat n'est pas une erreur")
+  ok(b.found && b.found.site === null && b.found.secteur === null, 'un champ introuvable reste vide, jamais deviné')
+  ok(/503/.test(b.registryError || '') && /503/.test(b.wikiError || ''), 'chaque source doit dire pourquoi elle est muette')
+  ok(!/quota/i.test(JSON.stringify(b)), "aucun message de quota ne doit subsister : plus rien n'en dépend")
 }
 {
-  // Et un 400 sur LES DEUX noms retombe sur nos propres pages — la cause importe peu,
-  // le remède est le même : lire ce qu'on sait lire.
-  stubFetch([
-    [REGISTRY, () => ({ body: { results: [] } })], wdRoute('Zeta', 'personnage de fiction'),
-    [GEMINI, (u, init) => (JSON.parse(init.body).tools
-      ? { status: 400, body: JSON.stringify({ error: { message: 'Unknown tool' } }) }
-      : { body: geminiBody({ secteur: { value: 'Logiciel RH', publisher: 'zeta.fr', url: 'https://zeta.fr/a-propos', confidence: 'high' } }) })],
-    [/zeta\.fr\/robots\.txt/, () => ({ status: 404, body: '' })],
-    [/zeta\.fr/, () => ({ body: '<html><head><title>Zeta — à propos</title></head><body><a href="/a-propos">À propos</a><p>Zeta édite un logiciel RH.</p></body></html>' })],
-    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
-  ])
-  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Zeta', fields: ['secteur'], known: { site: 'https://zeta.fr' } } })).json()
-  ok(b.found?.secteur?.value === 'Logiciel RH', "un outil de recherche refusé doit basculer sur nos pages, pas échouer")
-  ok(b.fallback === true, 'le repli doit être signalé')
+  // Seuls les champs DEMANDÉS sortent — la garantie « aucun champ créé » reste entière.
+  stubFetch([[REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute()])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['secteur'], known: {} } })).json()
+  ok(Object.keys(b.found).length === 1 && 'secteur' in b.found, `seul le champ demandé doit sortir (reçu : ${Object.keys(b.found).join(', ')})`)
 }
-
-// ⚠️ /diag — LE RELAIS SE TESTE LUI-MÊME. Trois causes de panne se corrigent différemment ;
-// tant qu'on les devinait depuis un message d'erreur, on cherchait au mauvais endroit.
+{
+  // ⚠️ L'ENTREPRISE, JAMAIS LES PERSONNES — même si une base publique glisse un e-mail.
+  stubFetch([
+    [REGISTRY, () => ({ body: { total_results: 1, results: [{ siren: '1', siege: { libelle_commune: 'contact@acme.fr' } }] } })],
+    [WIKIDATA, () => ({ body: { search: [] } })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['localisation'], known: {} } })).json()
+  ok(!b.found?.localisation, 'une valeur qui ressemble à une donnée personnelle doit être refusée')
+}
+{
+  // Les garde-fous de forme survivent au retrait de l'IA.
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })],
+    [WIKIDATA, (u) => ({ body: u.includes('wbsearchentities')
+      ? wdSearch('Acme', 'entreprise')
+      : { entities: { Q42: { claims: {
+          P856: [{ mainsnak: { datavalue: { value: 'pas-une-url' } } }],
+          P4264: [{ mainsnak: { datavalue: { value: 'acme' } } }],
+        } } } } })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site', 'linkedin'], known: {} } })).json()
+  ok(!b.found?.site, "une valeur qui n'est pas une URL ne doit pas entrer dans la fiche")
+  ok(/linkedin\.com\/company\/acme/.test(b.found?.linkedin?.value || ''), 'une URL LinkedIn bien formée doit passer')
+}
 console.log('Diagnostic — le relais dit lui-même ce qui bloque')
 {
+  // ⚠️ Le diagnostic ne teste QUE ce qui sert. La brique « recherche Google » a disparu
+  // avec l'IA de l'enrichissement : garder une brique qui n'alimente plus rien ferait
+  // chercher une panne là où il n'y en a pas.
   stubFetch([
     [REGISTRY, () => ({ body: REGISTRY_BODY })], [GOOGLE, () => ({ body: rss(['Doctolib lève']) })],
-    [BING, () => ({ body: rss([]) })], wdRoute('Doctolib', 'entreprise française de santé'),
-    [GEMINI, (u, init) => (JSON.parse(init.body).tools
-      ? { status: 429, body: GROUNDING_429 }
-      : { body: geminiBody({ ok: true }) })],
+    [BING, () => ({ body: rss([]) })], wdRoute(),
+    [GEMINI, () => ({ body: geminiBody({ ok: true }) })],
   ])
   const b = await (await call('/diag')).json()
-  ok(b.steps?.length === 7, `le diagnostic doit couvrir les sept briques (reçu : ${b.steps?.length})`)
-  const by = Object.fromEntries(b.steps.map(s => [s.id, s]))
-  ok(by.registry?.ok && by.news?.ok && by.gemini_text?.ok, 'les briques qui répondent doivent être vertes')
-  ok(by.gemini_search?.ok === false, 'la brique en échec doit être rouge')
-  // ⚠️ LE VERDICT DOIT PARTIR DE CE QUI MARCHE. Voir « recherche Google indisponible »
-  // n'apprend rien tant qu'on ignore si l'enrichissement fonctionne malgré ça.
-  ok(/FONCTIONNE/.test(b.verdict || '') && /pas bloquant/i.test(b.verdict || ''),
-    `le verdict doit dire que l'enrichissement marche malgré la brique en rouge (reçu : ${b.verdict})`)
+  const by = Object.fromEntries((b.steps || []).map(s => [s.id, s]))
+  ok(!by.gemini_search, "la brique « recherche Google » ne doit plus exister : plus rien ne l'utilise")
+  for (const id of ['key', 'registry', 'wikidata', 'news', 'gemini_text', 'enrich']) {
+    ok(by[id], `le diagnostic doit couvrir la brique « ${id} »`)
+  }
   ok(by.enrich?.ok === true, "le diagnostic doit vérifier l'enrichissement de bout en bout")
   ok((by.enrich?.detail?.champs || []).length >= 3, "le test de bout en bout doit rendre des champs réels")
+  ok(b.ok === true && /Tout répond/.test(b.verdict || ''), `tout vert doit donner un verdict vert (reçu : ${b.verdict})`)
   ok(!JSON.stringify(b).includes('test-key'), '⚠️ le diagnostic ne doit jamais laisser fuir la clé')
+}
+{
+  // ⚠️ GEMINI EN PANNE NE CONCERNE PLUS QUE LES SIGNAUX. Le verdict doit le dire, sinon
+  // l'utilisateur croit son enrichissement cassé alors qu'il fonctionne.
+  stubFetch([
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], [GOOGLE, () => ({ body: rss(['x']) })],
+    [BING, () => ({ body: rss([]) })], wdRoute(),
+    [GEMINI, () => ({ status: 429, body: JSON.stringify({ error: { message: 'quota' } }) })],
+  ])
+  const b = await (await call('/diag')).json()
+  const by = Object.fromEntries((b.steps || []).map(s => [s.id, s]))
+  ok(by.gemini_text?.ok === false, 'une brique en échec doit être rouge')
+  ok(by.enrich?.ok === true, "l'enrichissement doit rester vert quand Gemini est en panne")
+  ok(/SIGNAUX/.test(b.verdict || '') && /continue de fonctionner/.test(b.verdict || ''),
+    `le verdict doit dire que seuls les signaux sont touchés (reçu : ${b.verdict})`)
 }
 {
   // Sans clé, le verdict doit désigner le geste exact — pas « erreur Gemini ».

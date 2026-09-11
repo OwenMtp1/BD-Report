@@ -196,29 +196,19 @@ function EnrichPanel({ name, info, store, onApply, onClose }) {
   const [error, setError] = useState('')
   const [picked, setPicked] = useState({})
   const relay = newsRelayUrl(store.db)
-  const quota = store.aiUsageToday()
 
   const rows = found ? enrichmentDiff(found, info) : []
   const usable = rows.filter(r => r.state === 'empty' || r.state === 'conflict')
 
+  // ⚠️ AUCUN APPEL D'IA ICI — ni quota, ni plafond, ni délai d'attente. L'enrichissement
+  // ne lit plus que des bases publiques (annuaire des entreprises, Wikidata). Les verrous
+  // qui restaient empêchaient la requête de PARTIR (« Quota Google atteint, réessayez dans
+  // 39 secondes ») alors que plus rien, derrière, n'avait besoin de Gemini.
   const run = async (force) => {
-    if (store.aiQuotaReached()) { setError(`Plafond interne atteint (${quota.limit} appels aujourd'hui). Réessayez demain, ou relevez-le dans Paramètres.`); return }
     setBusy(true); setError('')
     const r = await enrichCompany(name, info, store.db, { force })
     setBusy(false)
-    if (r.error) {
-      // Le quota Google n'a rien consommé : le compter ferait atteindre NOTRE plafond sans
-      // qu'un seul appel soit passé.
-      if (!r.fromCache && !r.quota) store.recordAiCall({ feature: 'company_enrichment', companyId: name, status: 'error' })
-      setError(r.error); return
-    }
-    // Seul un appel RÉEL est décompté : une réponse du cache n'a rien consommé.
-    if (!r.fromCache) {
-      store.recordAiCall({
-        feature: 'company_enrichment', companyId: name, status: 'ok',
-        model: r.model, inputTokens: r.inputTokens, outputTokens: r.outputTokens,
-      })
-    }
+    if (r.error) { setError(r.error); return }
     setFound(r.found)
     // Les champs vides sont cochés d'avance — il n'y a rien à y perdre. Les conflits,
     // non : remplacer une donnée existante se décide, ça ne se subit pas.

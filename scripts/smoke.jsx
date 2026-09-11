@@ -1014,7 +1014,10 @@ async function main() {
       {
         const usage = db0().aiUsage || []
         const feats = usage.filter(c => c.status === 'ok').map(c => c.feature)
-        if (!feats.includes('company_enrichment')) throw new Error("L'enrichissement n'est pas décompté dans l'utilisation IA")
+        // ⚠️ L'ENRICHISSEMENT NE CONSOMME PLUS D'IA — il ne lit que des bases publiques
+        // (annuaire des entreprises, Wikidata). Le décompter donnerait un compteur faux et,
+        // pire, le ferait buter sur un plafond qui ne le concerne plus.
+        if (feats.includes('company_enrichment')) throw new Error("L'enrichissement est décompté comme un appel IA alors qu'il n'en fait plus aucun")
         if (!feats.includes('news_analysis')) throw new Error("L'analyse de signaux n'est pas décomptée dans l'utilisation IA")
         if (usage.some(c => !c.date || !c.ts || !c.userName)) throw new Error('Un appel IA est enregistré sans date ni auteur')
       }

@@ -374,20 +374,39 @@ npm run dev        # serveur de dev
     `gemini-3.6-flash`. ⚠️ **Quota Google (429)** : ce n'est ni une panne ni notre plafond. Le relais
     renvoie le délai d'attente que Google indique, et l'application **ne décompte pas** cet appel —
     il n'a rien consommé.
-  - **Enrichissement de fiche** — action **✨ Enrichir**, même panneau, même relais (`POST /enrich`,
-    Gemini avec recherche Google : sans source, le modèle répondrait de mémoire, c'est-à-dire
-    qu'il inventerait). `src/enrich.js`.
-    ⚠️ **AUCUN CHAMP N'EST CRÉÉ.** `ENRICHABLE` décrit EXACTEMENT les quatre champs de la fiche
-    (`data.companies[nom]` : `site`, `linkedin`, `localisation`, `ca`, `effectif`, `secteur`) ; l'application envoie cette
-    liste et le relais **itère dessus**, jamais sur la réponse du modèle. `npm run audit` compare
-    `ENRICHABLE` aux `setInfo(...)` de `Company.jsx` : un écart, et le test tombe. `effectif` et `secteur`
-    ont quitté le RDV pour la FICHE : lus sur le dernier rendez-vous, deux commerciaux voyaient
-    deux valeurs pour la même société sans pouvoir corriger la fausse. La valeur du RDV reste le
-    point de départ tant que personne n'a saisi la sienne.
-    ⚠️ **L'ENTREPRISE, JAMAIS LES PERSONNES**, même quand la fiche affiche des contacts. Le relais
-    refuse toute valeur qui ressemble à une donnée personnelle.
+  - **Enrichissement de fiche** — action **✨ Enrichir**, même panneau, même relais
+    (`POST /enrich`). **`src/enrich.js`**.
+    ⚠️ **PLUS AUCUNE IA ICI, ET C'EST LE CORRECTIF.** L'enrichissement passait par l'outil de
+    recherche Google de Gemini, dont le quota gratuit est le plus serré de toute l'API : en
+    pratique la fonctionnalité ne répondait presque jamais (« Quota Google atteint »). On a
+    contourné, puis réduit, avant de poser la vraie question — à quoi sert un modèle pour
+    retrouver six champs que des bases publiques publient déjà, gratuitement et de façon
+    citable ? Deux sources, interrogées EN PARALLÈLE, couvrent les six :
+    · **annuaire des entreprises** (INSEE/État, `officialRegistry`) → implantation, effectif,
+      secteur. Officiel, donc PRIORITAIRE, et confiance « high ». Le code INSEE de tranche
+      d'effectif est traduit en ordre de grandeur (`INSEE_TRANCHES`) — « 42 » n'apprend rien.
+    · **Wikidata** (CC0, `wikidata`) → site, LinkedIn, chiffre d'affaires. Confiance
+      « medium » : une base collaborative ne vaut pas une source d'État.
+    ⚠️ **L'homonymie est le vrai danger de Wikidata** : « Orange » est aussi un fruit. Une
+    entité n'est retenue que si son nom correspond ET que sa description désigne une
+    organisation (`WD_ORG`) — remplir la fiche d'un client avec les données d'autre chose est
+    pire que ne rien trouver.
+    ⚠️ **Conséquences côté application** : plus de `cooldownLeft`/`startCooldown` dans
+    `enrich.js` (ce verrou empêchait la requête de PARTIR), plus de `aiQuotaReached()` ni de
+    `recordAiCall` dans `EnrichPanel` — décompter un appel qui n'existe pas donnerait un
+    compteur faux et un plafond qui ne concerne plus rien. `npm run audit` fige les trois.
+    ⚠️ **Gemini reste utilisé pour les SIGNAUX**, où il est irremplaçable : regrouper des
+    preuves éparses en un fait commercial n'est pas une recherche, c'est un jugement.
+    ⚠️ **AUCUN CHAMP N'EST CRÉÉ.** `ENRICHABLE` décrit EXACTEMENT les champs de la fiche
+    (`data.companies[nom]` : `site`, `linkedin`, `localisation`, `ca`, `effectif`, `secteur`) ;
+    l'application envoie cette liste et le relais **itère dessus**. `npm run audit` compare
+    `ENRICHABLE` aux `setInfo(...)` de `Company.jsx` : un écart, et le test tombe. `effectif`
+    et `secteur` ont quitté le RDV pour la FICHE : lus sur le dernier rendez-vous, deux
+    commerciaux voyaient deux valeurs pour la même société sans pouvoir corriger la fausse.
+    ⚠️ **L'ENTREPRISE, JAMAIS LES PERSONNES** : `looksPersonal` refuse toute valeur qui
+    ressemble à une donnée personnelle, même publiée par une base officielle.
     ⚠️ **Rien n'est écrasé sans décision** : champ vide → proposé coché ; valeur différente →
-    montrée EN REGARD de l'actuelle, décochée. Sans source vérifiable, la confiance retombe à « low ».
+    montrée EN REGARD de l'actuelle, décochée. Un champ qu'aucune source ne donne reste VIDE.
   - **ICP — DEUX PÉRIMÈTRES, et dans chacun deux profils.** Bascule en tête de page, même
     mécanique que le pipeline de `Leads` : **« Mon ICP »** (mes affaires) et **« ICP de
     l'entreprise »** (tous les comptes de tous les espaces de l'environnement). ⚠️ Un seul

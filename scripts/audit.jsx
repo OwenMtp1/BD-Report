@@ -856,12 +856,7 @@ async function main() {
     // refus, et l'utilisateur lisait « sur tous les modèles » pour un plafond situé ailleurs.
     ok(/isGroundingQuota\(text\)\) break/.test(worker),
       'Relais : une limite commune à tous les modèles est retestée modèle par modèle')
-    // Et quand elle tombe, l'enrichissement ne s'arrête pas : nous savons lire nous-mêmes
-    // les pages publiques de l'entreprise. ⚠️ Jamais la mémoire du modèle — ce serait inventer.
-    ok(/ENRICH_FROM_SOURCES/.test(worker) && /TU N'AS PAS D'OUTIL DE RECHERCHE/.test(worker),
-      'Relais : le quota de recherche arrête l\'enrichissement alors que nos propres sources restent lisibles')
-    ok(/fallback\.some\(d => d\.sourceUrl === url\)/.test(worker),
-      'Relais : en repli, une URL inventée par le modèle passe pour une source')
+
 
     // h. UN CLIC = UN APPEL. Deux demandes identiques ne doivent jamais partir ensemble :
     //    c'est ce qui faisait atteindre le quota gratuit en quelques clics.
@@ -876,10 +871,13 @@ async function main() {
     // l'enrichissement passe par la recherche Google, dont le quota gratuit est bien plus
     // serré. Avec une clé d'attente commune, un enrichissement refusé mettait AUSSI les
     // signaux au repos, alors que leur quota était intact.
-    ok(/cooldownLeft\('enrich'\)/.test(enr2) && /cooldownLeft\('signals'\)/.test(sig2),
-      "Le délai d'attente est commun aux deux actions IA : l'une éteint l'autre sans raison")
-    ok(/startCooldown\([^)]*'enrich'\)/.test(enr2) && /startCooldown\([^)]*'signals'\)/.test(sig2),
-      'Un quota atteint est retenu sans dire de quelle action il vient')
+    // ⚠️ L'ENRICHISSEMENT N'A PLUS DE DÉLAI D'ATTENTE, parce qu'il n'appelle plus d'IA.
+    // Ce verrou empêchait la requête de PARTIR — « Quota Google atteint, réessayez dans
+    // 39 secondes » — alors que plus rien, derrière, n'avait besoin de Gemini.
+    ok(!/cooldownLeft\(/.test(enr2) && !/startCooldown\(/.test(enr2),
+      "L'enrichissement porte encore un verrou de quota alors qu'il n'appelle plus d'IA")
+    ok(/cooldownLeft\('signals'\)/.test(sig2) && /startCooldown\([^)]*'signals'\)/.test(sig2),
+      'Les signaux, eux, doivent retenir le délai annoncé par Google — leur analyse en dépend')
 
     // La fiche entreprise intègre l'action, elle ne crée pas de page ni de navigation.
     const navSrc = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'nav.jsx'), 'utf8')
@@ -907,9 +905,17 @@ async function main() {
     ok(/ENRICH_SPECS\[f\]/.test(worker), 'Relais : les champs reçus ne sont pas filtrés sur le catalogue')
     // c. Rien de personnel ne remonte, même glissé dans un champ d'entreprise.
     ok(/looksPersonal/.test(worker), "Relais : aucune barrière contre une donnée personnelle dans un champ d'entreprise")
-    ok(/AUCUNE information sur des PERSONNES/.test(worker), "Relais : la consigne n'interdit pas la recherche sur des personnes")
-    // d. Sans source vérifiable, la confiance ne peut pas être haute.
-    ok(/url && CONFIDENCES\.includes/.test(worker), 'Relais : une valeur sans source peut se déclarer « high »')
+    // d. ⚠️ PLUS AUCUNE IA DANS L'ENRICHISSEMENT. Une consigne adressée à un modèle ne
+    //    protégeait que tant qu'il l'écoutait ; des bases publiques ne renvoient que ce
+    //    qu'elles publient, et la barrière `looksPersonal` reste la dernière.
+    const enrichSrc = worker.slice(worker.indexOf('async function enrich(company, fields)'), worker.indexOf('Routage'))
+    ok(!/callGemini|tools:|google_search/.test(enrichSrc),
+      "Relais : l'enrichissement appelle encore Gemini — c'est ce qui le rendait tributaire du quota")
+    ok(/officialRegistry\(company\)/.test(enrichSrc) && /wikidata\(company\)/.test(enrichSrc),
+      'Relais : les deux sources publiques ne sont pas toutes deux interrogées')
+    // e. La confiance est POSÉE PAR NOUS selon la source, elle n'est plus déclarée par un tiers.
+    ok(/confidence: 'high'/.test(worker) && /confidence: 'medium'/.test(worker),
+      'Relais : la confiance ne distingue plus la source officielle de la base collaborative')
 
     // e. Un champ DÉJÀ REMPLI n'est jamais coché d'avance : l'écraser se décide.
     ok(/if \(x\.state === 'empty'\) pre\[x\.id\] = true/.test(comp),
@@ -920,7 +926,11 @@ async function main() {
 
     // g. Le compteur ne compte QUE les appels réels — un cache qui compterait ferait
     //    atteindre le plafond sans qu'un seul appel soit parti.
-    ok(/if \(!r\.fromCache\)/.test(comp), 'Compteur IA : une réponse du cache est comptée comme un appel')
+    // ⚠️ L'enrichissement ne consomme plus d'IA : le décompter donnerait un compteur faux,
+    //    et le ferait buter sur un plafond qui ne le concerne plus.
+    ok(!/feature: 'company_enrichment'/.test(comp),
+      "Compteur IA : l'enrichissement est décompté alors qu'il n'appelle plus aucune IA")
+    ok(/feature: 'news_analysis'/.test(comp), 'Compteur IA : les signaux ne sont plus décomptés')
     const d = s.buildDemoDb({}); s.migrate(d)
     ok(s.STAFF_PERMISSION_IDS.includes('ai.manage'), 'La permission de configurer l\'IA manque au catalogue')
     const sup = d.staffRoles.find(r => r.roleKey === 'Support BD Report')

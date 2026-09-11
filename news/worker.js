@@ -588,28 +588,6 @@ const ENRICH_SPECS = {
   secteur: { label: "secteur d'activité", hint: 'En quelques mots, ex. « Logiciel RH (SaaS) »' },
 }
 
-const ENRICH_PROMPT = (company, fields, known) => `Tu recherches des informations PUBLIQUES sur l'ENTREPRISE « ${company} ».
-
-RÈGLES ABSOLUES :
-· Tu ne renseignes QUE ce que tu trouves réellement dans des sources publiques. Aucune estimation, aucune déduction, aucune moyenne du secteur.
-· Si tu ne trouves pas une information de façon fiable, tu réponds null pour ce champ. « null » est une réponse correcte et attendue.
-· Tu ne cherches AUCUNE information sur des PERSONNES : ni e-mail, ni téléphone, ni adresse, ni profil individuel. Uniquement l'entreprise elle-même.
-· Tu ne renseignes QUE les champs listés ci-dessous. Aucun autre champ, sous aucun prétexte.
-
-CHAMPS DEMANDÉS :
-${fields.map(f => `· ${f} — ${ENRICH_SPECS[f].label} : ${ENRICH_SPECS[f].hint}`).join('\n')}
-
-DÉJÀ CONNU dans la fiche (à confirmer ou corriger si une source publique dit autre chose) :
-${fields.map(f => `· ${f} : ${known[f] ? known[f] : '(vide)'}`).join('\n')}
-
-Réponds UNIQUEMENT en JSON, sans texte autour ni balises de code :
-{${fields.map(f => `"${f}":{"value":"...","publisher":"...","url":"...","confidence":"low|medium|high"}`).join(',')}}
-Chaque champ vaut soit cet objet, soit null.
-· value : la valeur, telle qu'elle s'écrit dans la source
-· publisher : le nom du site d'où elle vient
-· url : l'adresse exacte de la page consultée
-· confidence : high si la source est officielle (site de l'entreprise, registre public), medium si c'est une source secondaire fiable, low sinon`
-
 const CONFIDENCES = ['low', 'medium', 'high']
 const isHttp = (u) => /^https?:\/\/\S+$/i.test(String(u || ''))
 // Les valeurs qui ressemblent à une donnée personnelle sont refusées, même si le modèle
@@ -617,38 +595,6 @@ const isHttp = (u) => /^https?:\/\/\S+$/i.test(String(u || ''))
 // de portable n'a rien à faire dans une fiche société, et rien ne la lui a demandée.
 const looksPersonal = (v) => /@/.test(v) || /\b0[67](?:[ .-]?\d{2}){4}\b/.test(v)
 
-/**
- * Les pages publiques que NOUS savons lire sur cette entreprise. Elles servent de repli
- * quand la recherche Google n'est plus disponible : le site officiel est précisément là
- * où vivent le secteur, l'implantation et l'URL LinkedIn.
- */
-async function ownSources(company, site) {
-  const [pages, press] = await Promise.all([
-    collectWebsite(site).catch(() => []),
-    collectNews(company, []).catch(() => []),
-  ])
-  return [...pages, ...press].slice(0, 8)
-}
-
-const ENRICH_FROM_SOURCES = (company, fields, known, docs) => `${ENRICH_PROMPT(company, fields, known)}
-
-TU N'AS PAS D'OUTIL DE RECHERCHE. Tu ne disposes QUE des pages publiques ci-dessous, et tu
-ne dois rien écrire qui n'y figure pas. Ce que ces pages ne disent pas vaut null.
-Le champ « url » doit être l'une des adresses listées, jamais une autre.
-
-PAGES :
-${docs.map((d, i) => `[${i}] ${d.title || '(sans titre)'}
-url: ${d.sourceUrl}
-extrait: ${(d.content || '').slice(0, 1200)}`).join('\n\n')}`
-
-// ---------------------------------------------------------------- Annuaire officiel
-// ⚠️ TROIS DES SIX CHAMPS N'ONT JAMAIS EU BESOIN D'UNE IA. L'implantation, l'effectif et le
-// secteur d'une société française sont publiés par l'État, gratuitement, sans clé et sans
-// quota : c'est l'annuaire des entreprises (data.gouv). Les faire chercher par un modèle
-// coûtait un appel, consommait le quota le plus serré du produit, et rendait une réponse
-// moins sûre qu'une donnée officielle.
-// On interroge donc l'annuaire D'ABORD. Ce qu'il donne est FACTUEL, daté et sourçable ;
-// l'IA ne s'occupe plus que de ce qu'il ne couvre pas (site, LinkedIn, chiffre d'affaires).
 const REGISTRY = 'https://recherche-entreprises.api.gouv.fr/search'
 const REGISTRY_PAGE = (siren) => `https://annuaire-entreprises.data.gouv.fr/entreprise/${siren}`
 
@@ -758,125 +704,50 @@ async function wikidata(company) {
   }
 }
 
-// ⚠️ LE NOM DE L'OUTIL DE RECHERCHE DÉPEND DE LA GÉNÉRATION DU MODÈLE : `google_search`
-// depuis Gemini 2.0, `google_search_retrieval` avant. Un nom que le modèle ne connaît pas
-// donne un 400 — pas un quota — et l'écran annonçait « recherche indisponible » pour une
-// simple incompatibilité de vocabulaire. On essaie donc les deux, une seule fois chacun.
-const SEARCH_TOOLS = [{ google_search: {} }, { google_search_retrieval: {} }]
-
-async function callGrounded(prompt, env) {
-  let last = null
-  for (const tool of SEARCH_TOOLS) {
-    try {
-      return await callGemini({
-        contents: [{ parts: [{ text: prompt }] }],
-        tools: [tool],
-        generationConfig: { temperature: 0 },
-      }, env)
-    } catch (e) {
-      last = e
-      // 400 = ce modèle ne connaît pas CET outil : l'autre nom vaut d'être tenté.
-      // Tout le reste (quota, panne) se comporte pareil quel que soit le nom.
-      if (e?.status !== 400) throw e
-    }
-  }
-  throw last
-}
-
-async function enrich(company, fields, known, env, site) {
-  // ---- PASSE 1 : l'annuaire officiel. Gratuite, factuelle, aucun quota, aucune IA.
-  // Son échec n'arrête rien : elle complète, elle ne commande pas.
-  // ⚠️ LES DEUX SOURCES TOURNENT EN PARALLÈLE et se complètent : l'annuaire est officiel
-  // (implantation, effectif, secteur), Wikidata couvre ce qu'il ignore (site, LinkedIn,
-  // chiffre d'affaires). Ni l'une ni l'autre ne coûte un appel d'IA ni ne touche un quota.
-  // L'échec de l'une n'arrête rien : elles complètent, elles ne commandent pas.
-  const official = {}
+/**
+ * ENRICHISSEMENT — SOURCES PUBLIQUES UNIQUEMENT, PLUS AUCUNE IA.
+ *
+ * ⚠️ POURQUOI GEMINI A ÉTÉ RETIRÉ D'ICI. L'enrichissement passait par l'outil de recherche
+ * Google, dont le quota gratuit est le plus serré de toute l'API — si serré qu'en pratique
+ * la fonctionnalité ne répondait presque jamais : « Quota Google atteint » à chaque clic.
+ * On a d'abord contourné (repli sur nos pages), puis réduit (l'annuaire d'abord). Restait
+ * la vraie question : à quoi sert un modèle pour retrouver six champs que des bases
+ * publiques publient déjà, gratuitement et de façon vérifiable ?
+ *   · annuaire des entreprises (INSEE/État) → implantation, effectif, secteur
+ *   · Wikidata (CC0)                        → site, LinkedIn, chiffre d'affaires
+ * À elles deux, elles couvrent les six champs de la fiche. Sans clé, sans quota, sans
+ * attente — et avec une source citable, ce qu'un modèle ne garantissait pas.
+ *
+ * Un champ qu'aucune source ne donne reste VIDE. C'est une réponse correcte : mieux vaut
+ * un blanc qu'une valeur inventée, et c'était déjà la règle du temps de l'IA.
+ *
+ * ⚠️ Gemini reste utilisé pour les SIGNAUX, où il est irremplaçable : regrouper des preuves
+ * éparses en un fait commercial n'est pas une recherche, c'est un jugement.
+ */
+async function enrich(company, fields) {
+  // Les deux sources tournent EN PARALLÈLE et se complètent. L'échec de l'une n'arrête
+  // rien : elles complètent, elles ne commandent pas.
   let registryError = ''
   let wikiError = ''
   const [reg, wiki] = await Promise.all([
     officialRegistry(company).catch(e => { registryError = (e && e.message) || String(e); return { found: {} } }),
     wikidata(company).catch(e => { wikiError = (e && e.message) || String(e); return { found: {} } }),
   ])
-  // L'annuaire PRIME : une donnée d'État l'emporte sur une fiche collaborative.
-  for (const f of fields) {
-    const v = reg.found[f] || wiki.found[f]
-    if (v) official[f] = v
-  }
-
-  // ⚠️ L'IA NE TRAVAILLE QUE SUR CE QUI RESTE. C'est le cœur du correctif : demander à un
-  // modèle une information que l'État publie gratuitement, c'était dépenser le quota le
-  // plus serré du produit pour une réponse moins sûre. Si l'annuaire a tout couvert, aucun
-  // appel n'est fait du tout — l'enrichissement devient gratuit et instantané.
-  const remaining = fields.filter(f => !official[f])
-  if (!remaining.length) {
-    return { found: official, model: '', source: 'public', registryError, wikiError, fallback: false, inputTokens: 0, outputTokens: 0 }
-  }
-  fields = remaining
-
-  let body, model, fallback = false
-  try {
-    // Recherche Google : sans elle, le modèle répondrait de mémoire — c'est-à-dire
-    // qu'il inventerait. La consigne « ne rien inventer » n'a de sens qu'avec une source.
-    ;({ body, model } = await callGrounded(ENRICH_PROMPT(company, fields, known), env))
-  } catch (e) {
-    // ⚠️ LE QUOTA DE RECHERCHE EST LA VRAIE LIMITE de l'enrichissement, et il est bien plus
-    // serré que celui du texte. Quand il tombe, la fonctionnalité s'arrêtait entièrement —
-    // alors que nous savons lire nous-mêmes les sources publiques de cette entreprise.
-    // On repasse donc par NOS pages. ⚠️ Jamais par la mémoire du modèle : un enrichissement
-    // sans source est une invention, et mieux vaut ne rien répondre que se tromper.
-    // ⚠️ CE QUE L'ANNUAIRE A DÉJÀ TROUVÉ EST ACQUIS. Un refus de Gemini ne doit pas
-    // emporter des données officielles obtenues gratuitement avant lui : on rend ce
-    // qu'on a, en disant ce qui a manqué.
-    const keep = (err) => {
-      if (!Object.keys(official).length) throw err
-      return { found: official, model: '', source: 'public', registryError, wikiError, aiError: err.message, fallback: false, inputTokens: 0, outputTokens: 0 }
-    }
-    const docs = await ownSources(company, site).catch(() => [])
-    if (!docs.length) return keep(e)   // aucune source à lire : l'erreur reste la bonne réponse
-    ;({ body, model } = await callGemini({
-      contents: [{ parts: [{ text: ENRICH_FROM_SOURCES(company, fields, known, docs) }] }],
-      generationConfig: { temperature: 0 },
-    }, env))
-    fallback = docs
-  }
-  const raw = body?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
-  // Le modèle encadre souvent son JSON de balises de code malgré la consigne.
-  const text = raw.replace(/^[\s\S]*?```(?:json)?/i, '').replace(/```[\s\S]*$/, '').trim() || raw.trim()
-  let parsed
-  try { parsed = JSON.parse(text) } catch (e) { throw new Error("Réponse de l'IA illisible.") }
 
   const out = {}
-  for (const f of fields) {              // on itère sur les champs DEMANDÉS, pas sur la réponse
-    const v = parsed?.[f]
-    if (!v || typeof v !== 'object') { out[f] = null; continue }
-    const value = String(v.value ?? '').trim()
-    if (!value || value.toLowerCase() === 'null' || looksPersonal(value)) { out[f] = null; continue }
-    if (f === 'site' && !isHttp(value)) { out[f] = null; continue }
-    if (f === 'linkedin' && !(isHttp(value) && /linkedin\.com\/company\//i.test(value))) { out[f] = null; continue }
-    let url = isHttp(v.url) ? v.url : ''
-    // ⚠️ EN REPLI, L'URL DOIT ÊTRE L'UNE DES NÔTRES. Le modèle n'a plus d'outil de recherche :
-    // toute adresse qui n'est pas dans les pages fournies sort de sa mémoire, c'est-à-dire
-    // qu'elle est inventée. On la retire — la valeur reste, mais sans source vérifiable, donc
-    // en confiance basse, ce que la règle générale ci-dessous applique déjà.
-    if (fallback && url && !fallback.some(d => d.sourceUrl === url)) url = ''
-    out[f] = {
-      value: value.slice(0, 300),
-      publisher: String(v.publisher || '').slice(0, 120),
-      url,
-      // Sans source vérifiable, la confiance ne peut pas être haute, quoi qu'en dise le modèle.
-      confidence: url && CONFIDENCES.includes(String(v.confidence || '').toLowerCase())
-        ? String(v.confidence).toLowerCase() : 'low',
-    }
+  for (const f of fields) {
+    // L'annuaire PRIME : une donnée d'État l'emporte sur une fiche collaborative.
+    const v = reg.found[f] || wiki.found[f]
+    // Dernière barrière, inchangée : aucune donnée personnelle dans une fiche société.
+    out[f] = v && !looksPersonal(v.value) ? v : null
   }
-  const usage = body?.usageMetadata || {}
-  // `fallback` est dit à l'application : sans recherche Google, la couverture est plus
-  // étroite (le site d'une entreprise donne rarement son chiffre d'affaires). L'écran doit
-  // pouvoir expliquer un résultat maigre autrement que par « l'IA n'a rien trouvé ».
-  // ⚠️ L'annuaire PRIME sur l'IA : une donnée officielle ne se fait pas corriger par un modèle.
+  // Les garde-fous de forme restent : une URL qui n'en est pas une n'entre pas dans la fiche.
+  if (out.site && !isHttp(out.site.value)) out.site = null
+  if (out.linkedin && !(isHttp(out.linkedin.value) && /linkedin\.com\/company\//i.test(out.linkedin.value))) out.linkedin = null
+
   return {
-    found: { ...out, ...official }, model, fallback: !!fallback,
-    source: Object.keys(official).length ? 'public+ai' : 'ai', registryError, wikiError,
-    inputTokens: usage.promptTokenCount || 0, outputTokens: usage.candidatesTokenCount || 0,
+    found: out, model: '', source: 'public', registryError, wikiError,
+    inputTokens: 0, outputTokens: 0,
   }
 }
 
@@ -931,10 +802,7 @@ export default {
         // Les champs viennent de l'APPLICATION : elle seule sait lesquels existent chez elle.
         const fields = (Array.isArray(body?.fields) ? body.fields : []).filter(f => ENRICH_SPECS[f])
         if (!company || !fields.length) return json({ error: 'Entreprise ou champs manquants.' }, request, env, 400)
-        // Le site connu sert de REPLI quand le quota de recherche Google est atteint :
-        // les pages de l'entreprise, nous savons les lire sans aucun outil Google.
-        const site = String(body?.site || body?.known?.site || '')
-        return json(await enrich(company, fields, body?.known || {}, env, site), request, env)
+        return json(await enrich(company, fields), request, env)
       }
 
       // ⚠️ /diag — LE RELAIS SE TESTE LUI-MÊME, ET LE DIT.
@@ -980,20 +848,14 @@ export default {
           }, env)
           return { model }
         })
-        // Recherche Google : LE quota serré, celui qui bloquait l'enrichissement.
-        await step('gemini_search', 'Gemini — recherche Google (grounding)', async () => {
-          if (!env.GEMINI_API_KEY) throw new Error('Sans clé, rien à tester.')
-          const { model } = await callGrounded(`Cite en une ligne le site officiel de « ${q} ».`, env)
-          return { model }
-        })
         // ⚠️ LA BRIQUE QUI RÉPOND VRAIMENT À LA QUESTION. Voir « recherche Google
         // indisponible » n'apprend rien tant qu'on ignore si l'enrichissement fonctionne
         // MALGRÉ ça — et c'est justement tout l'objet du correctif. On le fait donc pour
         // de vrai, sur l'entreprise de test, et on dit combien de champs en sortent.
         await step('enrich', `Enrichissement de bout en bout (« ${q} »)`, async () => {
-          const r = await enrich(q, ['site', 'linkedin', 'localisation', 'ca', 'effectif', 'secteur'], {}, env, '')
+          const r = await enrich(q, ['site', 'linkedin', 'localisation', 'ca', 'effectif', 'secteur'])
           const got = Object.keys(r.found || {}).filter(k => r.found[k])
-          if (!got.length) throw new Error(`Aucun champ trouvé. Annuaire : ${r.registryError || 'ok'} · Wikidata : ${r.wikiError || 'ok'} · IA : ${r.aiError || 'ok'}`)
+          if (!got.length) throw new Error(`Aucun champ trouvé. Annuaire : ${r.registryError || 'ok'} · Wikidata : ${r.wikiError || 'ok'}`)
           return { champs: got, source: r.source, valeurs: Object.fromEntries(got.map(k => [k, r.found[k].value])) }
         })
 
@@ -1002,11 +864,13 @@ export default {
         const enrichOk = steps.find(s => s.id === 'enrich')?.ok
         let verdict = 'Tout répond : enrichissement et signaux sont opérationnels.'
         if (ko.some(s => s.id === 'key')) verdict = "Le relais n'a pas de clé Gemini. Ajoutez le secret GEMINI_API_KEY dans Cloudflare, puis redéployez."
-        // ⚠️ Un service tiers en panne n'est PAS une panne du produit tant que le résultat
+        // ⚠️ NOMMER CE QUI EST TOUCHÉ passe avant le constat général : « Gemini ne répond
+        // pas » fait craindre le pire à qui vient d'enrichir une fiche, alors que
+        // l'enrichissement ne dépend plus de lui du tout.
+        else if (ko.some(s => s.id === 'gemini_text')) verdict = "Gemini ne répond pas : seuls les SIGNAUX sont concernés. L'enrichissement ne passe plus par l'IA — il continue de fonctionner."
+        // Un service tiers en panne n'est PAS une panne du produit tant que le résultat
         // sort quand même. Le dire dans cet ordre évite de chercher un problème réglé.
-        else if (enrichOk && ko.length) verdict = `L'enrichissement FONCTIONNE (${(steps.find(s => s.id === 'enrich')?.detail?.champs || []).length} champs trouvés sans passer par la recherche Google). Ce qui est en rouge ci-dessous n'est pas bloquant.`
-        else if (ko.some(s => s.id === 'gemini_search') && ko.some(s => s.id === 'gemini_text')) verdict = 'Gemini refuse tout : quota de texte atteint. Réessayez plus tard — les signaux comme l\'enrichissement sont concernés.'
-        else if (ko.some(s => s.id === 'gemini_search')) verdict = "Seule la RECHERCHE Google est épuisée. Les signaux fonctionnent ; l'enrichissement se rabat sur l'annuaire officiel et sur le site de l'entreprise — plus étroit, mais pas bloqué."
+        else if (enrichOk && ko.length) verdict = `L'enrichissement FONCTIONNE (${(steps.find(s => s.id === 'enrich')?.detail?.champs || []).length} champs trouvés). Ce qui est en rouge ci-dessous n'est pas bloquant.`
         else if (ko.some(s => s.id === 'registry') && ko.some(s => s.id === 'wikidata')) verdict = "Les deux sources publiques sont muettes : l'enrichissement dépendra entièrement de l'IA, donc du quota de recherche."
         else if (ko.some(s => s.id === 'registry' || s.id === 'wikidata')) verdict = "Une source publique sur deux répond : l'enrichissement fonctionne, avec une couverture un peu plus étroite."
         else if (ko.length) verdict = 'Une source secondaire ne répond pas ; le reste fonctionne.'
