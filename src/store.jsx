@@ -5773,7 +5773,13 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         try {
           const res = await fetch(base + '/health')
           const body = await res.json().catch(() => null)
-          if (!res.ok || !body?.ok) return { ok: false, msg: `Le relais a répondu ${res.status}.` }
+          // Un diagnostic qui dit juste « 404 » envoie chercher la panne au hasard. Chaque
+          // code raconte en fait une histoire différente, et une seule action la répare.
+          if (res.status === 404) {
+            return { ok: false, msg: 'Adresse joignable, mais ce n\'est pas le relais : vérifiez l\'URL, et que le contenu de news/worker.js a bien été collé puis déployé.' }
+          }
+          if (!res.ok) return { ok: false, msg: `Le relais a répondu ${res.status}.` }
+          if (!body?.ok) return { ok: false, msg: 'Réponse inattendue : à cette adresse, ce n\'est pas le relais Actualités.' }
           // Un relais qui répond mais sans clé ne sait faire que la moitié du travail :
           // le dire tout de suite évite de chercher l'erreur au premier « Analyser ».
           return body.gemini

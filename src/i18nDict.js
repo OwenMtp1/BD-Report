@@ -1751,4 +1751,6 @@ export const UI_DICT = [
   ['Relais publié par l\'équipe BD Report.', 'Relay published by the BD Report team.', 'Relé publicado por el equipo de BD Report.'],
   ['À configurer par l\'équipe BD Report.', 'To be configured by the BD Report team.', 'Lo debe configurar el equipo de BD Report.'],
   ['Aucune actualité à analyser.', 'No news to analyse.', 'No hay noticias que analizar.'],
+  ['Adresse joignable, mais ce n\'est pas le relais : vérifiez l\'URL, et que le contenu de news/worker.js a bien été collé puis déployé.', 'The address answers, but it is not the relay: check the URL, and that the contents of news/worker.js were pasted and deployed.', 'La dirección responde, pero no es el relé: comprueba la URL y que el contenido de news/worker.js se haya pegado y desplegado.'],
+  ['Réponse inattendue : à cette adresse, ce n\'est pas le relais Actualités.', 'Unexpected answer: the news relay is not at this address.', 'Respuesta inesperada: en esa dirección no está el relé de noticias.'],
 ]

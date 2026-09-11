@@ -226,7 +226,12 @@ export default {
         return json({ signals: await analyze(company, articles, env) }, request, env)
       }
 
-      if (url.pathname === '/health') return json({ ok: true, gemini: !!env.GEMINI_API_KEY }, request, env)
+      // La racine répond comme /health : ouvrir l'URL du relais dans un navigateur doit
+      // suffire à savoir s'il est vivant. Renvoyer « Route inconnue » à la seule adresse
+      // qu'on pense à essayer envoyait chercher une panne là où il n'y en avait pas.
+      if (url.pathname === '/health' || url.pathname === '/' || url.pathname === '') {
+        return json({ ok: true, gemini: !!env.GEMINI_API_KEY, service: 'bdr-news' }, request, env)
+      }
     } catch (e) {
       return json({ error: e && e.message ? e.message : String(e) }, request, env, 502)
     }
