@@ -872,8 +872,10 @@ const FEATURES = {
         ['🤝','Passation au closer','Le lead qualifié attend un verdict : accepté, ou refusé avec un motif. C\'est le taux d\'acceptation, et non le nombre de leads poussés, qui mesure un BDR.'],
         ['👔','Comité d\'achat','Le rôle de chaque interlocuteur dans la décision et le niveau de relation atteint — avec une alerte quand une affaire avancée ne tient qu\'à une personne.'],
         ['🏢','Fiche entreprise 360°','Tous les RDV, contacts, notes et commentaires d\'une société, avec infos enrichissables.'],
-        ['📰','Actualités & signaux','Les dépêches récentes du compte, et ce qu\'elles valent commercialement : nomination, levée de fonds, ouverture de bureaux — avec l\'angle d\'approche et qui viser.'],
+        ['📡','Signaux commerciaux','Une recherche, et vous savez s\'il y a une raison d\'appeler ce compte maintenant : nomination, levée de fonds, recrutements en série, ouverture de bureaux — avec l\'angle d\'approche et qui viser. Les sources restent dépliables sous chaque signal.'],
         ['✨','Enrichissement de fiche','Les informations publiques de l\'entreprise, retrouvées et proposées avec leur source. Rien n\'est écrasé sans votre accord, rien n\'est inventé.'],
+        ['🗂️','Mes entreprises','Tout votre portefeuille en liste ou en kanban, rangé selon ce qui vous occupe : ce qu\'on sait de chaque compte, la date du dernier contact, les signaux à traiter, le secteur ou la taille.'],
+        ['🎯','ICP entreprise & personnel','Deux profils, parce qu\'il y a deux questions : quel compte vaut votre temps, et à qui parler dedans. Le bon compte abordé par la mauvaise porte se change, il ne se jette pas.'],
         ['🔎','Recherche globale','Ctrl+K : entreprises, contacts, RDV et notes en un instant.'],
         ['📇','Contacts auto-alimentés','Chaque RDV alimente votre répertoire ; import/export CSV et Excel, filtrés ou non.'] ],
       [ ['💶','Barème configurable','Tranches d\'effectif × provenance du lead. Vous écrivez vos règles, l\'application les applique.'],
@@ -930,6 +932,10 @@ const FEATURES = {
         ['🤝','Hand-off to the closer','A qualified lead waits for a verdict: accepted, or turned down with a reason. What measures a BDR is the acceptance rate, not the number of leads pushed.'],
         ['👔','Buying committee','Each contact\'s role in the decision and how far the relationship has come — with a warning when an advanced deal rests on one person.'],
         ['🏢','360° account view','Every meeting, contact, note and comment for a company, with enrichable info.'],
+        ['📡','Buying signals','One search tells you whether there is a reason to call that account now: an appointment, a funding round, a hiring spree, a new office — with the angle to take and who to target. Sources stay one click away under each signal.'],
+        ['✨','Account enrichment','The company\'s public information, found and suggested with its source. Nothing is overwritten without your say-so, nothing is invented.'],
+        ['🗂️','My companies','Your whole book of accounts as a list or a kanban, arranged around whatever you are working on: what is known about each account, when you last spoke, signals to handle, sector or size.'],
+        ['🎯','Company & persona ICP','Two profiles, because there are two questions: which account is worth your time, and who to talk to inside it. The right account approached through the wrong door gets changed, not dropped.'],
         ['🔎','Global search','Ctrl+K: companies, contacts, meetings and notes instantly.'],
         ['📇','Auto-fed contacts','Every meeting feeds your address book; CSV and Excel import/export, filtered or not.'] ],
       [ ['💶','Configurable grid','Headcount brackets × lead source. You write the rules, the app applies them.'],
@@ -986,6 +992,10 @@ const FEATURES = {
         ['🤝','Traspaso al closer','El lead cualificado espera un veredicto: aceptado, o rechazado con un motivo. Lo que mide a un BDR es la tasa de aceptación, no el número de leads empujados.'],
         ['👔','Comité de compra','El papel de cada interlocutor en la decisión y el nivel de relación alcanzado — con un aviso cuando una operación avanzada depende de una sola persona.'],
         ['🏢','Ficha de cuenta 360°','Todas las citas, contactos, notas y comentarios de una empresa, con datos enriquecibles.'],
+        ['📡','Señales comerciales','Una búsqueda y sabes si hay una razón para llamar a esa cuenta ahora: un nombramiento, una ronda de financiación, contrataciones en serie, una nueva oficina — con el ángulo de entrada y a quién dirigirse. Las fuentes se despliegan bajo cada señal.'],
+        ['✨','Enriquecimiento de ficha','La información pública de la empresa, encontrada y propuesta con su fuente. No se sobrescribe nada sin tu visto bueno, no se inventa nada.'],
+        ['🗂️','Mis empresas','Toda tu cartera en lista o en kanban, ordenada según lo que te ocupa: lo que se sabe de cada cuenta, la fecha del último contacto, las señales por tratar, el sector o el tamaño.'],
+        ['🎯','ICP de empresa y de persona','Dos perfiles, porque hay dos preguntas: qué cuenta merece tu tiempo y con quién hablar dentro. La cuenta correcta abordada por la puerta equivocada se cambia, no se tira.'],
         ['🔎','Búsqueda global','Ctrl+K: empresas, contactos, citas y notas al instante.'],
         ['📇','Contactos autoalimentados','Cada cita alimenta tu agenda; importa/exporta CSV y Excel, filtrados o no.'] ],
       [ ['💶','Baremo configurable','Tramos de plantilla × fuente del lead. Tú escribes las reglas, la aplicación las aplica.'],
@@ -1234,7 +1244,7 @@ if (oHost) ORBIT.forEach((ic, i) => {
 })
 
 // Marquee de fonctionnalités (contenu dupliqué pour une boucle sans couture).
-const FEATURES_MQ = ['📊 Dashboards', '📅 Rendez-vous', '🧲 Pipeline kanban', '💶 Primes & commissions', '🎯 ICP', '🤝 Pilotage équipe', '💬 Messagerie d\'équipe', '📡 Reporting auto', '🟢 Présence & statuts', '🗂️ Services & organigramme', '📇 Contacts', '🗒️ Notes', '🏢 Fiche entreprise 360°', '🔔 Recommandations', '🔐 Connexion Google', '🌍 FR · EN · ES', '🌙 Mode sombre']
+const FEATURES_MQ = ['📊 Dashboards', '📅 Rendez-vous', '🧲 Pipeline kanban', '💶 Primes & commissions', '🎯 ICP entreprise & personnel', '📡 Signaux commerciaux', '🗂️ Mes entreprises', '🤝 Pilotage équipe', '💬 Messagerie d\'équipe', '📡 Reporting auto', '🟢 Présence & statuts', '🗂️ Services & organigramme', '📇 Contacts', '🗒️ Notes', '🏢 Fiche entreprise 360°', '🔔 Recommandations', '🔐 Connexion Google', '🌍 FR · EN · ES', '🌙 Mode sombre']
 const mq = document.getElementById('marqueeTrack')
 if (mq) mq.innerHTML = [...FEATURES_MQ, ...FEATURES_MQ].map(f => `<span class="chip">${f}</span>`).join('')
 

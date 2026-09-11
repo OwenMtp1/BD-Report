@@ -1,4 +1,16 @@
 // Génère les pages produit du site (site/produit/<slug>.html) — FR par défaut, EN via bascule.
+//
+// ⚠️ CE SCRIPT N'EST PLUS LA SOURCE DE VÉRITÉ — c'est un ÉCHAFAUDAGE.
+// Il a produit les six pages une fois ; elles ont été retouchées à la main depuis (nouvelles
+// fonctionnalités, libellés corrigés), et son contenu à lui n'a pas suivi : il annonce encore
+// « 20 thèmes dont 10 ambiances animées » alors qu'il n'y en a plus que quatre, et ignore les
+// signaux, l'enrichissement et le portefeuille en kanban.
+// Le relancer ÉCRASE donc les six pages avec une version périmée, en silence. Il n'est câblé à
+// aucun script npm ni à aucun workflow, et ce n'est pas un oubli.
+//
+// · Pour MODIFIER une page existante : éditer `site/produit/<slug>.html` directement.
+// · Pour CRÉER une nouvelle page : s'inspirer d'ici, ou remettre ce fichier à jour EN ENTIER
+//   et vérifier le diff des six pages avant de committer.
 import { mkdirSync, writeFileSync } from 'fs'
 
 const CATS = [
