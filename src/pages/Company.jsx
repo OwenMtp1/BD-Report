@@ -43,10 +43,13 @@ function SignalsPanel({ name, info, store, onClose }) {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [openSources, setOpenSources] = useState(false)
-  const [state, setState] = useState(() => { const c = cachedCollect(name); return c ? { items: c.items || [], stats: c.stats || {} } : null })
+  const [state, setState] = useState(() => { const c = cachedCollect(store.session?.envId || '', name); return c ? { items: c.items || [], stats: c.stats || {} } : null })
   const mine = (store.sub?.signals || []).filter(s => s.company === name)
   const ctx = buildContext(rules, SIGNAL_TYPES, store.envIcpProfiles())
   const relay = newsRelayUrl(store.db)
+  // ⚠️ TOUT EST CLOISONNÉ PAR ENVIRONNEMENT : les critères de signaux appartiennent au
+  // client, et une analyse faite pour l'un ne doit jamais servir à l'autre.
+  const envId = store.session?.envId || ''
   const items = state?.items || []
 
   /**
@@ -58,7 +61,7 @@ function SignalsPanel({ name, info, store, onClose }) {
     setBusy('collect')
     // ⚠️ La FICHE alimente la recherche : ce que l'équipe a saisi écarte les homonymes
     // et permet de retrouver le site quand il n'est pas renseigné.
-    const col = await collectEvidence(name, info.site, ctx, store.db, { force, known: info })
+    const col = await collectEvidence(name, info.site, ctx, store.db, { force, known: info, envId })
     if (col.error) { setBusy(''); setError(col.error); return }
     setState({ items: col.items || [], stats: col.stats || {} })
     if (!(col.items || []).length) {
@@ -75,7 +78,7 @@ function SignalsPanel({ name, info, store, onClose }) {
       return
     }
     setBusy('ai')
-    const r = await analyzeEvidence(name, col.items, ctx, store.db, info)
+    const r = await analyzeEvidence(name, col.items, ctx, store.db, info, envId)
     setBusy('')
     if (r.error) {
       if (!r.quota) store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' })

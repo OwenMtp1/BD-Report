@@ -529,6 +529,27 @@ npm run dev        # serveur de dev
     fraîcheur, corroboration entre sources INDÉPENDANTES (la même source deux fois n'en est pas
     une), qualité de la meilleure source, priorité du staff, confiance du rattachement. Il est
     RECALCULÉ à l'affichage — un score figé vieillirait en silence.
+    🔒 **CLOISONNEMENT PAR ENVIRONNEMENT — les critères appartiennent au CLIENT.**
+    Les règles vivent sur `env.newsRules` et un environnement neuf repart de
+    `defaultNewsRules()` (tout éteint, contexte vide) : **nouvel environnement, nouveaux
+    critères**, jamais ceux d'un autre. Les signaux détectés vivent dans `data[subId].signals`,
+    donc dans l'espace, donc dans l'environnement.
+    ⚠️ **LE CACHE ÉTAIT LA FUITE, et elle était réelle.** `bdrflow_signals_v1` était indexé
+    par NOM D'ENTREPRISE SEUL : l'environnement A analysait « Acme » avec SES critères, et
+    l'environnement B — un autre client, d'autres règles — récupérait ces signaux tels quels,
+    **sans jamais rappeler l'IA**. Deux clients se partageaient une analyse faite pour l'un
+    d'eux. La clé porte désormais l'environnement (`keyOf(envId, company)`), le verrou
+    anti-doublon aussi, et la version est passée à **`bdrflow_signals_v2`** pour que les
+    entrées de l'ancienne forme ne soient jamais relues.
+    ⚠️ **Une analyse dit POUR QUELLES RÈGLES elle vaut** (`rulesPrint`, enregistré à côté de
+    `evidencePrint`). Deux raisons : dans un même environnement, changer les critères doit
+    REFAIRE l'analyse — sinon le staff coche « levée de fonds » et continue de lire des
+    signaux de recrutement ; et entre environnements, deux jeux de règles ne peuvent pas
+    partager un résultat même si les clés venaient à se confondre.
+    ⚠️ Le contrôle porte sur l'USAGE, pas sur la signature : `npm run audit` exige que
+    `envId` entre dans la chaîne de la clé (un paramètre reçu et ignoré passerait un contrôle
+    de forme sans rien cloisonner), et `npm run smoke` LIT le cache après une analyse pour
+    vérifier que chaque clé commence par l'id de l'environnement.
     ⚠️ **robots.txt est consulté** avant de lire une page, et son absence vaut autorisation.
     Aucun contournement de CAPTCHA, d'authentification ou de paywall.
     UI : onglet **Signaux** (`Signals.jsx`, résumé + filtres + balayage explicite) → « Analyse

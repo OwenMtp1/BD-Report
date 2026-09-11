@@ -1013,6 +1013,35 @@ async function main() {
       'Relais : les preuves citées par l\'IA ne sont pas résolues sur les nôtres — une source inventée passerait')
     ok(/filter\(sg => sg\.title && sg\.evidence\.length\)/.test(worker),
       'Relais : un signal sans preuve est accepté — c\'est une affirmation, pas un signal')
+    // ⚠️ CLOISONNEMENT PAR ENVIRONNEMENT — les critères de signaux appartiennent au CLIENT.
+    //    Le cache était indexé par NOM D'ENTREPRISE SEUL : l'environnement A analysait
+    //    « Acme » avec SES règles, et l'environnement B récupérait ces signaux tels quels,
+    //    sans jamais rappeler l'IA. Deux clients partageaient une analyse faite pour l'un.
+    {
+      const sig = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'signals.js'), 'utf8')
+      // ⚠️ On exige que l'environnement ENTRE DANS LA CLÉ, pas seulement dans la signature :
+      //    un paramètre reçu et ignoré passe un contrôle de forme sans rien cloisonner.
+      ok(/const keyOf = \(envId, c\) => `\$\{envId[^`]*\}::/.test(sig),
+        "Signaux : le cache n'est pas cloisonné par environnement — deux clients partageraient une analyse")
+      ok(/bdrflow_signals_v2/.test(sig),
+        'Signaux : la version du cache ne change pas — les entrées non cloisonnées seraient relues')
+      ok(/export const rulesPrint/.test(sig),
+        "Signaux : rien ne dit POUR QUELLES RÈGLES une analyse vaut — changer les critères ne la referait pas")
+      // Et le balayage doit VÉRIFIER cette empreinte avant de réutiliser une analyse.
+      const scan = fs.default.readFileSync(path.default.join(dir, 'Signals.jsx'), 'utf8')
+      ok(/cachedCollect\(envId, name\)/.test(scan),
+        'Signaux : le balayage lit le cache sans dire de quel environnement')
+      ok(/cached\.rules === rulesPrint\(ctx\)/.test(scan),
+        'Signaux : une analyse est réutilisée sans vérifier que les règles sont les mêmes')
+      // Les règles elles-mêmes vivent sur l'ENVIRONNEMENT, et un nouvel env part vierge.
+      ok(s.defaultNewsRules().signals.every(x => x.on === false),
+        'Un nouvel environnement hériterait de critères cochés')
+      ok(s.defaultNewsRules().activite === '' && s.defaultNewsRules().offre === '' && !s.defaultNewsRules().consignes,
+        "Un nouvel environnement hériterait du contexte commercial d'un autre")
+      ok(s.envNewsRules({ id: 'env-neuf' }).signals.every(x => x.on === false),
+        'Un environnement sans règles ne repart pas du catalogue vierge')
+    }
+
     // e. Sources publiques uniquement, et robots.txt respecté.
     ok(/robotsAllows/.test(worker), 'Relais : robots.txt n\'est pas consulté avant de lire un site')
     // ⚠️ LE MOTEUR DE SIGNAUX ne doit dépendre d'AUCUNE clé : c'est ce qui le rend

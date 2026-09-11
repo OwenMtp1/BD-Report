@@ -939,6 +939,24 @@ async function main() {
       }
       await click(srcBtn) // on referme
 
+      // ⚠️ CLOISONNEMENT PAR ENVIRONNEMENT. Le cache était indexé par NOM D'ENTREPRISE
+      // SEUL : l'environnement A analysait « Acme » avec SES critères, et l'environnement B
+      // récupérait ces signaux sans rappeler l'IA. On vérifie ici que la clé porte bien
+      // l'environnement — c'est observable, contrairement à la signature d'une fonction.
+      {
+        const cache = JSON.parse(win.localStorage.getItem('bdrflow_signals_v2') || '{}')
+        const keys = Object.keys(cache)
+        if (!keys.length) throw new Error("Le cache des signaux est vide : le cloisonnement n'est pas vérifiable")
+        if (!keys.every(k => k.startsWith('env-peoplespheres::'))) {
+          throw new Error(`Une clé de cache ne porte pas son environnement : ${keys.join(', ')}`)
+        }
+        if (win.localStorage.getItem('bdrflow_signals_v1')) {
+          throw new Error("L'ancien cache non cloisonné est encore écrit")
+        }
+        // Et l'analyse mémorisée dit POUR QUELLES RÈGLES elle vaut.
+        const entry = cache[keys[0]]
+        if (entry.signals && !entry.rules) throw new Error("Une analyse est mémorisée sans l'empreinte des règles qui l'ont produite")
+      }
       {
         const saved = (db0().data[win.__bdrStore.session.subEnvId].signals || []).filter(x => x.company === 'Zephyr')
         if (saved.length !== 1) throw new Error(`Signaux enregistrés : ${saved.length} au lieu d'un seul`)

@@ -15,7 +15,7 @@ import { Radar, Search, RefreshCw, ArrowRight, Check, EyeOff, Flame, X } from 'l
 import { useStore, SIGNAL_TYPES, signalType, signalScore, SIGNAL_PRIORITIES, fmtDate } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
-import { collectEvidence, analyzeEvidence, buildContext, cachedCollect, evidencePrint } from '../signals.js'
+import { collectEvidence, analyzeEvidence, buildContext, cachedCollect, evidencePrint, rulesPrint } from '../signals.js'
 
 const STATUS = [
   { id: 'new', label: 'Non traité' },
@@ -87,6 +87,7 @@ export default function Signals() {
    */
   const scan = async (limit) => {
     if (!store.hasModule('aiInsights')) { toast('La brique Analyse IA n\'est pas installée.'); return }
+    const envId = store.session?.envId || ''
     const ctx = buildContext(rules, SIGNAL_TYPES, store.envIcpProfiles())
     const targets = companies.slice(0, limit)
     if (!targets.length) {
@@ -99,7 +100,7 @@ export default function Signals() {
     for (const name of targets) {
       setBusy(name)
       const info = (sub.companies || {})[name] || {}
-      const col = await collectEvidence(name, info.site, ctx, store.db, { known: info })
+      const col = await collectEvidence(name, info.site, ctx, store.db, { known: info, envId })
       if (col.outdated) { stop = col.error; break }
       if (col.error) { lines.push({ name, state: 'error', why: col.error }); continue }
       if (!(col.items || []).length) {
@@ -110,13 +111,16 @@ export default function Signals() {
       }
       // ⚠️ On n'analyse QUE si les preuves ont changé : re-payer pour un résultat identique
       // est la façon la plus sûre d'épuiser le quota sans rien apprendre.
-      const cached = cachedCollect(name)
-      if (cached?.signals && cached.print === evidencePrint(col.items)) {
+      // ⚠️ Le cache est lu POUR CET ENVIRONNEMENT, et il ne vaut que si les règles n'ont
+      // pas changé depuis : cocher un nouveau type de signal doit refaire l'analyse, sinon
+      // le staff change ses critères et continue de lire les résultats des anciens.
+      const cached = cachedCollect(envId, name)
+      if (cached?.signals && cached.print === evidencePrint(col.items) && cached.rules === rulesPrint(ctx)) {
         store.saveCompanySignals(name, cached.signals, { analyzedAt: cached.analyzedAt })
         lines.push({ name, state: 'cached', why: `${cached.signals.length} signal(s), analyse déjà faite sur ces mêmes preuves.` })
         continue
       }
-      const res = await analyzeEvidence(name, col.items, ctx, store.db, info)
+      const res = await analyzeEvidence(name, col.items, ctx, store.db, info, envId)
       if (res.quota) { stop = res.error; break }
       if (res.error) { lines.push({ name, state: 'error', why: res.error }); continue }
       store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok', model: res.model })

@@ -17,19 +17,25 @@
 import { newsRelayUrl } from './news.js'
 import { once, cooldownLeft, startCooldown, quotaMessage } from './aiGuard.js'
 
-const CACHE_KEY = 'bdrflow_signals_v1'
+// ⚠️ LE CACHE EST CLOISONNÉ PAR ENVIRONNEMENT, et c'était un vrai défaut.
+// Il était indexé par NOM D'ENTREPRISE SEUL : l'environnement A analysait « Acme » avec
+// SES critères, et l'environnement B — un autre client, d'autres règles — récupérait ces
+// signaux tels quels, sans jamais rappeler l'IA. Deux clients se partageaient une analyse
+// faite pour l'un d'eux. La clé porte donc l'environnement, et la version du cache change
+// pour que les entrées de l'ancienne forme ne soient jamais relues.
+const CACHE_KEY = 'bdrflow_signals_v2'
 const TTL = 24 * 3600 * 1000
-const keyOf = (c) => String(c || '').trim().toLowerCase()
+const keyOf = (envId, c) => `${envId || 'sans-env'}::${String(c || '').trim().toLowerCase()}`
 
 const readCache = () => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {} } catch (e) { return {} } }
-export function cachedCollect(company) {
-  const e = readCache()[keyOf(company)]
+export function cachedCollect(envId, company) {
+  const e = readCache()[keyOf(envId, company)]
   if (!e || Date.now() - (e.at || 0) > TTL) return null
   return e
 }
-function putCache(company, patch) {
+function putCache(envId, company, patch) {
   const all = readCache()
-  const k = keyOf(company)
+  const k = keyOf(envId, company)
   all[k] = { ...(all[k] || {}), ...patch }
   const keys = Object.keys(all).sort((a, b) => (all[b].at || 0) - (all[a].at || 0))
   const trimmed = {}
@@ -40,6 +46,21 @@ function putCache(company, patch) {
 /** Empreinte de l'ENSEMBLE des preuves : si elle n'a pas bougé, il n'y a rien de neuf à analyser. */
 export const evidencePrint = (items) =>
   (items || []).map(i => i.fingerprint || i.sourceUrl).sort().join('|').slice(0, 4000)
+
+/**
+ * Empreinte des RÈGLES qui ont produit une analyse.
+ * ⚠️ Deux raisons, et la seconde est une garantie de cloisonnement :
+ *  · dans un même environnement, changer les critères doit refaire l'analyse — sinon le
+ *    staff coche « levée de fonds » et continue de lire des signaux de recrutement ;
+ *  · entre environnements, deux jeux de règles différents ne peuvent PAS partager un
+ *    résultat, même si la clé de cache venait à se confondre.
+ */
+export const rulesPrint = (ctx) => JSON.stringify({
+  t: (ctx?.types || []).map(x => `${x.id}:${x.priority}`).sort(),
+  a: ctx?.forAi?.activite || '', o: ctx?.forAi?.offre || '',
+  p: [...(ctx?.forAi?.personas || [])].sort(), c: ctx?.forAi?.consignes || '',
+  i: ctx?.icp || '',
+}).slice(0, 4000)
 
 /** Les types de signaux cochés par le staff, mis à plat pour le relais. */
 const typesFor = (rules, catalogue) => (rules.signals || [])
@@ -72,16 +93,18 @@ export function icpSummary(rules, profiles) {
 }
 
 /** Ramasse les preuves publiques. Gratuit : aucune IA n'est appelée ici. */
-export async function collectEvidence(company, site, rules, db, { force = false, known = {} } = {}) {
+export async function collectEvidence(company, site, rules, db, { force = false, known = {}, envId = '' } = {}) {
   const name = String(company || '').trim()
   if (!name) return { error: "Aucun nom d'entreprise." }
   if (!force) {
-    const hit = cachedCollect(name)
+    const hit = cachedCollect(envId, name)
     if (hit?.items) return { ...hit, fromCache: true }
   }
   const base = newsRelayUrl(db)
   if (!base) return { error: "Le relais n'est pas configuré. L'équipe BD Report doit publier son URL." }
-  return once('collect:' + keyOf(name), async () => {
+  // ⚠️ Le verrou anti-doublon porte aussi l'environnement : deux environnements qui
+  // regardent la même société ne doivent pas se voir servir une seule réponse.
+  return once('collect:' + keyOf(envId, name), async () => {
     try {
       const res = await fetch(`${base}/signals/collect`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -99,9 +122,9 @@ export async function collectEvidence(company, site, rules, db, { force = false,
       const items = Array.isArray(body.items) ? body.items : []
       const out = { at: Date.now(), items, stats: body.stats || {} }
       // Les preuves ont changé : l'analyse précédente ne les décrit plus.
-      const prev = readCache()[keyOf(name)]
+      const prev = readCache()[keyOf(envId, name)]
       if (prev && evidencePrint(prev.items) !== evidencePrint(items)) out.signals = null
-      putCache(name, out)
+      putCache(envId, name, out)
       return out
     } catch (e) {
       return { error: 'Relais injoignable. Vérifiez la connexion ou l\'URL publiée.' }
@@ -114,14 +137,14 @@ export async function collectEvidence(company, site, rules, db, { force = false,
  * et il n'est jamais automatique : ni à l'ouverture d'un écran, ni sur des preuves
  * inchangées depuis la dernière analyse.
  */
-export async function analyzeEvidence(company, items, rules, db, known = {}) {
+export async function analyzeEvidence(company, items, rules, db, known = {}, envId = '') {
   const name = String(company || '').trim()
   const base = newsRelayUrl(db)
   if (!base) return { error: "Le relais n'est pas configuré." }
   if (!name || !(items || []).length) return { error: 'Aucune preuve à analyser.' }
   const left = cooldownLeft('signals')
   if (left) return { error: quotaMessage(left), quota: true }
-  return once('signals:' + keyOf(name), async () => {
+  return once('signals:' + keyOf(envId, name), async () => {
     try {
       const res = await fetch(`${base}/signals/analyze`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -132,7 +155,9 @@ export async function analyzeEvidence(company, items, rules, db, known = {}) {
       if (quota) startCooldown(body?.retryAfter, 'signals')
       if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota }
       const signals = Array.isArray(body.signals) ? body.signals : []
-      putCache(name, { signals, analyzedAt: Date.now(), print: evidencePrint(items) })
+      // L'empreinte des RÈGLES est enregistrée avec l'analyse : elle dit pour QUELS
+      // critères ce résultat vaut, et interdit de le réutiliser sous d'autres.
+      putCache(envId, name, { signals, analyzedAt: Date.now(), print: evidencePrint(items), rules: rulesPrint(rules) })
       return { signals, model: body.model || '' }
     } catch (e) {
       return { error: 'Relais injoignable. Vérifiez la connexion ou l\'URL publiée.' }
