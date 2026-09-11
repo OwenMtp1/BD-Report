@@ -908,11 +908,23 @@ async function main() {
     // d. ⚠️ PLUS AUCUNE IA DANS L'ENRICHISSEMENT. Une consigne adressée à un modèle ne
     //    protégeait que tant qu'il l'écoutait ; des bases publiques ne renvoient que ce
     //    qu'elles publient, et la barrière `looksPersonal` reste la dernière.
-    const enrichSrc = worker.slice(worker.indexOf('async function enrich(company, fields)'), worker.indexOf('Routage'))
+    const enrichSrc = worker.slice(worker.indexOf('async function enrich(company, fields, env)'), worker.indexOf('Routage'))
     ok(!/callGemini|tools:|google_search/.test(enrichSrc),
       "Relais : l'enrichissement appelle encore Gemini — c'est ce qui le rendait tributaire du quota")
     ok(/officialRegistry\(company\)/.test(enrichSrc) && /wikidata\(company\)/.test(enrichSrc),
       'Relais : les deux sources publiques ne sont pas toutes deux interrogées')
+    // ⚠️ PAPPERS EST FACULTATIF, et doit le rester : sans token il s'éteint proprement au
+    //    lieu d'échouer, sinon un réglage absent passerait pour une panne.
+    const papSrc = worker.slice(worker.indexOf('async function pappers('), worker.indexOf('async function enrich('))
+    ok(/if \(!token\) return \{ found: \{\}, off: true/.test(papSrc),
+      'Relais : Pappers est appelé sans token — un réglage absent passerait pour une panne')
+    ok(/if \(!siren\)/.test(papSrc),
+      "Relais : Pappers est interrogé sans SIREN — l'homonymie que le SIREN ferme se rouvrirait")
+    // ⚠️ La page publique de Pappers est CITÉE comme source (l'utilisateur doit pouvoir
+    //    vérifier), jamais LUE : le seul `fetch` du bloc doit viser leur API.
+    const papFetches = papSrc.match(/fetch\(([^)]*)/g) || []
+    ok(papFetches.length === 1 && /PAPPERS_API/.test(papFetches[0]),
+      `Relais : Pappers doit être lu par son API officielle, jamais par ses pages web (${papFetches.join(' | ') || 'aucun appel'})`)
     // e. La confiance est POSÉE PAR NOUS selon la source, elle n'est plus déclarée par un tiers.
     ok(/confidence: 'high'/.test(worker) && /confidence: 'medium'/.test(worker),
       'Relais : la confiance ne distingue plus la source officielle de la base collaborative')
@@ -992,7 +1004,13 @@ async function main() {
       'Relais : un signal sans preuve est accepté — c\'est une affirmation, pas un signal')
     // e. Sources publiques uniquement, et robots.txt respecté.
     ok(/robotsAllows/.test(worker), 'Relais : robots.txt n\'est pas consulté avant de lire un site')
-    ok(!/api\.pole-emploi|francetravail|pappers/i.test(worker), 'Relais : une source demandant une clé a été introduite')
+    // ⚠️ LE MOTEUR DE SIGNAUX ne doit dépendre d'AUCUNE clé : c'est ce qui le rend
+    //    utilisable chez n'importe quel client sans compte à ouvrir. La garantie porte sur
+    //    les COLLECTEURS, pas sur tout le fichier — l'enrichissement, lui, peut se voir
+    //    offrir une source facultative.
+    const collectSrc = worker.slice(worker.indexOf('const SIGNAL_QUERIES'), worker.indexOf('const SIGNAL_PROMPT'))
+    ok(!/api\.pole-emploi|francetravail|pappers|api_token|apiKey/i.test(collectSrc),
+      'Relais : la collecte de signaux dépend désormais d\'une clé')
   }
 
   // 6 octodecies. Une demande CLOSE quitte le tableau Clients. Le tableau doit dire ce

@@ -724,20 +724,89 @@ async function wikidata(company) {
  * ⚠️ Gemini reste utilisé pour les SIGNAUX, où il est irremplaçable : regrouper des preuves
  * éparses en un fait commercial n'est pas une recherche, c'est un jugement.
  */
-async function enrich(company, fields) {
-  // Les deux sources tournent EN PARALLÈLE et se complètent. L'échec de l'une n'arrête
-  // rien : elles complètent, elles ne commandent pas.
+// ---------------------------------------------------------------- Pappers
+// ⚠️ PAR SON API OFFICIELLE, ET PAR SIREN. Pappers publie une API documentée avec une
+// offre gratuite : c'est la voie prévue pour un programme, et la seule qui respecte leurs
+// conditions. On ne lit AUCUNE de leurs pages web — leur contenu est leur fonds de
+// commerce, et leur robots.txt comme leurs CGU le disent.
+//
+// ⚠️ L'interrogation se fait par SIREN, que l'annuaire de l'État vient de nous donner :
+// une recherche par nom rouvrirait le risque d'homonymie que le SIREN ferme définitivement.
+//
+// ⚠️ SANS TOKEN, LA SOURCE RESTE ÉTEINTE — et le dit. Un token vide qui produirait un 401
+// à chaque appel ferait passer une source non configurée pour une source en panne.
+// Secret Cloudflare : PAPPERS_API_TOKEN (offre gratuite, voir news/SETUP.md).
+const PAPPERS_API = 'https://api.pappers.fr/v2/entreprise'
+const PAPPERS_PAGE = (siren) => `https://www.pappers.fr/entreprise/${siren}`
+
+/** Formate un montant en euros pour la fiche : « 12 000 000 € (2024) ». */
+const money = (n, year) => {
+  const v = Number(n)
+  if (!Number.isFinite(v) || v <= 0) return ''
+  return `${v.toLocaleString('fr-FR')} €${year ? ` (${year})` : ''}`
+}
+
+async function pappers(siren, env) {
+  const token = String(env?.PAPPERS_API_TOKEN || '').trim()
+  if (!token) return { found: {}, off: true, why: 'Aucun token Pappers configuré (secret PAPPERS_API_TOKEN).' }
+  if (!siren) return { found: {}, why: "Pas de SIREN : l'annuaire ne l'a pas fourni." }
+  const res = await fetch(`${PAPPERS_API}?siren=${encodeURIComponent(siren)}&api_token=${encodeURIComponent(token)}`,
+    { headers: { Accept: 'application/json' }, cf: { cacheTtl: 86400, cacheEverything: true } })
+  // 401/403 = token invalide ou épuisé : le dire, plutôt que de laisser croire à une absence de données.
+  if (res.status === 401 || res.status === 403) throw new Error(`Pappers a refusé le token (${res.status}).`)
+  if (!res.ok) throw new Error(`Pappers : ${res.status}`)
+  const d = await res.json()
+  const url = PAPPERS_PAGE(siren)
+  // Registres officiels relayés : confiance haute, comme l'annuaire.
+  const src = (value) => (value ? { value: String(value).slice(0, 300), publisher: 'Pappers (registres)', url, confidence: 'high' } : null)
+
+  // Les comptes annuels sont rangés du plus récent au plus ancien selon les cas : on prend
+  // le plus récent explicitement plutôt que de supposer un ordre.
+  const comptes = Array.isArray(d?.finances) ? [...d.finances].sort((a, b) => Number(b?.annee || 0) - Number(a?.annee || 0)) : []
+  const dernier = comptes[0] || null
+  const ca = money(dernier?.chiffre_affaires ?? d?.chiffre_affaires, dernier?.annee)
+
+  return {
+    found: {
+      ca: src(ca),
+      effectif: src(d?.effectif || d?.tranche_effectif || ''),
+      secteur: src(d?.libelle_code_naf || d?.domaine_activite || ''),
+      site: typeof d?.site_web === 'string' ? src(d.site_web) : null,
+    },
+    siren,
+  }
+}
+
+async function enrich(company, fields, env) {
+  // L'annuaire et Wikidata partent ENSEMBLE : ils ne dépendent pas l'un de l'autre, et
+  // les enchaîner doublerait l'attente pour rien.
   let registryError = ''
   let wikiError = ''
+  let pappersError = ''
+  let pappersOff = false
   const [reg, wiki] = await Promise.all([
     officialRegistry(company).catch(e => { registryError = (e && e.message) || String(e); return { found: {} } }),
     wikidata(company).catch(e => { wikiError = (e && e.message) || String(e); return { found: {} } }),
   ])
 
+  // ⚠️ PAPPERS VIENT APRÈS, parce qu'il a besoin du SIREN que l'annuaire vient de rendre.
+  // L'interroger par nom rouvrirait l'homonymie que le SIREN ferme ; attendre un aller-retour
+  // de plus est le prix d'une identification certaine.
+  let pap = { found: {} }
+  try {
+    pap = await pappers(reg.raw?.siren || '', env)
+    if (pap.off) { pappersOff = true; pappersError = pap.why || '' }
+    else if (pap.why) pappersError = pap.why
+  } catch (e) { pappersError = (e && e.message) || String(e) }
+
   const out = {}
   for (const f of fields) {
-    // L'annuaire PRIME : une donnée d'État l'emporte sur une fiche collaborative.
-    const v = reg.found[f] || wiki.found[f]
+    // ORDRE DE CONFIANCE : l'État d'abord, les registres relayés ensuite, la base
+    // collaborative en dernier. ⚠️ Exception assumée pour le chiffre d'affaires : il vient
+    // des comptes déposés, que l'annuaire ne publie pas et que Pappers lit à la source.
+    const v = f === 'ca'
+      ? (pap.found[f] || reg.found[f] || wiki.found[f])
+      : (reg.found[f] || pap.found[f] || wiki.found[f])
     // Dernière barrière, inchangée : aucune donnée personnelle dans une fiche société.
     out[f] = v && !looksPersonal(v.value) ? v : null
   }
@@ -746,7 +815,8 @@ async function enrich(company, fields) {
   if (out.linkedin && !(isHttp(out.linkedin.value) && /linkedin\.com\/company\//i.test(out.linkedin.value))) out.linkedin = null
 
   return {
-    found: out, model: '', source: 'public', registryError, wikiError,
+    found: out, model: '', source: 'public',
+    registryError, wikiError, pappersError, pappersOff,
     inputTokens: 0, outputTokens: 0,
   }
 }
@@ -802,7 +872,7 @@ export default {
         // Les champs viennent de l'APPLICATION : elle seule sait lesquels existent chez elle.
         const fields = (Array.isArray(body?.fields) ? body.fields : []).filter(f => ENRICH_SPECS[f])
         if (!company || !fields.length) return json({ error: 'Entreprise ou champs manquants.' }, request, env, 400)
-        return json(await enrich(company, fields), request, env)
+        return json(await enrich(company, fields, env), request, env)
       }
 
       // ⚠️ /diag — LE RELAIS SE TESTE LUI-MÊME, ET LE DIT.
@@ -835,6 +905,14 @@ export default {
           if (!got.length) throw new Error(`Joignable, mais aucune fiche d'entreprise reconnue. ${JSON.stringify(w.raw)}`)
           return { champs: got }
         })
+        await step('pappers', `Pappers (« ${q} »)`, async () => {
+          const reg = await officialRegistry(q)
+          const r = await pappers(reg.raw?.siren || '', env)
+          if (r.off) throw new Error(r.why)
+          const got = Object.keys(r.found).filter(k => r.found[k])
+          if (!got.length) throw new Error(r.why || 'Joignable, mais aucun champ exploité.')
+          return { champs: got }
+        })
         await step('news', `Presse (« ${q} »)`, async () => {
           const n = await getNews(q)
           return { articles: n.articles.length, source: n.source }
@@ -853,9 +931,9 @@ export default {
         // MALGRÉ ça — et c'est justement tout l'objet du correctif. On le fait donc pour
         // de vrai, sur l'entreprise de test, et on dit combien de champs en sortent.
         await step('enrich', `Enrichissement de bout en bout (« ${q} »)`, async () => {
-          const r = await enrich(q, ['site', 'linkedin', 'localisation', 'ca', 'effectif', 'secteur'])
+          const r = await enrich(q, ['site', 'linkedin', 'localisation', 'ca', 'effectif', 'secteur'], env)
           const got = Object.keys(r.found || {}).filter(k => r.found[k])
-          if (!got.length) throw new Error(`Aucun champ trouvé. Annuaire : ${r.registryError || 'ok'} · Wikidata : ${r.wikiError || 'ok'}`)
+          if (!got.length) throw new Error(`Aucun champ trouvé. Annuaire : ${r.registryError || 'ok'} · Wikidata : ${r.wikiError || 'ok'} · Pappers : ${r.pappersError || 'ok'}`)
           return { champs: got, source: r.source, valeurs: Object.fromEntries(got.map(k => [k, r.found[k].value])) }
         })
 
@@ -868,6 +946,7 @@ export default {
         // pas » fait craindre le pire à qui vient d'enrichir une fiche, alors que
         // l'enrichissement ne dépend plus de lui du tout.
         else if (ko.some(s => s.id === 'gemini_text')) verdict = "Gemini ne répond pas : seuls les SIGNAUX sont concernés. L'enrichissement ne passe plus par l'IA — il continue de fonctionner."
+        else if (enrichOk && ko.length === 1 && ko[0].id === 'pappers') verdict = "Tout fonctionne. Pappers est simplement non configuré : c'est une source FACULTATIVE, utile surtout pour le chiffre d'affaires (secret PAPPERS_API_TOKEN, offre gratuite)."
         // Un service tiers en panne n'est PAS une panne du produit tant que le résultat
         // sort quand même. Le dire dans cet ordre évite de chercher un problème réglé.
         else if (enrichOk && ko.length) verdict = `L'enrichissement FONCTIONNE (${(steps.find(s => s.id === 'enrich')?.detail?.champs || []).length} champs trouvés). Ce qui est en rouge ci-dessous n'est pas bloquant.`

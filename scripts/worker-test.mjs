@@ -287,6 +287,76 @@ console.log("Enrichissement — l'IA n'est plus jamais appelée")
   ok(!b.found?.site, "une valeur qui n'est pas une URL ne doit pas entrer dans la fiche")
   ok(/linkedin\.com\/company\/acme/.test(b.found?.linkedin?.value || ''), 'une URL LinkedIn bien formée doit passer')
 }
+// ⚠️ PAPPERS — par son API OFFICIELLE et par SIREN. Leurs pages web ne sont jamais lues :
+// leur contenu est leur fonds de commerce, et leurs conditions l'interdisent. Le SIREN vient
+// de l'annuaire de l'État, ce qui ferme définitivement le risque d'homonymie.
+const PAPPERS = /api\.pappers\.fr/
+const PAPPERS_BODY = {
+  siren: '794598813', libelle_code_naf: 'Programmation informatique', site_web: 'https://doctolib.fr',
+  finances: [
+    { annee: 2023, chiffre_affaires: 9000000 },
+    { annee: 2024, chiffre_affaires: 12500000 },
+  ],
+}
+const withToken = { GEMINI_API_KEY: 'test-key', PAPPERS_API_TOKEN: 'tok-secret-pappers' }
+const callTok = (path, body) => worker.fetch(new Request('https://relay.test' + path, {
+  method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' },
+}), withToken)
+
+console.log('Enrichissement — Pappers, par API officielle et par SIREN')
+{
+  let asked = ''
+  stubFetch([
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute(),
+    [PAPPERS, (u) => { asked = u; return { body: PAPPERS_BODY } }],
+  ])
+  const b = await (await callTok('/enrich', { company: 'Doctolib', fields: ['ca', 'secteur', 'localisation'], known: {} })).json()
+  ok(/siren=794598813/.test(asked), `Pappers doit être interrogé par SIREN (appel : ${asked || 'aucun'})`)
+  ok(!/pappers\.fr\/entreprise/.test(asked), "aucune page web de Pappers ne doit être lue — seulement leur API")
+  // ⚠️ Le CA vient des comptes DÉPOSÉS, que l'annuaire ne publie pas : Pappers prime ici.
+  ok(/12\s?500\s?000/.test((b.found?.ca?.value || '').replace(/ | /g, ' ')), `le CA doit venir de Pappers (reçu : ${b.found?.ca?.value})`)
+  ok(/2024/.test(b.found?.ca?.value || ''), "l'exercice le plus RÉCENT doit être retenu, pas le premier de la liste")
+  // Sur le reste, l'annuaire de l'État garde la main.
+  ok(/Annuaire/.test(b.found?.secteur?.publisher || ''), "l'État garde la main sur ce qu'il publie lui-même")
+  ok(/LEVALLOIS/.test(b.found?.localisation?.value || ''), "l'implantation reste celle de l'annuaire")
+}
+{
+  // ⚠️ SANS TOKEN, LA SOURCE EST ÉTEINTE — pas en panne. Confondre les deux enverrait
+  // chercher un incident là où il n'y a qu'un réglage absent.
+  let called = false
+  stubFetch([
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute(),
+    [PAPPERS, () => { called = true; return { body: PAPPERS_BODY } }],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['ca', 'secteur'], known: {} } })).json()
+  ok(!called, "sans token, Pappers ne doit pas être appelé du tout")
+  ok(b.pappersOff === true, 'une source non configurée doit se déclarer éteinte')
+  ok(/PAPPERS_API_TOKEN/.test(b.pappersError || ''), 'le motif doit nommer le réglage manquant')
+  ok(b.found?.secteur?.value === 'Programmation informatique', "l'absence de Pappers ne doit rien retirer aux autres sources")
+}
+{
+  // Un token refusé est une VRAIE erreur : elle doit se distinguer d'une absence de données.
+  stubFetch([
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute(),
+    [PAPPERS, () => ({ status: 401, body: 'unauthorized' })],
+  ])
+  const b = await (await callTok('/enrich', { company: 'Doctolib', fields: ['ca', 'secteur'], known: {} })).json()
+  ok(/refusé le token/.test(b.pappersError || ''), `un token invalide doit le dire (reçu : ${b.pappersError})`)
+  ok(b.pappersOff !== true, "un token refusé n'est pas une source éteinte")
+  ok(b.found?.secteur?.value === 'Programmation informatique', "l'échec de Pappers ne doit pas emporter les autres sources")
+}
+{
+  // Sans SIREN (société non trouvée à l'annuaire), on n'invente pas une recherche par nom.
+  let called = false
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })], wdRoute('Acme', 'entreprise'),
+    [PAPPERS, () => { called = true; return { body: PAPPERS_BODY } }],
+  ])
+  const b = await (await callTok('/enrich', { company: 'Acme', fields: ['ca'], known: {} })).json()
+  ok(!called, "sans SIREN, Pappers ne doit pas être interrogé au jugé")
+  ok(/SIREN/.test(b.pappersError || ''), 'le motif doit dire que le SIREN manque')
+}
+
 console.log('Diagnostic — le relais dit lui-même ce qui bloque')
 {
   // ⚠️ Le diagnostic ne teste QUE ce qui sert. La brique « recherche Google » a disparu
@@ -294,19 +364,35 @@ console.log('Diagnostic — le relais dit lui-même ce qui bloque')
   // chercher une panne là où il n'y en a pas.
   stubFetch([
     [REGISTRY, () => ({ body: REGISTRY_BODY })], [GOOGLE, () => ({ body: rss(['Doctolib lève']) })],
-    [BING, () => ({ body: rss([]) })], wdRoute(),
+    [BING, () => ({ body: rss([]) })], wdRoute(), [PAPPERS, () => ({ body: PAPPERS_BODY })],
     [GEMINI, () => ({ body: geminiBody({ ok: true }) })],
   ])
-  const b = await (await call('/diag')).json()
+  const b = await (await worker.fetch(new Request('https://relay.test/diag'), withToken)).json()
   const by = Object.fromEntries((b.steps || []).map(s => [s.id, s]))
   ok(!by.gemini_search, "la brique « recherche Google » ne doit plus exister : plus rien ne l'utilise")
-  for (const id of ['key', 'registry', 'wikidata', 'news', 'gemini_text', 'enrich']) {
+  for (const id of ['key', 'registry', 'wikidata', 'pappers', 'news', 'gemini_text', 'enrich']) {
     ok(by[id], `le diagnostic doit couvrir la brique « ${id} »`)
   }
   ok(by.enrich?.ok === true, "le diagnostic doit vérifier l'enrichissement de bout en bout")
   ok((by.enrich?.detail?.champs || []).length >= 3, "le test de bout en bout doit rendre des champs réels")
   ok(b.ok === true && /Tout répond/.test(b.verdict || ''), `tout vert doit donner un verdict vert (reçu : ${b.verdict})`)
-  ok(!JSON.stringify(b).includes('test-key'), '⚠️ le diagnostic ne doit jamais laisser fuir la clé')
+  ok(!JSON.stringify(b).includes('test-key') && !JSON.stringify(b).includes('tok-secret-pappers'),
+    '⚠️ le diagnostic ne doit jamais laisser fuir une clé ni un token')
+}
+{
+  // ⚠️ UNE SOURCE FACULTATIVE NON CONFIGURÉE N'EST PAS UNE PANNE. Sans ce cas, l'écran
+  // affichait du rouge pour un réglage qu'on a sciemment laissé vide.
+  stubFetch([
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], [GOOGLE, () => ({ body: rss(['x']) })],
+    [BING, () => ({ body: rss([]) })], wdRoute(), [PAPPERS, () => ({ body: PAPPERS_BODY })],
+    [GEMINI, () => ({ body: geminiBody({ ok: true }) })],
+  ])
+  const b = await (await call('/diag')).json()   // sans token Pappers
+  const by = Object.fromEntries((b.steps || []).map(s => [s.id, s]))
+  ok(by.pappers?.ok === false, 'une source sans réglage doit être signalée')
+  ok(by.enrich?.ok === true, "l'enrichissement doit rester vert sans Pappers")
+  ok(/FACULTATIVE/.test(b.verdict || '') && /PAPPERS_API_TOKEN/.test(b.verdict || ''),
+    `le verdict doit dire que la source est facultative et nommer le réglage (reçu : ${b.verdict})`)
 }
 {
   // ⚠️ GEMINI EN PANNE NE CONCERNE PLUS QUE LES SIGNAUX. Le verdict doit le dire, sinon

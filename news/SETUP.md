@@ -43,6 +43,30 @@ npx wrangler secret put GEMINI_API_KEY     # colle la clé quand il la demande
 npx wrangler deploy
 ```
 
+### Facultatif — Pappers, pour le chiffre d'affaires
+
+L'enrichissement de fiche n'utilise **aucune IA** : il lit l'annuaire des entreprises
+(État) et Wikidata, tous deux gratuits et sans clé. Ces deux sources couvrent
+l'implantation, l'effectif, le secteur, le site et le LinkedIn.
+
+Le **chiffre d'affaires**, lui, vient des comptes annuels déposés, que ni l'un ni l'autre
+ne publie de façon fiable. [Pappers](https://www.pappers.fr/api) les expose par une API
+officielle avec une offre gratuite. Si vous créez un token :
+
+```bash
+npx wrangler secret put PAPPERS_API_TOKEN   # facultatif
+npx wrangler deploy
+```
+
+Sans token, la source reste **éteinte** — et le diagnostic le dit comme un réglage absent,
+jamais comme une panne. Tout le reste continue de fonctionner.
+
+> ℹ️ **Pourquoi pas societe.com ?** Ils ne publient pas d'API, et leurs conditions
+> d'utilisation comme leur `robots.txt` interdisent l'extraction automatisée de leurs
+> pages — c'est leur fonds de commerce. Leurs données proviennent par ailleurs des mêmes
+> registres publics (INSEE, greffes) que l'annuaire de l'État et Pappers lisent
+> légitimement : passer par eux donne la même information, à la source.
+
 Wrangler affiche l'URL du Worker, par exemple
 `https://bdr-news.votre-compte.workers.dev`.
 

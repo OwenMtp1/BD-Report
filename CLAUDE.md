@@ -387,6 +387,20 @@ npm run dev        # serveur de dev
       d'effectif est traduit en ordre de grandeur (`INSEE_TRANCHES`) — « 42 » n'apprend rien.
     · **Wikidata** (CC0, `wikidata`) → site, LinkedIn, chiffre d'affaires. Confiance
       « medium » : une base collaborative ne vaut pas une source d'État.
+    · **Pappers** (`pappers`, FACULTATIF) → chiffre d'affaires des comptes déposés, effectif,
+      secteur. ⚠️ Par son **API officielle** et **par SIREN** — celui que l'annuaire vient de
+      rendre, ce qui ferme définitivement l'homonymie. ⚠️ **Aucune de leurs pages web n'est
+      lue** : leur contenu est leur fonds de commerce, et leurs CGU comme leur robots.txt
+      l'interdisent ; la page n'est CITÉE que comme source vérifiable. ⚠️ **Sans le secret
+      `PAPPERS_API_TOKEN`, la source reste ÉTEINTE** et se déclare telle (`pappersOff`) —
+      confondre « non configuré » et « en panne » enverrait chercher un incident inexistant.
+      Le CA vient des comptes annuels, que l'annuaire ne publie pas : c'est la SEULE exception
+      à la priorité de l'État (`f === 'ca'` dans `enrich`), et l'exercice le plus RÉCENT est
+      choisi explicitement plutôt que le premier de la liste.
+    ⛔ **societe.com est écarté, et ce n'est pas un oubli** : pas d'API publique, et
+      l'extraction automatisée de leurs pages est interdite par leurs conditions. Leurs
+      données viennent des mêmes registres (INSEE, greffes) que l'annuaire et Pappers lisent
+      légitimement — passer par eux donne la même information, à la source.
     ⚠️ **L'homonymie est le vrai danger de Wikidata** : « Orange » est aussi un fruit. Une
     entité n'est retenue que si son nom correspond ET que sa description désigne une
     organisation (`WD_ORG`) — remplir la fiche d'un client avec les données d'autre chose est
