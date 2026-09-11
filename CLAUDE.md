@@ -565,10 +565,23 @@ npm run dev        # serveur de dev
   décider. ⚠️ `CLIENT_FINAL_STATUSES` : un client en churn ou ancien ne redevient pas « actif »
   parce qu'il a écrit au support — son statut vient de son environnement, pas d'un ticket.
 - **`src/pages/Companies.jsx` — onglet « Mes entreprises »** (brick homonyme, nav Activité) : toutes les
-  sociétés de l'espace, agrégées depuis les RDV, les contacts et `data.companies`. Leads répond à « où en
-  est l'affaire ? », celui-ci à « que sait-on de ce compte ? » — d'où le filtre « à compléter » (nombre de
-  champs `ENRICHABLE` vides) plutôt qu'un tri par étape. Chaque ligne ouvre la fiche existante
-  (`openCompany`) ; l'écran n'invente aucune donnée et ne crée aucun stockage.
+  sociétés de l'espace, agrégées depuis les RDV, les contacts, `data.companies` et `data.signals`. Leads
+  répond à « où en est l'affaire ? », celui-ci à « que sait-on de ce compte ? ».
+  ⚠️ **UNE CARTE = UNE ENTREPRISE**, pas une affaire : une société qui porte quatre deals fait ici UNE
+  carte. C'est ce qui distingue durablement cet écran de Leads.
+  **Deux vues** — liste (triable : nom, dernier contact, nombre de RDV, informations manquantes, signaux)
+  et **kanban**. ⚠️ **L'AXE DU KANBAN SE CHOISIT** (`AXES` : ce qu'on sait / dernier contact / signaux /
+  étape / secteur / taille) : le figer sur l'étape aurait refait Leads, le figer sur la complétude
+  n'aurait servi qu'à préparer un enrichissement. ⚠️ **Une colonne VIDE reste affichée** (« Aucune
+  entreprise ici. ») — la masquer ferait croire que la catégorie n'existe pas, alors qu'elle est
+  justement l'objectif ; en revanche des FILTRES qui ne rendent rien cèdent la place au message d'absence,
+  six colonnes vides n'apprenant rien.
+  **Recherche** sur nom, secteur, implantation, site ET contacts — on cherche souvent « le SaaS lyonnais »
+  sans se rappeler la raison sociale. **Filtres** : complétude, dernier contact (mois / trimestre / 3 mois
+  sans nouvelle / jamais), signaux (à traiter / traités / aucun), étape, secteur, taille, implantation.
+  ⚠️ Les valeurs proposées viennent des DONNÉES ; un secteur qu'aucune entreprise ne porte ne sélectionnerait
+  rien sans qu'on sache pourquoi. Chaque carte ouvre la fiche existante (`openCompany`) ; l'écran n'invente
+  aucune donnée et ne crée aucun stockage.
 - **Menu sur mesure par client** — `env.navLayout = [{id,label,items:[tabId]}]`, composé dans
   l'Atelier (`NavLayoutEditor` dans `EnvAdmin.jsx`, droit `env.build`), appliqué par
   `applyNavLayout` (nav.jsx) dans la barre latérale. ⚠️ **Ranger n'accorde AUCUN accès** : la

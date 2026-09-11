@@ -1061,6 +1061,98 @@ async function main() {
     if (!text().includes('à compléter') && !text().includes('fiche complète')) {
       throw new Error("La liste ne dit pas ce qu'il manque sur chaque fiche")
     }
+
+    // RECHERCHE : elle porte sur tout ce qui identifie un compte, pas seulement le nom.
+    const search = [...container.querySelectorAll('main input')].find(i => (i.placeholder || '').includes('Nom, secteur'))
+    if (!search) throw new Error("Le champ de recherche est absent de « Mes entreprises »")
+    await type(search, known || 'zzz')
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    if (known && !rowOf(known)) throw new Error('La recherche masque le compte qu\'elle devrait trouver')
+    await type(search, 'zzz-aucune-entreprise-nexiste')
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    if (!text().includes('Aucune entreprise ne correspond à ces filtres.')) {
+      throw new Error("Une recherche sans résultat doit le dire, pas afficher toute la liste")
+    }
+    // Et le filtre doit pouvoir se retirer : une liste vide sans issue est un piège.
+    const clearBtn = [...container.querySelectorAll('main button')].find(b => b.textContent.includes('Effacer les filtres'))
+    if (!clearBtn) throw new Error("Aucun moyen d'effacer les filtres quand ils ne rendent rien")
+    await click(clearBtn)
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    if (known && !rowOf(known)) throw new Error("« Effacer les filtres » ne rend pas la liste")
+
+    // FILTRES : chacun réduit réellement la liste.
+    {
+      const before = [...container.querySelectorAll('main .card')].length
+      const know = [...container.querySelectorAll('main select')][0]
+      if (!know) throw new Error('Les filtres sont absents de « Mes entreprises »')
+      await act(async () => {
+        know.value = 'full'
+        know.dispatchEvent(new win.Event('change', { bubbles: true }))
+      })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const after = [...container.querySelectorAll('main .card')].length
+      if (after >= before) throw new Error('Le filtre « Ce qu\'on sait » ne filtre rien')
+      const clear2 = [...container.querySelectorAll('main button')].find(b => b.textContent.includes('Effacer les filtres'))
+      if (clear2) await click(clear2)
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    }
+
+    // KANBAN : la seconde vue, avec ses colonnes. ⚠️ On lit le KANBAN, pas le texte de la
+    // page : les mêmes libellés apparaissent dans les listes déroulantes de filtres, et une
+    // assertion sur `text()` passerait sans qu'aucune colonne existe.
+    {
+      const kb = [...container.querySelectorAll('main button')].find(b => b.textContent.trim() === 'Kanban')
+      if (!kb) throw new Error('La vue kanban est absente de « Mes entreprises »')
+      await click(kb)
+      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      const board = () => container.querySelector('[data-kanban]')
+      if (!board()) throw new Error("Le kanban ne s'affiche pas")
+      const colText = () => board().textContent || ''
+      for (const col of ['Rien de renseigné', 'Fiche partielle', 'Fiche complète']) {
+        if (!colText().includes(col)) throw new Error(`La colonne « ${col} » manque au kanban`)
+      }
+      if (known && !rowOf(known)) throw new Error("Le kanban perd les entreprises de la liste")
+
+      // ⚠️ UNE COLONNE VIDE RESTE AFFICHÉE. On force le cas en ne gardant qu'une catégorie :
+      // les deux autres colonnes doivent rester là et dire qu'elles sont vides. Les masquer
+      // ferait croire que la catégorie n'existe pas, alors qu'elle est justement l'objectif.
+      {
+        // On choisit une catégorie qui garde AU MOINS une entreprise : un filtre qui ne
+        // rend rien fait place au message « aucune entreprise ne correspond », et c'est
+        // le bon comportement — six colonnes vides n'apprendraient rien.
+        const know2 = [...container.querySelectorAll('main select')][0]
+        let picked = ''
+        for (const v of ['partial', 'full', 'empty']) {
+          await act(async () => { know2.value = v; know2.dispatchEvent(new win.Event('change', { bubbles: true })) })
+          await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+          if (board()) { picked = v; break }
+        }
+        if (!picked) throw new Error("Aucune catégorie de complétude ne contient d'entreprise : le jeu de démo ne permet pas de tester les colonnes vides")
+        for (const col of ['Rien de renseigné', 'Fiche partielle', 'Fiche complète']) {
+          if (!colText().includes(col)) throw new Error(`Une colonne vide (« ${col} ») disparaît du kanban au lieu de se dire vide`)
+        }
+        if (!colText().includes('Aucune entreprise ici.')) throw new Error("Une colonne vide ne dit pas qu'elle est vide")
+        const clear3 = [...container.querySelectorAll('main button')].find(b => b.textContent.includes('Effacer les filtres'))
+        if (clear3) await click(clear3)
+        await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      }
+
+      // L'AXE SE CHOISIT : c'est ce qui distingue cet écran de Leads, qui n'a que l'étape.
+      const axisSel = [...container.querySelectorAll('main select')].pop()
+      await act(async () => { axisSel.value = 'activity'; axisSel.dispatchEvent(new win.Event('change', { bubbles: true })) })
+      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      if (!colText().includes('Vue ce mois-ci') || !colText().includes('Jamais de rendez-vous')) {
+        throw new Error("Changer d'axe ne change pas les colonnes du kanban")
+      }
+      if (colText().includes('Fiche partielle')) throw new Error("L'ancien axe laisse ses colonnes en place")
+      await act(async () => { axisSel.value = 'secteur'; axisSel.dispatchEvent(new win.Event('change', { bubbles: true })) })
+      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      if (!colText().includes('Secteur inconnu')) throw new Error("L'axe « Secteur » doit ranger quelque part ce qu'on ne sait pas")
+      const lv = [...container.querySelectorAll('main button')].find(b => b.textContent.trim() === 'Liste')
+      await click(lv)
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    }
+
     if (known) {
       await click(rowOf(known))
       await act(async () => { await new Promise(r => setTimeout(r, 60)) })
