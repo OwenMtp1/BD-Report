@@ -699,9 +699,22 @@ npm run dev        # serveur de dev
   de churn). Une archive qui EXPIRE sans décision le passe en « anciens » — expirer n'est pas
   décider. ⚠️ `CLIENT_FINAL_STATUSES` : un client en churn ou ancien ne redevient pas « actif »
   parce qu'il a écrit au support — son statut vient de son environnement, pas d'un ticket.
+- **DEUX ÉCRANS, DEUX PÉRIMÈTRES DE PIPELINE.** ⚠️ La bascule « Mon pipeline / Pipeline entreprise »
+  a été SÉPARÉE en deux écrans : **`Leads`** ne porte plus QUE le pipeline de l'ENTREPRISE (la vue
+  partagée, avec le filtre par propriétaire), et le **pipeline PERSONNEL** est devenu une vue de
+  **« Mes entreprises »**. Une carte de pipeline EST une entreprise — le même objet que les lignes
+  de la liste, vu sous l'angle « où en est l'affaire ? » plutôt que « que sait-on de ce compte ? ».
+  ⚠️ **UNE SEULE IMPLÉMENTATION** : `PipelineKanban({ scope, title, intro })` dans `Leads.jsx`,
+  exporté deux fois (`Leads` = `scope="org"`, `MyPipeline` = `scope="me"`). Dupliquer 300 lignes
+  de glisser-déposer, sélection multiple et actions groupées aurait condamné chaque correction à
+  être faite deux fois — la leçon d'`OrgChart`/`ProjectOrgChart`.
+  ⚠️ Les filtres de la liste ne sont PAS RENDUS sur la vue pipeline (pas seulement masqués) : un
+  bloc caché garde son état et se fait visiter par le traducteur pour rien, et deux barres de
+  filtres superposées ne se comprennent plus.
 - **`src/pages/Companies.jsx` — onglet « Mes entreprises »** (brick homonyme, nav Activité) : toutes les
   sociétés de l'espace, agrégées depuis les RDV, les contacts, `data.companies` et `data.signals`. Leads
-  répond à « où en est l'affaire ? », celui-ci à « que sait-on de ce compte ? ».
+  répond à « où en est l'affaire ? » POUR L'ÉQUIPE, celui-ci à « que sait-on de ce compte ? » —
+  et porte aussi « Mon pipeline », qui répond à la première question pour MES affaires.
   ⚠️ **UNE CARTE = UNE ENTREPRISE**, pas une affaire : une société qui porte quatre deals fait ici UNE
   carte. C'est ce qui distingue durablement cet écran de Leads.
   **Deux vues** — liste (triable : nom, dernier contact, nombre de RDV, informations manquantes, signaux)

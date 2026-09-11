@@ -20,10 +20,11 @@
 //  la fiche entreprise et les signaux contiennent déjà, et ouvre la fiche existante.
 // ---------------------------------------------------------------------------
 import React, { useMemo, useState } from 'react'
-import { Building2, Users, CalendarDays, Search, Sparkles, Globe, Linkedin, LayoutGrid, LayoutList, MapPin, Radar, X, RefreshCw } from 'lucide-react'
+import { Building2, Users, CalendarDays, Search, Sparkles, Globe, Linkedin, LayoutGrid, LayoutList, MapPin, Radar, X, RefreshCw, KanbanSquare } from 'lucide-react'
 import { useStore, phaseColor, companyKey } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
+import { MyPipeline } from './Leads.jsx'
 import { ENRICHABLE, enrichCompany, enrichmentDiff } from '../enrich.js'
 import { newsRelayUrl } from '../news.js'
 
@@ -315,7 +316,7 @@ export default function Companies() {
             </button>
           )}
           <div className="flex rounded-lg border border-line overflow-hidden">
-            {[['list', 'Liste', LayoutList], ['kanban', 'Kanban', LayoutGrid]].map(([id, label, Icon]) => (
+            {[['list', 'Liste', LayoutList], ['pipeline', 'Mon pipeline', KanbanSquare], ['kanban', 'Kanban', LayoutGrid]].map(([id, label, Icon]) => (
               <button key={id} className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${view === id ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
                 onClick={() => setView(id)}><Icon size={13} /> {label}</button>
             ))}
@@ -326,7 +327,10 @@ export default function Companies() {
         Toutes les sociétés de votre espace, et ce qu'on sait d'elles. Cliquez sur une carte pour ouvrir sa fiche — signaux, enrichissement, contacts et historique.
       </p>
 
-      {/* Filtres. Chacun n'est proposé que s'il a de quoi filtrer. */}
+      {/* Filtres. Chacun n'est proposé que s'il a de quoi filtrer.
+          ⚠️ Masqués sur le pipeline : il a les siens (propriétaire, dates), et deux barres
+          de filtres superposées sur un même écran ne se comprennent plus. */}
+      {view !== 'pipeline' && (
       <div className="card p-3 flex items-end gap-2 flex-wrap">
         <label className="text-xs">
           <span className="label !mb-1">Ce qu'on sait</span>
@@ -398,6 +402,7 @@ export default function Companies() {
           {active > 0 && <button className="btn-ghost !py-1 text-xs" onClick={reset}><X size={12} /> Effacer les filtres</button>}
         </div>
       </div>
+      )}
 
       {/* ⚠️ LE COMPTE RENDU DIT CE QUI S'EST PASSÉ, FICHE PAR FICHE. Un balayage qui se
           contente de « terminé » laisse croire à une panne quand il n'a rien trouvé, et
@@ -425,6 +430,12 @@ export default function Companies() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {list.map(r => <Card key={r.name} r={r} />)}
         </div>
+      ) : view === 'pipeline' ? (
+        // ⚠️ LE PIPELINE PERSONNEL VIT ICI, plus dans « Leads ». Une carte de pipeline EST
+        // une entreprise — le même objet que les lignes de la liste, vu sous l'angle
+        // « où en est l'affaire ? » plutôt que « que sait-on de ce compte ? ».
+        // « Leads » ne porte plus que le pipeline de l'entreprise, la vue partagée.
+        <MyPipeline />
       ) : (
         // Kanban : une colonne par valeur de l'axe choisi. ⚠️ Une colonne VIDE reste
         // affichée — « aucune entreprise ici » est une information, et la faire

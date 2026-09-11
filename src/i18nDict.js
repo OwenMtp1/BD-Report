@@ -1990,4 +1990,13 @@ export const UI_DICT = [
   ['Aucune entreprise dans ce périmètre.', 'No company in this scope.', 'Ninguna empresa en este ámbito.'],
   ['Rien de plus que ce que la fiche contient déjà.', 'Nothing beyond what the sheet already holds.', 'Nada más de lo que la ficha ya contiene.'],
   ['Aucune information nouvelle — voir le détail.', 'No new information — see the details.', 'Ninguna información nueva: consulta el detalle.'],
+
+  // ---- Pipeline : deux écrans, deux périmètres ----
+  // ⚠️ Ces deux phrases vivaient dans un ternaire, que l'extracteur de chaînes ne voit pas :
+  // elles n'avaient donc JAMAIS été traduites, et le balayage anglais ne montrait que la
+  // vue par défaut. Séparer les écrans a rendu le trou visible.
+  ['Leads — Pipeline entreprise', 'Leads — Company pipeline', 'Leads — Pipeline de empresa'],
+  ['Mon pipeline', 'My pipeline', 'Mi pipeline'],
+  ['Vue de toute l\'organisation. Glissez-déposez les leads de chaque collègue pour changer leur statut (et leur phase). Ouvrez une fiche entreprise pour un commentaire partagé.', 'The whole organisation at a glance. Drag and drop each teammate\'s leads to change their status (and stage). Open a company sheet for a shared comment.', 'Vista de toda la organización. Arrastra y suelta los leads de cada compañero para cambiar su estado (y su fase). Abre una ficha de empresa para un comentario compartido.'],
+  ['Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut — la phase de transaction est mise à jour automatiquement.', 'One card = one company (never a duplicate). Drag and drop to change its status — the deal stage updates itself.', 'Una tarjeta = una empresa (sin duplicados). Arrastra y suelta para cambiar su estado: la fase de la operación se actualiza sola.'],
 ]

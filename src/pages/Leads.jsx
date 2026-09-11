@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Clock, Building2, Users, UserRound, MessageSquare, Trash2, CheckSquare, ShieldCheck } from 'lucide-react'
+import { Clock, Building2, MessageSquare, Trash2, CheckSquare, ShieldCheck } from 'lucide-react'
 import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS, phaseColor, oppColor, companyKey } from '../store.jsx'
 import DataQuality from './DataQuality.jsx'
 import { Modal, SlideOver, Confirm, Empty, toast, confetti } from '../ui.jsx'
@@ -80,7 +80,17 @@ function TimelineDetail({ group, onClose }) {
   )
 }
 
-export default function Leads() {
+/**
+ * LE KANBAN DE PIPELINE — une seule implémentation, deux périmètres.
+ *
+ * ⚠️ `scope` n'est plus un état interne mais une PROP : les deux vues ont été séparées en
+ * deux écrans distincts — « Leads » porte le pipeline de l'ENTREPRISE, « Mes entreprises »
+ * porte le mien. Elles partagent pourtant tout le reste (glisser-déposer, sélection
+ * multiple, actions groupées, corbeille, filtres) : dupliquer ce composant aurait condamné
+ * chaque correction future à être faite deux fois, et oubliée une fois sur deux. C'est la
+ * leçon déjà tirée d'`OrgChart`/`ProjectOrgChart`.
+ */
+function PipelineKanban({ scope, title, intro }) {
   const store = useStore()
   const sub = store.sub
   const [detail, setDetail] = useState(null)
@@ -88,7 +98,6 @@ export default function Leads() {
   // Qualité des données : replié par défaut. On corrige les données là où elles sont —
   // un onglet séparé obligeait à retenir un problème, changer d'écran, retrouver la ligne.
   const [showQuality, setShowQuality] = useState(false)
-  const [scope, setScope] = useState('me') // 'me' = mon pipeline | 'org' = pipeline entreprise (partagé)
   // Filtres : propriétaire + plages de dates (ouverture / fermeture / dernière activité)
   const [fOwner, setFOwner] = useState('')
   const [fOpen, setFOpen] = useState({ start: '', end: '' })
@@ -196,24 +205,13 @@ export default function Leads() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-xl font-extrabold">Leads — Pipeline</h2>
-        <div className="flex rounded-lg border border-line overflow-hidden">
-          <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${scope === 'me' ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
-            onClick={() => setScope('me')}><UserRound size={13} /> Mon pipeline</button>
-          <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${scope === 'org' ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
-            onClick={() => setScope('org')}><Users size={13} /> Pipeline entreprise</button>
-          <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 bg-card text-muted hover:bg-surface border-l border-line`}
-            onClick={() => setShowQuality(q => !q)} title="Contrôler la qualité de vos données">
-            <ShieldCheck size={13} /> Qualité
-          </button>
-        </div>
-      {showQuality && <div className="card p-4"><DataQuality embedded /></div>}
+        {title ? <h2 className="text-xl font-extrabold">{title}</h2> : <span />}
+        <button className="btn-ghost !py-1.5 text-xs" onClick={() => setShowQuality(q => !q)} title="Contrôler la qualité de vos données">
+          <ShieldCheck size={13} /> Qualité
+        </button>
       </div>
-      <p className="text-xs text-muted -mt-2">
-        {scope === 'me'
-          ? "Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut — la phase de transaction est mise à jour automatiquement."
-          : "Vue de toute l'organisation. Glissez-déposez les leads de chaque collègue pour changer leur statut (et leur phase). Ouvrez une fiche entreprise pour un commentaire partagé."}
-      </p>
+      {showQuality && <div className="card p-4"><DataQuality embedded /></div>}
+      {intro && <p className="text-xs text-muted -mt-2">{intro}</p>}
 
       <div className="card p-3 flex items-end gap-3 flex-wrap text-xs">
         {scope === 'org' && (
@@ -298,4 +296,19 @@ export default function Leads() {
         onYes={bulkDelete} onNo={() => setConfirmBulkDel(false)} />}
     </div>
   )
+}
+
+// « Leads » ne porte plus QUE le pipeline de l'entreprise : la vue partagée, celle où l'on
+// voit les affaires de toute l'équipe. Le pipeline personnel a rejoint « Mes entreprises »,
+// auprès de ce qu'on sait de chaque compte.
+export default function Leads() {
+  return <PipelineKanban scope="org" title="Leads — Pipeline entreprise"
+    intro="Vue de toute l'organisation. Glissez-déposez les leads de chaque collègue pour changer leur statut (et leur phase). Ouvrez une fiche entreprise pour un commentaire partagé." />
+}
+
+// Le pipeline personnel, rendu par « Mes entreprises » : une carte = une entreprise, et
+// c'est le même objet que les lignes de la liste — d'où le rapprochement.
+export function MyPipeline() {
+  return <PipelineKanban scope="me"
+    intro="Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut — la phase de transaction est mise à jour automatiquement." />
 }

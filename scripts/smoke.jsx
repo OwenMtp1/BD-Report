@@ -559,8 +559,17 @@ async function main() {
     if (!text().includes('Combien') && !text().includes('Prime acquise') && !text().includes('acquise')) {
       throw new Error('La vue Simulateur ne rend pas son contenu')
     }
-    // La Qualité des données vit maintenant dans « Leads ».
+    // ⚠️ DEUX ÉCRANS, DEUX PÉRIMÈTRES. « Leads » ne porte plus QUE le pipeline de
+    // l'entreprise ; le pipeline personnel a rejoint « Mes entreprises », auprès de ce
+    // qu'on sait de chaque compte. La bascule d'autrefois n'existe plus.
     await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Leads'))
+    if (!text().includes('Pipeline entreprise')) throw new Error("« Leads » doit porter le pipeline de l'entreprise")
+    if (!text().includes("Vue de toute l'organisation")) throw new Error("« Leads » doit annoncer qu'il montre toute l'organisation")
+    if ([...container.querySelectorAll('main button')].some(b => b.textContent.trim() === 'Mon pipeline')) {
+      throw new Error("La bascule « Mon pipeline » doit avoir quitté Leads : elle vit dans « Mes entreprises »")
+    }
+    // Le propriétaire du lead n'a de sens que dans la vue partagée — il doit y être.
+    if (!text().includes('Propriétaire du lead')) throw new Error("Le filtre par propriétaire doit rester sur le pipeline entreprise")
     const qBtn = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Qualité')
     if (!qBtn) throw new Error("Le panneau Qualité des données n'est pas accessible depuis Leads")
     await click(qBtn)
@@ -1204,6 +1213,30 @@ async function main() {
       if (after >= before) throw new Error('Le filtre « Ce qu\'on sait » ne filtre rien')
       const clear2 = [...container.querySelectorAll('main button')].find(b => b.textContent.includes('Effacer les filtres'))
       if (clear2) await click(clear2)
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    }
+
+    // ---- MON PIPELINE : la troisième vue. Le kanban par statut, avec son glisser-déposer,
+    // a quitté « Leads » pour vivre auprès de ce qu'on sait de chaque compte — une carte de
+    // pipeline EST une entreprise, c'est le même objet vu sous un autre angle.
+    {
+      const pipeBtn = [...container.querySelectorAll('main button')].find(b => b.textContent.trim() === 'Mon pipeline')
+      if (!pipeBtn) throw new Error("La vue « Mon pipeline » est absente de « Mes entreprises »")
+      await click(pipeBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      if (!text().includes('Une carte = une entreprise')) throw new Error('La vue pipeline ne rend pas son contenu')
+      // ⚠️ C'est MON pipeline : le propriétaire du lead n'a pas de sens ici.
+      if (text().includes('Propriétaire du lead')) throw new Error("« Mon pipeline » ne doit pas proposer le filtre d'équipe")
+      // Les colonnes du kanban de statuts sont bien là.
+      const cols = (win.__bdrStore.sub.opportunites || [])
+      for (const c of cols.slice(0, 2)) {
+        if (!text().includes(c)) throw new Error(`La colonne « ${c} » manque au pipeline`)
+      }
+      // Et les filtres de la liste sont masqués : deux barres superposées ne se comprennent plus.
+      if ([...container.querySelectorAll('main select')].some(sel => [...sel.options].some(o => o.textContent === 'Rien de renseigné'))) {
+        throw new Error("Les filtres de la liste restent visibles sur le pipeline")
+      }
+      await click([...container.querySelectorAll('main button')].find(b => b.textContent.trim() === 'Liste'))
       await act(async () => { await new Promise(r => setTimeout(r, 40)) })
     }
 
