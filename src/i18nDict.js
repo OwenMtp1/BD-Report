@@ -1805,4 +1805,13 @@ export const UI_DICT = [
   ['Replier', 'Collapse', 'Plegar'],
   ['Décision attendue', 'Decision required', 'Decisión pendiente'],
   ['Archive expirée', 'Archive expired', 'Archivo caducado'],
+  ['Mes entreprises', 'My companies', 'Mis empresas'],
+  ['Rechercher une entreprise', 'Search a company', 'Buscar una empresa'],
+  ['Toutes les sociétés de votre espace, et ce qu\'on sait d\'elles. Cliquez sur une ligne pour ouvrir sa fiche — actualités, enrichissement, contacts et historique.', 'Every company in your workspace, and what is known about them. Click a row to open its record — news, enrichment, contacts and history.', 'Todas las empresas de tu espacio y lo que se sabe de ellas. Haz clic en una fila para abrir su ficha: noticias, enriquecimiento, contactos e historial.'],
+  ['fiche complète', 'complete record', 'ficha completa'],
+  ['À compléter', 'To complete', 'Por completar'],
+  ['Aucune entreprise ne correspond.', 'No company matches.', 'Ninguna empresa coincide.'],
+  ['Aucune entreprise pour l\'instant. Elles apparaissent dès le premier rendez-vous.', 'No companies yet. They appear from the first meeting.', 'Aún no hay empresas. Aparecen a partir de la primera cita.'],
+  ['site', 'website', 'web'],
+  ['LinkedIn', 'LinkedIn', 'LinkedIn'],
 ]

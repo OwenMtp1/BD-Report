@@ -287,6 +287,11 @@ npm run dev        # serveur de dev
     (`src/news.js`), volontairement hors de l'état synchronisé : des dépêches sont une vue, pas une donnée
     d'équipe, et les y écrire déclencherait une synchro à chaque ouverture de fiche.
     Sans relais publié, le panneau le dit et rien d'autre ne change.
+    ⚠️ **Modèle Gemini retiré (404)** : Google nomme son successeur dans le message d'erreur — le relais
+    le lit et rejoue l'appel UNE fois (`callGemini`). Il n'invente jamais de remplaçant. Défaut :
+    `gemini-3.6-flash`. ⚠️ **Quota Google (429)** : ce n'est ni une panne ni notre plafond. Le relais
+    renvoie le délai d'attente que Google indique, et l'application **ne décompte pas** cet appel —
+    il n'a rien consommé.
   - **Enrichissement de fiche** — action **✨ Enrichir**, même panneau, même relais (`POST /enrich`,
     Gemini avec recherche Google : sans source, le modèle répondrait de mémoire, c'est-à-dire
     qu'il inventerait). `src/enrich.js`.
@@ -465,6 +470,11 @@ npm run dev        # serveur de dev
   de churn). Une archive qui EXPIRE sans décision le passe en « anciens » — expirer n'est pas
   décider. ⚠️ `CLIENT_FINAL_STATUSES` : un client en churn ou ancien ne redevient pas « actif »
   parce qu'il a écrit au support — son statut vient de son environnement, pas d'un ticket.
+- **`src/pages/Companies.jsx` — onglet « Mes entreprises »** (brick homonyme, nav Activité) : toutes les
+  sociétés de l'espace, agrégées depuis les RDV, les contacts et `data.companies`. Leads répond à « où en
+  est l'affaire ? », celui-ci à « que sait-on de ce compte ? » — d'où le filtre « à compléter » (nombre de
+  champs `ENRICHABLE` vides) plutôt qu'un tri par étape. Chaque ligne ouvre la fiche existante
+  (`openCompany`) ; l'écran n'invente aucune donnée et ne crée aucun stockage.
 - **Menu sur mesure par client** — `env.navLayout = [{id,label,items:[tabId]}]`, composé dans
   l'Atelier (`NavLayoutEditor` dans `EnvAdmin.jsx`, droit `env.build`), appliqué par
   `applyNavLayout` (nav.jsx) dans la barre latérale. ⚠️ **Ranger n'accorde AUCUN accès** : la

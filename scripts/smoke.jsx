@@ -926,6 +926,38 @@ async function main() {
     } finally { globalThis.fetch = realFetch }
   }
 
+  // MES ENTREPRISES : la liste des comptes de l'espace, et ce qu'on sait d'eux. L'écran
+  // n'invente rien — il agrège rendez-vous, contacts et fiche entreprise.
+  {
+    const tabBtn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes entreprises')
+    if (!tabBtn) throw new Error("L'onglet « Mes entreprises » est absent de la navigation")
+    await click(tabBtn)
+    if (!text().includes('Mes entreprises')) throw new Error("L'onglet « Mes entreprises » ne s'ouvre pas")
+    // Une société vue en rendez-vous doit y figurer, et son nom ouvre sa fiche.
+    const known = (win.__bdrStore.sub.rdvs || []).map(r => r.entreprise).filter(Boolean)[0]
+    // On cherche sa LIGNE, pas son nom quelque part à l'écran : un nom peut traîner dans un
+    // toast ou la recherche globale, et le test passerait sans que la liste soit juste.
+    const rowOf = (n) => [...container.querySelectorAll('main .card')].find(c => c.textContent.includes(n) && c.textContent.includes('RDV'))
+    const nRdv = (win.__bdrStore.sub.rdvs || []).filter(r => (r.entreprise || '') === known).length
+    if (known && !rowOf(known)) throw new Error(`L'entreprise « ${known} » manque à la liste`)
+    // Et la ligne doit dire le VRAI nombre de rendez-vous : une liste qui affiche la société
+    // mais pas son activité ne sert pas à préparer un appel.
+    if (known && !rowOf(known).textContent.includes(`${nRdv} RDV`)) {
+      throw new Error(`La ligne de « ${known} » n'affiche pas ses ${nRdv} rendez-vous`)
+    }
+    if (!text().includes('à compléter') && !text().includes('fiche complète')) {
+      throw new Error("La liste ne dit pas ce qu'il manque sur chaque fiche")
+    }
+    if (known) {
+      await click(rowOf(known))
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      if (!text().includes('Infos société')) throw new Error("Cliquer une entreprise n'ouvre pas sa fiche")
+      const close = [...container.querySelectorAll('.fixed.z-50 .rounded-t-2xl button')].pop()
+      if (close) await click(close)
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    }
+  }
+
   // 6b. Support : créer un ticket, vérifier la conversation, le côté support et l'enrichissement client
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Support'))
   await click(find('button', 'Nouveau ticket'))

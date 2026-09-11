@@ -8,7 +8,7 @@
 import {
   LayoutDashboard, Table2, Target, Trophy, Gauge, CalendarDays, KanbanSquare, ListChecks,
   CheckSquare, Coins, MessagesSquare, BookUser, ShieldCheck, StickyNote, ScrollText, Trash2,
-  LifeBuoy, Gift, Shield, Users, Link2, Network, Workflow, ArrowRightLeft, Handshake,
+  LifeBuoy, Gift, Shield, Users, Link2, Network, Workflow, ArrowRightLeft, Handshake, Building2,
 } from 'lucide-react'
 
 const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
@@ -26,6 +26,10 @@ export const NAV_GROUPS = [
     id: 'activite', label: 'Activité commerciale', items: [
       { id: 'rdv', label: 'Mes Rendez-vous', icon: CalendarDays, brick: 'Mes Rendez-vous' },
       { id: 'leads', label: 'Leads', icon: KanbanSquare, brick: 'Leads' },
+      // Leads répond à « où en est l'affaire ? », Mes entreprises à « que sait-on de ce
+      // compte ? ». Deux questions, deux écrans — et c'est la seconde qu'on se pose avant
+      // d'appeler ou de lancer un enrichissement.
+      { id: 'companies', label: 'Mes entreprises', icon: Building2, brick: 'Mes entreprises' },
       { id: 'tasks', label: 'Recommandations prioritaires', icon: ListChecks, brick: 'Recommandations prioritaires' },
       { id: 'mytasks', label: 'Mes tâches', icon: CheckSquare, brick: 'Mes tâches' },
       // `module` : onglet livré à la carte. Le staff coche ou décoche le module à la création

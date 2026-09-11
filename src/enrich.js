@@ -74,7 +74,9 @@ export async function enrichCompany(company, known, db, { force = false } = {}) 
       }),
     })
     const body = await res.json().catch(() => null)
-    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.` }
+    // Un quota atteint n'est pas une erreur technique : l'application doit pouvoir le dire
+    // autrement, et ne pas décompter un appel qui n'a rien consommé chez Google.
+    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota: res.status === 429 || body?.code === 429 }
     // Dernière barrière côté application : on ne retient que nos propres champs.
     const found = {}
     ENRICHABLE_IDS.forEach(f => { found[f] = body.found?.[f] || null })

@@ -67,7 +67,9 @@ export async function fetchCompanyNews(company, db, { force = false } = {}) {
   try {
     const res = await fetch(`${base}/news?q=${encodeURIComponent(name)}`)
     const body = await res.json().catch(() => null)
-    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.` }
+    // Un quota atteint n'est pas une erreur technique : l'application doit pouvoir le dire
+    // autrement, et ne pas décompter un appel qui n'a rien consommé chez Google.
+    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota: res.status === 429 || body?.code === 429 }
     const articles = Array.isArray(body.articles) ? body.articles : []
     // Les actualités ont changé : l'analyse précédente ne les décrit plus.
     patchCache(name, { at: Date.now(), articles, signals: null })
@@ -90,7 +92,9 @@ export async function analyzeCompanyNews(company, articles, db) {
       body: JSON.stringify({ company: name, articles }),
     })
     const body = await res.json().catch(() => null)
-    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.` }
+    // Un quota atteint n'est pas une erreur technique : l'application doit pouvoir le dire
+    // autrement, et ne pas décompter un appel qui n'a rien consommé chez Google.
+    if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota: res.status === 429 || body?.code === 429 }
     const signals = Array.isArray(body.signals) ? body.signals : []
     patchCache(name, { signals, analyzedAt: Date.now() })
     return { signals }

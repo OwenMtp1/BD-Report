@@ -186,7 +186,21 @@ async function callGemini(payload, env, model) {
       res = retry.res; text = retry.text
     }
   }
-  if (!res.ok) throw new Error(`Gemini a répondu ${res.status}${text ? ' — ' + text.slice(0, 200) : ''}`)
+  if (!res.ok) {
+    // 429 = quota Google atteint. Ce n'est ni une panne ni une erreur de code : c'est une
+    // limite, et la seule chose utile à dire est DANS COMBIEN DE TEMPS réessayer. Google le
+    // précise dans le corps de l'erreur ; rendre « 429 » tout seul laisserait chercher.
+    if (res.status === 429) {
+      const wait = (text.match(/"retryDelay"\s*:\s*"(\d+)s"/) || [])[1]
+      const err = new Error(wait
+        ? `Quota Google atteint. Réessayez dans ${wait} seconde${Number(wait) > 1 ? 's' : ''}.`
+        : "Quota Google atteint (offre gratuite). Réessayez dans une minute, ou demain si la limite quotidienne est atteinte.")
+      err.code = 429
+      err.retryAfter = wait ? Number(wait) : 60
+      throw err
+    }
+    throw new Error(`Gemini a répondu ${res.status}${text ? ' — ' + text.slice(0, 200) : ''}`)
+  }
   return { body: await res.json(), model: first }
 }
 
@@ -382,7 +396,10 @@ export default {
         return json({ ok: true, gemini: !!env.GEMINI_API_KEY, service: 'bdr-news' }, request, env)
       }
     } catch (e) {
-      return json({ error: e && e.message ? e.message : String(e) }, request, env, 502)
+      // Un quota atteint n'est pas une panne du relais : on le dit avec son propre code,
+      // pour que l'application propose d'attendre plutôt que d'annoncer une erreur technique.
+      const status = e && e.code === 429 ? 429 : 502
+      return json({ error: e && e.message ? e.message : String(e), code: e?.code, retryAfter: e?.retryAfter }, request, env, status)
     }
     return json({ error: 'Route inconnue.' }, request, env, 404)
   },

@@ -49,7 +49,9 @@ function EnrichPanel({ name, info, store, onApply, onClose }) {
     const r = await enrichCompany(name, info, store.db, { force })
     setBusy(false)
     if (r.error) {
-      if (!r.fromCache) store.recordAiCall({ feature: 'company_enrichment', companyId: name, status: 'error' })
+      // Le quota Google n'a rien consommé : le compter ferait atteindre NOTRE plafond sans
+      // qu'un seul appel soit passé.
+      if (!r.fromCache && !r.quota) store.recordAiCall({ feature: 'company_enrichment', companyId: name, status: 'error' })
       setError(r.error); return
     }
     // Seul un appel RÉEL est décompté : une réponse du cache n'a rien consommé.
@@ -183,7 +185,10 @@ function NewsPanel({ name, store, onClose }) {
     setBusy('ai'); setError('')
     const r = await analyzeCompanyNews(name, state?.articles || [], store.db)
     setBusy('')
-    if (r.error) { store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' }); setError(r.error); return }
+    if (r.error) {
+      if (!r.quota) store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' })
+      setError(r.error); return
+    }
     store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok' })
     setState(s => ({ ...s, signals: r.signals }))
     store.logAction('Lead', 'Actualités analysées', name)
