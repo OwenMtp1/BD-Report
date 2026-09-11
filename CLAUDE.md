@@ -315,6 +315,23 @@ npm run dev        # serveur de dev
     refuse toute valeur qui ressemble à une donnée personnelle.
     ⚠️ **Rien n'est écrasé sans décision** : champ vide → proposé coché ; valeur différente →
     montrée EN REGARD de l'actuelle, décochée. Sans source vérifiable, la confiance retombe à « low ».
+  - **ICP — DEUX profils, parce qu'il y a DEUX QUESTIONS** (`Icp.jsx`, `ICP_KINDS`) :
+    **ICP entreprise** (`kind:'company'` — `secteurs[]`, `effMin/effMax`, `localisations[]`) répond
+    à « quel compte vaut mon temps ? » ; **ICP personnel** (`kind:'person'` — `postes[]`, `roles[]`,
+    `relations[]`, ces deux derniers venant du module `committee`) répond à « à qui parler dedans ? ».
+    ⚠️ Confondus dans un profil unique, la bonne entreprise abordée par le mauvais interlocuteur se
+    lisait « hors profil » : le commercial lâchait le compte au lieu de changer de porte.
+    `icpVerdict` renvoie donc `{company, person}` et `Rdv.jsx` affiche **deux avis**.
+    ⚠️ **La FICHE entreprise prime sur le RDV** (`companyTraits`) pour secteur, effectif et
+    implantation — même règle que l'enrichissement : la valeur du RDV n'est qu'un point de départ.
+    ⚠️ **Un profil sans `kind` est ANTÉRIEUR à la séparation** : `icpKindOf` le déduit et le rend
+    `'mixed'` s'il porte les deux natures — il continue alors de filtrer sur tout et répond aux deux
+    questions. **Aucune migration ne le réécrit** : ses deux moitiés sélectionneraient chacune plus
+    large que l'ensemble qu'elles remplacent, et le pipeline aurait changé sans un mot. Le bouton
+    « Séparer » est un choix de l'utilisateur, jamais un geste de `migrate`.
+    ⚠️ Les valeurs proposées par l'éditeur viennent des DONNÉES (secteurs et implantations vus,
+    postes rencontrés, vocabulaire du comité), jamais d'une liste inventée : un critère qu'aucun
+    deal ne porte ne sélectionnerait rien, sans qu'on sache pourquoi.
   - **Sales Signals — LOT 1 : le contexte commercial de l'environnement.** `env.newsRules`
     (`activite`, `offre`, `icpProfileIds[]`, `personas[]`, `signals[{id,on,priority}]`, `consignes`,
     `sources{}`), réglé dans `NewsRules.jsx` — **étape de l'assistant ET panneau de la fiche**

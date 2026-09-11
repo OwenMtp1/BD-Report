@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { Target, Plus, Trash2, Building2, Users2, Briefcase, Sparkles, Save, CalendarDays } from 'lucide-react'
-import { useStore, uid, todayISO, fmtDate, phaseRank, isWonPhase, qualifyPhase, milestonePhase, icpMatches } from '../store.jsx'
+import { Target, Plus, Trash2, Building2, Users2, Briefcase, Sparkles, Save, CalendarDays, MapPin, Handshake, Scissors } from 'lucide-react'
+import { useStore, uid, todayISO, fmtDate, phaseRank, isWonPhase, qualifyPhase, milestonePhase, icpMatches, icpKindOf, ICP_KINDS, ICP_COMPANY_KEYS, ICP_PERSON_KEYS, committeeRoles, committeeRelations, companyKey } from '../store.jsx'
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 
 // Rang de progression d'un deal : sa position dans le pipeline DE L'ÉQUIPE. Une table figée
@@ -41,31 +41,41 @@ function statsFor(deals, data) {
   const signed = deals.filter(d => reachedWon(d, data)).length
   return { total, mql, sql, signed, r1ToMql: pct(mql, total), mqlToSql: pct(sql, mql), r1ToSql: pct(sql, total), signRate: pct(signed, total) }
 }
-// Date de référence d'un deal (ouverture) pour le filtrage par période.
-const dealDate = (d) => d.datePriseRdv || d.dateRdv || d.createdAt || ''
 const mode = (arr) => {
   const m = {}; arr.forEach(v => { if (v) m[v] = (m[v] || 0) + 1 })
   return Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] || null
 }
+const bandLabel = (p) => EFF_BANDS.find(b => b.min === p.effMin && b.max === p.effMax)?.label || `${p.effMin ?? 0}–${p.effMax ?? '∞'}`
 const autoName = (p) => {
   const parts = []
   if (p.secteurs?.length) parts.push(p.secteurs.join('/'))
-  if (p.effMin != null || p.effMax != null) { const b = EFF_BANDS.find(x => x.min === p.effMin && x.max === p.effMax); parts.push(b ? b.label + ' empl.' : `${p.effMin ?? 0}–${p.effMax ?? '∞'} empl.`) }
+  if (p.effMin != null || p.effMax != null) parts.push(bandLabel(p) + ' empl.')
+  if (p.localisations?.length) parts.push(p.localisations.join('/'))
   if (p.postes?.length) parts.push(p.postes.join('/'))
+  if (p.roles?.length) parts.push(p.roles.join('/'))
+  if (p.relations?.length) parts.push(p.relations.join('/'))
   if (p.dateStart || p.dateEnd) parts.push(`${p.dateStart ? fmtDate(p.dateStart) : '…'}→${p.dateEnd ? fmtDate(p.dateEnd) : '…'}`)
   return parts.join(' · ') || 'Tous les deals'
 }
 
-function ProfileCard({ profile, deals, global, data, onSave, onDelete }) {
-  const matched = deals.filter(d => icpMatches(d, profile))
+function chipsOf(profile) {
+  const chips = []
+  if (profile.secteurs?.length) chips.push({ icon: <Building2 size={11} />, txt: profile.secteurs.join(', ') })
+  if (profile.effMin != null || profile.effMax != null) chips.push({ icon: <Users2 size={11} />, txt: bandLabel(profile) + ' empl.' })
+  if (profile.localisations?.length) chips.push({ icon: <MapPin size={11} />, txt: profile.localisations.join(', ') })
+  if (profile.postes?.length) chips.push({ icon: <Briefcase size={11} />, txt: profile.postes.join(', ') })
+  if (profile.roles?.length) chips.push({ icon: <Target size={11} />, txt: profile.roles.join(', ') })
+  if (profile.relations?.length) chips.push({ icon: <Handshake size={11} />, txt: profile.relations.join(', ') })
+  if (profile.dateStart || profile.dateEnd) chips.push({ icon: <CalendarDays size={11} />, txt: `${profile.dateStart ? fmtDate(profile.dateStart) : '…'} → ${profile.dateEnd ? fmtDate(profile.dateEnd) : '…'}` })
+  return chips
+}
+
+function ProfileCard({ profile, deals, global, data, onSave, onDelete, onSplit }) {
+  const matched = deals.filter(d => icpMatches(d, profile, { data }))
   const s = statsFor(matched, data)
   const delta = s.r1ToSql - global.r1ToSql
   const share = pct(matched.length, global.total)
-  const chips = []
-  if (profile.secteurs?.length) chips.push({ icon: <Building2 size={11} />, txt: profile.secteurs.join(', ') })
-  if (profile.effMin != null || profile.effMax != null) chips.push({ icon: <Users2 size={11} />, txt: (EFF_BANDS.find(b => b.min === profile.effMin && b.max === profile.effMax)?.label || `${profile.effMin ?? 0}–${profile.effMax ?? '∞'}`) + ' empl.' })
-  if (profile.postes?.length) chips.push({ icon: <Briefcase size={11} />, txt: profile.postes.join(', ') })
-  if (profile.dateStart || profile.dateEnd) chips.push({ icon: <CalendarDays size={11} />, txt: `${profile.dateStart ? fmtDate(profile.dateStart) : '…'} → ${profile.dateEnd ? fmtDate(profile.dateEnd) : '…'}` })
+  const chips = chipsOf(profile)
   const bar = (val, color) => (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2.5 rounded-full bg-surface overflow-hidden"><div className="h-full rounded-full" style={{ width: `${val}%`, background: color }} /></div>
@@ -83,9 +93,10 @@ function ProfileCard({ profile, deals, global, data, onSave, onDelete }) {
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {onSplit && <button className="btn-ghost !py-1 text-xs" title="Séparer ce profil en deux" onClick={() => onSplit(profile)}><Scissors size={13} /> Séparer</button>}
           {profile.proposed
             ? <button className="btn-ghost !py-1 text-xs" title="Enregistrer ce profil" onClick={() => onSave(profile)}><Save size={13} /> Enregistrer</button>
-            : <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer" onClick={() => onDelete(profile.id)}><Trash2 size={14} /></button>}
+            : onDelete && <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer" onClick={() => onDelete(profile.id)}><Trash2 size={14} /></button>}
         </div>
       </div>
 
@@ -114,36 +125,81 @@ function ProfileCard({ profile, deals, global, data, onSave, onDelete }) {
   )
 }
 
+// Une famille d'ICP : son titre, la question à laquelle elle répond, ses propositions
+// et ses profils enregistrés. Les deux natures s'affichent avec la même mécanique —
+// une seule implémentation, donc une correction vaut pour les deux.
+function KindSection({ kind, proposed, saved, deals, global, data, onCreate, onSave, onDelete }) {
+  const meta = ICP_KINDS.find(k => k.id === kind)
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-sm font-bold flex items-center gap-1.5">
+          {kind === 'company' ? <Building2 size={15} className="text-brand" /> : <Briefcase size={15} className="text-brand" />}
+          {meta.label}
+          <span className="font-normal text-muted">— {meta.question}</span>
+        </h3>
+        <button className="btn-ghost !py-1 text-xs" onClick={onCreate}><Plus size={14} /> Créer un profil</button>
+      </div>
+      {!proposed.length && !saved.length && (
+        <p className="text-xs text-muted">Aucun profil pour l'instant.</p>
+      )}
+      {proposed.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {proposed.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={data} onSave={onSave} />)}
+        </div>
+      )}
+      {saved.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {saved.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={data} onDelete={onDelete} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Icp() {
   const store = useStore()
   const sub = store.sub
-  const [creating, setCreating] = useState(false)
+  const env = store.env
+  const [creating, setCreating] = useState(null) // 'company' | 'person' | null
   const [confirmDel, setConfirmDel] = useState(null)
+  const committeeOn = store.hasModule('committee')
 
   // Un deal = un RDV racine (on évite de compter les sous-RDV de suivi en double).
   const deals = useMemo(() => (sub.rdvs || []).filter(r => !r.parentId), [sub.rdvs])
   const global = useMemo(() => statsFor(deals, sub), [deals, sub])
-  const secteurs = useMemo(() => [...new Set(deals.map(d => d.secteur).filter(Boolean))].sort(), [deals])
+  // Les valeurs proposées viennent des DONNÉES, jamais d'une liste inventée : un critère
+  // qu'aucun deal ne porte ne sélectionnerait rien, et on ne saurait pas pourquoi.
+  const sheetOf = (d) => sub.companies?.[companyKey(d.entreprise)] || null
+  const secteurs = useMemo(() => [...new Set(deals.map(d => sheetOf(d)?.secteur || d.secteur).filter(Boolean))].sort(), [deals, sub.companies]) // eslint-disable-line
+  const localisations = useMemo(() => [...new Set(deals.map(d => sheetOf(d)?.localisation).filter(Boolean))].sort(), [deals, sub.companies]) // eslint-disable-line
   const postes = useMemo(() => [...new Set(deals.flatMap(d => (d.contacts || []).map(c => c.poste)).filter(Boolean))].sort(), [deals])
+  const roles = useMemo(() => (committeeOn ? committeeRoles(env) : []), [committeeOn, env])
+  const relations = useMemo(() => (committeeOn ? committeeRelations(env) : []), [committeeOn, env])
+  const vocab = { secteurs, localisations, postes, roles, relations }
 
   // ----- Profils proposés (déduits des données) -----
   const proposed = useMemo(() => {
     if (!deals.length) return []
     const out = []
-    // 1) Profil idéal : traits dominants des deals ayant atteint SQL (sinon MQL).
+    // 1) Profils idéaux : traits dominants des deals ayant atteint SQL (sinon MQL).
+    //    Un pour l'entreprise, un pour l'interlocuteur — ce sont deux enseignements
+    //    distincts, et les réunir dans une carte empêchait de n'en retenir qu'un.
     const atMilestone = deals.filter(d => reached(d, sub, milestonePhase(sub)))
     const winners = atMilestone.length ? atMilestone : deals.filter(d => reached(d, sub, qualifyPhase(sub)))
     if (winners.length) {
-      const sec = mode(winners.map(d => d.secteur))
-      const bandId = mode(winners.map(d => bandOf(Number(d.effectif) || 0)?.id).filter(Boolean))
+      const sec = mode(winners.map(d => sheetOf(d)?.secteur || d.secteur))
+      const bandId = mode(winners.map(d => bandOf(Number(sheetOf(d)?.effectif || d.effectif) || 0)?.id).filter(Boolean))
       const b = EFF_BANDS.find(x => x.id === bandId)
+      const pc = { id: 'icp-ideal-company', kind: 'company', proposed: true, name: '🏆 Entreprise idéale', secteurs: sec ? [sec] : [], effMin: b?.min ?? null, effMax: b?.max ?? null }
+      if (pc.secteurs.length || pc.effMin != null) out.push(pc)
       const po = mode(winners.flatMap(d => (d.contacts || []).map(c => c.poste)))
-      const p = { id: 'icp-ideal', proposed: true, secteurs: sec ? [sec] : [], effMin: b?.min ?? null, effMax: b?.max ?? null, postes: po ? [po] : [] }
-      p.name = '🏆 Profil idéal'
-      if (p.secteurs.length || p.effMin != null || p.postes.length) out.push(p)
+      const ro = committeeOn ? mode(winners.flatMap(d => (d.contacts || []).map(c => c.role))) : null
+      const pp = { id: 'icp-ideal-person', kind: 'person', proposed: true, name: '🏆 Interlocuteur idéal', postes: po ? [po] : [], roles: ro ? [ro] : [] }
+      if (pp.postes.length || pp.roles.length) out.push(pp)
     }
     // 2) Meilleur sur chaque dimension (par taux R1→SQL, ≥1 deal).
-    const bestBy = (values, toProfile, keyFn, label) => {
+    const bestBy = (values, toProfile, keyFn, label, kind) => {
       let best = null
       values.forEach(v => {
         const m = deals.filter(d => keyFn(d, v))
@@ -151,29 +207,50 @@ export default function Icp() {
         const st = statsFor(m, sub)
         if (!best || st.r1ToSql > best.st.r1ToSql || (st.r1ToSql === best.st.r1ToSql && m.length > best.n)) best = { v, st, n: m.length }
       })
-      if (best) { const p = toProfile(best.v); p.id = 'icp-' + label; p.proposed = true; p.name = label; out.push(p) }
+      if (best) { const p = toProfile(best.v); p.id = 'icp-' + label; p.kind = kind; p.proposed = true; p.name = label; out.push(p) }
     }
-    bestBy(secteurs, v => ({ secteurs: [v] }), (d, v) => d.secteur === v, 'Meilleur secteur')
-    bestBy(EFF_BANDS, b => ({ effMin: b.min, effMax: b.max }), (d, b) => { const e = Number(d.effectif) || 0; return e >= b.min && e <= b.max }, 'Meilleure taille')
-    bestBy(postes, v => ({ postes: [v] }), (d, v) => (d.contacts || []).some(c => c.poste === v), 'Meilleur poste')
+    bestBy(secteurs, v => ({ secteurs: [v] }), (d, v) => (sheetOf(d)?.secteur || d.secteur) === v, 'Meilleur secteur', 'company')
+    bestBy(EFF_BANDS, b => ({ effMin: b.min, effMax: b.max }), (d, b) => { const e = Number(sheetOf(d)?.effectif || d.effectif) || 0; return e >= b.min && e <= b.max }, 'Meilleure taille', 'company')
+    bestBy(localisations, v => ({ localisations: [v] }), (d, v) => sheetOf(d)?.localisation === v, 'Meilleure implantation', 'company')
+    bestBy(postes, v => ({ postes: [v] }), (d, v) => (d.contacts || []).some(c => c.poste === v), 'Meilleur poste', 'person')
+    if (committeeOn) bestBy(roles, v => ({ roles: [v] }), (d, v) => (d.contacts || []).some(c => c.role === v), "Meilleur rôle d'achat", 'person')
     return out
-  }, [deals, secteurs, postes])
+  }, [deals, secteurs, localisations, postes, roles, committeeOn, sub])
 
   const saved = sub.icpProfiles || []
+  const byKind = (list, k) => list.filter(p => icpKindOf(p) === k)
+  const legacy = byKind(saved, 'mixed')
 
   const saveProfile = (p) => {
-    store.setSub(d => ({ ...d, icpProfiles: [...(d.icpProfiles || []), { id: uid(), name: p.name?.replace(/^🏆\s*/, '') || autoName(p), secteurs: p.secteurs || [], effMin: p.effMin ?? null, effMax: p.effMax ?? null, postes: p.postes || [], dateStart: p.dateStart || null, dateEnd: p.dateEnd || null, createdAt: todayISO() }] }))
+    const kind = p.kind === 'person' ? 'person' : 'company'
+    const keep = kind === 'person' ? ICP_PERSON_KEYS : ICP_COMPANY_KEYS
+    const crit = {}
+    keep.forEach(k => { if (p[k] != null) crit[k] = p[k] })
+    store.setSub(d => ({ ...d, icpProfiles: [...(d.icpProfiles || []), { id: uid(), kind, name: p.name?.replace(/^🏆\s*/, '') || autoName(p), ...crit, dateStart: p.dateStart || null, dateEnd: p.dateEnd || null, createdAt: todayISO() }] }))
     toast('Profil ICP enregistré')
   }
   const deleteProfile = (id) => { store.setSub(d => ({ ...d, icpProfiles: (d.icpProfiles || []).filter(x => x.id !== id) })); setConfirmDel(null); toast('Profil supprimé') }
+  // Séparer un profil d'avant la distinction. ⚠️ C'est un CHOIX de l'utilisateur, jamais
+  // une migration : les deux moitiés sélectionnent chacune plus largement que l'ensemble
+  // qu'elles remplacent, et réécrire cela d'office aurait changé son pipeline sans un mot.
+  const splitProfile = (p) => {
+    const pick = (keys) => { const o = {}; keys.forEach(k => { if (p[k] != null) o[k] = p[k] }); return o }
+    store.setSub(d => ({
+      ...d,
+      icpProfiles: (d.icpProfiles || []).flatMap(x => x.id !== p.id ? [x] : [
+        { id: uid(), kind: 'company', name: p.name, ...pick(ICP_COMPANY_KEYS), dateStart: p.dateStart || null, dateEnd: p.dateEnd || null, createdAt: todayISO() },
+        { id: uid(), kind: 'person', name: `${p.name} — interlocuteurs`, ...pick(ICP_PERSON_KEYS), dateStart: p.dateStart || null, dateEnd: p.dateEnd || null, createdAt: todayISO() },
+      ]),
+    }))
+    toast('Profil séparé en deux')
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold flex items-center gap-2"><Target size={20} className="text-brand" /> ICP — Profils clients idéaux</h2>
-        <button className="btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Créer un profil</button>
       </div>
-      <p className="text-xs text-muted -mt-2">Quelles entreprises convertissent le mieux (R1 → MQL → SQL) ? Croisement secteur × taille × poste, en pourcentages. Sur {global.total} deal(s).</p>
+      <p className="text-xs text-muted -mt-2">Deux questions, deux profils : quelles entreprises viser, et à qui parler dedans. Conversions R1 → MQL → SQL en pourcentages, sur {global.total} deal(s).</p>
 
       {/* Référence globale */}
       <div className="card p-4">
@@ -187,68 +264,89 @@ export default function Icp() {
 
       {deals.length === 0 && <Empty text="Aucun deal pour analyser des profils ICP. Créez des rendez-vous pour alimenter l'analyse." />}
 
-      {proposed.length > 0 && (
-        <div>
-          <h3 className="text-sm font-bold flex items-center gap-1.5 mb-2"><Sparkles size={15} className="text-amber-500" /> Profils proposés</h3>
+      {ICP_KINDS.map(k => (
+        <KindSection key={k.id} kind={k.id} deals={deals} global={global} data={sub}
+          proposed={byKind(proposed, k.id)} saved={byKind(saved, k.id)}
+          onCreate={() => setCreating(k.id)} onSave={saveProfile} onDelete={setConfirmDel} />
+      ))}
+
+      {legacy.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-bold">Profils mixtes</h3>
+          <p className="text-xs text-muted">Créés avant la séparation, ils filtrent à la fois sur l'entreprise et sur l'interlocuteur. Ils continuent de fonctionner tels quels ; « Séparer » en fait deux profils, un par question.</p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {proposed.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={sub} onSave={saveProfile} />)}
+            {legacy.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={sub} onDelete={setConfirmDel} onSplit={splitProfile} />)}
           </div>
         </div>
       )}
 
-      {saved.length > 0 && (
-        <div>
-          <h3 className="text-sm font-bold mb-2">Mes profils ICP</h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {saved.map(p => <ProfileCard key={p.id} profile={p} deals={deals} global={global} data={sub} onDelete={setConfirmDel} />)}
-          </div>
-        </div>
-      )}
-
-      {creating && <CreateProfile secteurs={secteurs} postes={postes}
-        onClose={() => setCreating(false)}
-        onCreate={(p) => { saveProfile(p); setCreating(false) }} />}
+      {creating && <CreateProfile kind={creating} vocab={vocab} committeeOn={committeeOn}
+        onClose={() => setCreating(null)}
+        onCreate={(p) => { saveProfile(p); setCreating(null) }} />}
       {confirmDel && <Confirm message="Supprimer ce profil ICP ?" onYes={() => deleteProfile(confirmDel)} onNo={() => setConfirmDel(null)} />}
     </div>
   )
 }
 
-function CreateProfile({ secteurs, postes, onClose, onCreate }) {
+function CreateProfile({ kind, vocab, committeeOn, onClose, onCreate }) {
+  const meta = ICP_KINDS.find(k => k.id === kind)
   const [name, setName] = useState('')
   const [secSel, setSecSel] = useState([])
   const [band, setBand] = useState('') // '' = toutes
+  const [locSel, setLocSel] = useState([])
   const [posSel, setPosSel] = useState([])
+  const [roleSel, setRoleSel] = useState([])
+  const [relSel, setRelSel] = useState([])
   const [dStart, setDStart] = useState('')
   const [dEnd, setDEnd] = useState('')
   const toggle = (arr, setArr, v) => setArr(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v])
   const b = EFF_BANDS.find(x => x.id === band)
-  const build = () => ({ secteurs: secSel, effMin: b?.min ?? null, effMax: b?.max ?? null, postes: posSel, dateStart: dStart || null, dateEnd: dEnd || null, name: name.trim() })
+  const build = () => (kind === 'person'
+    ? { kind, postes: posSel, roles: roleSel, relations: relSel, dateStart: dStart || null, dateEnd: dEnd || null, name: name.trim() }
+    : { kind, secteurs: secSel, effMin: b?.min ?? null, effMax: b?.max ?? null, localisations: locSel, dateStart: dStart || null, dateEnd: dEnd || null, name: name.trim() })
+
+  const picker = (label, values, sel, setSel, empty) => (
+    <div>
+      <span className="label">{label}</span>
+      <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+        {values.length === 0 && <span className="text-xs text-muted">{empty}</span>}
+        {values.map(v => <button key={v} type="button" className={`chip ${sel.includes(v) ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => toggle(sel, setSel, v)}>{v}</button>)}
+      </div>
+    </div>
+  )
 
   return (
-    <Modal title="Créer un profil ICP" onClose={onClose} wide>
+    <Modal title={meta.createLabel} onClose={onClose} wide>
       <div className="space-y-3">
+        <p className="text-xs text-muted">{meta.question}</p>
         <Field label="Nom (optionnel)"><input className="input" value={name} onChange={e => setName(e.target.value)} placeholder={autoName(build()) || 'Mon profil ICP'} /></Field>
-        <div>
-          <span className="label">Secteur(s)</span>
-          <div className="flex flex-wrap gap-1.5">
-            {secteurs.length === 0 && <span className="text-xs text-muted">Aucun secteur dans vos données.</span>}
-            {secteurs.map(s => <button key={s} type="button" className={`chip ${secSel.includes(s) ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => toggle(secSel, setSecSel, s)}>{s}</button>)}
-          </div>
-        </div>
-        <div>
-          <span className="label">Taille d'entreprise (employés)</span>
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" className={`chip ${band === '' ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => setBand('')}>Toutes</button>
-            {EFF_BANDS.map(x => <button key={x.id} type="button" className={`chip ${band === x.id ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => setBand(x.id)}>{x.label}</button>)}
-          </div>
-        </div>
-        <div>
-          <span className="label">Poste(s) du contact</span>
-          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-            {postes.length === 0 && <span className="text-xs text-muted">Aucun poste dans vos données.</span>}
-            {postes.map(p => <button key={p} type="button" className={`chip ${posSel.includes(p) ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => toggle(posSel, setPosSel, p)}>{p}</button>)}
-          </div>
-        </div>
+
+        {kind === 'company' ? (
+          <>
+            {picker('Secteur(s)', vocab.secteurs, secSel, setSecSel, 'Aucun secteur dans vos données.')}
+            <div>
+              <span className="label">Taille d'entreprise (employés)</span>
+              <div className="flex flex-wrap gap-1.5">
+                <button type="button" className={`chip ${band === '' ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => setBand('')}>Toutes</button>
+                {EFF_BANDS.map(x => <button key={x.id} type="button" className={`chip ${band === x.id ? 'bg-brand text-white' : 'bg-surface text-muted'}`} onClick={() => setBand(x.id)}>{x.label}</button>)}
+              </div>
+            </div>
+            {picker('Implantation', vocab.localisations, locSel, setLocSel, "Aucune implantation connue. Renseignez la localisation sur les fiches entreprise (ou laissez l'enrichissement la trouver).")}
+          </>
+        ) : (
+          <>
+            {picker('Poste(s) du contact', vocab.postes, posSel, setPosSel, 'Aucun poste dans vos données.')}
+            {committeeOn ? (
+              <>
+                {picker("Rôle dans la décision", vocab.roles, roleSel, setRoleSel, 'Aucun rôle défini.')}
+                {picker('État de la relation', vocab.relations, relSel, setRelSel, 'Aucun état défini.')}
+              </>
+            ) : (
+              <p className="text-xs text-muted">Le rôle dans la décision et l'état de la relation viennent du module « Comité d'achat », qui n'est pas installé sur cet environnement.</p>
+            )}
+          </>
+        )}
+
         <div>
           <span className="label">Période recherchée (date d'ouverture des deals)</span>
           <div className="flex items-center gap-2 flex-wrap">

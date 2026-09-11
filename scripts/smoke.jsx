@@ -30,7 +30,7 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES,
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, icpKindOf, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES,
           handoffState, handoffStats, quotaAchieved, buildStatement, monthlyPaidPrimes,
           dealAnnualValue, pipelineValue, wonValue, valueBySource,
           closingState, closingStats, closingPhases } = await import('../src/store.jsx')
@@ -281,13 +281,42 @@ async function main() {
 
   // Verdict ICP à la saisie : il ne parle que s'il a de quoi le faire, et il distingue
   // le lead qui ressemble aux comptes qui signent de celui qui s'en écarte.
+  // ⚠️ DEUX avis séparés : le mauvais compte se laisse tomber, le mauvais interlocuteur
+  // se remplace. C'est tout l'objet de la séparation entreprise / personnel.
   {
-    const profils = { icpProfiles: [{ id: 'p1', name: 'Scale-up SaaS', secteurs: ['SaaS'], effMin: 50, effMax: 500, postes: ['DRH'] }] }
-    if (icpVerdict({ secteur: 'SaaS', effectif: 120, contacts: [{ poste: 'DRH' }] }, profils)?.level !== 'match') throw new Error('Un lead conforme doit être reconnu')
+    const profils = {
+      icpProfiles: [
+        { id: 'c1', kind: 'company', name: 'Scale-up SaaS', secteurs: ['SaaS'], effMin: 50, effMax: 500 },
+        { id: 'p1', kind: 'person', name: 'Direction RH', postes: ['DRH'] },
+      ],
+    }
+    const bon = icpVerdict({ secteur: 'SaaS', effectif: 120, contacts: [{ poste: 'DRH' }] }, profils)
+    if (bon?.company?.level !== 'match' || bon?.person?.level !== 'match') throw new Error('Un lead conforme doit être reconnu sur les deux axes')
+    // Le cas qui justifie la séparation : bonne entreprise, mauvaise porte.
+    const porte = icpVerdict({ secteur: 'SaaS', effectif: 120, contacts: [{ poste: 'Stagiaire' }] }, profils)
+    if (porte?.company?.level !== 'match') throw new Error("L'entreprise reste conforme quand l'interlocuteur ne l'est pas")
+    if (porte?.person?.level !== 'off' || !porte.person.gaps.some(g => g.includes('Stagiaire'))) throw new Error("L'écart d'interlocuteur doit être nommé à part")
     const off = icpVerdict({ secteur: 'BTP', effectif: 120, contacts: [{ poste: 'DRH' }] }, profils)
-    if (off?.level !== 'off' || !off.gaps.some(g => g.includes('BTP'))) throw new Error("L'écart de secteur doit être nommé")
+    if (off?.company?.level !== 'off' || !off.company.gaps.some(g => g.includes('BTP'))) throw new Error("L'écart de secteur doit être nommé")
+    if (off?.person?.level !== 'match') throw new Error("Le bon interlocuteur reste bon dans une entreprise hors cible")
     if (icpVerdict({ secteur: '', effectif: '', contacts: [] }, profils)) throw new Error('Sans donnée saisie, aucun verdict ne doit s\'afficher')
     if (icpVerdict({ secteur: 'SaaS' }, { icpProfiles: [] })) throw new Error('Sans profil ICP, aucun verdict')
+
+    // La FICHE entreprise prime sur le rendez-vous : c'est elle qu'on peut corriger.
+    const fiche = { ...profils, companies: { acme: { secteur: 'SaaS', effectif: '120', localisation: 'Paris' } } }
+    const v = icpVerdict({ entreprise: 'Acme', secteur: 'BTP', effectif: 9, contacts: [] }, fiche)
+    if (v?.company?.level !== 'match') throw new Error('La fiche entreprise doit primer sur la valeur du RDV')
+
+    // Un profil d'avant la séparation porte les deux natures : il continue de filtrer
+    // sur tout, et répond aux deux questions. Le réécrire aurait changé sa sélection.
+    const ancien = { icpProfiles: [{ id: 'm1', name: 'Ancien', secteurs: ['SaaS'], postes: ['DRH'] }] }
+    if (icpKindOf(ancien.icpProfiles[0]) !== 'mixed') throw new Error('Un profil mixte doit être reconnu comme tel')
+    const am = icpVerdict({ secteur: 'SaaS', contacts: [{ poste: 'DRH' }] }, ancien)
+    if (am?.company?.level !== 'match' || am?.person?.level !== 'match') throw new Error('Un profil mixte doit répondre aux deux questions')
+
+    // Implantation : « Paris » et « Paris, France » désignent le même terrain.
+    const lieu = { icpProfiles: [{ id: 'l1', kind: 'company', name: 'IDF', localisations: ['Paris'] }], companies: { acme: { localisation: 'Paris, France' } } }
+    if (icpVerdict({ entreprise: 'Acme', contacts: [] }, lieu)?.company?.level !== 'match') throw new Error("L'implantation doit se rapprocher par inclusion")
   }
 
   // fmtDate reçoit tantôt une date seule, tantôt un horodatage ISO complet (createdAt).
@@ -1612,12 +1641,34 @@ async function main() {
   await click(navBtn('Gestion Manager'))
   if ([...container.querySelectorAll('input')].some(i => i.value === 'demo1234')) throw new Error('Admin must not expose plaintext password')
 
-  // 8d. ICP : page rendue + création d'un profil sur mesure
+  // 8d. ICP : page rendue + création d'un profil de CHAQUE nature. La séparation ne vaut
+  // que si les deux se créent séparément et atterrissent chacun dans sa section.
   await click(navBtn('ICP'))
   if (!text().includes('Moyenne globale')) throw new Error('ICP page did not render')
-  await click(find('button', 'Créer un profil'))
-  await click(find('button', 'Créer le profil'))
-  if (!text().includes('Mes profils ICP')) throw new Error('ICP custom profile not created')
+  if (!text().includes('ICP entreprise') || !text().includes('ICP personnel')) throw new Error('Les deux natures d\'ICP doivent être proposées')
+  {
+    const creerBtns = [...container.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Créer un profil')
+    if (creerBtns.length !== 2) throw new Error('Chaque nature d\'ICP doit avoir son bouton de création')
+    // Entreprise
+    await click(creerBtns[0])
+    const modal = () => container.querySelector('.fixed.z-50') || container
+    if (!modal().textContent.includes('Quel compte vaut mon temps ?')) throw new Error("L'éditeur entreprise doit poser sa question")
+    if (modal().textContent.includes('Poste(s) du contact')) throw new Error("L'ICP entreprise ne doit pas proposer de critère de personne")
+    await type(modal().querySelector('input'), 'Comptes cibles')
+    await click([...modal().querySelectorAll('button')].find(b => b.textContent.trim() === 'Créer le profil'))
+    if (!text().includes('Comptes cibles')) throw new Error('ICP entreprise non créé')
+    // Personnel
+    const again = [...container.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Créer un profil')
+    await click(again[1])
+    if (!modal().textContent.includes('À qui parler dans ce compte ?')) throw new Error("L'éditeur personnel doit poser sa question")
+    if (modal().textContent.includes("Taille d'entreprise")) throw new Error("L'ICP personnel ne doit pas proposer de critère d'entreprise")
+    await type(modal().querySelector('input'), 'Bonnes portes')
+    await click([...modal().querySelectorAll('button')].find(b => b.textContent.trim() === 'Créer le profil'))
+    if (!text().includes('Bonnes portes')) throw new Error('ICP personnel non créé')
+    const profs = dbNow().data['sub-owen'].icpProfiles || []
+    if (!profs.some(p => p.name === 'Comptes cibles' && p.kind === 'company')) throw new Error("La nature 'company' doit être enregistrée")
+    if (!profs.some(p => p.name === 'Bonnes portes' && p.kind === 'person')) throw new Error("La nature 'person' doit être enregistrée")
+  }
 
   // 9. Organigramme + paramètres
   await click(container.querySelector('button[title="Organigramme"]'))

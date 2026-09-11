@@ -1937,7 +1937,11 @@ function emptySubEnvData() {
     wonPhases: [...DEFAULT_WON_PHASES],     // phases signifiant « affaire gagnée »
     lostPhases: [...DEFAULT_LOST_PHASES],   // phases signifiant « affaire perdue »
     signals: [],     // signaux commerciaux détectés (moteur Sales Intelligence)
-    icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
+    // Profils ICP enregistrés. `kind` dit à quelle question le profil répond :
+    //   'company' → { secteurs[], effMin, effMax, localisations[] }
+    //   'person'  → { postes[], roles[], relations[] }
+    // Un profil sans `kind` est antérieur à la séparation : `icpKindOf` le déduit.
+    icpProfiles: [], // { id, kind, name, …critères, dateStart, dateEnd, createdAt }
     primeRules: DEFAULT_PRIME_RULES(), // seuils / accélérateurs / plafonds — désactivés par défaut
     objections: defaultObjections(), // bibliothèque d'objections (onglet de « Mes notes »)
     messageTemplates: defaultMessageTemplates(), // modèles de messages (onglet de « Mes notes »)
@@ -2426,16 +2430,68 @@ export const DEFAULT_PRIME_PHASES = ['SQL', 'Signée']
 //  Le calcul vivait dans la page ICP, donc il ne servait qu'à l'analyse après coup.
 //  Exporté ici, il sert aussi AU MOMENT DE LA SAISIE, quand le commercial peut encore
 //  décider d'investir son temps ailleurs.
+//
+//  ⚠️ DEUX ICP, parce qu'il y a DEUX QUESTIONS — et un seul profil les confondait.
+//  « Ce compte vaut-il mon temps ? » (secteur, taille, implantation) et « à qui
+//  parler dedans ? » (poste, rôle dans la décision, état de la relation) n'ont ni
+//  la même réponse ni le même remède. Mélangées, la bonne entreprise abordée par le
+//  mauvais interlocuteur se lisait « hors profil » : le commercial lâchait le compte
+//  au lieu de changer de porte. Séparées, chaque verdict dit quoi faire.
 // ---------------------------------------------------------------------------
-export function icpMatches(deal, p, { ignoreDates = false } = {}) {
-  if (p.secteurs?.length && !p.secteurs.includes(deal.secteur)) return false
-  const eff = Number(deal.effectif) || 0
-  if (p.effMin != null && eff < p.effMin) return false
-  if (p.effMax != null && eff > p.effMax) return false
-  if (p.postes?.length) {
-    const postes = (deal.contacts || []).map(c => c.poste).filter(Boolean)
-    if (!postes.some(po => p.postes.includes(po))) return false
+// ⚠️ `createLabel` est écrit EN ENTIER plutôt que composé à l'affichage : une phrase
+// recollée (`Créer un ${label}`) forme un seul nœud absent du dictionnaire, et ne se
+// traduit donc jamais. C'est la règle posée pour toute l'interface.
+export const ICP_KINDS = [
+  { id: 'company', label: 'ICP entreprise', createLabel: 'Créer un ICP entreprise', question: 'Quel compte vaut mon temps ?' },
+  { id: 'person', label: 'ICP personnel', createLabel: 'Créer un ICP personnel', question: 'À qui parler dans ce compte ?' },
+]
+// Les critères qui appartiennent à chaque question. Sert à l'éditeur (quels champs
+// proposer) ET à la lecture des profils antérieurs à la séparation.
+export const ICP_COMPANY_KEYS = ['secteurs', 'effMin', 'effMax', 'localisations']
+export const ICP_PERSON_KEYS = ['postes', 'roles', 'relations']
+const hasCrit = (p, keys) => keys.some(k => (Array.isArray(p?.[k]) ? p[k].length > 0 : p?.[k] != null))
+/**
+ * De quelle nature est ce profil ? `kind` fait foi quand il est posé. Sinon on
+ * DÉDUIT — et un profil d'avant la séparation qui porte les deux natures reste
+ * 'mixed' : il continue de filtrer sur tout, exactement comme avant. Le réécrire
+ * d'office changerait en silence ce qu'il sélectionne.
+ */
+export function icpKindOf(p) {
+  if (p?.kind === 'company' || p?.kind === 'person') return p.kind
+  const c = hasCrit(p, ICP_COMPANY_KEYS), h = hasCrit(p, ICP_PERSON_KEYS)
+  if (c && h) return 'mixed'
+  return h ? 'person' : 'company'
+}
+/**
+ * Les traits d'entreprise du deal. ⚠️ La FICHE prime sur le rendez-vous quand elle
+ * est renseignée : c'est la règle déjà posée pour `effectif` et `secteur` (lus sur
+ * le dernier RDV, deux commerciaux voyaient deux valeurs sans pouvoir corriger la
+ * fausse). Sans `data`, on retombe sur le comportement d'origine.
+ */
+function companyTraits(deal, data) {
+  const sheet = data?.companies?.[companyKey(deal?.entreprise)] || null
+  return {
+    secteur: (sheet?.secteur || deal?.secteur || '').trim(),
+    effectif: Number(sheet?.effectif || deal?.effectif) || 0,
+    localisation: String(sheet?.localisation || '').trim(),
   }
+}
+// Une implantation est du texte libre : « Paris », « Île-de-France », « Paris, France »
+// désignent le même terrain. On rapproche donc par inclusion, dans les deux sens.
+const placeHit = (place, wanted) => {
+  const v = place.toLowerCase()
+  return wanted.some(w => { const x = String(w).trim().toLowerCase(); return x && (v.includes(x) || x.includes(v)) })
+}
+export function icpMatches(deal, p, { ignoreDates = false, data = null } = {}) {
+  const t = companyTraits(deal, data)
+  if (p.secteurs?.length && !p.secteurs.includes(t.secteur)) return false
+  if (p.effMin != null && t.effectif < p.effMin) return false
+  if (p.effMax != null && t.effectif > p.effMax) return false
+  if (p.localisations?.length && !(t.localisation && placeHit(t.localisation, p.localisations))) return false
+  const contacts = deal.contacts || []
+  if (p.postes?.length && !contacts.some(c => c.poste && p.postes.includes(c.poste))) return false
+  if (p.roles?.length && !contacts.some(c => c.role && p.roles.includes(c.role))) return false
+  if (p.relations?.length && !contacts.some(c => c.relation && p.relations.includes(c.relation))) return false
   if (!ignoreDates && (p.dateStart || p.dateEnd)) {
     const dd = deal.datePriseRdv || deal.dateRdv || deal.createdAt || ''
     if (!dd) return false
@@ -2445,31 +2501,60 @@ export function icpMatches(deal, p, { ignoreDates = false } = {}) {
   return true
 }
 
-// Verdict affichable pendant la saisie d'un rendez-vous. Renvoie null quand il n'y a
-// rien d'utile à dire — aucun profil enregistré, ou pas encore assez de champs remplis
-// pour que l'avis veuille dire quelque chose.
-export function icpVerdict(deal, data) {
-  const profiles = (data?.icpProfiles || []).filter(p => p.secteurs?.length || p.effMin != null || p.effMax != null || p.postes?.length)
+// Ce qui écarte un deal d'un profil donné. Un critère dont le deal ne porte PAS encore
+// la valeur n'est pas un écart : c'est un champ vide, et le signaler ferait passer
+// « pas encore saisi » pour « mauvais compte ».
+function icpGaps(deal, p, data) {
+  const t = companyTraits(deal, data)
+  const gaps = []
+  if (p.secteurs?.length && t.secteur && !p.secteurs.includes(t.secteur)) gaps.push(`secteur ${t.secteur}`)
+  if (p.effMin != null && t.effectif && t.effectif < p.effMin) gaps.push(`effectif sous ${p.effMin}`)
+  if (p.effMax != null && t.effectif && t.effectif > p.effMax) gaps.push(`effectif au-dessus de ${p.effMax}`)
+  if (p.localisations?.length && t.localisation && !placeHit(t.localisation, p.localisations)) gaps.push(`implantation ${t.localisation}`)
+  const contacts = deal.contacts || []
+  const postes = contacts.map(c => c.poste).filter(Boolean)
+  const roles = contacts.map(c => c.role).filter(Boolean)
+  const rels = contacts.map(c => c.relation).filter(Boolean)
+  if (p.postes?.length && postes.length && !postes.some(x => p.postes.includes(x))) gaps.push(`interlocuteur ${postes[0]}`)
+  if (p.roles?.length && roles.length && !roles.some(x => p.roles.includes(x))) gaps.push(`rôle ${roles[0]}`)
+  if (p.relations?.length && rels.length && !rels.some(x => p.relations.includes(x))) gaps.push(`relation ${rels[0]}`)
+  return gaps
+}
+
+// Le verdict d'UNE famille de profils. null quand il n'y a rien d'utile à dire :
+// aucun profil de cette nature, ou pas encore de quoi comparer.
+function verdictFor(deal, profiles, data) {
   if (!profiles.length) return null
-  const eff = Number(deal.effectif) || 0
-  const postes = (deal.contacts || []).map(c => c.poste).filter(Boolean)
-  if (!deal.secteur && !eff && !postes.length) return null // rien à comparer encore
-
-  const hit = profiles.find(p => icpMatches(deal, p, { ignoreDates: true }))
+  const hit = profiles.find(p => icpMatches(deal, p, { ignoreDates: true, data }))
   if (hit) return { level: 'match', name: hit.name || 'votre profil idéal', gaps: [] }
-
-  // Profil le plus proche : celui dont le moins de critères s'écartent.
   let best = null
   profiles.forEach(p => {
-    const gaps = []
-    if (p.secteurs?.length && deal.secteur && !p.secteurs.includes(deal.secteur)) gaps.push(`secteur ${deal.secteur}`)
-    if (p.effMin != null && eff && eff < p.effMin) gaps.push(`effectif sous ${p.effMin}`)
-    if (p.effMax != null && eff && eff > p.effMax) gaps.push(`effectif au-dessus de ${p.effMax}`)
-    if (p.postes?.length && postes.length && !postes.some(po => p.postes.includes(po))) gaps.push(`interlocuteur ${postes[0]}`)
+    const gaps = icpGaps(deal, p, data)
     if (!best || gaps.length < best.gaps.length) best = { p, gaps }
   })
   if (!best || !best.gaps.length) return null // l'écart ne vient que de champs encore vides
   return { level: 'off', name: best.p.name || 'votre profil idéal', gaps: best.gaps }
+}
+
+/**
+ * Verdict affichable pendant la saisie d'un rendez-vous : un avis PAR question.
+ * Renvoie null quand il n'y a rien d'utile à dire — aucun profil enregistré, ou
+ * pas encore assez de champs remplis pour que l'avis veuille dire quelque chose.
+ * Un profil 'mixed' (d'avant la séparation) répond aux deux, comme il l'a toujours fait.
+ */
+export function icpVerdict(deal, data) {
+  const all = (data?.icpProfiles || []).filter(p => hasCrit(p, ICP_COMPANY_KEYS) || hasCrit(p, ICP_PERSON_KEYS))
+  if (!all.length) return null
+  const t = companyTraits(deal, data)
+  const contacts = deal.contacts || []
+  const knowsCompany = !!(t.secteur || t.effectif || t.localisation)
+  const knowsPerson = contacts.some(c => c.poste || c.role || c.relation)
+  if (!knowsCompany && !knowsPerson) return null // rien à comparer encore
+
+  const of = (k) => all.filter(p => { const kk = icpKindOf(p); return kk === k || kk === 'mixed' })
+  const company = knowsCompany ? verdictFor(deal, of('company'), data) : null
+  const person = knowsPerson ? verdictFor(deal, of('person'), data) : null
+  return company || person ? { company, person } : null
 }
 
 export const DEFAULT_WON_PHASES = ['Signée']
@@ -2834,15 +2919,12 @@ function seedDemoWorkspace(d, who = '') {
     },
   ]
 
+  // Deux natures d'ICP, séparées : les comptes qu'on vise, et les gens à qui on parle.
   d.icpProfiles = [
-    {
-      id: uid(), name: 'ETI industrie 200-800', secteurs: ['Industrie', 'Énergie', 'Logistique'],
-      effMin: 200, effMax: 800, postes: ['DRH', 'DAF', 'DG'], createdAt: nowIso,
-    },
-    {
-      id: uid(), name: 'Scale-up SaaS', secteurs: ['SaaS', 'IT', 'Cybersécurité'],
-      effMin: 30, effMax: 250, postes: ['CEO', 'COO', 'Head of People'], createdAt: nowIso,
-    },
+    { id: uid(), kind: 'company', name: 'ETI industrie 200-800', secteurs: ['Industrie', 'Énergie', 'Logistique'], effMin: 200, effMax: 800, createdAt: nowIso },
+    { id: uid(), kind: 'company', name: 'Scale-up SaaS', secteurs: ['SaaS', 'IT', 'Cybersécurité'], effMin: 30, effMax: 250, createdAt: nowIso },
+    { id: uid(), kind: 'person', name: 'Direction RH', postes: ['DRH', 'Head of People'], roles: ['Décideur', 'Prescripteur'], createdAt: nowIso },
+    { id: uid(), kind: 'person', name: 'Comité de direction', postes: ['CEO', 'COO', 'DG', 'DAF'], roles: ['Décideur'], createdAt: nowIso },
   ]
   return d
 }

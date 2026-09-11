@@ -74,7 +74,9 @@ function ContactSearch({ onPick }) {
 
 function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, findOrgOwners, committee, dealValue, territoryOf }) {
   const [f, setF] = useState(initial)
-  const icp = useMemo(() => icpVerdict(f, sub), [f.secteur, f.effectif, f.contacts, sub.icpProfiles]) // eslint-disable-line
+  // `entreprise` et `companies` comptent aussi : la FICHE prime sur le rendez-vous pour
+  // le secteur, l'effectif et l'implantation — sans elles, l'avis resterait sur la valeur périmée.
+  const icp = useMemo(() => icpVerdict(f, sub), [f.entreprise, f.secteur, f.effectif, f.contacts, sub.icpProfiles, sub.companies]) // eslint-disable-line
   const [err, setErr] = useState('')
   const visible = (k) => sub.fieldsConfig.find(c => c.key === k)?.visible !== false
   const set = (k, v) => setF(x => ({ ...x, [k]: v }))
@@ -120,19 +122,26 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
           <input className="input" value={f.secteur} onChange={e => set('secteur', e.target.value)} />
         </Field>}
         {/* Verdict ICP au moment où il sert : le commercial peut encore arbitrer son temps.
-            Purement informatif — c'est une aide à la décision, pas une autorisation. */}
-        {icp && (
-          <div className="sm:col-span-2">
-            <div className={`rounded-xl border p-2.5 flex items-start gap-2 text-xs ${icp.level === 'match'
-              ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
-              : 'border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300'}`}>
-              <Target size={14} className="shrink-0 mt-0.5" />
-              {icp.level === 'match'
-                ? <span>Ce lead correspond à <b>{icp.name}</b> — le profil qui signe le mieux chez vous.</span>
-                : <span>S'écarte de <b>{icp.name}</b> : {icp.gaps.join(', ')}. À travailler en connaissance de cause.</span>}
-            </div>
-          </div>
-        )}
+            Purement informatif — c'est une aide à la décision, pas une autorisation.
+            ⚠️ DEUX avis séparés, parce qu'ils appellent deux gestes différents : le mauvais
+            compte se laisse tomber, le mauvais interlocuteur se remplace. Confondus, on
+            lâchait des comptes qu'il suffisait d'aborder par une autre porte. */}
+        {icp && <div className="sm:col-span-2 space-y-1.5">
+          {[['company', 'Entreprise', icp.company], ['person', 'Interlocuteur', icp.person]]
+            .filter(([, , v]) => v).map(([k, titre, v]) => (
+              <div key={k} className={`rounded-xl border p-2.5 flex items-start gap-2 text-xs ${v.level === 'match'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+                : 'border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300'}`}>
+                <Target size={14} className="shrink-0 mt-0.5" />
+                <span>
+                  <b>{titre}</b>{' — '}
+                  {v.level === 'match'
+                    ? <>correspond à <b>{v.name}</b>.</>
+                    : <>s'écarte de <b>{v.name}</b> : {v.gaps.map((g, i) => <React.Fragment key={i}>{i > 0 && ', '}<span>{g}</span></React.Fragment>)}.</>}
+                </span>
+              </div>
+            ))}
+        </div>}
         {visible('source') && <Field label="Source">
           <Select value={f.source} onChange={v => set('source', v)} options={SOURCES} />
         </Field>}

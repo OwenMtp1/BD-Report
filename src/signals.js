@@ -49,16 +49,26 @@ const typesFor = (rules, catalogue) => (rules.signals || [])
     return { id: s.id, label: t ? t.label : s.id, priority: s.priority || 'medium' }
   })
 
-/** Une phrase décrivant l'ICP, à partir des profils COCHÉS — jamais redéfini ici. */
+/**
+ * Une phrase décrivant l'ICP, à partir des profils COCHÉS — jamais redéfini ici.
+ * ⚠️ La nature du profil est DITE au modèle : « entreprise à viser » et « personne à
+ * qui parler » ne se traitent pas pareil, et un modèle qui les confond cherche des
+ * signaux sur des postes au lieu de comptes.
+ */
 export function icpSummary(rules, profiles) {
   const chosen = (profiles || []).filter(p => (rules.icpProfileIds || []).includes(p.id))
   if (!chosen.length) return ''
-  return chosen.map(p => [
-    p.name,
-    (p.secteurs || []).length ? `secteurs : ${p.secteurs.join(', ')}` : '',
-    (p.effMin || p.effMax) ? `effectif ${p.effMin ?? '?'}–${p.effMax ?? '?'}` : '',
-    (p.postes || []).length ? `interlocuteurs : ${p.postes.join(', ')}` : '',
-  ].filter(Boolean).join(' — ')).join(' ; ')
+  return chosen.map(p => {
+    const person = p.kind === 'person'
+    const bits = [
+      (p.secteurs || []).length ? `secteurs : ${p.secteurs.join(', ')}` : '',
+      (p.effMin || p.effMax) ? `effectif ${p.effMin ?? '?'}–${p.effMax ?? '?'}` : '',
+      (p.localisations || []).length ? `implantation : ${p.localisations.join(', ')}` : '',
+      (p.postes || []).length ? `postes : ${p.postes.join(', ')}` : '',
+      (p.roles || []).length ? `rôles dans la décision : ${p.roles.join(', ')}` : '',
+    ].filter(Boolean)
+    return [`${p.name} (${person ? 'personne à qui parler' : 'entreprise à viser'})`, ...bits].join(' — ')
+  }).join(' ; ')
 }
 
 /** Ramasse les preuves publiques. Gratuit : aucune IA n'est appelée ici. */
