@@ -821,6 +821,11 @@ async function main() {
     ok(/Math\.max\(0, Math\.min\(100/.test(worker), 'Relais : le score renvoyé par l\'IA n\'est pas borné')
     ok(/slice\(0, MAX_SIGNALS\)/.test(worker), 'Relais : le nombre de signaux renvoyés n\'est pas borné')
     ok(!/GEMINI_API_KEY\s*=\s*['"][^'"]/.test(worker), 'Relais : une clé Gemini est écrite en dur dans le code')
+    // Un modèle retiré par Google ne doit pas arrêter le produit : il DIT lequel prend la
+    // relève, on rejoue une fois avec celui-là plutôt que de rendre un 404 à l'utilisateur.
+    ok(/res\.status === 404/.test(worker) && /Please update|models\\\//.test(worker),
+      'Relais : un modèle Gemini retiré casse la fonctionnalité au lieu de basculer sur son successeur')
+    ok(!/gemini-2\.0-flash'/.test(worker), 'Relais : le modèle par défaut est un modèle retiré')
 
     // La fiche entreprise intègre l'action, elle ne crée pas de page ni de navigation.
     const navSrc = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'nav.jsx'), 'utf8')

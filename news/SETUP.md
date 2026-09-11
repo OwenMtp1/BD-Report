@@ -67,6 +67,13 @@ L'URL est publiée à tous les clients : personne d'autre n'a rien à configurer
 | `POST /enrich` | Cherche les informations publiques de l'entreprise pour les seuls champs que l'application demande |
 | `GET /health` (ou `/`) | Diagnostic : le relais répond-il, et a-t-il une clé ? |
 
+### Si Gemini répond 404
+
+Google retire ses modèles sans préavis : `gemini-2.0-flash` a cessé de répondre du jour au
+lendemain. Le relais lit alors le modèle que le message d'erreur désigne et **rejoue l'appel
+une fois** avec celui-là. Vous n'avez rien à faire — et si vous voulez figer un modèle
+précis, mettez-le dans `GEMINI_MODEL`.
+
 ### Si Google refuse
 
 `news.google.com` répond **503** à un serveur qui se présente comme un robot. Le relais se

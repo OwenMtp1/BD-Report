@@ -25,7 +25,9 @@
  *   GEMINI_API_KEY   requis — clé Google AI Studio (offre gratuite suffisante)
  *   ALLOWED_ORIGINS  origines autorisées, séparées par des virgules
  *                    ex : "https://bdreport.js.org,http://localhost:5173"
- *   GEMINI_MODEL     (optionnel) modèle à utiliser, défaut « gemini-2.0-flash »
+ *   GEMINI_MODEL     (optionnel) modèle à utiliser, défaut « gemini-3.6-flash ».
+ *                    Un modèle retiré par Google est remplacé automatiquement par celui
+ *                    que son message d'erreur désigne — voir callGemini().
  */
 
 const RSS_BASE = 'https://news.google.com/rss/search'
@@ -152,6 +154,42 @@ async function getNews(company) {
 }
 
 // ---------------------------------------------------------------- Gemini
+
+// ---------------------------------------------------------------- Appel Gemini
+// ⚠️ LES MODÈLES SONT RETIRÉS SANS PRÉAVIS. `gemini-2.0-flash` a cessé de répondre du jour
+// au lendemain, et tout s'est arrêté sur un 404 — alors que Google DIT dans son message
+// d'erreur quel modèle prend la relève. On lit donc cette indication et on rejoue l'appel
+// une fois avec le modèle proposé : la prochaine mise à la retraite ne cassera rien, et le
+// relais signale le modèle réellement utilisé plutôt que celui qu'on croyait appeler.
+const DEFAULT_MODEL = 'gemini-3.6-flash'
+
+async function callGemini(payload, env, model) {
+  const key = env.GEMINI_API_KEY
+  if (!key) throw new Error("Le relais n'a pas de clé Gemini configurée.")
+  const first = model || env.GEMINI_MODEL || DEFAULT_MODEL
+  const once = async (m) => {
+    const res = await fetch(`${GEMINI_BASE}/${m}:generateContent?key=${encodeURIComponent(key)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    })
+    return { res, text: res.ok ? null : await res.text().catch(() => '') }
+  }
+  let { res, text } = await once(first)
+  if (!res.ok && res.status === 404) {
+    // « Please update your code to use models/<x> » : on prend le modèle nommé, jamais un
+    // autre. S'il n'y en a pas, on n'invente pas de remplaçant — on remonte l'erreur.
+    const suggested = (text.match(/models\/([A-Za-z0-9._-]+)/g) || [])
+      .map(x => x.replace('models/', ''))
+      .filter(x => x !== first)[0]
+    if (suggested) {
+      const retry = await once(suggested)
+      if (retry.res.ok) return { body: await retry.res.json(), model: suggested }
+      res = retry.res; text = retry.text
+    }
+  }
+  if (!res.ok) throw new Error(`Gemini a répondu ${res.status}${text ? ' — ' + text.slice(0, 200) : ''}`)
+  return { body: await res.json(), model: first }
+}
+
 const SIGNAL_TYPES = [
   'recrutement', 'changement de direction', 'levée de fonds', 'acquisition', 'fusion',
   'croissance', 'expansion', 'ouverture de bureaux', 'lancement de produit',
@@ -195,22 +233,10 @@ extrait: ${a.summary || '(aucun)'}`).join('\n\n')}`
 const URGENCIES = ['LOW', 'MEDIUM', 'HIGH']
 
 async function analyze(company, articles, env) {
-  const key = env.GEMINI_API_KEY
-  if (!key) throw new Error("Le relais n'a pas de clé Gemini configurée.")
-  const model = env.GEMINI_MODEL || 'gemini-2.0-flash'
-  const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: PROMPT(company, articles) }] }],
-      generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
-    }),
-  })
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '')
-    throw new Error(`Gemini a répondu ${res.status}${detail ? ' — ' + detail.slice(0, 200) : ''}`)
-  }
-  const body = await res.json()
+  const { body, model } = await callGemini({
+    contents: [{ parts: [{ text: PROMPT(company, articles) }] }],
+    generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+  }, env)
   const text = body?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
   let parsed
   try { parsed = JSON.parse(text) } catch (e) { throw new Error("Réponse de l'IA illisible.") }
@@ -283,25 +309,13 @@ const isHttp = (u) => /^https?:\/\/\S+$/i.test(String(u || ''))
 const looksPersonal = (v) => /@/.test(v) || /\b0[67](?:[ .-]?\d{2}){4}\b/.test(v)
 
 async function enrich(company, fields, known, env) {
-  const key = env.GEMINI_API_KEY
-  if (!key) throw new Error("Le relais n'a pas de clé Gemini configurée.")
-  const model = env.GEMINI_MODEL || 'gemini-2.0-flash'
-  const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: ENRICH_PROMPT(company, fields, known) }] }],
-      // Recherche Google : sans elle, le modèle répondrait de mémoire — c'est-à-dire
-      // qu'il inventerait. La consigne « ne rien inventer » n'a de sens qu'avec une source.
-      tools: [{ google_search: {} }],
-      generationConfig: { temperature: 0 },
-    }),
-  })
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '')
-    throw new Error(`Gemini a répondu ${res.status}${detail ? ' — ' + detail.slice(0, 200) : ''}`)
-  }
-  const body = await res.json()
+  const { body, model } = await callGemini({
+    contents: [{ parts: [{ text: ENRICH_PROMPT(company, fields, known) }] }],
+    // Recherche Google : sans elle, le modèle répondrait de mémoire — c'est-à-dire
+    // qu'il inventerait. La consigne « ne rien inventer » n'a de sens qu'avec une source.
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0 },
+  }, env)
   const raw = body?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
   // Le modèle encadre souvent son JSON de balises de code malgré la consigne.
   const text = raw.replace(/^[\s\S]*?```(?:json)?/i, '').replace(/```[\s\S]*$/, '').trim() || raw.trim()

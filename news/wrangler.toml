@@ -11,8 +11,10 @@ compatibility_date = "2024-11-01"
 [vars]
 # Origines autorisées à appeler le relais (l'app BD Report).
 ALLOWED_ORIGINS = "https://bdreport.js.org,https://owenmtp1.github.io,http://localhost:5173"
-# Modèle Gemini. Laisser vide pour le défaut (gemini-2.0-flash, offre gratuite).
-# GEMINI_MODEL = "gemini-2.0-flash"
+# Modèle Gemini. Laisser vide pour le défaut (gemini-3.6-flash, offre gratuite).
+# Un modèle retiré par Google est remplacé automatiquement par son successeur : le relais
+# lit le modèle que le message d'erreur désigne et rejoue l'appel une fois.
+# GEMINI_MODEL = "gemini-3.6-flash"
 
 # Secret (JAMAIS dans ce fichier — `wrangler secret put`) :
 #   GEMINI_API_KEY
