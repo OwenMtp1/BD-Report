@@ -219,41 +219,17 @@ async function callGemini(payload, env) {
   throw err
 }
 
-async function analyze(company, articles, env) {
-  const { body, model } = await callGemini({
-    contents: [{ parts: [{ text: PROMPT(company, articles) }] }],
-    generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
-  }, env)
-  const text = body?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
-  let parsed
-  try { parsed = JSON.parse(text) } catch (e) { throw new Error("Réponse de l'IA illisible.") }
-
-  // On ne fait pas confiance à la forme renvoyée : un modèle peut inventer un champ,
-  // en oublier un autre, ou rendre 12 signaux quand on en demandait 5.
-  const urls = new Set(articles.map(a => a.url))
-  const signals = (Array.isArray(parsed?.signals) ? parsed.signals : [])
-    .map(s => ({
-      type: String(s.type || '').slice(0, 60),
-      title: String(s.title || '').slice(0, 200),
-      summary: String(s.summary || '').slice(0, 600),
-      score: Math.max(0, Math.min(100, Math.round(Number(s.score) || 0))),
-      urgency: URGENCIES.includes(String(s.urgency || '').toUpperCase()) ? String(s.urgency).toUpperCase() : 'LOW',
-      why_now: String(s.why_now || '').slice(0, 600),
-      targets: (Array.isArray(s.targets) ? s.targets : []).slice(0, 3).map(t => String(t).slice(0, 60)),
-      angle: String(s.angle || '').slice(0, 400),
-      source: String(s.source || '').slice(0, 120),
-      date: String(s.date || '').slice(0, 40),
-      // Une URL absente des articles fournis est une URL inventée : on la retire plutôt
-      // que d'envoyer un commercial vers une page qui n'existe pas.
-      url: urls.has(s.url) ? s.url : '',
-    }))
-    .filter(s => s.title)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_SIGNALS)
-  // Le modèle qui a RÉELLEMENT répondu — pas celui qu'on croyait appeler : avec la rotation
-  // sur quota, ce n'est pas toujours le premier de la liste.
-  return { signals, model }
-}
+// ⚠️ IL N'Y A PLUS QU'UNE SEULE ANALYSE — `analyzeSignals`, plus bas. L'analyse
+// « actualités » avait son propre prompt, sans le contexte de l'équipe : elle jugeait
+// donc l'intérêt commercial d'un fait sans savoir ce que l'équipe vend. Deux prompts
+// pour une même question, c'est aussi deux endroits à corriger, et c'est ainsi que
+// celui-ci a fini par appeler un `PROMPT` supprimé — « PROMPT is not defined » à
+// l'écran, sur la seule branche qu'aucun test ne couvrait.
+// Un article est une PREUVE de presse comme une autre : il suffit de le dire.
+const articleToEvidence = (a) => ({
+  kind: 'news', sourceUrl: a.url || '', publisher: a.source || '', title: a.title || '',
+  content: a.summary || '', date: a.date || '',
+})
 
 
 // ============================================================ SALES SIGNALS
@@ -398,27 +374,47 @@ async function collectCareers(site) {
   }]
 }
 
-/** Presse, avec des requêtes composées à partir des signaux cochés. */
+/**
+ * Presse. ⚠️ LA RECHERCHE DE BASE PASSE PAR `getNews`, c'est-à-dire par le chemin qui
+ * marche : en-têtes de navigateur, fenêtre de 30 jours, ET REPLI SUR BING quand Google
+ * refuse. La version précédente composait sept requêtes spécialisées et les envoyait
+ * toutes à Google, sans repli : sept appels rapprochés depuis un Worker, Google limite,
+ * les sept reviennent vides — et l'appelant recevait « 0 preuve publique » sans qu'aucune
+ * source n'ait vraiment été interrogée.
+ * Les requêtes composées (« Nom + levée de fonds ») restent, mais comme un BONUS qui
+ * s'ajoute : leur échec n'emporte plus la recherche de base.
+ */
 async function collectNews(company, types) {
-  const queries = [`"${company}"`]
-  types.slice(0, 6).forEach(t => (SIGNAL_QUERIES[t.id] || []).slice(0, 2)
-    .forEach(k => queries.push(`"${company}" ${k}`)))
   const seen = new Set()
   const out = []
-  for (const q of [...new Set(queries)].slice(0, 7)) {
-    const r = await readRss(`${RSS_BASE}?q=${encodeURIComponent(q + ` when:${WINDOW_DAYS}d`)}&hl=fr&gl=FR&ceid=FR:fr`)
-    for (const a of r.items) {
-      const key = normTitle(a.title)
-      if (!key || seen.has(key)) continue
-      seen.add(key)
-      const ts = Date.parse(a.date)
-      out.push({
-        kind: 'news', sourceUrl: a.url, publisher: a.source, title: a.title,
-        content: a.summary || '', date: Number.isFinite(ts) ? new Date(ts).toISOString() : '',
-      })
-      if (out.length >= MAX_ARTICLES) return out
-    }
+  const push = (a) => {
+    const key = normTitle(a.title)
+    if (!key || seen.has(key) || out.length >= MAX_ARTICLES) return
+    seen.add(key)
+    const ts = Date.parse(a.date)
+    out.push({
+      kind: 'news', sourceUrl: a.url, publisher: a.source, title: a.title,
+      content: a.summary || '', date: Number.isFinite(ts) ? new Date(ts).toISOString() : '',
+    })
   }
+
+  // 1) Le socle : la recherche qui a toujours fonctionné, repli compris.
+  let baseError = ''
+  try { (await getNews(company)).articles.forEach(push) } catch (e) { baseError = e?.message || String(e) }
+
+  // 2) Le bonus : des requêtes ciblées sur les signaux que le staff a cochés. On s'arrête
+  //    dès que le socle a rempli la page — inutile de payer des appels pour du rab.
+  const extra = [...new Set(types.slice(0, 6).flatMap(t => (SIGNAL_QUERIES[t.id] || []).slice(0, 2)))].slice(0, 4)
+  for (const k of extra) {
+    if (out.length >= MAX_ARTICLES) break
+    try {
+      const r = await readRss(`${RSS_BASE}?q=${encodeURIComponent(`"${company}" ${k} when:${WINDOW_DAYS}d`)}&hl=fr&gl=FR&ceid=FR:fr`)
+      r.items.forEach(push)
+    } catch (e) { /* un mot-clé muet n'est pas une panne */ }
+  }
+  // Une erreur ne compte QUE si rien n'a été trouvé : ce qu'on a vaut mieux que le récit
+  // de ce qui a manqué.
+  if (!out.length && baseError) { const err = new Error(baseError); err.soft = true; throw err }
   return out
 }
 
@@ -429,11 +425,23 @@ const fingerprint = (company, it) =>
 
 async function collectSignals({ company, site, types, sources }) {
   const on = (id) => sources?.[id] !== false
-  const jobs = []
-  if (on('news')) jobs.push(collectNews(company, types || []).catch(() => []))
-  if (on('website')) jobs.push(collectWebsite(site).catch(() => []))
-  if (on('careers')) jobs.push(collectCareers(site).catch(() => []))
-  const all = (await Promise.all(jobs)).flat()
+  // ⚠️ CHAQUE SOURCE REND SES COMPTES. Les erreurs partaient dans un `.catch(() => [])` :
+  // une source éteinte par le staff, un site absent, un refus de Google et une page
+  // carrière introuvable produisaient tous le même « 0 preuve publique », impossible à
+  // diagnostiquer depuis l'écran. Le motif remonte maintenant avec le résultat.
+  const run = async (id, fn, skipWhy) => {
+    if (!on(id)) return { id, n: 0, why: 'Source désactivée dans la règle de cet environnement.', off: true }
+    if (skipWhy) return { id, n: 0, why: skipWhy }
+    try { const items = await fn(); return { id, items, n: items.length, why: items.length ? '' : 'Aucun résultat.' } }
+    catch (e) { return { id, n: 0, why: (e && e.message) || String(e), error: true } }
+  }
+  const noSite = site ? '' : "Aucun site web n'est renseigné sur la fiche."
+  const report = await Promise.all([
+    run('news', () => collectNews(company, types || [])),
+    run('website', () => collectWebsite(site), noSite),
+    run('careers', () => collectCareers(site), noSite),
+  ])
+  const all = report.flatMap(r => r.items || [])
 
   // Déduplication : une même information vue sur le site ET dans la presse ne fait pas
   // deux preuves. On garde une entrée, et on note toutes les sources qui la confirment.
@@ -451,7 +459,7 @@ async function collectSignals({ company, site, types, sources }) {
       collected: all.length,
       kept: items.length,
       duplicates: all.length - items.length,
-      bySource: ['news', 'website', 'careers'].map(k => ({ kind: k, n: all.filter(x => x.kind === k).length })),
+      bySource: report.map(r => ({ kind: r.id, n: r.n, why: r.why, error: !!r.error, off: !!r.off })),
     },
   }
 }
@@ -634,12 +642,18 @@ export default {
         return json({ articles: news.articles, source: news.source }, request, env)
       }
 
+      // Ancienne route « analyse d'actualités ». Elle reste servie parce qu'un navigateur
+      // peut encore exécuter une version antérieure de l'application, mise en cache : la
+      // faire disparaître casserait l'écran de quelqu'un qui n'a rien demandé. Elle passe
+      // désormais par l'analyse UNIQUE, avec le contexte que le corps veut bien porter.
       if (url.pathname === '/analyze' && request.method === 'POST') {
         const body = await request.json().catch(() => null)
         const company = String(body?.company || '').trim()
         const articles = Array.isArray(body?.articles) ? body.articles.slice(0, MAX_ARTICLES) : []
         if (!company || !articles.length) return json({ error: 'Entreprise ou articles manquants.' }, request, env, 400)
-        return json(await analyze(company, articles, env), request, env)
+        return json(await analyzeSignals({
+          company, rules: body?.rules || {}, items: articles.map(articleToEvidence), icp: body?.icp || '',
+        }, env), request, env)
       }
 
       if (url.pathname === '/signals/collect' && request.method === 'POST') {
