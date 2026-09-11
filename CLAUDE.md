@@ -376,7 +376,24 @@ npm run dev        # serveur de dev
     il n'a rien consommé.
   - **Enrichissement de fiche** — action **✨ Enrichir**, même panneau, même relais
     (`POST /enrich`). **`src/enrich.js`**.
-    ⚠️ **PLUS AUCUNE IA ICI, ET C'EST LE CORRECTIF.** L'enrichissement passait par l'outil de
+    ⚠️ **L'IA EST REVENUE, MAIS PAR L'AUTRE PORTE.** Ce qui saturait n'était pas Gemini,
+    c'était son **outil de recherche Google** (quota le plus serré de l'API). L'extraction
+    (`extractWithAi`) ne cherche donc RIEN : elle LIT des pages que le relais est allé
+    chercher (`readablePages` = site + presse) et n'en tire que les champs **encore vides**
+    (`missing`). C'est le quota de TEXTE, large — et la garantie anti-invention est plus
+    forte qu'avec la recherche, puisque toute URL absente des pages fournies est retirée.
+    `npm run audit` refuse tout `tools:`/`google_search` dans ce chemin.
+    ⚠️ **RETROUVER LA BONNE FICHE est la première cause d'un enrichissement vide.**
+    L'annuaire demandait UN résultat et le prenait sans vérifier — or la raison sociale
+    diffère presque toujours de la marque. Il en demande cinq et les départage
+    (`bestMatch`/`coNorm`, qui neutralise accents, ponctuation et formes juridiques :
+    « Doctolib SAS » = « Doctolib »). Sans correspondance ET plusieurs candidats, on
+    S'ABSTIENT : remplir une fiche avec les données d'une autre société est pire qu'un vide.
+    Wikidata utilise le même rapprochement, sa garde « c'est une organisation » en plus.
+    ⚠️ **LES SIGNAUX TROUVENT LE SITE EUX-MÊMES** : sans site, deux sources sur trois sont
+    mortes — première cause de « 0 preuve publique ». `collectSignals` interroge Wikidata
+    avant de renoncer (gratuit, sans IA) et remonte `stats.foundSite`.
+    ⚠️ **L'ordre reste : bases publiques d'abord, IA en dernier.** L'enrichissement passait par l'outil de
     recherche Google de Gemini, dont le quota gratuit est le plus serré de toute l'API : en
     pratique la fonctionnalité ne répondait presque jamais (« Quota Google atteint »). On a
     contourné, puis réduit, avant de poser la vraie question — à quoi sert un modèle pour

@@ -130,6 +130,22 @@ console.log('Collecte de signaux — chaque source rend ses comptes')
   ok(news?.off === true && !news?.error, 'une source désactivée doit être signalée comme telle, pas comme une erreur')
 }
 
+{
+  // ⚠️ SANS SITE, DEUX SOURCES SUR TROIS SONT MORTES — première cause de « 0 preuve ».
+  // Le relais sait maintenant retrouver le site officiel sans IA ni quota (Wikidata).
+  stubFetch([
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+    [/wikidata\.org/, (u) => ({ body: u.includes('wbsearchentities')
+      ? { search: [{ id: 'Q42', label: 'Acme', description: 'entreprise de logiciels' }] }
+      : { entities: { Q42: { claims: { P856: [{ mainsnak: { datavalue: { value: 'https://acme.fr' } } }] } } } } })],
+    [/acme\.fr\/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/acme\.fr/, () => ({ body: '<html><head><title>Acme — actualités</title></head><body><a href="/actualites">Actualités</a><p>Acme ouvre un bureau à Lyon.</p></body></html>' })],
+  ])
+  const b = await (await call('/signals/collect', { method: 'POST', body: { company: 'Acme', types: [] } })).json()
+  ok(b.stats?.foundSite === 'https://acme.fr', `le site doit être retrouvé sans qu'on le saisisse (reçu : ${b.stats?.foundSite})`)
+  ok((b.items || []).some(i => i.kind === 'website'), 'le site retrouvé doit être réellement lu')
+}
+
 console.log('Analyse contextualisée — aucune preuve inventée ne passe')
 {
   stubFetch([[GEMINI, () => ({
@@ -196,7 +212,7 @@ const wdEntity = {
 const wdRoute = (label = 'Doctolib', desc = 'entreprise française de santé') => [WIKIDATA, (u) =>
   ({ body: u.includes('wbsearchentities') ? wdSearch(label, desc) : wdEntity })]
 
-console.log("Enrichissement — l'IA n'est plus jamais appelée")
+console.log("Enrichissement — les sources publiques d'abord, l'IA pour ce qui reste")
 {
   // ⚠️ LA GARANTIE CENTRALE : quels que soient les champs demandés, ZÉRO appel Gemini.
   let gemini = 0
@@ -207,7 +223,7 @@ console.log("Enrichissement — l'IA n'est plus jamais appelée")
   const b = await (await call('/enrich', { method: 'POST', body: {
     company: 'Doctolib', fields: ['site', 'linkedin', 'localisation', 'ca', 'effectif', 'secteur'], known: {},
   } })).json()
-  ok(gemini === 0, `l'enrichissement ne doit plus appeler Gemini (${gemini} appel(s))`)
+  ok(gemini === 0, `quand les sources publiques couvrent tout, aucun appel IA (${gemini} appel(s))`)
   ok(b.source === 'public', "la provenance doit dire que rien ne vient d'une IA")
   const got = Object.keys(b.found || {}).filter(k => b.found[k])
   ok(got.length === 6, `les deux sources publiques doivent couvrir les six champs (reçu : ${got.join(', ')})`)
@@ -239,9 +255,17 @@ console.log("Enrichissement — l'IA n'est plus jamais appelée")
   ok(!b.found?.site, "une entité qui n'est pas une organisation ne doit jamais être retenue")
 }
 {
-  stubFetch([[REGISTRY, () => ({ body: { results: [] } })], wdRoute('Doctolib International SA', 'entreprise')])
+  stubFetch([[REGISTRY, () => ({ body: { results: [] } })], wdRoute('Alan Assurances', 'entreprise')])
   const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['site'], known: {} } })).json()
-  ok(!b.found?.site, 'une entité au nom différent ne doit pas être prise pour la bonne')
+  ok(!b.found?.site, 'une entité sans rapport de nom ne doit pas être prise pour la bonne')
+}
+{
+  // ⚠️ MAIS la forme juridique ne doit PAS faire manquer la bonne fiche : « Doctolib SAS »
+  // et « Doctolib » sont la même société, et l'exiger au caractère près vidait presque
+  // tous les enrichissements.
+  stubFetch([[REGISTRY, () => ({ body: { results: [] } })], wdRoute('Doctolib SAS', 'entreprise de santé')])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['site'], known: {} } })).json()
+  ok(b.found?.site?.value === 'https://doctolib.fr', "une forme juridique en plus ne doit pas faire manquer la fiche")
 }
 {
   // ⚠️ DEUX SOURCES MUETTES NE SONT PAS UNE PANNE : on rend des champs vides, avec les
@@ -302,6 +326,100 @@ const withToken = { GEMINI_API_KEY: 'test-key', PAPPERS_API_TOKEN: 'tok-secret-p
 const callTok = (path, body) => worker.fetch(new Request('https://relay.test' + path, {
   method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' },
 }), withToken)
+
+console.log("Enrichissement — retrouver la BONNE fiche à l'annuaire")
+{
+  // ⚠️ LA CAUSE LA PLUS PROBABLE D'UN ENRICHISSEMENT VIDE. On demandait UN résultat et on
+  // le prenait sans vérifier — et la raison sociale diffère presque toujours de la marque.
+  stubFetch([
+    [REGISTRY, () => ({ body: { total_results: 3, results: [
+      { siren: '111', nom_complet: 'ACME CONSEIL', siege: { libelle_commune: 'PARIS' }, libelle_activite_principale: 'Conseil' },
+      { siren: '222', nom_complet: 'ACME SAS', siege: { libelle_commune: 'LYON', code_postal: '69002' }, tranche_effectif_salarie: '22', libelle_activite_principale: 'Édition de logiciels' },
+    ] } })],
+    [WIKIDATA, () => ({ body: { search: [] } })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur', 'localisation', 'effectif'], known: {} } })).json()
+  ok(/Édition de logiciels/.test(b.found?.secteur?.value || ''), `« Acme » doit retrouver « ACME SAS », pas le premier venu (reçu : ${b.found?.secteur?.value})`)
+  ok(/LYON/.test(b.found?.localisation?.value || ''), "l'implantation doit être celle de la bonne fiche")
+  ok(b.found?.effectif?.value === '100 à 199', `l'effectif doit venir de la bonne fiche (reçu : ${b.found?.effectif?.value})`)
+}
+{
+  // ⚠️ Mais on ne prend PAS n'importe quoi : plusieurs candidats sans rapport de nom, on
+  // s'abstient. Remplir une fiche avec les données d'une autre société est pire qu'un vide.
+  stubFetch([
+    [REGISTRY, () => ({ body: { total_results: 2, results: [
+      { siren: '111', nom_complet: 'BOULANGERIE DUPONT', siege: { libelle_commune: 'PARIS' }, libelle_activite_principale: 'Boulangerie' },
+      { siren: '222', nom_complet: 'GARAGE MARTIN', siege: { libelle_commune: 'LYON' }, libelle_activite_principale: 'Garage' },
+    ] } })],
+    [WIKIDATA, () => ({ body: { search: [] } })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: {} } })).json()
+  ok(!b.found?.secteur, "sans correspondance de nom, l'annuaire ne doit rien imposer")
+  ok(/candidats/.test(JSON.stringify(b)) || b.registryError !== undefined, "le motif doit rester consultable")
+}
+
+console.log("Enrichissement — l'IA en dernier recours, sur NOS pages")
+{
+  // ⚠️ LE CHEMIN QUI SAUVE UN ENRICHISSEMENT VIDE. Les bases publiques ne connaissent pas
+  // toutes les sociétés (marque ≠ raison sociale, société étrangère, entité récente). Le
+  // modèle ne CHERCHE alors rien : il LIT les pages qu'on est allé chercher. C'est le quota
+  // de TEXTE, large — pas celui de la recherche Google, qui saturait.
+  let payload = null
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })],
+    [WIKIDATA, () => ({ body: { search: [] } })],
+    [/acme\.fr\/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/acme\.fr/, () => ({ body: '<html><head><title>Acme — à propos</title></head><body><a href="/a-propos">À propos</a><p>Acme édite un logiciel RH en SaaS, 120 personnes à Lyon.</p></body></html>' })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+    [GEMINI, (u, init) => {
+      payload = JSON.parse(init.body)
+      return { body: geminiBody({ secteur: { value: 'Logiciel RH (SaaS)', publisher: 'acme.fr', url: 'https://acme.fr/a-propos', confidence: 'high' } }) }
+    }],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: { site: 'https://acme.fr' } } })).json()
+  ok(b.found?.secteur?.value === 'Logiciel RH (SaaS)', "l'IA doit sauver un champ qu'aucune base publique ne donne")
+  ok(b.source === 'public+ai', "la provenance doit dire que l'IA est intervenue")
+  // ⚠️ AUCUN OUTIL DE RECHERCHE : c'est le quota serré qu'on évite.
+  ok(payload && !payload.tools, "l'IA ne doit jamais recevoir l'outil de recherche Google")
+  ok(/PAGES :/.test(payload?.contents?.[0]?.parts?.[0]?.text || ''), 'les pages lues doivent être fournies au modèle')
+}
+{
+  // Une URL que le modèle invente n'a aucun chemin vers l'écran.
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })], [WIKIDATA, () => ({ body: { search: [] } })],
+    [/acme\.fr\/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/acme\.fr/, () => ({ body: '<html><head><title>Acme</title></head><body><a href="/a-propos">À propos</a><p>Acme.</p></body></html>' })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+    [GEMINI, () => ({ body: geminiBody({ secteur: { value: 'Logiciel', publisher: 'x', url: 'https://invente.example/x', confidence: 'high' } }) })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: { site: 'https://acme.fr' } } })).json()
+  ok(b.found?.secteur?.url === '', 'une URL absente des pages fournies doit être retirée')
+  ok(b.found?.secteur?.confidence === 'low', 'sans source vérifiable, la confiance ne peut pas rester haute')
+}
+{
+  // L'IA n'est PAS appelée pour des champs que les bases publiques ont déjà donnés.
+  let gemini = 0
+  stubFetch([
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], wdRoute(),
+    [GEMINI, () => { gemini++; return { body: geminiBody({}) } }],
+  ])
+  await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['secteur', 'localisation'], known: {} } })
+  ok(gemini === 0, `aucun appel IA quand les bases publiques suffisent (${gemini})`)
+}
+{
+  // Un échec de l'IA ne doit pas emporter ce que les bases publiques ont trouvé.
+  stubFetch([
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], [WIKIDATA, () => ({ body: { search: [] } })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+    [GEMINI, () => ({ status: 429, body: JSON.stringify({ error: { message: 'quota' } }) })],
+  ])
+  const res = await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['secteur', 'ca'], known: {} } })
+  const b = await res.json()
+  ok(res.status === 200, "un refus de l'IA ne doit pas faire échouer l'enrichissement")
+  ok(b.found?.secteur?.value === 'Programmation informatique', "ce que l'annuaire a trouvé doit survivre")
+  ok(!!b.aiError, "le motif de l'échec de l'IA doit être dit")
+}
 
 console.log('Enrichissement — Pappers, par API officielle et par SIREN')
 {

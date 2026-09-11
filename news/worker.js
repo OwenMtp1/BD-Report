@@ -450,6 +450,18 @@ const fingerprint = (company, it) =>
 
 async function collectSignals({ company, site, types, sources }) {
   const on = (id) => sources?.[id] !== false
+  // ⚠️ SANS SITE, DEUX SOURCES SUR TROIS SONT MORTES — et c'est la première cause de
+  // « 0 preuve publique ». Or nous savons maintenant le trouver sans IA ni quota : Wikidata
+  // publie le site officiel, et l'annuaire donne le SIREN qui l'identifie. On le cherche
+  // donc AVANT de renoncer, plutôt que d'attendre qu'un commercial le saisisse à la main.
+  let foundSite = ''
+  if (!site) {
+    try {
+      const w = await wikidata(company)
+      if (w.found?.site?.value && isHttp(w.found.site.value)) foundSite = w.found.site.value
+    } catch (e) { /* une source muette ne doit rien emporter */ }
+  }
+  const useSite = site || foundSite
   // ⚠️ CHAQUE SOURCE REND SES COMPTES. Les erreurs partaient dans un `.catch(() => [])` :
   // une source éteinte par le staff, un site absent, un refus de Google et une page
   // carrière introuvable produisaient tous le même « 0 preuve publique », impossible à
@@ -460,11 +472,11 @@ async function collectSignals({ company, site, types, sources }) {
     try { const items = await fn(); return { id, items, n: items.length, why: items.length ? '' : 'Aucun résultat.' } }
     catch (e) { return { id, n: 0, why: (e && e.message) || String(e), error: true } }
   }
-  const noSite = site ? '' : "Aucun site web n'est renseigné sur la fiche."
+  const noSite = useSite ? '' : "Aucun site web n'est renseigné sur la fiche, et aucune base publique n'en publie."
   const report = await Promise.all([
     run('news', () => collectNews(company, types || [])),
-    run('website', () => collectWebsite(site), noSite),
-    run('careers', () => collectCareers(site), noSite),
+    run('website', () => collectWebsite(useSite), noSite),
+    run('careers', () => collectCareers(useSite), noSite),
   ])
   const all = report.flatMap(r => r.items || [])
 
@@ -485,6 +497,7 @@ async function collectSignals({ company, site, types, sources }) {
       kept: items.length,
       duplicates: all.length - items.length,
       bySource: report.map(r => ({ kind: r.id, n: r.n, why: r.why, error: !!r.error, off: !!r.off })),
+      foundSite,
     },
   }
 }
@@ -615,16 +628,48 @@ const INSEE_TRANCHES = {
  * manque vaut simplement « non trouvé ». Une API publique qui évolue ne doit jamais faire
  * tomber l'enrichissement entier.
  */
+// Normalise un nom d'entreprise pour le comparer : accents, ponctuation, et surtout
+// les formes juridiques — « Doctolib SAS » et « DOCTOLIB » sont la même société, et
+// comparer les chaînes brutes faisait manquer la bonne fiche une fois sur deux.
+const LEGAL_FORMS = /\b(sas|sasu|sarl|eurl|sa|snc|sci|scop|sc|gie|eirl|ei|association|groupe|group|holding|france|international|corp|corporation|inc|ltd|llc|gmbh|bv|nv|spa|srl)\b/g
+const coNorm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ').replace(LEGAL_FORMS, ' ').replace(/\s+/g, ' ').trim()
+
+/** Le meilleur candidat d'une liste, ou null si aucun ne correspond assez. */
+function bestMatch(cands, wanted, labelOf) {
+  const w = coNorm(wanted)
+  if (!w) return null
+  let best = null
+  for (const c of cands) {
+    const l = coNorm(labelOf(c))
+    if (!l) continue
+    // Exact, puis inclusion : « doctolib » retrouve « doctolib solutions », mais deux
+    // noms qui se contentent de partager un mot ne se rejoignent jamais.
+    const score = l === w ? 3 : (l.startsWith(w) || w.startsWith(l)) ? 2 : (l.includes(w) || w.includes(l)) ? 1 : 0
+    if (score && (!best || score > best.score)) best = { c, score }
+  }
+  return best ? best.c : null
+}
+
 async function officialRegistry(company) {
   const name = String(company || '').trim()
   if (!name) return { found: {}, raw: null }
-  const res = await fetch(`${REGISTRY}?q=${encodeURIComponent(name)}&per_page=1`, {
+  // ⚠️ CINQ RÉSULTATS, PAS UN. Avec `per_page=1` on prenait le premier venu sans vérifier
+  // qu'il s'agissait de la bonne société — et quand la recherche ne le classait pas en tête,
+  // l'enrichissement rendait un vide inexplicable.
+  const res = await fetch(`${REGISTRY}?q=${encodeURIComponent(name)}&per_page=5`, {
     headers: { Accept: 'application/json' }, cf: { cacheTtl: 86400, cacheEverything: true },
   })
   if (!res.ok) throw new Error(`Annuaire des entreprises : ${res.status}`)
   const body = await res.json()
-  const r = (body?.results || [])[0]
-  if (!r) return { found: {}, raw: { total: body?.total_results ?? 0 } }
+  const cands = body?.results || []
+  const r = bestMatch(cands, name, (x) => x.nom_complet || x.nom_raison_sociale || '')
+    // À défaut d'une correspondance de nom, le premier résultat reste le meilleur pari de
+    // l'annuaire lui-même — mais seulement s'il n'y en a qu'un : au-delà, on s'abstient.
+    || (cands.length === 1 ? cands[0] : null)
+  if (!r) {
+    return { found: {}, raw: { total: body?.total_results ?? 0, candidats: cands.map(x => x.nom_complet).slice(0, 5) } }
+  }
 
   const siren = String(r.siren || '')
   const url = siren ? REGISTRY_PAGE(siren) : 'https://annuaire-entreprises.data.gouv.fr/'
@@ -656,7 +701,7 @@ const WD_PROPS = { site: 'P856', linkedin: 'P4264', ca: 'P2139', effectif: 'P112
 // Ce qui désigne une organisation dans la description d'une entité. Sans ce filtre,
 // chercher « Orange » ramène le fruit — et l'enrichissement irait remplir la fiche
 // d'un client avec les données d'un agrume.
-const WD_ORG = /entreprise|société|societe|company|corporation|organisation|organization|groupe|group|firm|éditeur|editor|startup|banque|bank|assurance/i
+const WD_ORG = /entreprise|société|societe|company|corporation|organisation|organization|groupe|group|firm|éditeur|editor|publisher|startup|scale-?up|banque|bank|assurance|insurer|marque|brand|enseigne|constructeur|fabricant|manufacturer|opérateur|operator|agence|agency|cabinet|institut|coopérative|filiale|subsidiary|business|commerce|retailer|distributeur|prestataire|éditrice|plateforme|platform|service/i
 const wdNorm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '')
 
 const wdClaim = (claims, prop) => (claims?.[prop] || [])
@@ -675,8 +720,11 @@ async function wikidata(company) {
     { headers: { Accept: 'application/json' }, cf: { cacheTtl: 86400, cacheEverything: true } })
   if (!search.ok) throw new Error(`Wikidata : ${search.status}`)
   const hits = (await search.json())?.search || []
-  const target = wdNorm(name)
-  const hit = hits.find(h => wdNorm(h.label) === target && WD_ORG.test(h.description || ''))
+  // ⚠️ La correspondance EXACTE écartait presque tout : « Doctolib » contre « Doctolib SAS »,
+  // « BD Report » contre « BD-Report »… On réutilise le même rapprochement que pour l'annuaire,
+  // la garde « c'est bien une organisation » restant, elle, entière.
+  const orgs = hits.filter(h => WD_ORG.test(h.description || ''))
+  const hit = bestMatch(orgs, name, (h) => h.label || '')
   if (!hit) return { found: {}, raw: { candidats: hits.map(h => `${h.label} — ${h.description || ''}`).slice(0, 3) } }
 
   const ent = await fetch(`${WD_API}?action=wbgetentities&ids=${encodeURIComponent(hit.id)}&props=claims&format=json`,
@@ -777,7 +825,83 @@ async function pappers(siren, env) {
   }
 }
 
-async function enrich(company, fields, env) {
+// ---------------------------------------------------------------- Extraction par IA
+// ⚠️ GEMINI REVIENT, MAIS PAR L'AUTRE PORTE. Ce qui saturait, c'était son outil de
+// RECHERCHE Google (quota le plus serré de l'API). Ici le modèle ne cherche rien : il
+// LIT des pages que nous sommes allés chercher nous-mêmes, et n'en extrait que les
+// champs encore vides. C'est le quota de TEXTE, bien plus large, et la garantie
+// anti-invention est plus forte qu'avec la recherche — toute source non fournie est
+// refusée, donc rien ne peut sortir de la mémoire du modèle.
+const EXTRACT_PROMPT = (company, fields, docs) => `Tu extrais des informations PUBLIQUES sur l'ENTREPRISE « ${company} » À PARTIR DES PAGES CI-DESSOUS, et de rien d'autre.
+
+RÈGLES ABSOLUES :
+· Tu n'utilises QUE les pages fournies. Aucune connaissance personnelle, aucune déduction, aucune estimation.
+· Si une page ne dit pas quelque chose, cette chose vaut null. « null » est une réponse correcte et attendue.
+· Tu ne cherches AUCUNE information sur des PERSONNES : ni e-mail, ni téléphone, ni profil individuel. L'entreprise seulement.
+· Le champ « url » doit être l'une des adresses listées, jamais une autre.
+
+CHAMPS DEMANDÉS :
+${fields.map(f => `· ${f} — ${ENRICH_LABELS[f] || f}`).join('\n')}
+
+Réponds UNIQUEMENT en JSON, sans texte autour ni balises de code :
+{${fields.map(f => `"${f}":{"value":"...","publisher":"...","url":"...","confidence":"low|medium|high"}`).join(',')}}
+Chaque champ vaut soit cet objet, soit null.
+
+PAGES :
+${docs.map((d, i) => `[${i}] ${d.title || '(sans titre)'}
+url: ${d.sourceUrl}
+extrait: ${(d.content || '').slice(0, 1500)}`).join('\n\n')}`
+
+const ENRICH_LABELS = {
+  site: "URL du site officiel",
+  linkedin: "URL de la PAGE ENTREPRISE LinkedIn (linkedin.com/company/...), jamais un profil de personne",
+  localisation: "Ville et pays du siège",
+  ca: "Chiffre d'affaires annuel publié",
+  effectif: "Nombre de collaborateurs",
+  secteur: "Secteur d'activité, en quelques mots",
+}
+
+/** Les pages publiques qu'on sait aller lire sur une entreprise. Gratuit, sans IA. */
+async function readablePages(company, site) {
+  const [pages, press] = await Promise.all([
+    collectWebsite(site).catch(() => []),
+    collectNews(company, []).catch(() => []),
+  ])
+  return [...pages, ...press].slice(0, 8)
+}
+
+async function extractWithAi(company, fields, docs, env) {
+  const { body, model } = await callGemini({
+    contents: [{ parts: [{ text: EXTRACT_PROMPT(company, fields, docs) }] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+  }, env)
+  const raw = body?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
+  const text = raw.replace(/^[\s\S]*?```(?:json)?/i, '').replace(/```[\s\S]*$/, '').trim() || raw.trim()
+  let parsed
+  try { parsed = JSON.parse(text) } catch (e) { throw new Error("Réponse de l'IA illisible.") }
+
+  const out = {}
+  const urls = new Set(docs.map(d => d.sourceUrl))
+  for (const f of fields) {                 // on itère sur les champs DEMANDÉS, pas sur la réponse
+    const v = parsed?.[f]
+    if (!v || typeof v !== 'object') continue
+    const value = String(v.value ?? '').trim()
+    if (!value || value.toLowerCase() === 'null') continue
+    // ⚠️ Une URL absente des pages fournies sort de la mémoire du modèle : elle est
+    // inventée, et une source inventée n'a aucun chemin vers l'écran.
+    const url = urls.has(v.url) ? v.url : ''
+    out[f] = {
+      value: value.slice(0, 300),
+      publisher: String(v.publisher || '').slice(0, 120),
+      url,
+      // Sans source vérifiable, la confiance ne peut pas être haute, quoi qu'en dise le modèle.
+      confidence: url ? 'medium' : 'low',
+    }
+  }
+  return { found: out, model }
+}
+
+async function enrich(company, fields, env, known = {}) {
   // L'annuaire et Wikidata partent ENSEMBLE : ils ne dépendent pas l'un de l'autre, et
   // les enchaîner doublerait l'attente pour rien.
   let registryError = ''
@@ -810,13 +934,39 @@ async function enrich(company, fields, env) {
     // Dernière barrière, inchangée : aucune donnée personnelle dans une fiche société.
     out[f] = v && !looksPersonal(v.value) ? v : null
   }
+  // ---- DERNIER RECOURS : l'IA, sur NOS pages. Elle ne cherche pas — elle lit ce que nous
+  // sommes allés chercher. C'est le quota de TEXTE (large), pas celui de la RECHERCHE
+  // (serré), et c'est ce qui distingue ce chemin de celui qui saturait.
+  let aiError = ''
+  let usedAi = false
+  let model = ''
+  const missing = fields.filter(f => !out[f])
+  if (missing.length && env?.GEMINI_API_KEY) {
+    try {
+      // Le site connu — celui de la fiche, ou celui que les sources publiques viennent de
+      // trouver — sert de porte d'entrée. Sans lui il reste la presse.
+      const site = known.site || out.site?.value || ''
+      const docs = await readablePages(company, site)
+      if (!docs.length) aiError = "Aucune page publique à lire (site inconnu, presse muette)."
+      else {
+        const r = await extractWithAi(company, missing, docs, env)
+        model = r.model
+        usedAi = true
+        for (const f of missing) {
+          const v = r.found[f]
+          if (v && !looksPersonal(v.value)) out[f] = v
+        }
+      }
+    } catch (e) { aiError = (e && e.message) || String(e) }
+  }
+
   // Les garde-fous de forme restent : une URL qui n'en est pas une n'entre pas dans la fiche.
   if (out.site && !isHttp(out.site.value)) out.site = null
   if (out.linkedin && !(isHttp(out.linkedin.value) && /linkedin\.com\/company\//i.test(out.linkedin.value))) out.linkedin = null
 
   return {
-    found: out, model: '', source: 'public',
-    registryError, wikiError, pappersError, pappersOff,
+    found: out, model, source: usedAi ? 'public+ai' : 'public',
+    registryError, wikiError, pappersError, pappersOff, aiError,
     inputTokens: 0, outputTokens: 0,
   }
 }
@@ -872,7 +1022,7 @@ export default {
         // Les champs viennent de l'APPLICATION : elle seule sait lesquels existent chez elle.
         const fields = (Array.isArray(body?.fields) ? body.fields : []).filter(f => ENRICH_SPECS[f])
         if (!company || !fields.length) return json({ error: 'Entreprise ou champs manquants.' }, request, env, 400)
-        return json(await enrich(company, fields, env), request, env)
+        return json(await enrich(company, fields, env, body?.known || {}), request, env)
       }
 
       // ⚠️ /diag — LE RELAIS SE TESTE LUI-MÊME, ET LE DIT.

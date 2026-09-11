@@ -908,9 +908,20 @@ async function main() {
     // d. ⚠️ PLUS AUCUNE IA DANS L'ENRICHISSEMENT. Une consigne adressée à un modèle ne
     //    protégeait que tant qu'il l'écoutait ; des bases publiques ne renvoient que ce
     //    qu'elles publient, et la barrière `looksPersonal` reste la dernière.
-    const enrichSrc = worker.slice(worker.indexOf('async function enrich(company, fields, env)'), worker.indexOf('Routage'))
-    ok(!/callGemini|tools:|google_search/.test(enrichSrc),
-      "Relais : l'enrichissement appelle encore Gemini — c'est ce qui le rendait tributaire du quota")
+    const enrichSrc = worker.slice(worker.indexOf('async function enrich(company, fields, env, known'), worker.indexOf('Routage'))
+    // ⚠️ L'IA EST DE RETOUR, MAIS PAR L'AUTRE PORTE. Ce qui saturait, c'était l'outil de
+    //    RECHERCHE Google (quota le plus serré). Ici le modèle ne cherche rien : il LIT des
+    //    pages qu'on est allé chercher. Le quota de TEXTE, lui, est large.
+    ok(!/tools:|google_search/.test(enrichSrc),
+      "Relais : l'enrichissement redonne l'outil de recherche à l'IA — c'est le quota qui saturait")
+    const extractSrc = worker.slice(worker.indexOf('async function extractWithAi'), worker.indexOf('async function enrich(company, fields, env, known'))
+    ok(!/tools:|google_search/.test(extractSrc),
+      "Relais : l'extraction par IA reçoit l'outil de recherche — elle doit se contenter de NOS pages")
+    ok(/urls\.has\(v\.url\)/.test(extractSrc),
+      'Relais : une URL inventée par le modèle passe pour une source')
+    //    Et l'IA ne travaille QUE sur ce que les bases publiques n'ont pas donné.
+    ok(/const missing = fields\.filter\(f => !out\[f\]\)/.test(enrichSrc),
+      "Relais : l'IA est appelée pour des champs déjà trouvés gratuitement")
     ok(/officialRegistry\(company\)/.test(enrichSrc) && /wikidata\(company\)/.test(enrichSrc),
       'Relais : les deux sources publiques ne sont pas toutes deux interrogées')
     // ⚠️ PAPPERS EST FACULTATIF, et doit le rester : sans token il s'éteint proprement au
