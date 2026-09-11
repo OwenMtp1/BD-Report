@@ -64,7 +64,25 @@ L'URL est publiée à tous les clients : personne d'autre n'a rien à configurer
 |---|---|
 | `GET /news?q=<entreprise>` | Google News RSS (FR), 30 derniers jours, doublons retirés, 20 articles au plus |
 | `POST /analyze` | Envoie ces articles à Gemini, renvoie au plus 5 signaux commerciaux |
-| `GET /health` | Diagnostic : le relais répond-il, et a-t-il une clé ? |
+| `POST /enrich` | Cherche les informations publiques de l'entreprise pour les seuls champs que l'application demande |
+| `GET /health` (ou `/`) | Diagnostic : le relais répond-il, et a-t-il une clé ? |
+
+### Si Google refuse
+
+`news.google.com` répond **503** à un serveur qui se présente comme un robot. Le relais se
+présente donc comme un navigateur ordinaire — c'est ce que fait n'importe quel lecteur de flux —
+et bascule sur **Bing News** si Google reste muet. Aucun contournement : ni CAPTCHA, ni
+authentification, ni paywall. Ces flux RSS sont publics et prévus pour être lus par des programmes.
+
+## Garde-fous de l'enrichissement
+
+- **Aucun champ créé.** L'application envoie la liste de SES champs ; le relais itère sur
+  cette liste, jamais sur la réponse du modèle. Un champ inventé n'a aucun chemin pour arriver.
+- **Rien sur les personnes.** La consigne l'interdit, et le relais refuse toute valeur qui
+  ressemble à une adresse e-mail ou à un numéro personnel — même glissée dans un champ d'entreprise.
+- **Rien n'est écrasé sans décision.** Un champ vide est proposé coché ; un champ déjà rempli
+  dont la valeur diffère s'affiche en regard de l'actuelle, décoché.
+- **Sans source, pas de confiance élevée.** Une valeur sans URL vérifiable est ramenée à « low ».
 
 ## Garde-fous
 

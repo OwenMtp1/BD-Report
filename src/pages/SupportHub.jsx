@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network, GraduationCap, CalendarDays } from 'lucide-react'
+import { Inbox, LifeBuoy, Users2, FolderKanban, BookOpen, ScrollText, Trash2, MonitorPlay, MessagesSquare, Tag, ShieldCheck, LayoutDashboard, Shield, Network, GraduationCap, CalendarDays, Bot } from 'lucide-react'
 import { useStore, slaInfo, ticketHasUnread } from '../store.jsx'
 import Requests from './Requests.jsx'
 import Tickets from './Tickets.jsx'
@@ -7,6 +7,7 @@ import Clients from './Clients.jsx'
 import Delivery from './Delivery.jsx'
 import KnowledgeBase from './KnowledgeBase.jsx'
 import SupportLogs from './SupportLogs.jsx'
+import AiUsage from './AiUsage.jsx'
 import SupportTrash from './SupportTrash.jsx'
 import DemoSales from './DemoSales.jsx'
 import Conversations from './Conversations.jsx'
@@ -41,6 +42,9 @@ const TABS = [
   { id: 'kb', label: 'Base de connaissances', icon: BookOpen, El: KnowledgeBase, perm: 'kb.manage' },
   { id: 'permissions', label: 'Permissions staff', icon: ShieldCheck, El: StaffPermissions, perm: 'permissions.manage' },
   { id: 'orgchart', label: 'Organigramme staff', icon: Network, El: StaffOrgChart, perm: 'services.manage' },
+  // Ce que l'équipe consomme chez Gemini : à côté des logs, puisque c'est de la même
+  // nature — regarder ce que l'application a réellement fait.
+  { id: 'aiusage', label: 'Utilisation IA', icon: Bot, El: AiUsage, perm: 'stats.view' },
   { id: 'logs', label: 'Logs', icon: ScrollText, El: SupportLogs, perm: 'logs.view' },
   { id: 'trash', label: 'Corbeille', icon: Trash2, El: SupportTrash, perm: 'trash.manage' },
   { id: 'training', label: 'Formation staff', icon: GraduationCap, El: StaffTraining, perm: 'demo.access' },

@@ -379,6 +379,12 @@ export const ENV_MODULES = [
     desc: "Attribution explicite de comptes ou de secteurs par personne, et alerte quand deux commerciaux travaillent la même entreprise — avant le doublon, pas après." },
   { id: 'weeklyDigest', where: { page: 'conversations', hub: null, hint: "le canal de reporting, chaque lundi" }, label: 'Récapitulatif hebdomadaire',
     desc: "Chaque lundi dans le canal de reporting : ce qui a bougé, ce qui stagne, qui est sous quota." },
+  // ---- Troisième série (MODULES_V3). Une SEULE brique pour les deux actions de la fiche
+  // entreprise : elles partagent la même dépendance (le relais et sa clé Gemini) et le même
+  // compteur. Les séparer aurait donné deux cases à cocher pour une seule décision — « est-ce
+  // qu'on met de l'IA chez ce client ? ».
+  { id: 'aiInsights', where: { page: 'leads', hub: null, hint: "la fiche d'une entreprise : « Actualités » et « Enrichir »" }, label: 'Analyse IA des entreprises',
+    desc: "Sur chaque fiche entreprise : les actualités récentes du client, l'analyse des signaux commerciaux qu'elles contiennent, et l'enrichissement des informations publiques de la fiche. Consomme l'offre Gemini de l'éditeur — voir « Utilisation IA »." },
 ]
 export const ENV_MODULE_IDS = ENV_MODULES.map(m => m.id)
 // ⚠️ EXCEPTION ASSUMÉE à la règle « absent = actif ». Ces six briques sont arrivées après
@@ -388,6 +394,9 @@ export const ENV_MODULE_IDS = ENV_MODULES.map(m => m.id)
 // `_autoSeed.modulesV2`). Les environnements créés ensuite les reçoivent actives, comme
 // le reste. Le staff les allume quand le client le décide.
 export const MODULES_V2 = ['rdvHistory', 'forecast', 'recycling', 'cadence', 'territories', 'weeklyDigest']
+// Même raisonnement, série suivante : l'analyse IA n'apparaît pas d'elle-même chez qui ne
+// l'a pas demandée — elle consomme un quota partagé, et on ne dépense pas pour les autres.
+export const MODULES_V3 = ['aiInsights']
 
 // ---------------------------------------------------------------- Historique d'une affaire
 // Les primes se calculent sur des passages d'étape et des dates. Tant que personne ne peut
@@ -550,6 +559,9 @@ export const STAFF_PERMISSION_GROUPS = [
       // maintenant comme les autres — et il commande TOUT le chemin : la liste des
       // environnements, l'exemption de code, et la trace laissée en entrant.
       { id: 'env.access', label: 'Entrer dans tous les environnements clients' },
+      // Régler le relais et le plafond quotidien engage la consommation de TOUS les clients :
+      // c'est une décision d'éditeur, pas un réglage de plus.
+      { id: 'ai.manage', label: "Configurer l'analyse IA (relais, plafond quotidien)" },
     ],
   },
   {
@@ -1046,6 +1058,29 @@ function defaultKbArticles() {
 // La montée en charge n'est pas un détail de confort : sans elle, un arrivant est rouge partout
 // pendant son premier trimestre, le classement l'enfonce, et le quota devient un objet de
 // découragement au lieu d'un repère.
+// ---------------------------------------------------------------- Consommation Gemini
+// Deux fonctionnalités appellent l'IA, et l'offre gratuite se consomme. On compte donc les
+// appels RÉELS — une réponse servie par le cache n'en est pas un — pour que le staff voie
+// venir la limite au lieu de la découvrir un matin où plus rien ne marche.
+//
+// ⚠️ `GEMINI_DAILY_LIMIT` est un plafond INTERNE À L'APPLICATION, pas le quota de Google.
+// L'API ne publie pas le quota restant : prétendre le refléter serait inventer un chiffre.
+// C'est une sécurité qu'on se donne, et qu'on peut régler.
+export const AI_FEATURES = [
+  { id: 'news_analysis', label: 'Analyse des actualités' },
+  { id: 'company_enrichment', label: 'Enrichissement de fiche' },
+]
+export const AI_DEFAULT_DAILY_LIMIT = 500
+export const AI_KEEP_CALLS = 4000   // au-delà, on ne garde que les plus récents : l'historique par jour, lui, reste
+// Paliers d'alerte. Le dernier ne prévient plus, il bloque.
+export const AI_THRESHOLDS = [
+  { at: 0.95, level: 'critical', label: 'Critique' },
+  { at: 0.85, level: 'high', label: 'Important' },
+  { at: 0.70, level: 'warn', label: 'Avertissement' },
+]
+export const aiLevel = (pct) => (AI_THRESHOLDS.find(t => pct >= t.at) || { level: 'ok', label: '' })
+const dayKey = (d = new Date()) => new Date(d).toISOString().slice(0, 10)
+
 // Rubriques qu'un manager peut ajouter à sa trame de 1:1. Volontairement peu nombreuses :
 // un formulaire d'entretien qui offre douze types de champs devient un formulaire à remplir,
 // et l'entretien se perd. Une note sur 5 suffit à suivre un moral, une case à cocher à
@@ -3626,6 +3661,13 @@ export function migrate(db) {
     })
     db._autoSeed.modulesV2 = true
   }
+  if (!db._autoSeed.modulesV3) {
+    ;(db.environments || []).forEach(e => {
+      e.modules = { ...(e.modules || {}) }
+      MODULES_V3.forEach(id => { if (e.modules[id] === undefined) e.modules[id] = false })
+    })
+    db._autoSeed.modulesV3 = true
+  }
   // Contenus support semés une seule fois (respecte les suppressions ultérieures)
   if (!db._autoSeed.supportContent) {
     if (!db.cannedReplies.length) db.cannedReplies = defaultCannedReplies()
@@ -3785,6 +3827,18 @@ export function migrate(db) {
       }
     })
     db._autoSeed.envAccessPerm = true
+  }
+  // Même rattrapage pour `ai.manage` : un droit neuf ne figure dans aucun rôle déjà
+  // enregistré. Sans cette passe, l'équipe support ne pourrait plus régler le relais
+  // qu'elle vient de configurer. Posé une fois — le retirer ensuite est un choix.
+  if (!db._autoSeed.aiManagePerm) {
+    db.staffRoles.forEach(r => {
+      const key = r.roleKey || r.name
+      if (SUPPORT_ROLES.includes(key) && !(r.permissions || []).includes('ai.manage')) {
+        r.permissions = [...(r.permissions || []), 'ai.manage']
+      }
+    })
+    db._autoSeed.aiManagePerm = true
   }
   if (!Array.isArray(db.productRatings)) db.productRatings = [] // notes de satisfaction produit
   // Sans date de création, aucun jalon d'enquête ne peut être calculé : les comptes
@@ -5754,8 +5808,72 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // Même modèle que le connecteur HubSpot : l'application n'a pas de serveur, donc ni
       // le flux Google News (aucun en-tête CORS) ni la clé Gemini (elle serait publique
       // dans le bundle) ne peuvent y vivre. Une URL, publiée une fois, pour tout le monde.
+      // ----- Consommation Gemini : compteur, historique, plafond interne
+      aiDailyLimit() {
+        const n = Number(db.integrations?.news?.dailyLimit)
+        return Number.isFinite(n) && n > 0 ? Math.round(n) : AI_DEFAULT_DAILY_LIMIT
+      },
+      setAiDailyLimit(n) {
+        if (!this.canSetNewsRelay()) return false
+        const v = Math.max(1, Math.round(Number(n) || AI_DEFAULT_DAILY_LIMIT))
+        setDb(d => {
+          d.integrations = d.integrations || {}
+          d.integrations.news = { ...(d.integrations.news || {}), dailyLimit: v }
+          return d
+        })
+        return true
+      },
+      // Un appel RÉEL, et lui seul. Le cache ne consomme rien : le compter fausserait la
+      // seule chose que ce compteur doit dire — combien il reste.
+      recordAiCall({ feature, companyId = '', status = 'ok', model = '', inputTokens = 0, outputTokens = 0 }) {
+        const now = new Date()
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        setDb(d => {
+          d.aiUsage = Array.isArray(d.aiUsage) ? d.aiUsage : []
+          d.aiUsage.unshift({
+            id: uid(), userId: account?.id || null,
+            userName: sub ? `${sub.prenom} ${sub.nom}`.trim() : (account?.pseudo || '—'),
+            date: dayKey(now), ts: now.toISOString(),
+            feature, companyId, status, model,
+            inputTokens: Number(inputTokens) || 0, outputTokens: Number(outputTokens) || 0,
+          })
+          if (d.aiUsage.length > AI_KEEP_CALLS) d.aiUsage.length = AI_KEEP_CALLS
+          return d
+        })
+      },
+      // Seuls les appels ABOUTIS comptent dans le plafond : une erreur réseau n'a rien
+      // consommé chez Google, et interdire l'IA parce qu'elle a échoué serait absurde.
+      aiUsageToday() {
+        const today = dayKey()
+        const count = (db.aiUsage || []).filter(c => c.date === today && c.status === 'ok').length
+        const limit = this.aiDailyLimit()
+        const pct = limit ? count / limit : 0
+        return { count, limit, pct, left: Math.max(0, limit - count), ...aiLevel(pct) }
+      },
+      aiQuotaReached() { const u = this.aiUsageToday(); return u.count >= u.limit },
+      aiUsageStats(days = 14) {
+        const calls = db.aiUsage || []
+        const byDay = {}
+        const byUser = {}
+        calls.forEach(c => {
+          if (c.status !== 'ok') return
+          byDay[c.date] = (byDay[c.date] || 0) + 1
+          const k = c.userName || '—'
+          byUser[k] = (byUser[k] || 0) + 1
+        })
+        const today = dayKey()
+        return {
+          today: this.aiUsageToday(),
+          byDay: Object.entries(byDay).sort((a, b) => b[0].localeCompare(a[0])).slice(0, days).map(([date, n]) => ({ date, n })),
+          byUser: Object.entries(byUser).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([name, n]) => ({ name, n })),
+          byFeature: AI_FEATURES.map(f => ({ ...f, n: calls.filter(c => c.feature === f.id && c.status === 'ok').length })),
+          users: new Set(calls.filter(c => c.date === today && c.status === 'ok').map(c => c.userId)).size,
+          lastAt: calls.find(c => c.status === 'ok')?.ts || '',
+          errors: calls.filter(c => c.date === today && c.status !== 'ok').length,
+        }
+      },
       newsRelay() { return String(db.integrations?.news?.relayUrl || '') },
-      canSetNewsRelay() { return isSupportRole(account?.role) },
+      canSetNewsRelay() { return accountHasPerm(account, 'ai.manage', db) },
       setNewsRelay(url) {
         if (!this.canSetNewsRelay()) return false
         const clean = String(url || '').trim().replace(/\/+$/, '')

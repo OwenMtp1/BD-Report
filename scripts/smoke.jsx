@@ -802,10 +802,19 @@ async function main() {
   // c'est le parcours réel — dépêches, puis analyse À LA DEMANDE, jamais automatique.
   {
     const st = () => win.__bdrStore
+    const db0 = () => { win.__bdrFlushSave?.(); return JSON.parse(win.localStorage.getItem('bdrflow_db_v1')) }
     const realFetch = globalThis.fetch
     let calls = []
     globalThis.fetch = async (url, opts) => {
       calls.push(String(url))
+      if (String(url).includes('/enrich')) {
+        return { ok: true, status: 200, json: async () => ({ model: 'gemini-test', inputTokens: 10, outputTokens: 5, found: {
+          site: { value: 'https://zephyr.example', publisher: 'Site officiel', url: 'https://zephyr.example', confidence: 'high' },
+          localisation: { value: 'Lyon, France', publisher: 'Registre', url: 'https://reg.example/z', confidence: 'medium' },
+          linkedin: null,
+          ca: null,
+        } }) }
+      }
       if (String(url).includes('/news')) {
         return { ok: true, status: 200, json: async () => ({ articles: [
           { title: 'Nouveau directeur RH chez Zephyr', url: 'https://ex.fr/a1', source: 'Les Échos', date: new Date().toISOString(), summary: 'Nomination.' },
@@ -821,12 +830,16 @@ async function main() {
     }
     try {
       await act(async () => { st().setNewsRelay('https://relais.test') })
+      // L'analyse IA est une brique optionnelle : chez un client qui ne l'a pas prise,
+      // les deux actions n'existent pas. On l'installe donc avant de la tester.
+      await act(async () => { st().setEnvModules('env-peoplespheres', { aiInsights: true }) })
       win.localStorage.removeItem('bdrflow_news_v1')
       await act(async () => { win.dispatchEvent(new win.CustomEvent('open-company', { detail: 'Zephyr' })) })
       await act(async () => { await new Promise(r => setTimeout(r, 80)) })
       if (!text().includes('Zephyr')) throw new Error("La fiche entreprise ne s'ouvre pas")
       const newsBtn = find('button', 'Actualités')
       if (!newsBtn) throw new Error("L'action « Actualités » est absente de la fiche entreprise")
+      if (!find('button', 'Enrichir')) throw new Error("L'action « Enrichir » est absente de la fiche entreprise")
       await click(newsBtn)
       await act(async () => { await new Promise(r => setTimeout(r, 50)) })
       if (!text().includes('Nouveau directeur RH chez Zephyr')) { console.error('DEBUG calls', calls); console.error('DEBUG panel', text().slice(Math.max(0, text().indexOf('Actualités') - 50), text().indexOf('Actualités') + 500)); throw new Error('Les dépêches ne sont pas affichées') }
@@ -851,6 +864,57 @@ async function main() {
       await click(again)
       await act(async () => { await new Promise(r => setTimeout(r, 50)) })
       if (calls.length !== before) throw new Error('Le cache de 24 h ne sert à rien : le relais est rappelé à chaque ouverture')
+      // ---- ENRICHIR. Deux règles absolues : aucun champ créé, et rien d'écrasé sans
+      // que l'utilisateur l'ait décidé.
+      // On pose une localisation à la main : c'est le cas qui compte — une donnée saisie
+      // par un commercial, que l'enrichissement propose de remplacer par une autre.
+      await act(async () => {
+        st().setSub(d => ({ ...d, companies: { ...(d.companies || {}), Zephyr: { localisation: 'Paris, France' } } }))
+      })
+      const enrichBtn = find('button', 'Enrichir')
+      if (!enrichBtn) throw new Error("L'action « Enrichir » est absente de la fiche entreprise")
+      await click(enrichBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      if (!calls.some(u => u.includes('/enrich'))) throw new Error("« Enrichir » n'appelle pas le relais")
+      // Le champ VIDE est proposé et coché d'avance ; le champ en conflit est proposé, décoché.
+      if (!text().includes('https://zephyr.example')) throw new Error('La valeur trouvée pour un champ vide n\'est pas proposée')
+      if (!text().includes('Lyon, France')) throw new Error('La valeur en conflit n\'est pas montrée')
+      if (!text().includes('Paris, France')) throw new Error("La valeur ACTUELLE n'est pas montrée face à celle trouvée")
+      // Un champ introuvable reste vide et le dit — il n'est jamais deviné.
+      if (!text().includes("rien trouvé")) throw new Error("Un champ sans information publique doit le dire, pas être inventé")
+      const boxes = [...container.querySelectorAll('.fixed.z-50 input[type="checkbox"]')]
+      if (boxes.length !== 2) throw new Error(`Enrichissement : ${boxes.length} champs proposés au lieu de 2`)
+      if (!boxes[0].checked) throw new Error('Un champ vide doit être coché d\'avance')
+      if (boxes[1].checked) throw new Error("Un champ DÉJÀ REMPLI ne doit jamais être coché d'avance : ce serait l'écraser sans le dire")
+      await click(find('button', 'Appliquer'))
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      {
+        const mySub = win.__bdrStore.session.subEnvId
+        const comp = (db0().data[mySub].companies || {})['Zephyr'] || {}
+        if (comp.site !== 'https://zephyr.example') throw new Error("Le champ vide n'a pas été rempli")
+        if (comp.localisation !== 'Paris, France') throw new Error("Un champ décoché a été écrasé quand même")
+        // ⚠️ AUCUN CHAMP CRÉÉ : la fiche ne connaît que ses quatre champs.
+        const extra = Object.keys(comp).filter(k => !['ca', 'site', 'linkedin', 'localisation'].includes(k))
+        if (extra.length) throw new Error('Champs inventés par l\'enrichissement : ' + extra.join(', '))
+      }
+      // Le compteur d'IA a vu passer les deux appels réels, et pas un de plus.
+      {
+        const usage = db0().aiUsage || []
+        const feats = usage.filter(c => c.status === 'ok').map(c => c.feature)
+        if (!feats.includes('company_enrichment')) throw new Error("L'enrichissement n'est pas décompté dans l'utilisation IA")
+        if (!feats.includes('news_analysis')) throw new Error("L'analyse d'actualités n'est pas décomptée dans l'utilisation IA")
+        if (usage.some(c => !c.date || !c.ts || !c.userName)) throw new Error('Un appel IA est enregistré sans date ni auteur')
+      }
+
+      // Brique RETIRÉE : les deux actions disparaissent ensemble. Une fonctionnalité
+      // facturée au client ne doit pas rester visible quand il ne l'a pas prise.
+      await act(async () => { st().setEnvModules('env-peoplespheres', { aiInsights: false }) })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      if (find('button', 'Enrichir') || [...container.querySelectorAll('.fixed.z-50 button')].some(b => b.textContent.trim() === 'Actualités')) {
+        throw new Error("Sans la brique « Analyse IA », les actions de la fiche restent visibles")
+      }
+      await act(async () => { st().setEnvModules('env-peoplespheres', { aiInsights: true }) })
+
       // On referme la fiche : une fenêtre laissée ouverte capterait les clics des tests suivants.
       const closeBtn = [...container.querySelectorAll('.fixed.z-50 .rounded-t-2xl button')].pop()
       if (!closeBtn) throw new Error('Bouton de fermeture de la fiche entreprise introuvable')

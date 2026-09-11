@@ -818,6 +818,47 @@ async function main() {
     ok(!/actualit/i.test(navSrc), 'Actualités : un onglet de navigation a été créé au lieu d\'une action de fiche')
   }
 
+  // 6 novodecies. ENRICHISSEMENT — deux promesses, et elles ne se vérifient pas à l'œil.
+  //   « Aucun champ créé » et « aucune donnée personnelle » sont des garanties qui se
+  //   perdent au premier ajout distrait : on les fige.
+  {
+    const enr = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'enrich.js'), 'utf8')
+    const comp = fs.default.readFileSync(path.default.join(dir, 'Company.jsx'), 'utf8')
+    const worker = fs.default.readFileSync(path.default.join(process.cwd(), 'news', 'worker.js'), 'utf8')
+
+    // a. La liste enrichissable est EXACTEMENT celle des champs de la fiche. Un champ en
+    //    plus ici, et l'enrichissement se met à en inventer un dans le CRM.
+    const declared = [...enr.matchAll(/\{ id: '([a-z]+)', label:/g)].map(m => m[1]).sort()
+    const inSheet = [...comp.matchAll(/setInfo\('([a-z]+)'/g)].map(m => m[1]).sort()
+    ok(JSON.stringify(declared) === JSON.stringify([...new Set(inSheet)].sort()),
+      `Enrichissement : champs déclarés [${declared}] ≠ champs de la fiche [${[...new Set(inSheet)].sort()}] — un champ serait inventé ou oublié`)
+
+    // b. Le relais n'itère que sur les champs DEMANDÉS, jamais sur la réponse du modèle.
+    ok(/for \(const f of fields\)/.test(worker),
+      'Relais : la réponse du modèle pilote les champs renvoyés — il peut donc en créer')
+    ok(/ENRICH_SPECS\[f\]/.test(worker), 'Relais : les champs reçus ne sont pas filtrés sur le catalogue')
+    // c. Rien de personnel ne remonte, même glissé dans un champ d'entreprise.
+    ok(/looksPersonal/.test(worker), "Relais : aucune barrière contre une donnée personnelle dans un champ d'entreprise")
+    ok(/AUCUNE information sur des PERSONNES/.test(worker), "Relais : la consigne n'interdit pas la recherche sur des personnes")
+    // d. Sans source vérifiable, la confiance ne peut pas être haute.
+    ok(/url && CONFIDENCES\.includes/.test(worker), 'Relais : une valeur sans source peut se déclarer « high »')
+
+    // e. Un champ DÉJÀ REMPLI n'est jamais coché d'avance : l'écraser se décide.
+    ok(/if \(x\.state === 'empty'\) pre\[x\.id\] = true/.test(comp),
+      "Enrichissement : un champ déjà rempli serait coché d'avance — donc écrasé sans décision")
+    // f. Les deux actions relèvent de la MÊME brique, et disparaissent ensemble.
+    ok(/hasModule\('aiInsights'\)/.test(comp), "Les actions IA de la fiche ne sont pas gardées par leur brique")
+    ok(s.MODULES_V3.includes('aiInsights'), "La brique d'analyse IA s'allumerait d'office chez l'existant")
+
+    // g. Le compteur ne compte QUE les appels réels — un cache qui compterait ferait
+    //    atteindre le plafond sans qu'un seul appel soit parti.
+    ok(/if \(!r\.fromCache\)/.test(comp), 'Compteur IA : une réponse du cache est comptée comme un appel')
+    const d = s.buildDemoDb({}); s.migrate(d)
+    ok(s.STAFF_PERMISSION_IDS.includes('ai.manage'), 'La permission de configurer l\'IA manque au catalogue')
+    const sup = d.staffRoles.find(r => r.roleKey === 'Support BD Report')
+    ok((sup?.permissions || []).includes('ai.manage'), "Support BD Report ne peut plus configurer l'analyse IA")
+  }
+
   // 6 octodecies. Une demande CLOSE quitte le tableau Clients. Le tableau doit dire ce
   //   qu'il reste à faire ; une demande traitée qui y reste à vie le transforme en journal.
   {

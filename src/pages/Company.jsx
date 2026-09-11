@@ -3,7 +3,13 @@ import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNo
 import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor } from '../store.jsx'
 import { Modal, Field, Empty, toast } from '../ui.jsx'
 import { fetchCompanyNews, analyzeCompanyNews, cachedNews, newsRelayUrl } from '../news.js'
+import { enrichCompany, cachedEnrichment, enrichmentDiff, ENRICHABLE } from '../enrich.js'
 
+const CONF_CLASS = {
+  high: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+  medium: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  low: 'bg-surface text-muted',
+}
 const URGENCY_CLASS = {
   HIGH: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
   MEDIUM: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
@@ -13,6 +19,128 @@ const fmtNewsDate = (iso) => {
   if (!iso) return ''
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/**
+ * ✨ ENRICHIR — panneau ouvert DANS la fiche entreprise.
+ *
+ * Deux principes gouvernent cet écran :
+ *  · ON NE CRÉE AUCUN CHAMP. La liste vient de `ENRICHABLE`, qui décrit les champs
+ *    réellement présents dans la fiche. Rien d'autre ne peut arriver jusqu'ici.
+ *  · ON N'ÉCRASE RIEN SANS DEMANDER. Un champ vide se propose ; un champ déjà rempli
+ *    dont la valeur trouvée diffère s'affiche EN REGARD de l'actuelle, et c'est
+ *    l'utilisateur qui tranche. Appliquer en silence reviendrait à préférer une
+ *    trouvaille de l'IA à ce qu'un commercial a saisi de sa main.
+ */
+function EnrichPanel({ name, info, store, onApply, onClose }) {
+  const [found, setFound] = useState(() => cachedEnrichment(name)?.found || null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [picked, setPicked] = useState({})
+  const relay = newsRelayUrl(store.db)
+  const quota = store.aiUsageToday()
+
+  const rows = found ? enrichmentDiff(found, info) : []
+  const usable = rows.filter(r => r.state === 'empty' || r.state === 'conflict')
+
+  const run = async (force) => {
+    if (store.aiQuotaReached()) { setError(`Plafond interne atteint (${quota.limit} appels aujourd'hui). Réessayez demain, ou relevez-le dans Paramètres.`); return }
+    setBusy(true); setError('')
+    const r = await enrichCompany(name, info, store.db, { force })
+    setBusy(false)
+    if (r.error) {
+      if (!r.fromCache) store.recordAiCall({ feature: 'company_enrichment', companyId: name, status: 'error' })
+      setError(r.error); return
+    }
+    // Seul un appel RÉEL est décompté : une réponse du cache n'a rien consommé.
+    if (!r.fromCache) {
+      store.recordAiCall({
+        feature: 'company_enrichment', companyId: name, status: 'ok',
+        model: r.model, inputTokens: r.inputTokens, outputTokens: r.outputTokens,
+      })
+    }
+    setFound(r.found)
+    // Les champs vides sont cochés d'avance — il n'y a rien à y perdre. Les conflits,
+    // non : remplacer une donnée existante se décide, ça ne se subit pas.
+    const pre = {}
+    enrichmentDiff(r.found, info).forEach(x => { if (x.state === 'empty') pre[x.id] = true })
+    setPicked(pre)
+  }
+
+  useEffect(() => { if (!found && relay) run(false) }, []) // eslint-disable-line
+
+  const apply = () => {
+    const chosen = rows.filter(r => picked[r.id] && r.value)
+    if (!chosen.length) return
+    onApply(chosen.map(r => ({ id: r.id, value: r.value })))
+    toast(`${chosen.length} information(s) appliquée(s)`)
+    onClose()
+  }
+
+  return (
+    <div className="rounded-xl border border-line bg-surface/60 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-bold text-sm flex items-center gap-1.5"><Sparkles size={15} className="text-brand" /> Enrichissement</span>
+        <button className="btn-ghost !p-1" onClick={onClose} title="Fermer l'enrichissement"><X size={14} /></button>
+      </div>
+
+      {!relay && <p className="text-xs text-muted">Le relais n'est pas configuré. L'équipe BD Report doit publier son URL dans Paramètres → Intégrations.</p>}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      {relay && busy && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted">Recherche des informations publiques…</p>
+          {ENRICHABLE.map(f => <div key={f.id} className="text-xs text-muted">◌ {f.label}</div>)}
+        </div>
+      )}
+
+      {relay && !busy && found && (
+        <>
+          {usable.length === 0 ? (
+            <p className="text-sm text-muted">Aucune information publique nouvelle. La fiche est déjà à jour, ou rien de fiable n'a été trouvé.</p>
+          ) : (
+            <div className="space-y-2">
+              {rows.map(r => {
+                if (r.state === 'none') return <div key={r.id} className="text-xs text-muted">◌ {r.label} — rien trouvé</div>
+                if (r.state === 'same') return <div key={r.id} className="text-xs text-muted">✓ {r.label} — déjà à jour</div>
+                return (
+                  <label key={r.id} className="flex items-start gap-2 rounded-xl bg-card border border-line p-2.5 cursor-pointer">
+                    <input type="checkbox" className="mt-1" checked={!!picked[r.id]}
+                      onChange={e => setPicked(p => ({ ...p, [r.id]: e.target.checked }))} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold flex items-center gap-2 flex-wrap">
+                        {r.label}
+                        <span className={`chip ${CONF_CLASS[r.hit.confidence] || CONF_CLASS.low}`}>confiance {r.hit.confidence}</span>
+                        {r.state === 'conflict' && <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-500/15">valeur différente</span>}
+                      </div>
+                      {r.state === 'conflict' && (
+                        <div className="text-xs text-muted mt-0.5">Actuel : <span className="line-through">{r.current}</span></div>
+                      )}
+                      <div className="text-sm break-words">{r.value}</div>
+                      <div className="text-[11px] text-muted">
+                        {r.hit.publisher || 'source non nommée'}
+                        {r.hit.url && <> · <a href={r.hit.url} target="_blank" rel="noreferrer" className="text-brand hover:underline">source</a></>}
+                      </div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            <button className="btn-ghost !py-1 text-xs" onClick={() => run(true)}>
+              <RefreshCw size={12} /> Actualiser
+            </button>
+            <div className="ml-auto flex gap-2">
+              <button className="btn-ghost !py-1 text-xs" onClick={onClose}>Annuler</button>
+              <button className="btn-primary !py-1 text-xs" disabled={!rows.some(r => picked[r.id])} onClick={apply}>Appliquer</button>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted">Informations publiques sur l'entreprise uniquement — jamais sur les personnes qui y travaillent.</p>
+        </>
+      )}
+    </div>
+  )
 }
 
 /**
@@ -44,10 +172,19 @@ function NewsPanel({ name, store, onClose }) {
     setState({ articles: r.articles, signals: r.signals, at: r.cachedAt })
   }
   const analyse = async () => {
+    // Plafond interne atteint : les actualités RESTENT lisibles, seule l'analyse s'arrête.
+    // Une fonctionnalité qui s'éteint entièrement parce que l'IA n'est plus disponible
+    // punit l'utilisateur d'une limite qui n'est pas la sienne.
+    if (store.aiQuotaReached()) {
+      const q = store.aiUsageToday()
+      setError(`Plafond interne atteint (${q.limit} appels aujourd'hui). Les actualités restent consultables.`)
+      return
+    }
     setBusy('ai'); setError('')
     const r = await analyzeCompanyNews(name, state?.articles || [], store.db)
     setBusy('')
-    if (r.error) { setError(r.error); return }
+    if (r.error) { store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' }); setError(r.error); return }
+    store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok' })
     setState(s => ({ ...s, signals: r.signals }))
     store.logAction('Lead', 'Actualités analysées', name)
     toast(r.signals.length ? `${r.signals.length} signal(s) commercial(aux)` : 'Aucun signal commercial détecté.')
@@ -286,13 +423,14 @@ function CommentThread({ name, store }) {
 export default function CompanyModal() {
   const store = useStore()
   const [name, setName] = useState(null)
-  const [news, setNews] = useState(false) // panneau Actualités, replié par défaut
+  const [news, setNews] = useState(false)     // panneau Actualités, replié par défaut
+  const [enrich, setEnrich] = useState(false) // panneau Enrichir, replié par défaut
   const prevHash = useRef(null) // hash de l'onglet avant ouverture, pour le restaurer à la fermeture
 
   useEffect(() => {
     // Changer d'entreprise referme le panneau : il montrerait sinon les actualités
     // de la société précédente sous le nom de la nouvelle.
-    const h = (e) => { setNews(false); setName(e.detail) }
+    const h = (e) => { setNews(false); setEnrich(false); setName(e.detail) }
     window.addEventListener('open-company', h)
     return () => window.removeEventListener('open-company', h)
   }, [])
@@ -332,12 +470,35 @@ export default function CompanyModal() {
       <div className="space-y-5">
         {/* Actions de la fiche. Une seule pour l'instant : elle vit ici plutôt que dans une
             page à part — on consulte les actualités d'une entreprise en la regardant. */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button className={`btn-ghost !py-1 text-xs ${news ? 'text-brand' : ''}`} onClick={() => setNews(v => !v)}>
-            <Newspaper size={13} /> Actualités
-          </button>
-        </div>
+        {/* Les deux actions relèvent d'une seule brique : elles partagent le relais, la clé
+            et le compteur. Un client qui n'a pas pris l'analyse IA ne voit ni l'une ni l'autre. */}
+        {store.hasModule('aiInsights') && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button className={`btn-ghost !py-1 text-xs ${news ? 'text-brand' : ''}`} onClick={() => setNews(v => !v)}>
+              <Newspaper size={13} /> Actualités
+            </button>
+            <button className={`btn-ghost !py-1 text-xs ${enrich ? 'text-brand' : ''}`} onClick={() => setEnrich(v => !v)}>
+              <Sparkles size={13} /> Enrichir
+            </button>
+          </div>
+        )}
         {news && <NewsPanel name={name} store={store} onClose={() => setNews(false)} />}
+        {enrich && (
+          <EnrichPanel name={name} info={info} store={store} onClose={() => setEnrich(false)}
+            onApply={(list) => {
+              // Une seule écriture pour tous les champs retenus : passer par `setInfo`
+              // champ par champ enchaînerait autant de mises à jour d'état, dont chacune
+              // repartirait de la précédente — la dernière seule survivrait.
+              store.setSub(d => ({
+                ...d,
+                companies: {
+                  ...(d.companies || {}),
+                  [name]: { ...((d.companies || {})[name] || {}), ...Object.fromEntries(list.map(x => [x.id, x.value])) },
+                },
+              }))
+              store.logAction('Lead', 'Fiche enrichie', `${name} — ${list.map(x => x.id).join(', ')}`)
+            }} />
+        )}
 
         {/* Infos société (enrichissement manuel) */}
         <div className="rounded-xl bg-surface p-3">

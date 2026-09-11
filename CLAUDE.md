@@ -287,6 +287,28 @@ npm run dev        # serveur de dev
     (`src/news.js`), volontairement hors de l'état synchronisé : des dépêches sont une vue, pas une donnée
     d'équipe, et les y écrire déclencherait une synchro à chaque ouverture de fiche.
     Sans relais publié, le panneau le dit et rien d'autre ne change.
+  - **Enrichissement de fiche** — action **✨ Enrichir**, même panneau, même relais (`POST /enrich`,
+    Gemini avec recherche Google : sans source, le modèle répondrait de mémoire, c'est-à-dire
+    qu'il inventerait). `src/enrich.js`.
+    ⚠️ **AUCUN CHAMP N'EST CRÉÉ.** `ENRICHABLE` décrit EXACTEMENT les quatre champs de la fiche
+    (`data.companies[nom]` : `site`, `linkedin`, `localisation`, `ca`) ; l'application envoie cette
+    liste et le relais **itère dessus**, jamais sur la réponse du modèle. `npm run audit` compare
+    `ENRICHABLE` aux `setInfo(...)` de `Company.jsx` : un écart, et le test tombe. `effectif` et
+    `secteur` sont EXCLUS — ils appartiennent au RDV, les remplir modifierait un rendez-vous.
+    ⚠️ **L'ENTREPRISE, JAMAIS LES PERSONNES**, même quand la fiche affiche des contacts. Le relais
+    refuse toute valeur qui ressemble à une donnée personnelle.
+    ⚠️ **Rien n'est écrasé sans décision** : champ vide → proposé coché ; valeur différente →
+    montrée EN REGARD de l'actuelle, décochée. Sans source vérifiable, la confiance retombe à « low ».
+  - **Brique `aiInsights`** (`MODULES_V3`) — les DEUX actions relèvent d'une seule case à cocher :
+    même relais, même clé, même compteur. Deux cases auraient donné deux réglages pour une seule
+    décision (« met-on de l'IA chez ce client ? »). Éteinte chez l'existant, comme `MODULES_V2`.
+  - **Compteur Gemini** — `db.aiUsage` (appels RÉELS uniquement : le cache ne consomme rien),
+    `AI_FEATURES` = `news_analysis` / `company_enrichment`, onglet **« Utilisation IA »** de
+    `SupportHub` (`AiUsage.jsx`, perm `stats.view`), réglage du plafond par la permission `ai.manage`.
+    ⚠️ `AI_DEFAULT_DAILY_LIMIT` (500) est une **sécurité INTERNE**, pas le quota de Google : l'API ne
+    le publie pas, prétendre le refléter serait afficher un chiffre inventé. Paliers 70/85/95 %, blocage
+    à 100 % — et **les actualités restent consultables sans IA** : une limite qui n'est pas celle de
+    l'utilisateur ne doit pas lui retirer ce qui ne coûte rien.
   - **Entretiens 1:1** (module `oneToOne`) — un canal par binôme (`channel.oneToOne`), semé par
     `seedOneToOneChannels` d'après `account.teamOf`.
     **Trame composée par le manager** : `env.oneToOneTemplate = [{id,label,type,hint}]`

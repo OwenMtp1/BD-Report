@@ -90,17 +90,51 @@ function parseRss(xml) {
       date: tag(block, 'pubDate'),
       summary: tag(block, 'description').slice(0, 400),
     }
+  }).map(a => {
+    // Bing ne renseigne pas <source> : à défaut, le nom de domaine du lien dit
+    // suffisamment de quel média il s'agit.
+    if (a.source) return a
+    const m = String(a.url).match(/^https?:\/\/(?:www\.)?([^/]+)/i)
+    return { ...a, source: m ? m[1] : '' }
   }).filter(a => a.title && a.url)
+}
+
+// ⚠️ GOOGLE REFUSE LES AGENTS QUI SE DÉCLARENT ROBOTS. Avec un `User-Agent` maison,
+// news.google.com répond 503 à tous les coups depuis un serveur — ce n'est pas une panne,
+// c'est un refus. On se présente donc comme un navigateur ordinaire et on demande du
+// français, ce qui est exactement ce que fait un lecteur de flux RSS.
+// On ne contourne rien : ni CAPTCHA, ni authentification, ni paywall. Le flux RSS est
+// public et prévu pour être lu par des programmes.
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+  Accept: 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8',
+  'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+}
+
+// Bing News, en second. Google reste la source PRIORITAIRE, mais un relais qui rend
+// « 0 actualité » parce qu'une source a dit non est un relais inutile : on a une réponse
+// à donner, il faut aller la chercher ailleurs.
+const BING_RSS = 'https://www.bing.com/news/search'
+
+async function readRss(url) {
+  const res = await fetch(url, { headers: BROWSER_HEADERS, cf: { cacheTtl: 900, cacheEverything: true } })
+  if (!res.ok) return { error: res.status, items: [] }
+  const xml = await res.text()
+  return { error: 0, items: parseRss(xml) }
 }
 
 async function getNews(company) {
   // `when:30d` borne la fenêtre côté Google ; on refiltre ensuite sur la date, le
   // flux renvoyant parfois des articles plus anciens.
   const q = `"${company}" when:${WINDOW_DAYS}d`
-  const url = `${RSS_BASE}?q=${encodeURIComponent(q)}&hl=fr&gl=FR&ceid=FR:fr`
-  const res = await fetch(url, { headers: { 'User-Agent': 'BDReport/1.0 (+https://bdreport.js.org)' } })
-  if (!res.ok) throw new Error('Google News a répondu ' + res.status)
-  const parsed = parseRss(await res.text())
+  const google = await readRss(`${RSS_BASE}?q=${encodeURIComponent(q)}&hl=fr&gl=FR&ceid=FR:fr`)
+  let parsed = google.items
+  let source = 'google'
+  if (!parsed.length) {
+    const bing = await readRss(`${BING_RSS}?q=${encodeURIComponent(`"${company}"`)}&format=RSS&setmkt=fr-FR&setlang=fr`)
+    if (bing.items.length) { parsed = bing.items; source = 'bing' }
+    else if (google.error) throw new Error(`Aucune source d'actualités n'a répondu (Google ${google.error}${bing.error ? `, Bing ${bing.error}` : ''}).`)
+  }
 
   const floor = Date.now() - WINDOW_DAYS * 86400000
   const seen = new Set()
@@ -114,7 +148,7 @@ async function getNews(company) {
     out.push({ ...a, date: Number.isFinite(ts) ? new Date(ts).toISOString() : '' })
     if (out.length >= MAX_ARTICLES) break
   }
-  return out
+  return { articles: out, source }
 }
 
 // ---------------------------------------------------------------- Gemini
@@ -205,6 +239,95 @@ async function analyze(company, articles, env) {
     .slice(0, MAX_SIGNALS)
 }
 
+// ---------------------------------------------------------------- Enrichissement
+// ⚠️ LE RELAIS NE RENVOIE QUE LES CHAMPS DEMANDÉS. C'est la garantie structurelle que
+// l'enrichissement ne peut PAS inventer de champ : l'application envoie la liste de ses
+// champs existants, et tout ce qui n'y figure pas est jeté ici, avant même d'être affiché.
+// Un modèle bavard qui ajouterait « effectif » ou « email » ne sera jamais entendu.
+const ENRICH_SPECS = {
+  site: { label: 'site web officiel', hint: 'URL complète du site officiel de l\'entreprise' },
+  linkedin: { label: 'page LinkedIn de l\'entreprise', hint: 'URL linkedin.com/company/... — la PAGE ENTREPRISE, jamais un profil de personne' },
+  localisation: { label: 'localisation du siège', hint: 'Ville et pays, ex. « Paris, France »' },
+  ca: { label: "chiffre d'affaires", hint: 'Montant annuel publié, ex. « 12 M€ (2024) ». Uniquement s\'il est publié officiellement.' },
+}
+
+const ENRICH_PROMPT = (company, fields, known) => `Tu recherches des informations PUBLIQUES sur l'ENTREPRISE « ${company} ».
+
+RÈGLES ABSOLUES :
+· Tu ne renseignes QUE ce que tu trouves réellement dans des sources publiques. Aucune estimation, aucune déduction, aucune moyenne du secteur.
+· Si tu ne trouves pas une information de façon fiable, tu réponds null pour ce champ. « null » est une réponse correcte et attendue.
+· Tu ne cherches AUCUNE information sur des PERSONNES : ni e-mail, ni téléphone, ni adresse, ni profil individuel. Uniquement l'entreprise elle-même.
+· Tu ne renseignes QUE les champs listés ci-dessous. Aucun autre champ, sous aucun prétexte.
+
+CHAMPS DEMANDÉS :
+${fields.map(f => `· ${f} — ${ENRICH_SPECS[f].label} : ${ENRICH_SPECS[f].hint}`).join('\n')}
+
+DÉJÀ CONNU dans la fiche (à confirmer ou corriger si une source publique dit autre chose) :
+${fields.map(f => `· ${f} : ${known[f] ? known[f] : '(vide)'}`).join('\n')}
+
+Réponds UNIQUEMENT en JSON, sans texte autour ni balises de code :
+{${fields.map(f => `"${f}":{"value":"...","publisher":"...","url":"...","confidence":"low|medium|high"}`).join(',')}}
+Chaque champ vaut soit cet objet, soit null.
+· value : la valeur, telle qu'elle s'écrit dans la source
+· publisher : le nom du site d'où elle vient
+· url : l'adresse exacte de la page consultée
+· confidence : high si la source est officielle (site de l'entreprise, registre public), medium si c'est une source secondaire fiable, low sinon`
+
+const CONFIDENCES = ['low', 'medium', 'high']
+const isHttp = (u) => /^https?:\/\/\S+$/i.test(String(u || ''))
+// Les valeurs qui ressemblent à une donnée personnelle sont refusées, même si le modèle
+// les a glissées dans un champ d'entreprise : une adresse e-mail nominative ou un numéro
+// de portable n'a rien à faire dans une fiche société, et rien ne la lui a demandée.
+const looksPersonal = (v) => /@/.test(v) || /\b0[67](?:[ .-]?\d{2}){4}\b/.test(v)
+
+async function enrich(company, fields, known, env) {
+  const key = env.GEMINI_API_KEY
+  if (!key) throw new Error("Le relais n'a pas de clé Gemini configurée.")
+  const model = env.GEMINI_MODEL || 'gemini-2.0-flash'
+  const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: ENRICH_PROMPT(company, fields, known) }] }],
+      // Recherche Google : sans elle, le modèle répondrait de mémoire — c'est-à-dire
+      // qu'il inventerait. La consigne « ne rien inventer » n'a de sens qu'avec une source.
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0 },
+    }),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`Gemini a répondu ${res.status}${detail ? ' — ' + detail.slice(0, 200) : ''}`)
+  }
+  const body = await res.json()
+  const raw = body?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
+  // Le modèle encadre souvent son JSON de balises de code malgré la consigne.
+  const text = raw.replace(/^[\s\S]*?```(?:json)?/i, '').replace(/```[\s\S]*$/, '').trim() || raw.trim()
+  let parsed
+  try { parsed = JSON.parse(text) } catch (e) { throw new Error("Réponse de l'IA illisible.") }
+
+  const out = {}
+  for (const f of fields) {              // on itère sur les champs DEMANDÉS, pas sur la réponse
+    const v = parsed?.[f]
+    if (!v || typeof v !== 'object') { out[f] = null; continue }
+    const value = String(v.value ?? '').trim()
+    if (!value || value.toLowerCase() === 'null' || looksPersonal(value)) { out[f] = null; continue }
+    if (f === 'site' && !isHttp(value)) { out[f] = null; continue }
+    if (f === 'linkedin' && !(isHttp(value) && /linkedin\.com\/company\//i.test(value))) { out[f] = null; continue }
+    const url = isHttp(v.url) ? v.url : ''
+    out[f] = {
+      value: value.slice(0, 300),
+      publisher: String(v.publisher || '').slice(0, 120),
+      url,
+      // Sans source vérifiable, la confiance ne peut pas être haute, quoi qu'en dise le modèle.
+      confidence: url && CONFIDENCES.includes(String(v.confidence || '').toLowerCase())
+        ? String(v.confidence).toLowerCase() : 'low',
+    }
+  }
+  const usage = body?.usageMetadata || {}
+  return { found: out, model, inputTokens: usage.promptTokenCount || 0, outputTokens: usage.candidatesTokenCount || 0 }
+}
+
 // ---------------------------------------------------------------- Routage
 export default {
   async fetch(request, env) {
@@ -215,7 +338,8 @@ export default {
       if (url.pathname === '/news' && request.method === 'GET') {
         const q = (url.searchParams.get('q') || '').trim()
         if (!q) return json({ error: "Nom d'entreprise manquant." }, request, env, 400)
-        return json({ articles: await getNews(q) }, request, env)
+        const news = await getNews(q)
+        return json({ articles: news.articles, source: news.source }, request, env)
       }
 
       if (url.pathname === '/analyze' && request.method === 'POST') {
@@ -224,6 +348,15 @@ export default {
         const articles = Array.isArray(body?.articles) ? body.articles.slice(0, MAX_ARTICLES) : []
         if (!company || !articles.length) return json({ error: 'Entreprise ou articles manquants.' }, request, env, 400)
         return json({ signals: await analyze(company, articles, env) }, request, env)
+      }
+
+      if (url.pathname === '/enrich' && request.method === 'POST') {
+        const body = await request.json().catch(() => null)
+        const company = String(body?.company || '').trim()
+        // Les champs viennent de l'APPLICATION : elle seule sait lesquels existent chez elle.
+        const fields = (Array.isArray(body?.fields) ? body.fields : []).filter(f => ENRICH_SPECS[f])
+        if (!company || !fields.length) return json({ error: 'Entreprise ou champs manquants.' }, request, env, 400)
+        return json(await enrich(company, fields, body?.known || {}, env), request, env)
       }
 
       // La racine répond comme /health : ouvrir l'URL du relais dans un navigateur doit
