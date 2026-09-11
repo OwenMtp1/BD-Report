@@ -807,6 +807,25 @@ async function main() {
     let calls = []
     globalThis.fetch = async (url, opts) => {
       calls.push(String(url))
+      if (String(url).includes('/signals/collect')) {
+        return { ok: true, status: 200, json: async () => ({ items: [
+          { kind: 'careers', sourceUrl: 'https://zephyr.example/jobs', publisher: 'zephyr.example', title: '14 offres publiées', content: 'DRH · HRBP · Commercial', date: '', jobCount: 14, hrCount: 2, fingerprint: 'fp1' },
+          { kind: 'news', sourceUrl: 'https://ex.fr/a1', publisher: 'Les Échos', title: 'Zephyr nomme un DRH', content: 'Nomination.', date: new Date().toISOString(), fingerprint: 'fp2' },
+        ], stats: { collected: 2, kept: 2, duplicates: 0 } }) }
+      }
+      if (String(url).includes('/signals/analyze')) {
+        return { ok: true, status: 200, json: async () => ({ model: 'gemini-test', signals: [{
+          type: 'hiring_hr', title: 'Structuration RH en cours', summary: 'Recrutements RH et nomination.',
+          whyNow: 'Phase de structuration.', whyRelevant: 'Correspond à votre offre SIRH.',
+          opportunity: 'Accompagner la structuration RH.', persona: 'DRH', action: 'Contacter le nouveau DRH.',
+          importance: 80, relevance: 90, confidence: 85,
+          evidence: [
+            { kind: 'careers', title: '14 offres publiées', publisher: 'zephyr.example', url: 'https://zephyr.example/jobs', date: '' },
+            { kind: 'news', title: 'Zephyr nomme un DRH', publisher: 'Les Échos', url: 'https://ex.fr/a1', date: new Date().toISOString() },
+          ],
+          date: new Date().toISOString(),
+        }] }) }
+      }
       if (String(url).includes('/enrich')) {
         return { ok: true, status: 200, json: async () => ({ model: 'gemini-test', inputTokens: 10, outputTokens: 5, found: {
           site: { value: 'https://zephyr.example', publisher: 'Site officiel', url: 'https://zephyr.example', confidence: 'high' },
@@ -864,6 +883,38 @@ async function main() {
       await click(again)
       await act(async () => { await new Promise(r => setTimeout(r, 50)) })
       if (calls.length !== before) throw new Error('Le cache de 24 h ne sert à rien : le relais est rappelé à chaque ouverture')
+      // ---- SIGNAUX. Un signal n'est PAS un article : plusieurs preuves de sources
+      // différentes se rassemblent en UN fait, avec ses preuves visibles.
+      // ⚠️ On cherche DANS LA FICHE : « Signaux » est aussi un onglet de navigation, et
+      // cliquer celui-là quitterait la fiche au lieu d'ouvrir la vue.
+      const inSheet = (label) => [...container.querySelectorAll('.fixed.z-50 button')].find(b => b.textContent.trim() === label)
+      const sigBtn = inSheet('Signaux')
+      if (!sigBtn) throw new Error("L'action « Signaux » est absente de la fiche entreprise")
+      await click(sigBtn)
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      if (!calls.some(u => u.includes('/signals/collect'))) throw new Error('Les preuves ne sont pas collectées')
+      // ⚠️ La collecte est gratuite ; l'ANALYSE ne part jamais toute seule.
+      if (calls.some(u => u.includes('/signals/analyze'))) throw new Error("L'analyse IA part sans qu'on l'ait demandée")
+      if (!text().includes('14 offres publiées')) throw new Error("Les preuves collectées ne sont pas affichées")
+      const aiSig = [...container.querySelectorAll('.fixed.z-50 button')].find(b => b.textContent.includes("Analyser avec l'IA"))
+      if (!aiSig) throw new Error("Le bouton d'analyse des signaux est absent")
+      await click(aiSig)
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      for (const k of ['Structuration RH en cours', 'Pourquoi maintenant', 'Pourquoi c\'est pertinent', 'Opportunité', 'DRH', 'Preuves']) {
+        if (!text().includes(k)) throw new Error('Signal : « ' + k + ' » manquant à l\'écran')
+      }
+      // Les DEUX preuves sont citées : c'est ce qui distingue un signal d'un article.
+      if (!text().includes('Les Échos') || !text().includes('zephyr.example')) {
+        throw new Error('Un signal doit montrer toutes ses preuves, de toutes ses sources')
+      }
+      {
+        const saved = (db0().data[win.__bdrStore.session.subEnvId].signals || []).filter(x => x.company === 'Zephyr')
+        if (saved.length !== 1) throw new Error(`Signaux enregistrés : ${saved.length} au lieu d'un seul`)
+        if ((saved[0].evidence || []).length !== 2) throw new Error('Le signal enregistré perd ses preuves')
+        if (saved[0].status !== 'new') throw new Error('Un signal neuf doit être « non traité »')
+      }
+      await click(inSheet('Signaux'))
+
       // ---- ENRICHIR. Deux règles absolues : aucun champ créé, et rien d'écrasé sans
       // que l'utilisateur l'ait décidé.
       // On pose une localisation à la main : c'est le cas qui compte — une donnée saisie

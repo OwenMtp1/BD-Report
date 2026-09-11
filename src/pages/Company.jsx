@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2, Newspaper, Sparkles, RefreshCw, ExternalLink, X, Flame, Factory } from 'lucide-react'
-import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor } from '../store.jsx'
+import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2, Newspaper, Sparkles, RefreshCw, ExternalLink, X, Flame, Factory, Radar } from 'lucide-react'
+import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, SIGNAL_TYPES, signalType } from '../store.jsx'
 import { Modal, Field, Empty, toast } from '../ui.jsx'
 import { fetchCompanyNews, analyzeCompanyNews, cachedNews, newsRelayUrl } from '../news.js'
 import { enrichCompany, cachedEnrichment, enrichmentDiff, ENRICHABLE } from '../enrich.js'
+import { collectEvidence, analyzeEvidence, buildContext, cachedCollect } from '../signals.js'
 
 const CONF_CLASS = {
   high: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
@@ -19,6 +20,113 @@ const fmtNewsDate = (iso) => {
   if (!iso) return ''
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+
+/**
+ * VUE SIGNAUX D'UNE ENTREPRISE — le détail, là où vit le compte.
+ *
+ * L'onglet Signaux donne le résumé et le tri ; ici on voit le raisonnement complet et,
+ * surtout, LES PREUVES. Un signal sans ses sources est une affirmation : on doit pouvoir
+ * remonter à ce sur quoi l'analyse s'est appuyée, et juger soi-même.
+ */
+function SignalsPanel({ name, info, store, onClose }) {
+  const rules = store.envNewsRules()
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const [items, setItems] = useState(() => cachedCollect(name)?.items || null)
+  const mine = (store.sub?.signals || []).filter(s => s.company === name)
+  const ctx = buildContext(rules, SIGNAL_TYPES, store.envIcpProfiles())
+
+  const collect = async (force) => {
+    setBusy('collect'); setError('')
+    const r = await collectEvidence(name, info.site, ctx, store.db, { force })
+    setBusy('')
+    if (r.error) { setError(r.error); return }
+    setItems(r.items)
+  }
+  const analyse = async () => {
+    const evidence = items || cachedCollect(name)?.items
+    if (!evidence?.length) { setError('Aucune preuve collectée pour le moment.'); return }
+    setBusy('ai'); setError('')
+    const r = await analyzeEvidence(name, evidence, ctx, store.db)
+    setBusy('')
+    if (r.error) { if (!r.quota) store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'error' }); setError(r.error); return }
+    store.recordAiCall({ feature: 'news_analysis', companyId: name, status: 'ok', model: r.model })
+    store.saveCompanySignals(name, r.signals)
+    toast(r.signals.length ? `${r.signals.length} signal(s) détecté(s)` : 'Aucun signal commercial détecté.')
+  }
+
+  useEffect(() => { if (!items) collect(false) }, []) // eslint-disable-line
+
+  return (
+    <div className="rounded-xl border border-line bg-surface/60 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-bold text-sm flex items-center gap-1.5"><Radar size={15} className="text-brand" /> Signaux commerciaux</span>
+        <button className="btn-ghost !p-1" onClick={onClose} title="Fermer les signaux"><X size={14} /></button>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted">
+          {busy === 'collect' ? 'Collecte des preuves…' : `${(items || []).length} preuve${(items || []).length > 1 ? 's' : ''} publique${(items || []).length > 1 ? 's' : ''}`}
+        </span>
+        <button className="btn-primary !py-1 text-xs" disabled={!!busy || !(items || []).length} onClick={analyse}>
+          <Sparkles size={13} /> {busy === 'ai' ? 'Analyse en cours…' : 'Analyser avec l\'IA'}
+        </button>
+        <button className="btn-ghost !py-1 text-xs ml-auto" disabled={!!busy} onClick={() => collect(true)}>
+          <RefreshCw size={12} /> Actualiser les preuves
+        </button>
+      </div>
+
+      {/* Ce qui a été trouvé, AVANT de payer l'analyse. On doit pouvoir juger de la matière
+          disponible — et constater qu'il n'y en a pas, plutôt que de lancer l'IA pour rien. */}
+      {(items || []).length > 0 && mine.length === 0 && (
+        <div className="space-y-1 border-t border-line pt-2">
+          <div className="text-[11px] uppercase tracking-wide text-muted">Preuves collectées</div>
+          {items.map((it, i) => (
+            <div key={i} className="text-xs">
+              <a href={it.sourceUrl} target="_blank" rel="noreferrer" className="hover:text-brand">{it.title}</a>
+              <span className="text-muted"> — {it.publisher || it.kind}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {mine.length === 0 ? (
+        <p className="text-sm text-muted">Aucun signal détecté pour ce compte. Lancez l'analyse quand des preuves sont collectées.</p>
+      ) : mine.map(s => {
+        const t = signalType(s.type)
+        return (
+          <div key={s.id} className="rounded-xl border border-brand/30 bg-brand/5 p-3 space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="chip bg-brand/15 text-brand">{t.emoji} {t.label}</span>
+              <span className="text-xs text-muted">Confiance {s.confidence}/100</span>
+            </div>
+            <div className="font-bold text-sm">{s.title}</div>
+            {s.summary && <p className="text-sm">{s.summary}</p>}
+            {s.whyNow && <p className="text-sm"><span className="text-muted text-xs uppercase tracking-wide">Pourquoi maintenant — </span>{s.whyNow}</p>}
+            {s.whyRelevant && <p className="text-sm"><span className="text-muted text-xs uppercase tracking-wide">Pourquoi c'est pertinent — </span>{s.whyRelevant}</p>}
+            {s.opportunity && <p className="text-sm"><span className="text-muted text-xs uppercase tracking-wide">Opportunité — </span>{s.opportunity}</p>}
+            {s.persona && <p className="text-sm"><span className="text-muted text-xs uppercase tracking-wide">Persona — </span>{s.persona}</p>}
+            {s.action && <p className="text-sm"><span className="text-muted text-xs uppercase tracking-wide">Action — </span>{s.action}</p>}
+            {/* LES PREUVES. Un signal sans ses sources est une affirmation. */}
+            {(s.evidence || []).length > 0 && (
+              <div className="border-t border-line pt-1.5 space-y-0.5">
+                <div className="text-[11px] uppercase tracking-wide text-muted">Preuves</div>
+                {s.evidence.map((e, i) => (
+                  <div key={i} className="text-[11px] text-muted">
+                    {e.title} — {e.publisher || 'source'}
+                    {e.url && <> · <a href={e.url} target="_blank" rel="noreferrer" className="text-brand hover:underline">voir</a></>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 /**
@@ -430,14 +538,19 @@ export default function CompanyModal() {
   const [name, setName] = useState(null)
   const [news, setNews] = useState(false)     // panneau Actualités, replié par défaut
   const [enrich, setEnrich] = useState(false) // panneau Enrichir, replié par défaut
+  const [sig, setSig] = useState(false)       // vue Signaux — ouverte depuis l'onglet Signaux
   const prevHash = useRef(null) // hash de l'onglet avant ouverture, pour le restaurer à la fermeture
 
   useEffect(() => {
     // Changer d'entreprise referme le panneau : il montrerait sinon les actualités
     // de la société précédente sous le nom de la nouvelle.
-    const h = (e) => { setNews(false); setEnrich(false); setName(e.detail) }
+    const h = (e) => { setNews(false); setEnrich(false); setSig(false); setName(e.detail) }
+    // L'onglet Signaux ouvre la fiche DIRECTEMENT sur le détail : « Analyse détaillée… »
+    // doit mener à l'analyse, pas à une fiche où il faudrait encore chercher.
+    const v = (e) => { if (e.detail === 'signals') setSig(true) }
+    window.addEventListener('company-view', v)
     window.addEventListener('open-company', h)
-    return () => window.removeEventListener('open-company', h)
+    return () => { window.removeEventListener('open-company', h); window.removeEventListener('company-view', v) }
   }, [])
 
   // URL partageable : la fiche ouverte se reflète dans #/company/<nom> ; à la fermeture,
@@ -485,8 +598,12 @@ export default function CompanyModal() {
             <button className={`btn-ghost !py-1 text-xs ${enrich ? 'text-brand' : ''}`} onClick={() => setEnrich(v => !v)}>
               <Sparkles size={13} /> Enrichir
             </button>
+            <button className={`btn-ghost !py-1 text-xs ${sig ? 'text-brand' : ''}`} onClick={() => setSig(v => !v)}>
+              <Radar size={13} /> Signaux
+            </button>
           </div>
         )}
+        {sig && <SignalsPanel name={name} info={info} store={store} onClose={() => setSig(false)} />}
         {news && <NewsPanel name={name} store={store} onClose={() => setNews(false)} />}
         {enrich && (
           <EnrichPanel name={name} info={info} store={store} onClose={() => setEnrich(false)}

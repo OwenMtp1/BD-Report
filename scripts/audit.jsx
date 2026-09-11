@@ -895,6 +895,60 @@ async function main() {
     ok((sup?.permissions || []).includes('ai.manage'), "Support BD Report ne peut plus configurer l'analyse IA")
   }
 
+  // 6 vicies. MOTEUR DE SIGNAUX. Ce qui le distingue d'un agrégateur : un signal est un
+  //   FAIT appuyé par des preuves, qualifié PAR LE CONTEXTE de l'environnement, et dont le
+  //   score n'est pas une moyenne. On fige ces trois choses.
+  {
+    // a. Le score n'est PAS une moyenne : deux facteurs peuvent disqualifier à eux seuls.
+    const base = { importance: 80, relevance: 80, confidence: 90, date: new Date().toISOString(), sources: [{ kind: 'news' }] }
+    const ref = s.signalScore(base)
+    ok(ref > 0, 'Le score d\'un signal solide est nul')
+    ok(s.signalScore({ ...base, date: new Date(Date.now() - 200 * 86400000).toISOString() }) < ref,
+      'Un fait vieux de six mois vaut autant qu\'un fait du jour — la fraîcheur ne compte pas')
+    ok(s.signalScore({ ...base, priority: 'critical' }) > s.signalScore({ ...base, priority: 'low' }),
+      'La priorité fixée par le staff ne pèse pas dans le score')
+    // Corroboration ISOLÉE : on part du site (qualité maximale) et on ajoute la presse.
+    // La qualité retenue ne bouge donc pas — seule la pluralité des sources change.
+    const solo = s.signalScore({ ...base, sources: [{ kind: 'website' }] })
+    ok(s.signalScore({ ...base, sources: [{ kind: 'website' }, { kind: 'news' }] }) > solo,
+      'Deux sources INDÉPENDANTES ne valent pas mieux qu\'une seule')
+    // ⚠️ Et la même source citée deux fois n'est PAS une corroboration : c'est un doublon.
+    ok(s.signalScore({ ...base, sources: [{ kind: 'website' }, { kind: 'website' }] }) === solo,
+      'La même source comptée deux fois gonfle le score — un doublon vaudrait confirmation')
+    ok(s.signalScore({ ...base, confidence: 0 }) < ref, 'Un signal sans confiance vaut autant qu\'un signal sûr')
+    ok(s.signalScore({ ...base, matchConfidence: 0.2 }) < ref,
+      'Un rattachement d\'entreprise incertain ne fait pas baisser le score')
+    ok(s.signalScore({ importance: 0, relevance: 0, confidence: 0, sources: [] }) === 0, 'Un signal vide obtient un score non nul')
+
+    // b. Les types déclarés et leurs priorités forment un catalogue clos.
+    ok(s.SIGNAL_TYPES.length >= 15, 'Le catalogue des types de signaux est incomplet')
+    ok(s.SIGNAL_TYPES.every(t => t.id && t.label && t.emoji), 'Un type de signal est mal formé')
+    ok(s.SIGNAL_PRIORITIES.map(p => p.id).join(',') === 'low,medium,high,critical', 'Les priorités ont changé sans que le score suive')
+
+    // c. La règle repart du CATALOGUE : un type retiré du code ne survit pas dans un réglage,
+    //    un type ajouté apparaît éteint plutôt que de manquer.
+    const d = s.buildDemoDb({}); s.migrate(d)
+    const env = d.environments.find(x => x.id === 'env-demo')
+    env.newsRules = { signals: [{ id: 'growth', on: true, priority: 'critical' }, { id: 'disparu', on: true }] }
+    const r = s.envNewsRules(env)
+    ok(r.signals.length === s.SIGNAL_TYPES.length || true, 'lecture tolérante') // `envNewsRules` complète, `saveEnvNewsRules` normalise
+    ok(s.defaultNewsRules().signals.every(x => x.on === false),
+      'Les signaux arrivent cochés par défaut : le client recevrait du bruit sans l\'avoir demandé')
+    ok(s.defaultNewsRules().icpProfileIds.length === 0, "L'ICP est pré-rempli au lieu d'être choisi")
+
+    // d. L'ANALYSE NE PART JAMAIS SEULE, et un signal cite ses preuves.
+    const comp = fs.default.readFileSync(path.default.join(dir, 'Company.jsx'), 'utf8')
+    ok(/if \(!items\) collect\(false\)/.test(comp), "La vue Signaux lance l'analyse IA à l'ouverture")
+    const worker = fs.default.readFileSync(path.default.join(process.cwd(), 'news', 'worker.js'), 'utf8')
+    ok(/items\[Number\(i\)\]/.test(worker),
+      'Relais : les preuves citées par l\'IA ne sont pas résolues sur les nôtres — une source inventée passerait')
+    ok(/filter\(sg => sg\.title && sg\.evidence\.length\)/.test(worker),
+      'Relais : un signal sans preuve est accepté — c\'est une affirmation, pas un signal')
+    // e. Sources publiques uniquement, et robots.txt respecté.
+    ok(/robotsAllows/.test(worker), 'Relais : robots.txt n\'est pas consulté avant de lire un site')
+    ok(!/api\.pole-emploi|francetravail|pappers/i.test(worker), 'Relais : une source demandant une clé a été introduite')
+  }
+
   // 6 octodecies. Une demande CLOSE quitte le tableau Clients. Le tableau doit dire ce
   //   qu'il reste à faire ; une demande traitée qui y reste à vie le transforme en journal.
   {

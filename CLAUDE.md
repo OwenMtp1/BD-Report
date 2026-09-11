@@ -329,6 +329,28 @@ npm run dev        # serveur de dev
     pertinence, confiance, fraîcheur, corroboration entre sources indépendantes, priorité du staff.
     ⚠️ `saveEnvNewsRules` repart du CATALOGUE : un type retiré du code ne survit pas dans un
     réglage, un type ajouté apparaît éteint plutôt que de manquer.
+  - **Sales Signals — LOTS 2-5 : le moteur.** Chaîne : COLLECTE (gratuite) → REGROUPEMENT →
+    ANALYSE IA CONTEXTUALISÉE → SCORE → SIGNAL. Relais : `/signals/collect` (trois collecteurs
+    PUBLICS, sans clé ni compte — presse avec requêtes composées à partir des signaux cochés,
+    site de l'entreprise, page carrière) et `/signals/analyze`. App : `src/signals.js`,
+    `data.signals` par espace, `store.saveCompanySignals/setSignalStatus`.
+    ⚠️ **UN SIGNAL N'EST PAS UN ARTICLE.** Un SEUL appel IA couvre toute l'entreprise : c'est
+    ce qui permet de rassembler « 8 offres + un DRH nommé + un bureau ouvert » en UN signal de
+    structuration, et ce qui rend le coût tenable. Le relais RÉSOUT les preuves citées sur les
+    nôtres et refuse tout signal sans preuve — une source inventée n'a aucun chemin vers l'écran.
+    ⚠️ **Collecte et analyse sont DEUX TEMPS.** Ramasser ne coûte rien ; seule l'analyse consomme,
+    et elle ne part jamais seule — ni à l'ouverture d'un écran, ni sur des preuves inchangées
+    (`evidencePrint` le dit sans demander à l'IA).
+    ⚠️ **`signalScore` N'EST PAS UNE MOYENNE** : importance, pertinence avec l'offre, confiance,
+    fraîcheur, corroboration entre sources INDÉPENDANTES (la même source deux fois n'en est pas
+    une), qualité de la meilleure source, priorité du staff, confiance du rattachement. Il est
+    RECALCULÉ à l'affichage — un score figé vieillirait en silence.
+    ⚠️ **robots.txt est consulté** avant de lire une page, et son absence vaut autorisation.
+    Aucun contournement de CAPTCHA, d'authentification ou de paywall.
+    UI : onglet **Signaux** (`Signals.jsx`, résumé + filtres + balayage explicite) → « Analyse
+    détaillée… » ouvre la fiche entreprise sur sa vue Signaux (événement `company-view`), là où
+    vivent les preuves. Un statut posé sur un signal SURVIT à une nouvelle analyse, sinon plus
+    personne ne cocherait rien.
   - **Brique `aiInsights`** (`MODULES_V3`) — les DEUX actions relèvent d'une seule case à cocher :
     même relais, même clé, même compteur. Deux cases auraient donné deux réglages pour une seule
     décision (« met-on de l'IA chez ce client ? »). Éteinte chez l'existant, comme `MODULES_V2`.

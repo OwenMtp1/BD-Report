@@ -8,7 +8,7 @@
 import {
   LayoutDashboard, Table2, Target, Trophy, Gauge, CalendarDays, KanbanSquare, ListChecks,
   CheckSquare, Coins, MessagesSquare, BookUser, ShieldCheck, StickyNote, ScrollText, Trash2,
-  LifeBuoy, Gift, Shield, Users, Link2, Network, Workflow, ArrowRightLeft, Handshake, Building2,
+  LifeBuoy, Gift, Shield, Users, Link2, Network, Workflow, ArrowRightLeft, Handshake, Building2, Radar,
 } from 'lucide-react'
 
 const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
@@ -30,6 +30,8 @@ export const NAV_GROUPS = [
       // compte ? ». Deux questions, deux écrans — et c'est la seconde qu'on se pose avant
       // d'appeler ou de lancer un enrichissement.
       { id: 'companies', label: 'Mes entreprises', icon: Building2, brick: 'Mes entreprises' },
+      // Moteur de signaux : livré avec la brique `aiInsights`, donc absent chez qui ne l'a pas.
+      { id: 'signals', label: 'Signaux', icon: Radar, brick: 'Signaux', module: 'aiInsights' },
       { id: 'tasks', label: 'Recommandations prioritaires', icon: ListChecks, brick: 'Recommandations prioritaires' },
       { id: 'mytasks', label: 'Mes tâches', icon: CheckSquare, brick: 'Mes tâches' },
       // `module` : onglet livré à la carte. Le staff coche ou décoche le module à la création

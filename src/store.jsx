@@ -1936,6 +1936,7 @@ function emptySubEnvData() {
     primePhases: [...DEFAULT_PRIME_PHASES], // phases qui déclenchent une prime
     wonPhases: [...DEFAULT_WON_PHASES],     // phases signifiant « affaire gagnée »
     lostPhases: [...DEFAULT_LOST_PHASES],   // phases signifiant « affaire perdue »
+    signals: [],     // signaux commerciaux détectés (moteur Sales Intelligence)
     icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
     primeRules: DEFAULT_PRIME_RULES(), // seuils / accélérateurs / plafonds — désactivés par défaut
     objections: defaultObjections(), // bibliothèque d'objections (onglet de « Mes notes »)
@@ -3900,6 +3901,7 @@ export function migrate(db) {
     data.tasks = data.tasks || []
     data.taskTrash = data.taskTrash || []
     data.icpProfiles = data.icpProfiles || []
+    data.signals = Array.isArray(data.signals) ? data.signals : [] // signaux commerciaux détectés
     data.activityRules = data.activityRules || [] // primes d'activité (volume de RDV)
     // Bibliothèque d'objections. Semée une seule fois : une équipe qui l'a vidée ne doit pas
     // la voir repousser au rechargement suivant.
@@ -6972,6 +6974,32 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (!accountHasPerm(account, 'accounts.role', db)) return
         setDb(d => { const e = d.environments.find(x => x.id === envId); if (e) e.createdBy = accId; return d })
         this.logStaff({ type: 'Compte', cat: 'acces', action: "Propriétaire de l'environnement modifié", envId, targetId: accId })
+      },
+      // ----- Signaux commerciaux détectés, par espace
+      // Ils vivent dans `data.signals` : ce sont les comptes de CE commercial qu'ils
+      // concernent, et `writeSubData` les fait profiter du même départage que le reste.
+      signals() { return (this.sub?.signals || []) },
+      // Remplace les signaux d'UNE entreprise, sans toucher aux autres. Le statut déjà posé
+      // sur un signal identique est CONSERVÉ : re-analyser ne doit pas rouvrir ce qui a été
+      // traité, sinon plus personne ne cocherait rien.
+      saveCompanySignals(company, list, meta = {}) {
+        const key = String(company || '').trim()
+        if (!key) return
+        this.setSub(d => {
+          const prev = d.signals || []
+          const kept = prev.filter(s => s.company !== key)
+          const before = new Map(prev.filter(s => s.company === key).map(s => [s.title, s]))
+          const made = (list || []).map(s => ({
+            ...s, id: before.get(s.title)?.id || uid(), company: key,
+            status: before.get(s.title)?.status || 'new',
+            createdAt: before.get(s.title)?.createdAt || new Date().toISOString(),
+            analyzedAt: meta.analyzedAt || new Date().toISOString(),
+          }))
+          return { ...d, signals: [...kept, ...made] }
+        })
+      },
+      setSignalStatus(id, status) {
+        this.setSub(d => ({ ...d, signals: (d.signals || []).map(s => (s.id === id ? { ...s, status } : s)) }))
       },
       // ----- Règle Actualité IA : le contexte commercial de CET environnement
       // C'est ce qui fait qu'une même dépêche est déterminante ici et sans intérêt ailleurs.

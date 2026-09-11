@@ -255,6 +255,292 @@ async function analyze(company, articles, env) {
   return { signals, model }
 }
 
+
+// ============================================================ SALES SIGNALS
+//  Un signal n'est PAS un article. C'est un FAIT — souvent établi par plusieurs preuves
+//  venues de sources différentes — qui donne une raison d'appeler ce compte maintenant.
+//  Le relais collecte les preuves ; l'IA, plus bas, les regroupe et les qualifie.
+//
+//  Trois sources, toutes PUBLIQUES et sans clé ni compte :
+//   · la presse, avec des requêtes composées à partir des signaux que le client a cochés ;
+//   · le site de l'entreprise (actualités, presse, implantations) ;
+//   · sa page carrière — de loin le signal de croissance le plus direct.
+//  Chacune s'éteint seule : une source muette ne doit jamais emporter les deux autres.
+
+// Mots-clés par type de signal. Ils servent à COMPOSER les recherches : « Nom + levée de
+// fonds » trouve ce qu'un flux générique noie. C'est toute la différence entre un
+// agrégateur et un moteur.
+const SIGNAL_QUERIES = {
+  growth: ['croissance', 'développement'],
+  hiring_mass: ['recrutement', 'recrute', 'embauches'],
+  hiring_hr: ['recrutement RH', 'DRH recrute'],
+  new_site: ['ouverture site', 'nouveau bureau', 'implantation'],
+  international: ['international', 'filiale', "s'implante"],
+  fundraising: ['levée de fonds', 'financement'],
+  ma: ['acquisition', 'rachat', 'fusion'],
+  exec_change: ['nomination', 'nommé directeur'],
+  transformation: ['transformation', 'réorganisation'],
+  hr_lead_change: ['DRH', 'directeur des ressources humaines'],
+  tech_change: ['déploiement', 'logiciel', 'digitalisation'],
+  financial_growth: ["chiffre d'affaires", 'résultats'],
+  industrial: ['investissement', 'usine', 'site industriel'],
+  strategy: ['stratégie', 'plan'],
+  distress: ['restructuration', 'plan social', 'difficultés'],
+  other: [],
+}
+
+// Pages à chercher sur un site d'entreprise. On ne parcourt pas le site : on suit les liens
+// dont le texte ou l'adresse annonce l'une de ces pages, et on s'arrête là.
+const SITE_PAGE_HINTS = [
+  { re: /actualit|news|presse|press|blog|communiqu/i, kind: 'news' },
+  { re: /a-propos|about|qui-sommes|notre-histoire/i, kind: 'about' },
+  { re: /implantation|nos-bureaux|nos-sites|locations|agences/i, kind: 'sites' },
+]
+const CAREER_HINTS = /carriere|carrières|careers|recrutement|jobs|emploi|nous-rejoindre|join-us|talent/i
+const MAX_PAGES = 4            // au-delà, on interroge un site, on ne le lit plus
+const FETCH_TIMEOUT = 8000
+
+const abs = (href, base) => { try { return new URL(href, base).toString() } catch (e) { return '' } }
+const hostOf = (u) => { try { return new URL(u).host.replace(/^www\./, '') } catch (e) { return '' } }
+const textOf = (html) => String(html || '')
+  .replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ')
+  .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+
+async function getPage(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT)
+  try {
+    const res = await fetch(url, { headers: BROWSER_HEADERS, signal: ctrl.signal, cf: { cacheTtl: 1800, cacheEverything: true } })
+    if (!res.ok) return null
+    const ct = res.headers.get('content-type') || ''
+    if (!/html|xml|text/i.test(ct)) return null
+    return await res.text()
+  } catch (e) { return null } finally { clearTimeout(t) }
+}
+
+// ⚠️ ROBOTS.TXT EST RESPECTÉ, et son absence vaut autorisation. On ne contourne rien :
+// pas de CAPTCHA, pas d'authentification, pas de paywall. Un site qui dit non est un site
+// qu'on ne lit pas — c'est aussi simple que ça.
+async function robotsAllows(origin, path) {
+  const txt = await getPage(origin + '/robots.txt')
+  if (!txt) return true
+  let applies = false
+  for (const line of txt.split('\n')) {
+    const l = line.split('#')[0].trim()
+    if (/^user-agent:/i.test(l)) applies = /\*\s*$/.test(l)
+    else if (applies && /^disallow:/i.test(l)) {
+      const rule = l.split(':')[1].trim()
+      if (rule && path.startsWith(rule)) return false
+    }
+  }
+  return true
+}
+
+const links = (html, base) => [...String(html || '').matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]{0,120}?)<\/a>/gi)]
+  .map(m => ({ url: abs(m[1], base), label: textOf(m[2]) }))
+  .filter(l => l.url.startsWith('http'))
+
+/** Pages publiques du site : actualités, à propos, implantations. */
+async function collectWebsite(site) {
+  if (!site) return []
+  const home = await getPage(site)
+  if (!home) return []
+  const origin = new URL(site).origin
+  const out = []
+  const seen = new Set()
+  for (const l of links(home, site)) {
+    if (hostOf(l.url) !== hostOf(site)) continue
+    const hint = SITE_PAGE_HINTS.find(h => h.re.test(l.url) || h.re.test(l.label))
+    if (!hint || seen.has(l.url) || out.length >= MAX_PAGES) continue
+    seen.add(l.url)
+    const path = new URL(l.url).pathname
+    if (!(await robotsAllows(origin, path))) continue
+    const html = await getPage(l.url)
+    if (!html) continue
+    const title = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]
+    out.push({
+      kind: 'website', sourceUrl: l.url, publisher: hostOf(l.url),
+      title: textOf(title) || l.label || 'Page du site',
+      content: textOf(html).slice(0, 1200), date: '',
+    })
+  }
+  return out
+}
+
+/**
+ * Page carrière : le nombre d'offres, les métiers, les localisations.
+ * ⚠️ C'est une ESTIMATION, et l'écran le dira. Chaque site publie ses offres à sa façon ;
+ * annoncer « 14 offres » comme un fait vérifié serait mentir sur la nature de la mesure.
+ */
+async function collectCareers(site) {
+  if (!site) return []
+  const home = await getPage(site)
+  if (!home) return []
+  const origin = new URL(site).origin
+  const link = links(home, site).find(l => hostOf(l.url) === hostOf(site) && (CAREER_HINTS.test(l.url) || CAREER_HINTS.test(l.label)))
+  if (!link) return []
+  if (!(await robotsAllows(origin, new URL(link.url).pathname))) return []
+  const html = await getPage(link.url)
+  if (!html) return []
+
+  // Les intitulés d'offres sont les liens dont l'adresse parle de job/offre/poste.
+  const offers = links(html, link.url)
+    .filter(l => /job|offre|poste|vacanc|career|recrut/i.test(l.url) && l.label && l.label.length > 3 && l.label.length < 120)
+    .map(l => ({ title: l.label.trim(), url: l.url }))
+  const uniq = [...new Map(offers.map(o => [o.title.toLowerCase(), o])).values()].slice(0, 60)
+  const hr = uniq.filter(o => /\bRH\b|ressources humaines|HRBP|talent|recrut|paie|formation|people/i.test(o.title))
+  return [{
+    kind: 'careers', sourceUrl: link.url, publisher: hostOf(link.url),
+    title: `${uniq.length} offre${uniq.length > 1 ? 's' : ''} publiée${uniq.length > 1 ? 's' : ''}`,
+    content: uniq.map(o => o.title).join(' · ').slice(0, 1200),
+    date: '', jobCount: uniq.length, hrCount: hr.length,
+    jobs: uniq.slice(0, 25).map(o => o.title),
+  }]
+}
+
+/** Presse, avec des requêtes composées à partir des signaux cochés. */
+async function collectNews(company, types) {
+  const queries = [`"${company}"`]
+  types.slice(0, 6).forEach(t => (SIGNAL_QUERIES[t.id] || []).slice(0, 2)
+    .forEach(k => queries.push(`"${company}" ${k}`)))
+  const seen = new Set()
+  const out = []
+  for (const q of [...new Set(queries)].slice(0, 7)) {
+    const r = await readRss(`${RSS_BASE}?q=${encodeURIComponent(q + ` when:${WINDOW_DAYS}d`)}&hl=fr&gl=FR&ceid=FR:fr`)
+    for (const a of r.items) {
+      const key = normTitle(a.title)
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      const ts = Date.parse(a.date)
+      out.push({
+        kind: 'news', sourceUrl: a.url, publisher: a.source, title: a.title,
+        content: a.summary || '', date: Number.isFinite(ts) ? new Date(ts).toISOString() : '',
+      })
+      if (out.length >= MAX_ARTICLES) return out
+    }
+  }
+  return out
+}
+
+// Empreinte d'une preuve : même entreprise, même jour, même titre normalisé = même fait,
+// quelle que soit la source qui le rapporte.
+const fingerprint = (company, it) =>
+  `${normTitle(company)}|${(it.date || '').slice(0, 10)}|${normTitle(it.title).slice(0, 80)}`
+
+async function collectSignals({ company, site, types, sources }) {
+  const on = (id) => sources?.[id] !== false
+  const jobs = []
+  if (on('news')) jobs.push(collectNews(company, types || []).catch(() => []))
+  if (on('website')) jobs.push(collectWebsite(site).catch(() => []))
+  if (on('careers')) jobs.push(collectCareers(site).catch(() => []))
+  const all = (await Promise.all(jobs)).flat()
+
+  // Déduplication : une même information vue sur le site ET dans la presse ne fait pas
+  // deux preuves. On garde une entrée, et on note toutes les sources qui la confirment.
+  const byPrint = new Map()
+  for (const it of all) {
+    const fp = fingerprint(company, it)
+    const prev = byPrint.get(fp)
+    if (prev) { prev.alsoSeen = [...new Set([...(prev.alsoSeen || []), it.kind])]; continue }
+    byPrint.set(fp, { ...it, fingerprint: fp, alsoSeen: [it.kind] })
+  }
+  const items = [...byPrint.values()]
+  return {
+    items,
+    stats: {
+      collected: all.length,
+      kept: items.length,
+      duplicates: all.length - items.length,
+      bySource: ['news', 'website', 'careers'].map(k => ({ kind: k, n: all.filter(x => x.kind === k).length })),
+    },
+  }
+}
+
+
+// ---------------------------------------------------------------- Analyse contextualisée
+// ⚠️ UN SEUL APPEL POUR TOUTE L'ENTREPRISE, pas un par article. C'est ce qui permet à
+// l'IA de RASSEMBLER plusieurs preuves autour d'un même fait — « 8 nouvelles offres + un
+// nouveau DRH + un nouveau bureau » devient UN signal de structuration, pas trois lignes.
+// C'est aussi ce qui rend le coût tenable.
+const SIGNAL_PROMPT = ({ company, rules, items, icp }) => `Tu es analyste commercial pour une équipe de prospection B2B.
+
+CONTEXTE DE L'ÉQUIPE QUI VEND — c'est lui qui décide de ce qui est pertinent :
+· Son activité : ${rules.activite || '(non précisée)'}
+· Ce qu'elle vend : ${rules.offre || '(non précisé)'}
+· Ses clients types (ICP) : ${icp || '(non précisé)'}
+· Les personas visés : ${(rules.personas || []).join(', ') || '(non précisés)'}
+· Signaux recherchés, par ordre d'importance : ${(rules.types || []).map(t => `${t.label} (priorité ${t.priority})`).join(', ') || '(tous)'}
+${rules.consignes ? `· Consignes : ${rules.consignes}` : ''}
+
+ENTREPRISE ANALYSÉE : « ${company} »
+
+RÈGLES ABSOLUES :
+· Tu ne t'appuies QUE sur les preuves ci-dessous. Aucune information venue d'ailleurs, aucune déduction sur ce qui n'y figure pas.
+· Une simple mention de l'entreprise n'est PAS un signal commercial. S'il n'y a rien de commercialement exploitable, réponds {"signals":[]} — c'est une réponse correcte.
+· REGROUPE les preuves qui décrivent le même mouvement en UN SEUL signal, en citant toutes ses preuves.
+· Tu écris en français, court et factuel.
+
+Réponds en JSON strict, sans texte autour :
+{"signals":[{"type":"<id>","title":"...","summary":"...","whyNow":"...","whyRelevant":"...","opportunity":"...","persona":"...","action":"...","importance":0,"relevance":0,"confidence":0,"evidence":[0]}]}
+
+· type : l'un de ${(rules.types || []).map(t => t.id).join(', ') || 'growth, hiring_mass, hiring_hr, new_site, international, fundraising, ma, exec_change, transformation, hr_lead_change, tech_change, financial_growth, industrial, strategy, distress, other'}
+· title : le fait, en une ligne
+· summary : ce qui s'est passé, deux phrases maximum
+· whyNow : ce qui rend ce moment opportun
+· whyRelevant : le lien explicite avec l'activité, l'offre, l'ICP ou le persona ci-dessus
+· opportunity : ce que le commercial peut concrètement proposer
+· persona : la fonction à contacter, parmi les personas visés quand c'est possible
+· action : la prochaine action, en une phrase
+· importance : 0-100, l'ampleur du fait en soi
+· relevance : 0-100, sa pertinence POUR CETTE OFFRE
+· confidence : 0-100, la solidité des preuves
+· evidence : les NUMÉROS des preuves utilisées
+
+5 signaux maximum, du plus pertinent au moins pertinent.
+
+PREUVES :
+${items.map((it, i) => `[${i}] (${it.kind}${it.jobCount != null ? `, ${it.jobCount} offres dont ${it.hrCount} RH` : ''}) ${it.title}
+source: ${it.publisher || 'inconnue'} — ${it.sourceUrl}
+date: ${it.date || 'inconnue'}
+extrait: ${(it.content || '').slice(0, 500)}`).join('\n\n')}`
+
+async function analyzeSignals({ company, rules, items, icp }, env) {
+  const { body, model } = await callGemini({
+    contents: [{ parts: [{ text: SIGNAL_PROMPT({ company, rules, items, icp }) }] }],
+    generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+  }, env)
+  const text = body?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
+  let parsed
+  try { parsed = JSON.parse(text) } catch (e) { throw new Error("Réponse de l'IA illisible.") }
+
+  const clamp = (v) => Math.max(0, Math.min(100, Math.round(Number(v) || 0)))
+  const signals = (Array.isArray(parsed?.signals) ? parsed.signals : []).slice(0, 5).map(sg => {
+    // Les preuves citées sont RÉSOLUES sur nos propres éléments : un indice inventé ne
+    // désigne rien, et une source fabriquée n'a aucun moyen d'atteindre l'écran.
+    const evidence = (Array.isArray(sg.evidence) ? sg.evidence : [])
+      .map(i => items[Number(i)]).filter(Boolean)
+      .map(it => ({ kind: it.kind, title: it.title, publisher: it.publisher, url: it.sourceUrl, date: it.date }))
+    return {
+      type: String(sg.type || 'other').slice(0, 40),
+      title: String(sg.title || '').slice(0, 200),
+      summary: String(sg.summary || '').slice(0, 600),
+      whyNow: String(sg.whyNow || '').slice(0, 400),
+      whyRelevant: String(sg.whyRelevant || '').slice(0, 400),
+      opportunity: String(sg.opportunity || '').slice(0, 400),
+      persona: String(sg.persona || '').slice(0, 80),
+      action: String(sg.action || '').slice(0, 400),
+      importance: clamp(sg.importance),
+      relevance: clamp(sg.relevance),
+      confidence: clamp(sg.confidence),
+      evidence,
+      // La date du signal est celle de sa preuve la plus récente : c'est elle qui dit si
+      // le fait est encore une raison d'appeler.
+      date: evidence.map(e => e.date).filter(Boolean).sort().pop() || '',
+    }
+  }).filter(sg => sg.title && sg.evidence.length)
+  return { signals, model }
+}
+
 // ---------------------------------------------------------------- Enrichissement
 // ⚠️ LE RELAIS NE RENVOIE QUE LES CHAMPS DEMANDÉS. C'est la garantie structurelle que
 // l'enrichissement ne peut PAS inventer de champ : l'application envoie la liste de ses
@@ -354,6 +640,23 @@ export default {
         const articles = Array.isArray(body?.articles) ? body.articles.slice(0, MAX_ARTICLES) : []
         if (!company || !articles.length) return json({ error: 'Entreprise ou articles manquants.' }, request, env, 400)
         return json(await analyze(company, articles, env), request, env)
+      }
+
+      if (url.pathname === '/signals/collect' && request.method === 'POST') {
+        const b = await request.json().catch(() => null)
+        const company = String(b?.company || '').trim()
+        if (!company) return json({ error: "Nom d'entreprise manquant." }, request, env, 400)
+        return json(await collectSignals({
+          company, site: String(b?.site || ''), types: b?.types || [], sources: b?.sources || {},
+        }), request, env)
+      }
+
+      if (url.pathname === '/signals/analyze' && request.method === 'POST') {
+        const b = await request.json().catch(() => null)
+        const company = String(b?.company || '').trim()
+        const items = Array.isArray(b?.items) ? b.items.slice(0, MAX_ARTICLES) : []
+        if (!company || !items.length) return json({ error: 'Entreprise ou preuves manquantes.' }, request, env, 400)
+        return json(await analyzeSignals({ company, rules: b?.rules || {}, items, icp: b?.icp || '' }, env), request, env)
       }
 
       if (url.pathname === '/enrich' && request.method === 'POST') {

@@ -48,6 +48,7 @@ import Tickets from './pages/Tickets.jsx'
 import Clients from './pages/Clients.jsx'
 import Projects from './pages/Projects.jsx'
 import Companies from './pages/Companies.jsx'
+import SignalsPage from './pages/Signals.jsx'
 import SupportTrash from './pages/SupportTrash.jsx'
 import SupportLogs from './pages/SupportLogs.jsx'
 import KnowledgeBase from './pages/KnowledgeBase.jsx'
@@ -696,6 +697,7 @@ function MainApp() {
     rdv: <Rdv pendingNote={pendingNote} onPendingNoteUsed={() => setPendingNote('')} />,
     leads: <Leads />,
     companies: <Companies />,
+    signals: <SignalsPage />,
     tasks: <Tasks />,
     mytasks: <MyTasks />,
     contacts: <Contacts />,
