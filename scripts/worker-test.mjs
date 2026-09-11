@@ -421,6 +421,81 @@ console.log("Enrichissement — l'IA en dernier recours, sur NOS pages")
   ok(!!b.aiError, "le motif de l'échec de l'IA doit être dit")
 }
 
+// ⚠️ TROIS CHAMPS NE REMONTAIENT JAMAIS, chacun pour une raison différente. Une source
+// généraliste de plus n'y aurait rien changé : il fallait traiter les trois causes.
+const FINANCE = /data\.economie\.gouv\.fr/
+const FINANCE_BODY = { records: [
+  { fields: { siren: '794598813', date_cloture_exercice: '2023-12-31', chiffre_d_affaires: 9000000 } },
+  { fields: { siren: '794598813', date_cloture_exercice: '2024-12-31', chiffre_d_affaires: 12500000 } },
+] }
+const HOME = (name, extra = '') => `<html><head><title>${name} — accueil</title></head><body><p>Bienvenue chez ${name}.</p>${extra}</body></html>`
+
+console.log("Enrichissement — les trois champs qui ne remontaient pas")
+{
+  // CA : les comptes annuels déposés, publiés par l'État, sans clé.
+  stubFetch([
+    [REGISTRY, () => ({ body: REGISTRY_BODY })], [WIKIDATA, () => ({ body: { search: [] } })],
+    [FINANCE, () => ({ body: FINANCE_BODY })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Doctolib', fields: ['ca'], known: { site: 'https://doctolib.fr' } } })).json()
+  ok(/12\s?500\s?000/.test((b.found?.ca?.value || '').replace(/ | /g, ' ')), `le CA doit venir des comptes déposés (reçu : ${b.found?.ca?.value})`)
+  ok(/2024/.test(b.found?.ca?.value || ''), "l'exercice le plus RÉCENT doit être retenu")
+  ok(/INPI/.test(b.found?.ca?.publisher || ''), 'la source officielle doit être nommée')
+}
+{
+  // SITE : problème CIRCULAIRE — pour lire le site il faut le connaître. On propose des
+  // domaines et on VÉRIFIE lequel parle bien de cette entreprise.
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })], [WIKIDATA, () => ({ body: { search: [] } })],
+    [/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/www\.acme\.fr/, () => ({ body: HOME('Acme') })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site'], known: {} } })).json()
+  ok(b.found?.site?.value === 'https://www.acme.fr', `le site doit être trouvé et vérifié (reçu : ${b.found?.site?.value})`)
+}
+{
+  // ⚠️ VÉRIFIER, PAS DEVINER : un domaine qui répond mais ne parle pas de l'entreprise
+  // (parking, homonyme) ne doit JAMAIS entrer dans la fiche.
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })], [WIKIDATA, () => ({ body: { search: [] } })],
+    [/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/www\.acme\./, () => ({ body: HOME('Domaine à vendre') })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site'], known: {} } })).json()
+  ok(!b.found?.site, "un domaine qui ne parle pas de l'entreprise ne doit pas être retenu")
+  ok(/essais/.test(b.siteError || ''), 'le motif doit dire que rien n\'a été vérifié')
+}
+{
+  // LINKEDIN : LinkedIn interdit sa lecture par robots.txt. Le lien vit sur le SITE de
+  // l'entreprise, qui le publie pour être suivi — c'est la source légitime.
+  const seen = []
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })], [WIKIDATA, () => ({ body: { search: [] } })],
+    [/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/linkedin\.com/, (u) => { seen.push(u); return { body: '<html></html>' } }],
+    [/www\.acme\.fr/, () => ({ body: HOME('Acme', '<a href="https://www.linkedin.com/company/acme-sa">LinkedIn</a>') })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site', 'linkedin'], known: {} } })).json()
+  ok(/linkedin\.com\/company\/acme-sa/.test(b.found?.linkedin?.value || ''), `le LinkedIn doit être pris sur le site (reçu : ${b.found?.linkedin?.value})`)
+  ok(seen.length === 0, `⚠️ LinkedIn ne doit JAMAIS être visité (${seen.length} appel(s))`)
+}
+{
+  // Un site déjà connu ne se re-cherche pas : on n'essaie pas huit domaines pour rien.
+  let tried = 0
+  stubFetch([
+    [REGISTRY, () => ({ body: { results: [] } })], [WIKIDATA, () => ({ body: { search: [] } })],
+    [/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/www\.acme\./, () => { tried++; return { body: HOME('Acme') } }],
+    [/acme\.fr/, () => ({ body: HOME('Acme', '<a href="https://linkedin.com/company/acme">in</a>') })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['linkedin'], known: { site: 'https://acme.fr' } } })
+  ok(tried === 0, `un site déjà connu ne doit pas relancer la recherche de domaine (${tried})`)
+}
+
 console.log('Enrichissement — Pappers, par API officielle et par SIREN')
 {
   let asked = ''

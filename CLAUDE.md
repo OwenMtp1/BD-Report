@@ -393,6 +393,20 @@ npm run dev        # serveur de dev
     ⚠️ **LES SIGNAUX TROUVENT LE SITE EUX-MÊMES** : sans site, deux sources sur trois sont
     mortes — première cause de « 0 preuve publique ». `collectSignals` interroge Wikidata
     avant de renoncer (gratuit, sans IA) et remonte `stats.foundSite`.
+    ⚠️ **TROIS SOURCES SPÉCIALISÉES**, parce que trois champs ne remontaient jamais et que
+    chacun avait sa propre cause — une source généraliste de plus n'y aurait rien changé :
+    · **Chiffre d'affaires** → `officialFinancials`, comptes annuels déposés (INPI via
+      `data.economie.gouv.fr`), gratuit et sans clé. Plusieurs noms de colonne sont acceptés :
+      un renommage du jeu de données ne doit pas rendre un vide inexplicable.
+    · **Site internet** → `findWebsite`. ⚠️ Problème CIRCULAIRE : pour lire le site il faut
+      déjà le connaître. On propose donc des domaines (`siteCandidates`) et on les **VÉRIFIE** —
+      la page d'accueil doit NOMMER l'entreprise. Ce n'est pas deviner, c'est constater : un
+      domaine parqué ou un homonyme échoue au contrôle. C'est aussi ce qui débloque le
+      LinkedIn ET l'IA, tous deux tributaires du site.
+    · **LinkedIn** → `findLinkedin`. ⚠️ **On ne va JAMAIS chez LinkedIn** : leur robots.txt
+      interdit `/company/`. Le lien vit de toute façon sur le site de l'entreprise, qui le
+      publie pour être suivi — accueil, puis « contact »/« à propos ». Le test refuse tout
+      appel vers linkedin.com.
     ⚠️ **L'ordre reste : bases publiques d'abord, IA en dernier.** L'enrichissement passait par l'outil de
     recherche Google de Gemini, dont le quota gratuit est le plus serré de toute l'API : en
     pratique la fonctionnalité ne répondait presque jamais (« Quota Google atteint »). On a

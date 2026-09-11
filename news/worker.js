@@ -772,6 +772,111 @@ async function wikidata(company) {
  * ⚠️ Gemini reste utilisé pour les SIGNAUX, où il est irremplaçable : regrouper des preuves
  * éparses en un fait commercial n'est pas une recherche, c'est un jugement.
  */
+// ---------------------------------------------------------------- Sources spécialisées
+//  Trois champs ne remontaient jamais, et chacun pour une raison différente. Une source
+//  généraliste de plus n'y aurait rien changé : il fallait traiter les trois causes.
+//
+//   · CHIFFRE D'AFFAIRES — l'annuaire ne le publie pas, Wikidata l'a rarement, et Pappers
+//     demande un token. Mais l'État publie les comptes déposés : le jeu de données INPI/BCE
+//     de data.economie.gouv.fr, gratuit et sans clé.
+//   · SITE INTERNET — personne ne le publie de façon fiable, et c'est un problème CIRCULAIRE :
+//     pour lire le site il faut déjà le connaître. On propose donc des domaines et on les
+//     VÉRIFIE — ce n'est pas deviner, c'est constater.
+//   · LINKEDIN — LinkedIn interdit sa lecture par robots.txt, donc on ne va pas chez eux.
+//     Mais une entreprise met presque toujours le lien sur SON site : on le prend là.
+
+// --- Chiffre d'affaires : comptes annuels déposés (INPI, via data.economie.gouv.fr) ---
+const FINANCE_API = 'https://data.economie.gouv.fr/api/records/1.0/search/'
+const FINANCE_DATASET = 'ratios_inpi_bce'
+const FINANCE_PAGE = (siren) => `https://annuaire-entreprises.data.gouv.fr/entreprise/${siren}`
+
+async function officialFinancials(siren) {
+  if (!siren) return { found: {}, why: "Pas de SIREN : l'annuaire ne l'a pas fourni." }
+  const url = `${FINANCE_API}?dataset=${FINANCE_DATASET}&q=siren%3A${encodeURIComponent(siren)}&rows=5&sort=-date_cloture_exercice`
+  const res = await fetch(url, { headers: { Accept: 'application/json' }, cf: { cacheTtl: 86400, cacheEverything: true } })
+  if (!res.ok) throw new Error(`Comptes annuels : ${res.status}`)
+  const body = await res.json()
+  const recs = (body?.records || []).map(r => r?.fields || {}).filter(Boolean)
+  if (!recs.length) return { found: {}, why: 'Aucun compte annuel déposé pour ce SIREN.' }
+  // ⚠️ L'exercice le plus RÉCENT, choisi explicitement — l'ordre d'une API n'est pas un contrat.
+  const best = [...recs].sort((a, b) => String(b.date_cloture_exercice || '').localeCompare(String(a.date_cloture_exercice || '')))[0]
+  // Le jeu de données a connu plusieurs noms pour la même colonne : on les accepte tous
+  // plutôt que de rendre vide au prochain renommage.
+  const ca = best.chiffre_d_affaires ?? best.chiffre_net_ca ?? best.ca ?? best.chiffre_affaires
+  const year = String(best.date_cloture_exercice || '').slice(0, 4)
+  const v = money(ca, year)
+  if (!v) return { found: {}, why: `Comptes trouvés, mais sans chiffre d'affaires exploitable (${Object.keys(best).slice(0, 8).join(', ')}).` }
+  return {
+    found: { ca: { value: v, publisher: 'Comptes annuels déposés (INPI)', url: FINANCE_PAGE(siren), confidence: 'high' } },
+  }
+}
+
+// --- Site internet : proposer des domaines, et les VÉRIFIER ---
+// ⚠️ On ne « devine » pas : un domaine n'est retenu que s'il répond ET que sa page d'accueil
+// parle bien de cette entreprise. Un domaine parqué, une homonymie ou une redirection
+// publicitaire échouent donc à ce contrôle, et rien n'entre dans la fiche.
+const TLDS = ['fr', 'com', 'io', 'co', 'net', 'eu']
+const siteCandidates = (company) => {
+  const base = coNorm(company).replace(/\s+/g, '')
+  const dashed = coNorm(company).replace(/\s+/g, '-')
+  if (!base || base.length < 3) return []
+  const names = base === dashed ? [base] : [base, dashed]
+  return names.flatMap(n => TLDS.map(t => `https://www.${n}.${t}`)).slice(0, 8)
+}
+
+async function findWebsite(company) {
+  const cands = siteCandidates(company)
+  if (!cands.length) return { found: {}, why: 'Nom trop court pour proposer un domaine.' }
+  const want = coNorm(company).replace(/\s+/g, '')
+  const tried = []
+  for (const url of cands) {
+    tried.push(url)
+    const origin = new URL(url).origin
+    if (!(await robotsAllows(origin, '/'))) continue
+    const html = await getPage(url)
+    if (!html) continue
+    // Le contrôle qui distingue « vérifier » de « deviner » : la page doit nommer l'entreprise.
+    const title = textOf((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '')
+    const head = textOf(html).slice(0, 3000)
+    if (!coNorm(title + ' ' + head).replace(/\s+/g, '').includes(want)) continue
+    return {
+      found: { site: { value: origin, publisher: hostOf(origin), url: origin, confidence: 'medium' } },
+      html, origin,
+    }
+  }
+  return { found: {}, why: `Aucun domaine vérifié parmi ${tried.length} essais.` }
+}
+
+// --- LinkedIn : depuis le site de l'entreprise, jamais depuis LinkedIn ---
+// ⚠️ LinkedIn interdit la lecture automatisée de /company/ dans son robots.txt : on n'y va
+// pas. Le lien vit de toute façon sur le site de l'entreprise, qui, lui, le publie pour
+// être suivi — c'est la source légitime.
+const LINKEDIN_RE = /https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/company\/[A-Za-z0-9\-_.%]+/i
+
+async function findLinkedin(site, homeHtml) {
+  if (!site) return { found: {}, why: "Pas de site connu : le lien LinkedIn s'y trouve." }
+  const pages = []
+  const home = homeHtml || await getPage(site)
+  if (home) pages.push(home)
+  // Le lien est souvent en pied de page d'accueil ; sinon sur « contact » ou « à propos ».
+  if (home) {
+    for (const l of links(home, site).slice(0, 40)) {
+      if (pages.length >= 3) break
+      if (!/contact|propos|about|qui-sommes|mentions/i.test(l.url + ' ' + l.label)) continue
+      if (hostOf(l.url) !== hostOf(site)) continue
+      const html = await getPage(l.url)
+      if (html) pages.push(html)
+    }
+  }
+  for (const html of pages) {
+    // L'expression capture déjà exactement l'URL de la page entreprise : tout « nettoyage »
+    // supplémentaire ne pouvait que l'abîmer — la première version la réduisait à « https: ».
+    const m = html.match(LINKEDIN_RE)
+    if (m) return { found: { linkedin: { value: m[0], publisher: hostOf(site), url: site, confidence: 'medium' } } }
+  }
+  return { found: {}, why: 'Aucun lien LinkedIn sur le site.' }
+}
+
 // ---------------------------------------------------------------- Pappers
 // ⚠️ PAR SON API OFFICIELLE, ET PAR SIREN. Pappers publie une API documentée avec une
 // offre gratuite : c'est la voie prévue pour un programme, et la seule qui respecte leurs
@@ -934,6 +1039,42 @@ async function enrich(company, fields, env, known = {}) {
     // Dernière barrière, inchangée : aucune donnée personnelle dans une fiche société.
     out[f] = v && !looksPersonal(v.value) ? v : null
   }
+  // ---- SOURCES SPÉCIALISÉES, pour les trois champs qui ne remontaient jamais.
+  // Chacune ne travaille que si son champ manque encore, et aucune ne coûte de quota.
+  let financeError = ''
+  let siteError = ''
+  let linkedinError = ''
+  let homeHtml = ''
+
+  // 1. Chiffre d'affaires : les comptes annuels déposés, publiés par l'État.
+  if (fields.includes('ca') && !out.ca && reg.raw?.siren) {
+    try {
+      const fin = await officialFinancials(reg.raw.siren)
+      if (fin.found.ca) out.ca = fin.found.ca
+      else financeError = fin.why || ''
+    } catch (e) { financeError = (e && e.message) || String(e) }
+  }
+
+  // 2. Site : on propose des domaines et on VÉRIFIE lequel parle de cette entreprise.
+  //    ⚠️ C'est aussi ce qui débloque le LinkedIn et l'IA, tous deux tributaires du site.
+  let site = known.site || out.site?.value || ''
+  if (!site) {
+    try {
+      const w = await findWebsite(company)
+      if (w.found.site) { out.site = w.found.site; site = w.found.site.value; homeHtml = w.html || '' }
+      else siteError = w.why || ''
+    } catch (e) { siteError = (e && e.message) || String(e) }
+  }
+
+  // 3. LinkedIn : sur le site de l'entreprise, jamais chez LinkedIn (robots.txt).
+  if (fields.includes('linkedin') && !out.linkedin && site) {
+    try {
+      const li = await findLinkedin(site, homeHtml)
+      if (li.found.linkedin) out.linkedin = li.found.linkedin
+      else linkedinError = li.why || ''
+    } catch (e) { linkedinError = (e && e.message) || String(e) }
+  }
+
   // ---- DERNIER RECOURS : l'IA, sur NOS pages. Elle ne cherche pas — elle lit ce que nous
   // sommes allés chercher. C'est le quota de TEXTE (large), pas celui de la RECHERCHE
   // (serré), et c'est ce qui distingue ce chemin de celui qui saturait.
@@ -945,7 +1086,6 @@ async function enrich(company, fields, env, known = {}) {
     try {
       // Le site connu — celui de la fiche, ou celui que les sources publiques viennent de
       // trouver — sert de porte d'entrée. Sans lui il reste la presse.
-      const site = known.site || out.site?.value || ''
       const docs = await readablePages(company, site)
       if (!docs.length) aiError = "Aucune page publique à lire (site inconnu, presse muette)."
       else {
@@ -967,6 +1107,7 @@ async function enrich(company, fields, env, known = {}) {
   return {
     found: out, model, source: usedAi ? 'public+ai' : 'public',
     registryError, wikiError, pappersError, pappersOff, aiError,
+    financeError, siteError, linkedinError,
     inputTokens: 0, outputTokens: 0,
   }
 }
