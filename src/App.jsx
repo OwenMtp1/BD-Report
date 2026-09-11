@@ -6,7 +6,7 @@ import {
   AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Radio, Trophy, ShieldCheck, Star, GraduationCap,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER, isElevatedRole, ENV_MODULES, defaultEnvModules, STATEMENT_MODES } from './store.jsx'
-import { NAV_GROUPS, NAV } from './nav.jsx'
+import { NAV_GROUPS, NAV, applyNavLayout } from './nav.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { trUI } from './i18nAuto.js'
@@ -621,7 +621,12 @@ function MainApp() {
     if (envRole && item.brick && !(envRole.tabs || []).includes(item.brick)) return false // puis le rôle affine
     return true
   }
-  const groups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(canSee) })).filter(g => g.items.length)
+  // Disposition du menu, composée par le staff pour CE client (`env.navLayout`). Elle
+  // s'applique APRÈS `canSee` : ranger un onglet ailleurs n'accorde aucun droit.
+  const groups = applyNavLayout(
+    NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(canSee) })).filter(g => g.items.length),
+    store.envNavLayout(),
+  )
   // Densité adaptative de la sidebar : les rubriques se resserrent quand il y a beaucoup
   // d'onglets (et se relâchent quand il y en a moins) pour tenir sur une seule page sans scroll.
   const navRows = groups.reduce((n, g) => n + g.items.length, 0) + groups.length

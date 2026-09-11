@@ -872,8 +872,16 @@ export const CLIENT_STATUSES = [
   { id: 'actifs', label: 'Clients actifs', color: 'bg-emerald-100 text-emerald-700' },
   { id: 'attente', label: 'En attente de support', color: 'bg-blue-100 text-blue-700' },
   { id: 'nonaboutis', label: 'Clients non aboutis', color: 'bg-rose-100 text-rose-700' },
+  // Entre « il part » et « il est parti », il y a un moment qui dure : l'accès est fermé,
+  // le ticket de fermeture est ouvert, et rien n'est encore décidé. Ce client n'est ni actif
+  // ni ancien — le ranger dans l'une de ces deux colonnes reviendrait à trancher à sa place.
+  { id: 'churn', label: 'En cours de churn', color: 'bg-orange-100 text-orange-700' },
   { id: 'anciens', label: 'Anciens clients', color: 'bg-gray-200 text-gray-600' },
 ]
+// Statuts que la vie de l'environnement impose : ils ne se laissent pas réécrire par la
+// simple ouverture d'un ticket. Un client dont l'accès est fermé ne redevient pas « actif »
+// parce qu'il a écrit au support — c'est même l'inverse qui se passe.
+export const CLIENT_FINAL_STATUSES = ['anciens', 'churn']
 
 // Phases standard d'un projet d'implémentation (gestion de projet support).
 // « Maintenance » n'est pas une étape du déroulé : c'est un ÉTAT, celui d'un environnement sur
@@ -1971,8 +1979,10 @@ function syncClientStatusFromTickets(d, ticket) {
   if (!ticket) return
   const client = (d.clients || []).find(c => c.envId ? c.envId === ticket.envId : c.accountId === ticket.userAccountId)
   if (!client) return
-  // Un client « ancien » (environnement supprimé/résilié) le reste : pas de réactivation par un ticket.
-  if (client.status === 'anciens') return
+  // Un client « ancien » ou « en cours de churn » le reste : son statut vient de la vie de
+  // son environnement, pas d'un ticket. Le réactiver ici l'effacerait du suivi de churn au
+  // moment précis où on le surveille.
+  if (CLIENT_FINAL_STATUSES.includes(client.status)) return
   const related = (d.tickets || []).filter(t => client.envId ? t.envId === client.envId : t.userAccountId === client.accountId)
   const hasOpen = related.some(t => t.status !== 'closed')
   client.status = hasOpen ? 'attente' : 'actifs'
@@ -2085,7 +2095,9 @@ export function archiveDelivery(d, { envId, projectId, reason, actorId, actorNam
     // La FICHE CLIENT reste, devenue « ancien client » : elle porte l'histoire (tickets,
     // motifs de churn, satisfaction) qui est précisément ce qu'on veut garder d'un client
     // parti. L'effacer reviendrait à effacer la raison du départ.
-    if (client) { client.status = 'anciens'; client.blocked = false }
+    // « En cours de churn » et non « ancien » : la décision n'est pas prise, elle se prend
+    // dans le ticket de fermeture. Ce client doit rester VISIBLE et suivi jusque-là.
+    if (client) { client.status = 'churn'; client.blocked = false }
   }
   // FERMER L'ACCÈS. Un environnement archivé dont les comptes resteraient ouverts n'est pas
   // fermé : ses membres se connecteraient dans le vide. Tous les comptes CLIENTS de cet
@@ -2182,7 +2194,11 @@ export function restoreDelivery(d, entry) {
 // lui — les laisser derrière, désactivés à jamais, garderait leurs adresses e-mail prises
 // et le propriétaire devant une porte qui ne s'ouvre plus sur rien.
 export function purgeDelivery(d, entry) {
-  const { ownerAccountId, disabledAccounts, memberAccounts, ticketId } = entry?.data || {}
+  const { ownerAccountId, disabledAccounts, memberAccounts, ticketId, clientId } = entry?.data || {}
+  // La suppression est définitive : le client quitte le tableau. Le laisser en « ancien
+  // client » ferait suivre un portefeuille qui n'existe plus, et fausserait le taux de churn
+  // en gardant éternellement au dénominateur quelqu'un qui a été effacé.
+  if (clientId) d.clients = (d.clients || []).filter(c => c.id !== clientId)
   const ids = [...new Set([...(memberAccounts || []), ...(disabledAccounts || []), ownerAccountId].filter(Boolean))]
   const removed = []
   ids.forEach(id => {
@@ -3749,7 +3765,15 @@ export function migrate(db) {
   })
   // Corbeille support : purge des éléments supprimés depuis plus de 30 jours
   const supCutoff = new Date(Date.now() - 30 * 86400000).toISOString()
+  const expired = (db.supportTrash || []).filter(t => t.deletedAt <= supCutoff)
   db.supportTrash = (db.supportTrash || []).filter(t => t.deletedAt > supCutoff)
+  // Une archive qui expire sans décision n'est pas une décision : le client cesse d'être
+  // « en cours de churn » (plus rien à rétablir) mais reste au tableau, en ancien client.
+  // Seule la suppression DÉCIDÉE, dans le ticket de fermeture, l'efface du portefeuille.
+  expired.filter(t => t.kind === 'project' && t.data?.clientId).forEach(t => {
+    const c = (db.clients || []).find(x => x.id === t.data.clientId)
+    if (c && c.status === 'churn') c.status = 'anciens'
+  })
   // Pierres tombales des environnements : un environnement supprimé ne revient par AUCUN
   // chemin — ni par une sauvegarde locale, ni par une importation, ni par une synchro.
   // Elles s'effacent au bout de 90 jours : passé ce délai, plus aucune photo périmée
@@ -6854,6 +6878,28 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         setDb(d => { const e = d.environments.find(x => x.id === envId); if (e) e.createdBy = accId; return d })
         this.logStaff({ type: 'Compte', cat: 'acces', action: "Propriétaire de l'environnement modifié", envId, targetId: accId })
       },
+      // ----- Disposition du menu, composée par le staff pour CE client
+      // ⚠️ Ranger n'est pas accorder : la disposition s'applique APRÈS le filtrage par
+      // offre, rôle, module et permission. Déplacer un onglet ne le donne à personne.
+      envNavLayout(envId) {
+        const env = db.environments.find(e => e.id === (envId || session?.envId))
+        return Array.isArray(env?.navLayout) && env.navLayout.length ? env.navLayout : null
+      },
+      canEditNavLayout() { return accountHasPerm(account, 'env.build', db) },
+      saveEnvNavLayout(envId, layout) {
+        if (!this.canEditNavLayout()) return false
+        const clean = (Array.isArray(layout) ? layout : [])
+          .map(g => ({
+            id: String(g.id || uid()),
+            label: String(g.label || '').trim(),
+            items: [...new Set((g.items || []).map(String))],
+          }))
+          .filter(g => g.label)
+        setDb(d => { const e = d.environments.find(x => x.id === envId); if (e) e.navLayout = clean; return d })
+        this.logStaff({ type: 'Module', cat: 'client', action: clean.length ? 'Menu réorganisé' : 'Menu remis par défaut', envId })
+        return true
+      },
+      resetEnvNavLayout(envId) { return this.saveEnvNavLayout(envId, []) },
       // Ce que verrait un titulaire de rôle, sans entrer dans l'environnement.
       previewRole(envId, roleId) {
         const env = db.environments.find(e => e.id === envId)

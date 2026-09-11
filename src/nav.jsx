@@ -85,3 +85,42 @@ export const GRANTABLE_TABS = NAV.filter(i => i.brick).map(i => {
 export const ALL_BRICKS = [...new Set(GRANTABLE_TABS.map(t => t.brick))]
 // Bricks historiques (avant l'ajout des nouveaux onglets) — sert à la migration douce des comptes existants.
 export const LEGACY_BRICKS = ['Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Primes & Commissions', 'KPI Entreprise', 'ICP', 'Logs']
+
+// ---------------------------------------------------------------- Menu sur mesure par client
+/**
+ * L'ordre des rubriques et leur découpage ne sont pas universels : une équipe qui vit
+ * dans le pipeline et une autre qui vit dans le reporting ne veulent pas la même première
+ * ligne. Le staff compose donc le menu À LA LIVRAISON — `env.navLayout`.
+ *
+ * ⚠️ LA DISPOSITION N'ACCORDE AUCUN ACCÈS. Elle s'applique APRÈS le filtrage par offre,
+ * rôle, module et permission : ranger un onglet ailleurs ne le rend pas visible à qui n'y
+ * a pas droit, et retirer une catégorie ne retire aucun droit.
+ * ⚠️ UN ONGLET NON MENTIONNÉ N'EST PAS PERDU. Une brique livrée après la composition du
+ * menu retomberait sinon dans un trou : elle reste dans sa rubrique d'origine, à la fin.
+ */
+export function applyNavLayout(groups, layout) {
+  if (!Array.isArray(layout) || !layout.length) return groups
+  const byId = new Map()
+  groups.forEach(g => g.items.forEach(it => byId.set(it.id, it)))
+  const placed = new Set()
+  const out = []
+  layout.forEach(g => {
+    const items = (g.items || []).map(id => byId.get(id)).filter(Boolean)
+    items.forEach(it => placed.add(it.id))
+    if (items.length) out.push({ id: g.id, label: g.label, items })
+  })
+  // Le reliquat : tout ce que la disposition ne nomme pas, à sa place d'origine.
+  groups.forEach(g => {
+    const rest = g.items.filter(it => !placed.has(it.id))
+    if (!rest.length) return
+    const existing = out.find(x => x.id === g.id)
+    if (existing) existing.items.push(...rest)
+    else out.push({ ...g, items: rest })
+  })
+  return out
+}
+
+// Disposition par défaut : la structure livrée, mise à plat pour être éditée.
+export const defaultNavLayout = () => NAV_GROUPS.map(g => ({
+  id: g.id, label: g.label, items: g.items.filter(i => !i.inManagerHub).map(i => i.id),
+}))

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2, Newspaper, Sparkles, RefreshCw, ExternalLink, X, Flame } from 'lucide-react'
+import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2, Newspaper, Sparkles, RefreshCw, ExternalLink, X, Flame, Factory } from 'lucide-react'
 import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor } from '../store.jsx'
 import { Modal, Field, Empty, toast } from '../ui.jsx'
 import { fetchCompanyNews, analyzeCompanyNews, cachedNews, newsRelayUrl } from '../news.js'
@@ -503,7 +503,7 @@ export default function CompanyModal() {
         {/* Infos société (enrichissement manuel) */}
         <div className="rounded-xl bg-surface p-3">
           <p className="label">Infos société</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <div className="flex items-center gap-1.5">
               <Euro size={14} className="text-muted shrink-0" />
               <input className="input !py-1.5 text-xs" placeholder="CA (ex : 5 M€)" value={info.ca || ''} onChange={e => setInfo('ca', e.target.value)} />
@@ -520,10 +520,21 @@ export default function CompanyModal() {
               <MapPin size={14} className="text-muted shrink-0" />
               <input className="input !py-1.5 text-xs" placeholder="Localisation" value={info.localisation || ''} onChange={e => setInfo('localisation', e.target.value)} />
             </div>
+            {/* Effectif et secteur étaient lus sur le DERNIER rendez-vous : deux commerciaux
+                pouvaient donc voir deux valeurs pour la même société, et rien ne permettait de
+                corriger celle qui était fausse. Ce sont des attributs de l'ENTREPRISE — ils
+                vivent maintenant sur sa fiche. La valeur du rendez-vous sert encore de point
+                de départ tant que personne n'a saisi la sienne. */}
+            <div className="flex items-center gap-1.5">
+              <Users size={14} className="text-muted shrink-0" />
+              <input className="input !py-1.5 text-xs" placeholder="Effectif" value={info.effectif ?? (rep?.effectif || '')} onChange={e => setInfo('effectif', e.target.value)} />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Factory size={14} className="text-muted shrink-0" />
+              <input className="input !py-1.5 text-xs" placeholder="Secteur d'activité" value={info.secteur ?? (rep?.secteur || '')} onChange={e => setInfo('secteur', e.target.value)} />
+            </div>
           </div>
           {rep && <div className="flex gap-2 mt-2 text-xs text-muted flex-wrap">
-            {rep.effectif && <span>Effectif : <b>{rep.effectif}</b></span>}
-            {rep.secteur && <span>Secteur : <b>{rep.secteur}</b></span>}
             {rep.source && <span>Source : <b>{rep.source}</b></span>}
             {rep.provenance && <span>Provenance : <b>{rep.provenance}</b></span>}
           </div>}

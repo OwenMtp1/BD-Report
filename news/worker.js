@@ -249,6 +249,8 @@ const ENRICH_SPECS = {
   linkedin: { label: 'page LinkedIn de l\'entreprise', hint: 'URL linkedin.com/company/... — la PAGE ENTREPRISE, jamais un profil de personne' },
   localisation: { label: 'localisation du siège', hint: 'Ville et pays, ex. « Paris, France »' },
   ca: { label: "chiffre d'affaires", hint: 'Montant annuel publié, ex. « 12 M€ (2024) ». Uniquement s\'il est publié officiellement.' },
+  effectif: { label: "effectif de l'entreprise", hint: 'Nombre de collaborateurs, ex. « 250 » ou « 200-500 ». Uniquement si une source publique le donne.' },
+  secteur: { label: "secteur d'activité", hint: 'En quelques mots, ex. « Logiciel RH (SaaS) »' },
 }
 
 const ENRICH_PROMPT = (company, fields, known) => `Tu recherches des informations PUBLIQUES sur l'ENTREPRISE « ${company} ».

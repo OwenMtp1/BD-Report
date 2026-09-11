@@ -24,6 +24,8 @@ export const ENRICHABLE = [
   { id: 'linkedin', label: 'LinkedIn entreprise' },
   { id: 'localisation', label: 'Localisation' },
   { id: 'ca', label: "Chiffre d'affaires" },
+  { id: 'effectif', label: 'Effectif' },
+  { id: 'secteur', label: "Secteur d'activité" },
 ]
 export const ENRICHABLE_IDS = ENRICHABLE.map(f => f.id)
 

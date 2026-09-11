@@ -1251,6 +1251,35 @@ async function main() {
     await click(hubTab('Projets & atelier'))
   }
 
+  // MENU DE L'ENVIRONNEMENT : le staff range les rubriques pour CE client. ⚠️ Ranger
+  // n'accorde rien — la disposition s'applique après le filtrage par offre, rôle et module.
+  {
+    const st2 = () => win.__bdrStore
+    const nav = await import('../src/nav.jsx')
+    const visible = [{ id: 'a', label: 'A', items: [{ id: 'dashboard' }, { id: 'rdv' }] },
+      { id: 'b', label: 'B', items: [{ id: 'leads' }] }]
+    // Une disposition qui déplace un onglet ne crée ni ne supprime rien.
+    const moved = nav.applyNavLayout(visible, [{ id: 'z', label: 'Z', items: ['leads', 'dashboard'] }])
+    const ids = moved.flatMap(g => g.items.map(i => i.id))
+    if (ids.length !== 3) throw new Error(`Disposition : ${ids.length} onglets au lieu de 3 — un onglet a été perdu ou dupliqué`)
+    if (moved[0].label !== 'Z' || moved[0].items[0].id !== 'leads') throw new Error("La disposition n'ordonne pas les onglets")
+    // ⚠️ Un onglet que la disposition ne nomme PAS reste visible, dans sa rubrique d'origine :
+    // sinon une brique livrée après la composition du menu disparaîtrait sans prévenir.
+    if (!ids.includes('rdv')) throw new Error("Un onglet absent de la disposition disparaît du menu")
+    // Et une disposition ne peut pas faire apparaître un onglet auquel on n'a pas droit.
+    const ghost = nav.applyNavLayout(visible, [{ id: 'z', label: 'Z', items: ['primes', 'kpi'] }])
+    if (ghost.flatMap(g => g.items.map(i => i.id)).some(x => ['primes', 'kpi'].includes(x))) {
+      throw new Error('La disposition fait apparaître un onglet non autorisé — ranger accorderait un droit')
+    }
+    // Le store enregistre bien la disposition sur l'environnement.
+    await act(async () => { st2().saveEnvNavLayout('env-peoplespheres', [{ id: 'z', label: 'Zone test', items: ['leads'] }]) })
+    if (!(st2().envNavLayout('env-peoplespheres') || []).some(g => g.label === 'Zone test')) {
+      throw new Error("La disposition du menu n'est pas enregistrée sur l'environnement")
+    }
+    await act(async () => { st2().resetEnvNavLayout('env-peoplespheres') })
+    if (st2().envNavLayout('env-peoplespheres')) throw new Error('Remettre par défaut ne vide pas la disposition')
+  }
+
   // Atelier : désormais une VUE de « Projets & atelier », pas un onglet à part. On y accède
   // par le sélecteur de vue, et l'assistant doit s'y comporter comme avant.
   await click(hubTab('Projets & atelier'))

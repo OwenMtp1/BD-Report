@@ -19,6 +19,8 @@ export default function Clients() {
   const clients = showArchived ? all : all.filter(c => !c.archived)
 
   const ticketsOf = (c) => tickets.filter(t => c.envId ? t.envId === c.envId : t.userAccountId === c.accountId)
+  // Le ticket de fermeture encore en attente d'une décision, s'il existe.
+  const closureOf = (c) => tickets.find(t => t.projectClosure && t.envId === c.envId && !t.projectClosure.decided)
   const stats = (c) => {
     const ts = ticketsOf(c)
     return { total: ts.length, open: ts.filter(t => t.status !== 'closed').length }
@@ -82,6 +84,13 @@ export default function Clients() {
                         </button>
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                           {c.archived && <span className="chip bg-surface text-muted">Demande close</span>}
+                          {/* En churn, la seule chose qui compte est : la décision est-elle prise ?
+                              Elle se prend dans le ticket de fermeture, pas sur cette carte. */}
+                          {c.status === 'churn' && (
+                            <span className="chip bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
+                              {closureOf(c) ? 'Décision attendue' : 'Archive expirée'}
+                            </span>
+                          )}
                           {c.blocked && <span className="chip bg-red-100 text-red-700 flex items-center gap-0.5"><ShieldAlert size={10} /> Bloqué</span>}
                           {s.open > 0 && <span className="chip bg-amber-100 text-amber-700 flex items-center gap-0.5"><MessageSquare size={10} /> {s.open} ouvert{s.open > 1 ? 's' : ''}</span>}
                           <span className="chip bg-surface text-muted">{s.total} ticket{s.total > 1 ? 's' : ''}</span>

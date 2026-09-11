@@ -11,10 +11,14 @@
 //  chemin d'accès, jamais le sujet.
 // ---------------------------------------------------------------------------
 import React, { useState } from 'react'
-import { ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Unlock, ShieldAlert, Rocket, LogIn, Trash2, Eye } from 'lucide-react'
+import { ShieldCheck, Ban, Play, KeyRound, Eraser, UserMinus, Unlock, ShieldAlert, Rocket, LogIn, Trash2, Eye, LayoutList, ChevronUp, ChevronDown, X, Plus } from 'lucide-react'
 import { ENV_MODULES, STATEMENT_MODES, statementMode } from '../store.jsx'
+import { defaultNavLayout, GRANTABLE_TABS } from '../nav.jsx'
 import { Field, Empty, Confirm, toast } from '../ui.jsx'
 import { ChipEditor } from './Projects.jsx'
+
+// Libellé lisible de chaque onglet, pour l'éditeur de menu.
+const ALL_NAV_ITEMS = GRANTABLE_TABS
 
 export default function EnvAdmin({ envId, store }) {
   // La livraison n'est plus l'entrée : on la RETROUVE, uniquement pour savoir si
@@ -114,6 +118,8 @@ export default function EnvAdmin({ envId, store }) {
             </p>
           </div>
         )}
+
+        {env && <NavLayoutEditor envId={envId} store={store} />}
 
         {/* Modules optionnels : le périmètre réellement livré à ce client. Décocher un module
             le retire de la navigation et des écrans de toute l'entreprise sans rien effacer —
@@ -292,6 +298,103 @@ export default function EnvAdmin({ envId, store }) {
         <Confirm
           yesLabel={confirm.kind === 'block' ? 'Désactiver' : confirm.kind === 'delEnv' ? 'Supprimer' : undefined}
           message={confirmText()} onYes={doConfirm} onNo={() => setConfirm(null)} />
+      )}
+    </div>
+  )
+}
+
+/**
+ * MENU DE L'ENVIRONNEMENT — composé par le staff, pour ce client.
+ *
+ * L'ordre des rubriques n'est pas universel : une équipe qui vit dans le pipeline et une
+ * autre qui vit dans le reporting ne veulent pas la même première ligne. Le staff range
+ * donc le menu à la livraison, renomme les catégories, en ajoute, en retire.
+ *
+ * ⚠️ RANGER N'EST PAS ACCORDER. La disposition s'applique APRÈS le filtrage par offre,
+ * rôle, module et permission : déplacer un onglet ne le donne à personne, et supprimer une
+ * catégorie ne retire aucun droit — ses onglets reviennent simplement dans leur rubrique
+ * d'origine. C'est aussi pour cela qu'on n'y supprime pas d'onglet : un onglet se retire
+ * en décochant sa brique ou son module, pas en le rangeant hors de vue.
+ */
+function NavLayoutEditor({ envId, store }) {
+  const [draft, setDraft] = useState(() => store.envNavLayout(envId) || defaultNavLayout())
+  const [open, setOpen] = useState(false)
+  if (!store.canEditNavLayout()) return null
+
+  const labelOf = (id) => (ALL_NAV_ITEMS.find(i => i.id === id) || {}).label || id
+  const set = (gi, patch) => setDraft(l => l.map((g, i) => (i === gi ? { ...g, ...patch } : g)))
+  const moveGroup = (gi, dir) => setDraft(l => {
+    const j = gi + dir
+    if (j < 0 || j >= l.length) return l
+    const out = [...l]; const [x] = out.splice(gi, 1); out.splice(j, 0, x); return out
+  })
+  const moveItem = (gi, ii, dir) => setDraft(l => l.map((g, i) => {
+    if (i !== gi) return g
+    const j = ii + dir
+    if (j < 0 || j >= g.items.length) return g
+    const items = [...g.items]; const [x] = items.splice(ii, 1); items.splice(j, 0, x)
+    return { ...g, items }
+  }))
+  const sendTo = (fromGi, id, toGi) => setDraft(l => l.map((g, i) => {
+    if (i === fromGi) return { ...g, items: g.items.filter(x => x !== id) }
+    if (i === toGi) return { ...g, items: [...g.items, id] }
+    return g
+  }))
+  // Supprimer une catégorie ne perd rien : ses onglets retombent dans leur rubrique
+  // d'origine, à la fin du menu. C'est ce que garantit `applyNavLayout`.
+  const removeGroup = (gi) => setDraft(l => l.filter((_, i) => i !== gi))
+  const addGroup = () => setDraft(l => [...l, { id: 'grp-' + Math.random().toString(36).slice(2, 7), label: 'Nouvelle catégorie', items: [] }])
+
+  const save = () => {
+    store.saveEnvNavLayout(envId, draft)
+    toast('Menu enregistré — il s\'applique à toute l\'entreprise')
+  }
+  const reset = () => { store.resetEnvNavLayout(envId); setDraft(defaultNavLayout()); toast('Menu remis par défaut') }
+
+  return (
+    <div className="rounded-xl border border-line p-3 space-y-2">
+      <button className="flex items-center gap-2 w-full text-left" onClick={() => setOpen(v => !v)}>
+        <LayoutList size={15} className="text-brand shrink-0" />
+        <span className="text-sm font-bold flex-1">Menu de l'environnement</span>
+        <span className="text-xs text-muted">{open ? 'Replier' : 'Organiser'}</span>
+      </button>
+      {open && (
+        <>
+          <p className="text-xs text-muted">
+            L'ordre des rubriques et leurs catégories, pour ce client. Un onglet se retire en décochant sa brique ou son module — pas ici.
+          </p>
+          <div className="space-y-2">
+            {draft.map((g, gi) => (
+              <div key={g.id} className="rounded-lg bg-surface p-2 space-y-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <input className="input !py-1 text-sm flex-1 min-w-[8rem]" value={g.label}
+                    onChange={e => set(gi, { label: e.target.value })} placeholder="Nom de la catégorie" />
+                  <button className="btn-ghost !p-1" title="Monter la catégorie" onClick={() => moveGroup(gi, -1)}><ChevronUp size={13} /></button>
+                  <button className="btn-ghost !p-1" title="Descendre la catégorie" onClick={() => moveGroup(gi, 1)}><ChevronDown size={13} /></button>
+                  <button className="btn-ghost !p-1 !text-red-500" title="Supprimer la catégorie" onClick={() => removeGroup(gi)}><X size={13} /></button>
+                </div>
+                {g.items.length === 0 && <div className="text-xs text-muted pl-1">Catégorie vide.</div>}
+                {g.items.map((id, ii) => (
+                  <div key={id} className="flex items-center gap-1.5 flex-wrap pl-1">
+                    <span className="text-xs flex-1 min-w-0 truncate">{labelOf(id)}</span>
+                    <button className="btn-ghost !p-1" title="Monter" onClick={() => moveItem(gi, ii, -1)}><ChevronUp size={12} /></button>
+                    <button className="btn-ghost !p-1" title="Descendre" onClick={() => moveItem(gi, ii, 1)}><ChevronDown size={12} /></button>
+                    <select className="input !w-auto !py-0.5 !text-[11px]" value=""
+                      onChange={e => { if (e.target.value) sendTo(gi, id, Number(e.target.value)) }}>
+                      <option value="">Déplacer vers…</option>
+                      {draft.map((x, xi) => (xi === gi ? null : <option key={x.id} value={xi}>{x.label}</option>))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 flex-wrap pt-1">
+            <button className="btn-ghost !py-1 text-xs" onClick={addGroup}><Plus size={12} /> Ajouter une catégorie</button>
+            <button className="btn-ghost !py-1 text-xs ml-auto" onClick={reset}>Remettre par défaut</button>
+            <button className="btn-primary !py-1 text-xs" onClick={save}>Enregistrer le menu</button>
+          </div>
+        </>
       )}
     </div>
   )

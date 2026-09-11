@@ -616,14 +616,19 @@ async function main() {
     ok(!acc('acc-two').disabled, 'Un membre qui travaille pour une autre société a perdu cet accès aussi')
     ok(!acc('acc-stf').disabled, 'Un membre du staff a été désactivé avec le client')
 
-    // d. Le client reste, devenu ancien : c'est lui qui porte l'histoire du départ.
+    // d. Le client reste, et passe « en cours de churn » : la décision n'est pas prise,
+    //    elle se prend dans le ticket. Le classer « ancien » trancherait à sa place ; le
+    //    laisser « actif » le sortirait du suivi au moment précis où on le surveille.
     const cli = d.clients.find(c => c.key === 'env:env-supp')
-    ok(cli && cli.status === 'anciens', 'La fiche client a disparu ou n\'est pas classée en « anciens »')
+    ok(cli && cli.status === 'churn', 'Un client dont l\'accès est fermé doit passer « en cours de churn »')
+    ok(s.CLIENT_STATUSES.some(x => x.id === 'churn'), 'La colonne « en cours de churn » manque au tableau Clients')
 
     // e. Restaurer rend TOUT, à l'identique — y compris les accès.
     s.restoreDelivery(d, entry)
     ok(!acc('acc-mbr').disabled, 'Rétablir le projet ne rend pas son accès à l\'équipe')
     ok(!acc('acc-own').closureTicketId, 'Le propriétaire reste enfermé dans l\'écran de fermeture')
+    ok(d.clients.find(c => c.key === 'env:env-supp')?.status !== 'churn',
+      'Rétablir le projet laisse le client en cours de churn')
     ok(tk.status === 'closed' && tk.projectClosure.decided === 'restored',
       'La décision de rétablir ne clôt pas le ticket de fermeture')
     ok(d.environments.some(e => e.id === 'env-supp'), 'Restaurer ne rend pas l\'environnement')
@@ -716,6 +721,10 @@ async function main() {
       'Suppression définitive : un compte qui travaille ailleurs a été supprimé avec le projet')
     ok(removed.length === 2, `Suppression définitive : ${removed.length} comptes retirés au lieu de 2`)
     ok(!(dd.supportTrash || []).some(t => t.id === pEntry.id), 'Suppression définitive : l\'archive reste dans la corbeille')
+    // Le client quitte le tableau : garder un « ancien client » qui a été effacé fausserait
+    // le portefeuille et le taux de churn, en laissant au dénominateur quelqu'un qui n'existe plus.
+    ok(!dd.clients.some(c => c.key === 'env:env-purge'),
+      'Suppression définitive : la fiche client reste sur le tableau')
     const pTk = dd.tickets.find(t => t.id === pEntry.data.ticketId)
     ok(pTk && pTk.status === 'closed' && pTk.projectClosure.decided === 'purged',
       'Suppression définitive : le ticket de fermeture reste ouvert')

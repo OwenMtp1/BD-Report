@@ -291,10 +291,12 @@ npm run dev        # serveur de dev
     Gemini avec recherche Google : sans source, le modèle répondrait de mémoire, c'est-à-dire
     qu'il inventerait). `src/enrich.js`.
     ⚠️ **AUCUN CHAMP N'EST CRÉÉ.** `ENRICHABLE` décrit EXACTEMENT les quatre champs de la fiche
-    (`data.companies[nom]` : `site`, `linkedin`, `localisation`, `ca`) ; l'application envoie cette
+    (`data.companies[nom]` : `site`, `linkedin`, `localisation`, `ca`, `effectif`, `secteur`) ; l'application envoie cette
     liste et le relais **itère dessus**, jamais sur la réponse du modèle. `npm run audit` compare
-    `ENRICHABLE` aux `setInfo(...)` de `Company.jsx` : un écart, et le test tombe. `effectif` et
-    `secteur` sont EXCLUS — ils appartiennent au RDV, les remplir modifierait un rendez-vous.
+    `ENRICHABLE` aux `setInfo(...)` de `Company.jsx` : un écart, et le test tombe. `effectif` et `secteur`
+    ont quitté le RDV pour la FICHE : lus sur le dernier rendez-vous, deux commerciaux voyaient
+    deux valeurs pour la même société sans pouvoir corriger la fausse. La valeur du RDV reste le
+    point de départ tant que personne n'a saisi la sienne.
     ⚠️ **L'ENTREPRISE, JAMAIS LES PERSONNES**, même quand la fiche affiche des contacts. Le relais
     refuse toute valeur qui ressemble à une donnée personnelle.
     ⚠️ **Rien n'est écrasé sans décision** : champ vide → proposé coché ; valeur différente →
@@ -455,6 +457,21 @@ npm run dev        # serveur de dev
   (`client.key = 'req:<id>'`) suit son sort : traitée ou archivée, `syncClientFromRequest` la
   RANGE (`client.archived`) — elle n'est jamais supprimée, et un interrupteur la rend. Sans cela
   le tableau cessait de dire ce qu'il reste à faire pour ne raconter que ce qui est arrivé un jour.
+- **Cycle de vie d'un client sur le kanban.** `CLIENT_STATUSES` porte une colonne
+  **« En cours de churn »** : entre « il part » et « il est parti » il y a un moment qui dure —
+  l'accès est fermé, le ticket de fermeture est ouvert, rien n'est décidé. `archiveDelivery`
+  y place le client ; `restoreDelivery` lui rend son statut d'avant ; `purgeDelivery` **le
+  retire du tableau** (garder un « ancien client » effacé fausserait le portefeuille et le taux
+  de churn). Une archive qui EXPIRE sans décision le passe en « anciens » — expirer n'est pas
+  décider. ⚠️ `CLIENT_FINAL_STATUSES` : un client en churn ou ancien ne redevient pas « actif »
+  parce qu'il a écrit au support — son statut vient de son environnement, pas d'un ticket.
+- **Menu sur mesure par client** — `env.navLayout = [{id,label,items:[tabId]}]`, composé dans
+  l'Atelier (`NavLayoutEditor` dans `EnvAdmin.jsx`, droit `env.build`), appliqué par
+  `applyNavLayout` (nav.jsx) dans la barre latérale. ⚠️ **Ranger n'accorde AUCUN accès** : la
+  disposition s'applique APRÈS le filtrage par offre, rôle, module et permission — un onglet
+  déplacé n'est donné à personne, un onglet absent des droits ne peut pas être fait apparaître.
+  ⚠️ **Un onglet non mentionné n'est pas perdu** : il reste dans sa rubrique d'origine, sinon
+  une brique livrée après la composition du menu disparaîtrait sans prévenir.
 - Catégorie menu **« Support Client BD Report »** réservée à `SUPPORT_ROLES`. Onglet **Support** ouvert à tous.
 - Tickets : priorité, assignation, SLA (1re réponse cible par priorité), CSAT à la clôture. Réponses types + base de connaissances.
 - **Résiliation** (Paramètres → Gérer mes environnements → Résilier) : ouvre un ticket + passe l'env en `subState='cancelling'`
