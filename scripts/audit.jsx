@@ -849,8 +849,19 @@ async function main() {
     ok(!/gemini-2\.0-flash'/.test(worker), 'Relais : le modèle par défaut est un modèle retiré')
     // Chaque modèle a son propre compteur de quota : quand l'un refuse, le suivant répond
     // souvent. C'est la seule façon d'étendre une offre gratuite sans la payer.
-    ok(/for \(let i = 0; i < models\.length/.test(worker) && /res\.status === 429\) \{ lastQuota/.test(worker),
+    ok(/for \(let i = 0; i < models\.length/.test(worker) && /lastQuota = \{ text, model \}/.test(worker),
       'Relais : un quota atteint sur un modèle arrête tout au lieu d\'essayer le suivant')
+    // ⚠️ MAIS toutes les limites ne sont pas par modèle. Celle de la RECHERCHE Google est
+    // commune à tous : les essayer l'un après l'autre ne fait que collectionner le même
+    // refus, et l'utilisateur lisait « sur tous les modèles » pour un plafond situé ailleurs.
+    ok(/isGroundingQuota\(text\)\) break/.test(worker),
+      'Relais : une limite commune à tous les modèles est retestée modèle par modèle')
+    // Et quand elle tombe, l'enrichissement ne s'arrête pas : nous savons lire nous-mêmes
+    // les pages publiques de l'entreprise. ⚠️ Jamais la mémoire du modèle — ce serait inventer.
+    ok(/ENRICH_FROM_SOURCES/.test(worker) && /TU N'AS PAS D'OUTIL DE RECHERCHE/.test(worker),
+      'Relais : le quota de recherche arrête l\'enrichissement alors que nos propres sources restent lisibles')
+    ok(/fallback\.some\(d => d\.sourceUrl === url\)/.test(worker),
+      'Relais : en repli, une URL inventée par le modèle passe pour une source')
 
     // h. UN CLIC = UN APPEL. Deux demandes identiques ne doivent jamais partir ensemble :
     //    c'est ce qui faisait atteindre le quota gratuit en quelques clics.
@@ -861,8 +872,14 @@ async function main() {
     ok(/once\('enrich:/.test(enr2) && /once\('signals:/.test(sig2) && /once\('collect:/.test(sig2),
       'Un appel IA peut encore partir en double')
     // Et quand Google dit « trop de requêtes », on le retient : inutile de redemander avant.
-    ok(/cooldownLeft\(\)/.test(enr2) && /cooldownLeft\(\)/.test(sig2),
-      'Le délai d\'attente annoncé par Google n\'est pas respecté — on rappelle pour rien')
+    // ⚠️ MAIS CHACUN SON COMPTEUR. Les deux actions ne se heurtent pas à la même limite :
+    // l'enrichissement passe par la recherche Google, dont le quota gratuit est bien plus
+    // serré. Avec une clé d'attente commune, un enrichissement refusé mettait AUSSI les
+    // signaux au repos, alors que leur quota était intact.
+    ok(/cooldownLeft\('enrich'\)/.test(enr2) && /cooldownLeft\('signals'\)/.test(sig2),
+      "Le délai d'attente est commun aux deux actions IA : l'une éteint l'autre sans raison")
+    ok(/startCooldown\([^)]*'enrich'\)/.test(enr2) && /startCooldown\([^)]*'signals'\)/.test(sig2),
+      'Un quota atteint est retenu sans dire de quelle action il vient')
 
     // La fiche entreprise intègre l'action, elle ne crée pas de page ni de navigation.
     const navSrc = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'nav.jsx'), 'utf8')

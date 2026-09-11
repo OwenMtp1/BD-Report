@@ -311,6 +311,23 @@ npm run dev        # serveur de dev
     ⚠️ **Quota (429) : ROTATION DE MODÈLES.** Chaque modèle a son propre compteur —
     `GEMINI_MODELS` est essayé dans l'ordre, et le 429 d'un modèle fait passer au suivant.
     Le modèle qui a RÉELLEMENT répondu est celui qu'on enregistre dans le compteur.
+    ⚠️ **MAIS TOUTES LES LIMITES NE SONT PAS PAR MODÈLE**, et c'est ce qui bloquait
+    l'enrichissement. Celle de la **recherche Google** (le « grounding ») est COMMUNE à tous
+    les modèles et bien plus serrée que celle du texte : les essayer l'un après l'autre ne
+    faisait que collectionner trois fois le même refus, et l'écran annonçait « sur tous les
+    modèles » pour un plafond situé ailleurs. `quotaMetricOf`/`isGroundingQuota` lisent la
+    limite que Google nomme dans l'erreur ; la rotation s'arrête, et le message la désigne.
+    ⚠️ **Le quota de recherche n'arrête plus l'enrichissement** : le relais repasse par NOS
+    propres pages (`ownSources` = site de l'entreprise + presse, les collecteurs des signaux)
+    et rappelle Gemini SANS outil, avec ces pages pour seule matière. Jamais depuis la
+    mémoire du modèle — un enrichissement sans source est une invention, et `fallback`
+    interdit toute URL absente des pages fournies. Sans rien à lire, le quota reste la
+    bonne réponse. `found.fallback` remonte à l'écran : la couverture est plus étroite
+    (un site donne rarement le chiffre d'affaires), et cela doit s'expliquer autrement
+    que par « l'IA n'a rien trouvé ».
+    ⚠️ **Un compteur d'attente PAR FONCTIONNALITÉ** (`aiGuard.cooldownLeft(scope)`). Avec une
+    clé commune, un enrichissement refusé mettait AUSSI les signaux au repos — alors que
+    leur quota était intact, puisque ce n'est pas le même.
     ⚠️ **Modèle Gemini retiré (404)** : Google nomme son successeur dans le message d'erreur — le relais
     le lit et rejoue l'appel UNE fois (`callGemini`). Il n'invente jamais de remplaçant. Défaut :
     `gemini-3.6-flash`. ⚠️ **Quota Google (429)** : ce n'est ni une panne ni notre plafond. Le relais

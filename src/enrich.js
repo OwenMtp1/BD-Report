@@ -64,7 +64,7 @@ export async function enrichCompany(company, known, db, { force = false } = {}) 
   }
   const base = newsRelayUrl(db)
   if (!base) return { error: "Le relais n'est pas configuré. L'équipe BD Report doit publier son URL." }
-  const left = cooldownLeft()
+  const left = cooldownLeft('enrich')
   if (left) return { error: quotaMessage(left), quota: true }
   // ⚠️ Une demande identique déjà en vol est PARTAGÉE. Sans cela, un remontage du
   // panneau relançait une seconde recherche — et l'enrichissement, qui interroge la
@@ -78,19 +78,22 @@ export async function enrichCompany(company, known, db, { force = false } = {}) 
         company: name,
         fields: ENRICHABLE_IDS,                       // la liste part d'ICI, jamais du modèle
         known: Object.fromEntries(ENRICHABLE_IDS.map(f => [f, String(known?.[f] || '')])),
+        // Le site déjà connu sert de REPLI au relais quand le quota de recherche Google
+        // est atteint : les pages de l'entreprise se lisent sans aucun outil Google.
+        site: String(known?.site || ''),
       }),
     })
     const body = await res.json().catch(() => null)
     // Un quota atteint n'est pas une erreur technique : l'application doit pouvoir le dire
     // autrement, et ne pas décompter un appel qui n'a rien consommé chez Google.
     const quota = res.status === 429 || body?.code === 429
-    if (quota) startCooldown(body?.retryAfter)
+    if (quota) startCooldown(body?.retryAfter, 'enrich')
     if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota }
     // Dernière barrière côté application : on ne retient que nos propres champs.
     const found = {}
     ENRICHABLE_IDS.forEach(f => { found[f] = body.found?.[f] || null })
     putCache(name, found)
-    return { found, model: body.model || '', inputTokens: body.inputTokens || 0, outputTokens: body.outputTokens || 0 }
+    return { found, model: body.model || '', fallback: !!body.fallback, inputTokens: body.inputTokens || 0, outputTokens: body.outputTokens || 0 }
   } catch (e) {
     return { error: 'Relais injoignable. Vérifiez la connexion ou l\'URL publiée.' }
   }

@@ -175,6 +175,16 @@ const retryDelayOf = (text) => {
   return m ? Number(m[1]) : 0
 }
 
+// ⚠️ TOUS LES QUOTAS NE SE CONTOURNENT PAS DE LA MÊME FAÇON, et c'est ce qui manquait.
+// La rotation de modèles ne vaut que pour un quota PAR MODÈLE. Certaines limites portent
+// sur autre chose — au premier chef l'outil de recherche Google (le « grounding »), dont
+// le compteur est commun à tous les modèles et bien plus serré que celui du texte. Face
+// à une limite de ce genre, essayer les modèles l'un après l'autre ne fait que perdre du
+// temps pour recevoir trois fois le même refus.
+// Google nomme la limite atteinte dans le corps de l'erreur : on la LIT.
+const quotaMetricOf = (text) => (String(text || '').match(/"quotaMetric"\s*:\s*"([^"]+)"/) || [])[1] || ''
+const isGroundingQuota = (text) => /ground|search/i.test(quotaMetricOf(text)) || /google_?search/i.test(String(text || ''))
+
 async function callGemini(payload, env) {
   const key = env.GEMINI_API_KEY
   if (!key) throw new Error("Le relais n'a pas de clé Gemini configurée.")
@@ -204,18 +214,29 @@ async function callGemini(payload, env) {
       }
     }
     // Quota atteint sur CE modèle : on tente le suivant de la liste avant d'abandonner.
-    if (res.status === 429) { lastQuota = { text, model }; continue }
+    // SAUF si la limite ne porte pas sur le modèle : les suivants la rencontreront à
+    // l'identique, et l'utilisateur aura attendu trois refus au lieu d'un.
+    if (res.status === 429) {
+      lastQuota = { text, model }
+      if (isGroundingQuota(text)) break
+      continue
+    }
     throw new Error(`Gemini a répondu ${res.status}${text ? ' — ' + text.slice(0, 200) : ''}`)
   }
 
-  // Tous les modèles ont dit non : c'est un vrai plafond, et la seule chose utile à dire
-  // est DANS COMBIEN DE TEMPS réessayer. Google l'indique dans le corps de l'erreur.
+  // Plus de modèle à essayer : c'est un vrai plafond. La chose utile à dire est LAQUELLE
+  // des limites a été atteinte — elles ne se contournent pas de la même façon — et dans
+  // combien de temps réessayer. Google indique les deux dans le corps de l'erreur.
   const wait = lastQuota ? retryDelayOf(lastQuota.text) : 0
-  const err = new Error(wait
-    ? `Quota Google atteint sur tous les modèles. Réessayez dans ${wait} seconde${wait > 1 ? 's' : ''}.`
-    : "Quota Google atteint (offre gratuite) sur tous les modèles. Réessayez dans une minute, ou demain si la limite quotidienne est atteinte.")
+  const grounded = lastQuota ? isGroundingQuota(lastQuota.text) : false
+  const quand = wait ? `Réessayez dans ${wait} seconde${wait > 1 ? 's' : ''}.` : 'Réessayez dans une minute, ou demain si la limite quotidienne est atteinte.'
+  const err = new Error(grounded
+    ? `Quota de recherche Google atteint (offre gratuite). Cette limite est commune à tous les modèles : changer de modèle n'y change rien. ${quand}`
+    : `Quota Google atteint (offre gratuite) sur tous les modèles. ${quand}`)
   err.code = 429
   err.retryAfter = wait || 60
+  err.grounding = grounded
+  err.quotaMetric = lastQuota ? quotaMetricOf(lastQuota.text) : ''
   throw err
 }
 
@@ -592,14 +613,55 @@ const isHttp = (u) => /^https?:\/\/\S+$/i.test(String(u || ''))
 // de portable n'a rien à faire dans une fiche société, et rien ne la lui a demandée.
 const looksPersonal = (v) => /@/.test(v) || /\b0[67](?:[ .-]?\d{2}){4}\b/.test(v)
 
-async function enrich(company, fields, known, env) {
-  const { body, model } = await callGemini({
-    contents: [{ parts: [{ text: ENRICH_PROMPT(company, fields, known) }] }],
+/**
+ * Les pages publiques que NOUS savons lire sur cette entreprise. Elles servent de repli
+ * quand la recherche Google n'est plus disponible : le site officiel est précisément là
+ * où vivent le secteur, l'implantation et l'URL LinkedIn.
+ */
+async function ownSources(company, site) {
+  const [pages, press] = await Promise.all([
+    collectWebsite(site).catch(() => []),
+    collectNews(company, []).catch(() => []),
+  ])
+  return [...pages, ...press].slice(0, 8)
+}
+
+const ENRICH_FROM_SOURCES = (company, fields, known, docs) => `${ENRICH_PROMPT(company, fields, known)}
+
+TU N'AS PAS D'OUTIL DE RECHERCHE. Tu ne disposes QUE des pages publiques ci-dessous, et tu
+ne dois rien écrire qui n'y figure pas. Ce que ces pages ne disent pas vaut null.
+Le champ « url » doit être l'une des adresses listées, jamais une autre.
+
+PAGES :
+${docs.map((d, i) => `[${i}] ${d.title || '(sans titre)'}
+url: ${d.sourceUrl}
+extrait: ${(d.content || '').slice(0, 1200)}`).join('\n\n')}`
+
+async function enrich(company, fields, known, env, site) {
+  let body, model, fallback = false
+  try {
     // Recherche Google : sans elle, le modèle répondrait de mémoire — c'est-à-dire
     // qu'il inventerait. La consigne « ne rien inventer » n'a de sens qu'avec une source.
-    tools: [{ google_search: {} }],
-    generationConfig: { temperature: 0 },
-  }, env)
+    ;({ body, model } = await callGemini({
+      contents: [{ parts: [{ text: ENRICH_PROMPT(company, fields, known) }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0 },
+    }, env))
+  } catch (e) {
+    // ⚠️ LE QUOTA DE RECHERCHE EST LA VRAIE LIMITE de l'enrichissement, et il est bien plus
+    // serré que celui du texte. Quand il tombe, la fonctionnalité s'arrêtait entièrement —
+    // alors que nous savons lire nous-mêmes les sources publiques de cette entreprise.
+    // On repasse donc par NOS pages. ⚠️ Jamais par la mémoire du modèle : un enrichissement
+    // sans source est une invention, et mieux vaut ne rien répondre que se tromper.
+    if (!(e && e.code === 429 && e.grounding)) throw e
+    const docs = await ownSources(company, site)
+    if (!docs.length) throw e     // aucune source à lire : le quota reste la bonne réponse
+    ;({ body, model } = await callGemini({
+      contents: [{ parts: [{ text: ENRICH_FROM_SOURCES(company, fields, known, docs) }] }],
+      generationConfig: { temperature: 0 },
+    }, env))
+    fallback = docs
+  }
   const raw = body?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
   // Le modèle encadre souvent son JSON de balises de code malgré la consigne.
   const text = raw.replace(/^[\s\S]*?```(?:json)?/i, '').replace(/```[\s\S]*$/, '').trim() || raw.trim()
@@ -614,7 +676,12 @@ async function enrich(company, fields, known, env) {
     if (!value || value.toLowerCase() === 'null' || looksPersonal(value)) { out[f] = null; continue }
     if (f === 'site' && !isHttp(value)) { out[f] = null; continue }
     if (f === 'linkedin' && !(isHttp(value) && /linkedin\.com\/company\//i.test(value))) { out[f] = null; continue }
-    const url = isHttp(v.url) ? v.url : ''
+    let url = isHttp(v.url) ? v.url : ''
+    // ⚠️ EN REPLI, L'URL DOIT ÊTRE L'UNE DES NÔTRES. Le modèle n'a plus d'outil de recherche :
+    // toute adresse qui n'est pas dans les pages fournies sort de sa mémoire, c'est-à-dire
+    // qu'elle est inventée. On la retire — la valeur reste, mais sans source vérifiable, donc
+    // en confiance basse, ce que la règle générale ci-dessous applique déjà.
+    if (fallback && url && !fallback.some(d => d.sourceUrl === url)) url = ''
     out[f] = {
       value: value.slice(0, 300),
       publisher: String(v.publisher || '').slice(0, 120),
@@ -625,7 +692,13 @@ async function enrich(company, fields, known, env) {
     }
   }
   const usage = body?.usageMetadata || {}
-  return { found: out, model, inputTokens: usage.promptTokenCount || 0, outputTokens: usage.candidatesTokenCount || 0 }
+  // `fallback` est dit à l'application : sans recherche Google, la couverture est plus
+  // étroite (le site d'une entreprise donne rarement son chiffre d'affaires). L'écran doit
+  // pouvoir expliquer un résultat maigre autrement que par « l'IA n'a rien trouvé ».
+  return {
+    found: out, model, fallback: !!fallback,
+    inputTokens: usage.promptTokenCount || 0, outputTokens: usage.candidatesTokenCount || 0,
+  }
 }
 
 // ---------------------------------------------------------------- Routage
@@ -679,7 +752,10 @@ export default {
         // Les champs viennent de l'APPLICATION : elle seule sait lesquels existent chez elle.
         const fields = (Array.isArray(body?.fields) ? body.fields : []).filter(f => ENRICH_SPECS[f])
         if (!company || !fields.length) return json({ error: 'Entreprise ou champs manquants.' }, request, env, 400)
-        return json(await enrich(company, fields, body?.known || {}, env), request, env)
+        // Le site connu sert de REPLI quand le quota de recherche Google est atteint :
+        // les pages de l'entreprise, nous savons les lire sans aucun outil Google.
+        const site = String(body?.site || body?.known?.site || '')
+        return json(await enrich(company, fields, body?.known || {}, env, site), request, env)
       }
 
       // La racine répond comme /health : ouvrir l'URL du relais dans un navigateur doit

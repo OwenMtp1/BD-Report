@@ -14,7 +14,13 @@
 //  Et quand Google dit « trop de requêtes », on le retient : inutile de redemander
 //  avant l'heure qu'il a lui-même indiquée.
 // ---------------------------------------------------------------------------
+// ⚠️ UN COMPTEUR PAR FONCTIONNALITÉ, pas un pour tout le monde. Les deux actions IA ne
+// se heurtent pas à la même limite : l'enrichissement passe par la recherche Google, dont
+// le quota gratuit est bien plus serré que celui du texte. Avec une seule clé d'attente,
+// un enrichissement refusé mettait AUSSI les signaux au repos — alors que leur quota était
+// intact. L'utilisateur voyait une fonctionnalité s'éteindre sans l'avoir touchée.
 const COOLDOWN_KEY = 'bdrflow_ai_cooldown_v1'
+const keyFor = (scope) => COOLDOWN_KEY + (scope ? ':' + scope : '')
 const inflight = new Map()
 
 /** Partage une demande identique déjà en vol, au lieu d'en lancer une seconde. */
@@ -27,16 +33,16 @@ export function once(key, fn) {
   return p
 }
 
-/** Secondes restantes avant de pouvoir rappeler l'IA, 0 si la voie est libre. */
-export function cooldownLeft() {
+/** Secondes restantes avant de pouvoir rappeler l'IA pour CETTE fonctionnalité, 0 si libre. */
+export function cooldownLeft(scope) {
   try {
-    const until = Number(localStorage.getItem(COOLDOWN_KEY)) || 0
+    const until = Number(localStorage.getItem(keyFor(scope))) || 0
     return Math.max(0, Math.ceil((until - Date.now()) / 1000))
   } catch (e) { return 0 }
 }
 
-export function startCooldown(seconds) {
-  try { localStorage.setItem(COOLDOWN_KEY, String(Date.now() + Math.max(5, Number(seconds) || 60) * 1000)) } catch (e) { /* quota */ }
+export function startCooldown(seconds, scope) {
+  try { localStorage.setItem(keyFor(scope), String(Date.now() + Math.max(5, Number(seconds) || 60) * 1000)) } catch (e) { /* quota */ }
 }
 
 export const quotaMessage = (left) => left

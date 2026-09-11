@@ -184,5 +184,76 @@ console.log('Enrichissement — la liste des champs vient de l\'application')
   ok(!b.found?.localisation, 'une valeur qui ressemble à une donnée personnelle doit être refusée')
 }
 
+// ⚠️ LE QUOTA QUI BLOQUAIT VRAIMENT L'ENRICHISSEMENT. Il ne porte pas sur le modèle mais
+// sur l'outil de RECHERCHE Google, dont le compteur est commun à tous les modèles : la
+// rotation ne pouvait donc rien y faire, et l'utilisateur lisait « sur tous les modèles »
+// alors qu'un seul plafond, ailleurs, était atteint.
+console.log('Enrichissement — quota de recherche Google')
+const GROUNDING_429 = JSON.stringify({ error: { code: 429, message: 'Quota exceeded', details: [{ violations: [{ quotaMetric: 'generativelanguage.googleapis.com/grounding_with_google_search_requests' }] }] } })
+{
+  let models = []
+  stubFetch([[GEMINI, (u) => { models.push(u.match(/models\/([^:]+):/)[1]); return { status: 429, body: GROUNDING_429 } }]])
+  const res = await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site'], known: {} } })
+  const b = await res.json()
+  ok(models.length === 1, `une limite commune à tous les modèles ne doit pas être retestée modèle par modèle (${models.length} essais)`)
+  ok(/recherche Google/i.test(b.error || ''), "le message doit nommer la limite atteinte, pas accuser « tous les modèles »")
+  ok(res.status === 429, 'le quota doit garder son code')
+}
+{
+  // Le repli : nos propres pages. Le quota de recherche tombe, mais nous savons lire le
+  // site de l'entreprise nous-mêmes — sans aucun outil Google.
+  let grounded = 0, plain = 0
+  stubFetch([
+    [GEMINI, (u, init) => {
+      const body = JSON.parse(init.body)
+      if (body.tools) { grounded++; return { status: 429, body: GROUNDING_429 } }
+      plain++
+      return { body: geminiBody({ secteur: { value: 'Logiciel RH (SaaS)', publisher: 'acme.fr', url: 'https://acme.fr/a-propos', confidence: 'high' } }) }
+    }],
+    [/acme\.fr\/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/acme\.fr/, () => ({ body: '<html><head><title>Acme — à propos</title></head><body><a href="/a-propos">À propos</a><p>Acme édite un logiciel RH en SaaS.</p></body></html>' })],
+    [GOOGLE, () => ({ body: rss([]) })],
+    [BING, () => ({ body: rss([]) })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: { site: 'https://acme.fr' } } })).json()
+  ok(grounded === 1 && plain === 1, 'le quota de recherche doit déclencher UN repli, pas une cascade')
+  ok(b.found?.secteur?.value === 'Logiciel RH (SaaS)', "le repli sur nos propres pages doit rendre un résultat")
+  ok(b.fallback === true, "l'application doit savoir que la couverture est plus étroite")
+}
+{
+  // ⚠️ En repli, une URL qui n'est pas l'une des nôtres sort de la MÉMOIRE du modèle :
+  // elle est inventée, et une source inventée n'a aucun chemin vers l'écran.
+  stubFetch([
+    [GEMINI, (u, init) => (JSON.parse(init.body).tools
+      ? { status: 429, body: GROUNDING_429 }
+      : { body: geminiBody({ secteur: { value: 'Logiciel RH', publisher: 'inventé', url: 'https://source-inventee.example/x', confidence: 'high' } }) })],
+    [/acme\.fr\/robots\.txt/, () => ({ status: 404, body: '' })],
+    [/acme\.fr/, () => ({ body: '<html><head><title>Acme — à propos</title></head><body><a href="/a-propos">À propos</a><p>Acme édite un logiciel RH.</p></body></html>' })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: { site: 'https://acme.fr' } } })).json()
+  ok(b.found?.secteur?.url === '', 'une URL absente des pages fournies doit être retirée')
+  ok(b.found?.secteur?.confidence === 'low', 'sans source vérifiable, la confiance ne peut pas rester haute')
+}
+{
+  // Sans rien à lire, le quota reste la bonne réponse : on n'invente pas pour meubler.
+  stubFetch([
+    [GEMINI, () => ({ status: 429, body: GROUNDING_429 })],
+    [GOOGLE, () => ({ body: rss([]) })], [BING, () => ({ body: rss([]) })],
+  ])
+  const res = await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['secteur'], known: {} } })
+  ok(res.status === 429, "sans aucune source à lire, le repli ne doit pas répondre de mémoire")
+}
+{
+  // Un quota ORDINAIRE (par modèle) doit, lui, continuer d'essayer le modèle suivant.
+  let n = 0
+  stubFetch([[GEMINI, () => (++n === 1
+    ? { status: 429, body: JSON.stringify({ error: { message: 'quota', details: [{ violations: [{ quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests' }] }] } }) }
+    : { body: geminiBody({ site: { value: 'https://acme.fr', publisher: 'Acme', url: 'https://acme.fr', confidence: 'high' } }) })]])
+  const b = await (await call('/enrich', { method: 'POST', body: { company: 'Acme', fields: ['site'], known: {} } })).json()
+  ok(n === 2, 'un quota par modèle doit toujours faire essayer le suivant')
+  ok(b.found?.site?.value === 'https://acme.fr', 'la rotation de modèles doit rester efficace')
+}
+
 if (failures) { console.error(`\nRELAIS : ${failures} vérification(s) en échec`); process.exit(1) }
 console.log('relais OK ✓ — routes, replis, quotas et garde-fous')

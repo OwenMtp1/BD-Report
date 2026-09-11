@@ -117,7 +117,7 @@ export async function analyzeEvidence(company, items, rules, db) {
   const base = newsRelayUrl(db)
   if (!base) return { error: "Le relais n'est pas configuré." }
   if (!name || !(items || []).length) return { error: 'Aucune preuve à analyser.' }
-  const left = cooldownLeft()
+  const left = cooldownLeft('signals')
   if (left) return { error: quotaMessage(left), quota: true }
   return once('signals:' + keyOf(name), async () => {
     try {
@@ -127,7 +127,7 @@ export async function analyzeEvidence(company, items, rules, db) {
       })
       const body = await res.json().catch(() => null)
       const quota = res.status === 429 || body?.code === 429
-      if (quota) startCooldown(body?.retryAfter)
+      if (quota) startCooldown(body?.retryAfter, 'signals')
       if (!res.ok || !body || body.error) return { error: body?.error || `Le relais a répondu ${res.status}.`, quota }
       const signals = Array.isArray(body.signals) ? body.signals : []
       putCache(name, { signals, analyzedAt: Date.now(), print: evidencePrint(items) })
