@@ -803,6 +803,18 @@ const WD_HEADERS = {
   Accept: 'application/json',
   'User-Agent': 'BD-Report/1.0 (https://bdreport.js.org; enrichissement de fiches entreprise)',
 }
+
+// ⚠️ ET SURTOUT : ON NE MET PLUS CES APPELS EN CACHE FORCÉ. C'est ce qui a
+// transformé un refus ponctuel en panne permanente. `cacheEverything: true` avec
+// `cacheTtl: 86400` fige la réponse 24 h — y compris un 403 — et la clé de cache
+// est l'URL SEULE : l'en-tête User-Agent n'en fait pas partie. Le correctif
+// précédent était donc invisible, Cloudflare rejouant le refus d'avant.
+// Diagnostic trompeur au passage : l'annuaire répondait en 8 ms au lieu de 570,
+// signe qu'on lisait le cache et non les sources.
+// `maxage=0&smaxage=0` sont des paramètres reconnus de l'API MediaWiki — ils
+// demandent une réponse fraîche, et changent du même coup la clé de cache, ce qui
+// écarte immédiatement l'entrée déjà empoisonnée sans attendre son expiration.
+const wdFetch = (params) => fetch(`${WD_API}?${params}&maxage=0&smaxage=0&format=json`, { headers: WD_HEADERS })
 const WD_PROPS = { site: 'P856', linkedin: 'P4264', ca: 'P2139', effectif: 'P1128' }
 // Ce qui désigne une organisation dans la description d'une entité. Sans ce filtre,
 // chercher « Orange » ramène le fruit — et l'enrichissement irait remplir la fiche
@@ -822,8 +834,7 @@ const wdClaim = (claims, prop) => (claims?.[prop] || [])
 async function wikidata(company, hints = {}) {
   const name = String(company || '').trim()
   if (!name) return { found: {}, raw: null }
-  const search = await fetch(`${WD_API}?action=wbsearchentities&search=${encodeURIComponent(name)}&language=fr&uselang=fr&type=item&limit=5&format=json`,
-    { headers: WD_HEADERS, cf: { cacheTtl: 86400, cacheEverything: true } })
+  const search = await wdFetch(`action=wbsearchentities&search=${encodeURIComponent(name)}&language=fr&uselang=fr&type=item&limit=5`)
   if (!search.ok) throw new Error(`Wikidata : ${search.status}`)
   const hits = (await search.json())?.search || []
   // ⚠️ La correspondance EXACTE écartait presque tout : « Doctolib » contre « Doctolib SAS »,
@@ -842,8 +853,7 @@ async function wikidata(company, hints = {}) {
   const hit = bestMatch(ranked, name, (h) => h.label || '')
   if (!hit) return { found: {}, raw: { candidats: hits.map(h => `${h.label} — ${h.description || ''}`).slice(0, 3) } }
 
-  const ent = await fetch(`${WD_API}?action=wbgetentities&ids=${encodeURIComponent(hit.id)}&props=claims&format=json`,
-    { headers: WD_HEADERS, cf: { cacheTtl: 86400, cacheEverything: true } })
+  const ent = await wdFetch(`action=wbgetentities&ids=${encodeURIComponent(hit.id)}&props=claims`)
   if (!ent.ok) throw new Error(`Wikidata : ${ent.status}`)
   const claims = (await ent.json())?.entities?.[hit.id]?.claims || {}
   const url = `https://www.wikidata.org/wiki/${hit.id}`

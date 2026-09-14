@@ -713,6 +713,16 @@ console.log('Wikidata — Wikimedia exige un agent qui se nomme')
   ok(wd.every(c => ua(c)), 'CHAQUE appel Wikidata porte un User-Agent')
   ok(wd.every(c => /BD-Report/.test(ua(c)) && /https?:\/\//.test(ua(c))),
     "l'agent nomme l'outil ET donne un contact, comme la politique Wikimedia l'exige")
+
+  // ⚠️ Le correctif précédent est resté INVISIBLE un jour entier : la clé du cache
+  // Cloudflare est l'URL SEULE — le User-Agent n'en fait pas partie — et le relais
+  // forçait 24 h de cache sur TOUTE réponse, 403 compris. Figer une erreur, c'est
+  // transformer un refus ponctuel en panne permanente, et rendre tout correctif
+  // indémontrable jusqu'à l'expiration.
+  ok(wd.every(c => !c.init?.cf?.cacheEverything),
+    'aucun appel Wikidata ne force le cache : une erreur ne peut plus être figée 24 h')
+  ok(wd.every(c => /maxage=0/.test(c.url)),
+    'la demande est explicitement fraîche (et la clé de cache change, ce qui écarte une entrée déjà empoisonnée)')
 }
 
 // ---------------------------------------------------------------------------
