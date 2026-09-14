@@ -8,507 +8,551 @@
 <body>
 <title>Origin Roleplay — Journal serveur</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 /* ============================================================
-   ORIGIN ROLEPLAY — panneau de journalisation
-   Monde visuel unique : console sombre violette. Tout est peint
-   explicitement, la page ne doit rien emprunter au fond de l'hôte.
+   ORIGIN ROLEPLAY — console de journalisation
+   Monde visuel unique : une console de nuit. Pas de thème clair,
+   c'est un choix — tout est peint explicitement pour que la page
+   n'emprunte rien au fond de l'hôte.
    ============================================================ */
 :root{
   color-scheme: dark;
-  --void:#0A0710;
-  --panel:#120C1D;
-  --panel-2:#180F28;
-  --raise:#1E1432;
-  --line:#241A36;
-  --line-soft:#1B1329;
-  --ink:#EFE9FA;
-  --ink-2:#BCACD8;
-  --muted:#8B7BA8;
-  --vio:#9D5CFF;
-  --vio-soft:#C9A2FF;
-  --vio-dim:rgba(157,92,255,.14);
 
-  --sev-critique:#FF4D6D;
-  --sev-alerte:#FFB020;
-  --sev-notice:#7FA9FF;
-  --sev-info:#5E9E8B;
-  --ok:#2DD4A7;
+  --ground:#0A0711;
+  --panel:#140E1F;
+  --panel-2:#1B1229;
+  --raise:#241733;
+  --edge:#2B1E40;
+  --edge-soft:#1F1630;
 
-  --fam-social:#A97BFF;
-  --fam-risque:#FF6B86;
-  --fam-biens:#F0A93C;
-  --fam-civil:#37C4B4;
-  --fam-staff:#79A6FF;
+  --ink:#F3EEFB;
+  --ink-2:#B6A6D2;
+  --muted:#7B6C95;
 
-  --display:'Chakra Petch', 'Trebuchet MS', sans-serif;
-  --body:'IBM Plex Sans', system-ui, -apple-system, sans-serif;
-  --mono:'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --vio:#8B5CF6;
+  --vio-hi:#D4B3FF;
+  --vio-wash:rgba(139,92,246,.12);
 
-  --rail:238px;
-  --r-sm:4px; --r-md:8px; --r-lg:14px;
+  --crit:#FF4365;
+  --warn:#F5A524;
+  --check:#6EA8FF;
+  --ok:#34D399;
+
+  /* familles de catégories — une teinte par métier, pas par catégorie */
+  --f-surv:#FF6B86;
+  --f-play:#B98CFF;
+  --f-bien:#F0A93C;
+  --f-monde:#37C4B4;
+  --f-staff:#79A6FF;
+
+  --ui:'Archivo','Helvetica Neue',Arial,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --rail:250px;
+  --bar-h:58px;
 }
 *{box-sizing:border-box}
+html{background:var(--ground)}
 body{
-  margin:0;
-  background:var(--void);
-  color:var(--ink);
-  font-family:var(--body);
-  font-size:14px;
-  line-height:1.5;
+  margin:0;background:var(--ground);color:var(--ink);
+  font-family:var(--ui);font-size:14px;line-height:1.5;
+  font-variation-settings:'wdth' 100;
   -webkit-font-smoothing:antialiased;
 }
-/* nappe d'ambiance : deux halos violets très diffus, fixes */
-body::before{
-  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:
-    radial-gradient(900px 420px at 14% -8%, rgba(157,92,255,.16), transparent 62%),
-    radial-gradient(700px 380px at 96% 4%, rgba(88,48,160,.14), transparent 60%);
-}
 button,input,select,textarea{font:inherit;color:inherit}
-button{cursor:pointer;background:none;border:none}
-a{color:var(--vio-soft)}
-:focus-visible{outline:2px solid var(--vio-soft);outline-offset:2px;border-radius:var(--r-sm)}
-::selection{background:rgba(157,92,255,.35)}
-.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+button{cursor:pointer;background:none;border:none;padding:0;text-align:left}
+:focus-visible{outline:2px solid var(--vio-hi);outline-offset:2px;border-radius:3px}
+::selection{background:rgba(139,92,246,.4)}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
-/* ---------- coquille ---------- */
-.app{position:relative;z-index:1;display:grid;grid-template-columns:var(--rail) minmax(0,1fr);min-height:100dvh}
+h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-wrap:balance}
+
+/* Une seule définition pour les intitulés de section : ils cadencent
+   tout l'écran, ils doivent être identiques partout. */
+.eyebrow{
+  font-family:var(--mono);font-size:10px;font-weight:500;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+}
+
+/* ============================================================
+   COQUILLE
+   ============================================================ */
+.app{display:grid;grid-template-columns:var(--rail) minmax(0,1fr);min-height:100dvh}
+.app[hidden]{display:none}
 
 /* ---------- rail ---------- */
 .rail{
-  border-right:1px solid var(--line);
-  background:linear-gradient(180deg, rgba(24,15,40,.92), rgba(14,9,23,.92));
-  display:flex;flex-direction:column;gap:2px;
-  padding:16px 12px 22px;
-  position:sticky;top:0;height:100dvh;overflow-y:auto;
+  position:sticky;top:0;height:100dvh;min-width:0;overflow-y:auto;
+  background:var(--panel);border-right:1px solid var(--edge);
+  display:flex;flex-direction:column;
 }
-.brand{display:flex;align-items:center;gap:10px;padding:4px 6px 16px}
-.brand-mark{
-  width:34px;height:34px;flex:none;border-radius:10px;
-  background:linear-gradient(145deg,#B47BFF,#6D2BD9);
-  display:grid;place-items:center;
-  font-family:var(--display);font-weight:700;font-size:17px;color:#120C1D;
-  box-shadow:0 0 0 1px rgba(201,162,255,.35), 0 6px 18px rgba(109,43,217,.45);
+.brand{
+  display:flex;align-items:center;gap:11px;
+  padding:16px 18px;border-bottom:1px solid var(--edge-soft);
 }
-.brand-name{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.02em;line-height:1.15}
-.brand-sub{font-size:10.5px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;font-family:var(--mono)}
-.rail-head{
-  font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
-  color:var(--muted);padding:14px 8px 7px;
+.mark{
+  width:32px;height:32px;flex:none;border-radius:9px;
+  background:linear-gradient(140deg,var(--vio-hi),var(--vio));
+  color:#150E22;display:grid;place-items:center;
+  font-variation-settings:'wdth' 84;font-weight:800;font-size:14px;letter-spacing:-.02em;
 }
-.cat{
-  display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px;
-  width:100%;padding:7px 8px;border-radius:var(--r-md);
-  color:var(--ink-2);text-align:left;transition:background .12s, color .12s;
+.brand-name{font-variation-settings:'wdth' 88;font-weight:700;font-size:14.5px;line-height:1.1}
+.brand-sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+
+.nav{padding:10px 10px 18px;display:flex;flex-direction:column;gap:1px;flex:1}
+.nav-group{padding:14px 8px 5px}
+.nav-item{
+  display:grid;grid-template-columns:8px 1fr auto;align-items:center;gap:10px;
+  padding:6px 9px;border-radius:6px;color:var(--ink-2);
+  transition:background .12s,color .12s;
 }
-.cat:hover{background:rgba(157,92,255,.09);color:var(--ink)}
-.cat[aria-current="true"]{background:var(--vio-dim);color:var(--ink);box-shadow:inset 2px 0 0 var(--vio)}
-.tag{
-  font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;
-  padding:3px 5px;border-radius:var(--r-sm);white-space:nowrap;
-  background:color-mix(in srgb, var(--fam) 18%, transparent);
-  color:var(--fam);
-  border:1px solid color-mix(in srgb, var(--fam) 26%, transparent);
-}
-.cat-label{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cat-count{font-family:var(--mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
-.cat[aria-current="true"] .cat-count{color:var(--vio-soft)}
-.rail-foot{margin-top:auto;padding:14px 8px 0;border-top:1px solid var(--line-soft);display:grid;gap:6px}
-.dot-live{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 3px rgba(45,212,167,.16)}
-.dot-live.off{background:var(--muted);box-shadow:none}
-.foot-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted)}
-.foot-row b{color:var(--ink-2);font-weight:500;font-family:var(--mono);font-size:11px}
+.nav-item:hover{background:var(--vio-wash);color:var(--ink)}
+.nav-item[aria-current="true"]{background:var(--raise);color:var(--ink);box-shadow:inset 2px 0 0 var(--vio-hi)}
+.nav-dot{width:7px;height:7px;border-radius:50%;background:var(--fam,var(--muted))}
+.nav-item[aria-current="true"] .nav-dot{box-shadow:0 0 0 3px color-mix(in srgb,var(--fam,var(--vio)) 22%,transparent)}
+.nav-label{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-n{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.nav-item[aria-current="true"] .nav-n{color:var(--vio-hi)}
+.nav-item.flagged .nav-n{color:var(--crit)}
+
+.rail-foot{padding:12px 18px 18px;border-top:1px solid var(--edge-soft);display:grid;gap:7px}
+.foot-line{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted)}
+.foot-line b{color:var(--ink-2);font-weight:500;font-family:var(--mono);font-size:10.5px}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 3px rgba(52,211,153,.18)}
+.pulse.off{background:var(--muted);box-shadow:none}
 
 /* ---------- barre de commande ---------- */
 .bar{
-  position:sticky;top:0;z-index:30;
+  position:sticky;top:0;z-index:40;min-height:var(--bar-h);
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  padding:11px 22px;
-  background:rgba(10,7,16,.86);
-  backdrop-filter:blur(14px);
-  border-bottom:1px solid var(--line);
+  padding:10px 22px;
+  background:color-mix(in srgb,var(--ground) 88%,transparent);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--edge);
 }
-.bar::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
-  background:linear-gradient(90deg, transparent, rgba(157,92,255,.55), transparent)}
-.search{position:relative;flex:1 1 260px;min-width:0}
-.search input{
-  width:100%;padding:8px 12px 8px 32px;border-radius:var(--r-md);
-  background:var(--panel);border:1px solid var(--line);color:var(--ink);font-size:13px;
+.find{position:relative;flex:1 1 240px;min-width:0}
+.find input{
+  width:100%;height:34px;padding:0 34px 0 32px;border-radius:7px;
+  background:var(--panel);border:1px solid var(--edge);color:var(--ink);font-size:13px;
 }
-.search input::placeholder{color:var(--muted)}
-.search input:focus{border-color:rgba(157,92,255,.55);background:var(--panel-2);outline:none;box-shadow:0 0 0 3px rgba(157,92,255,.12)}
-.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted)}
-.kbd{
+.find input::placeholder{color:var(--muted)}
+.find input:focus{outline:none;border-color:var(--vio);background:var(--panel-2);box-shadow:0 0 0 3px var(--vio-wash)}
+.find svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.find kbd{
   position:absolute;right:9px;top:50%;transform:translateY(-50%);
   font-family:var(--mono);font-size:10px;color:var(--muted);
-  border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 5px;background:var(--panel-2);
+  border:1px solid var(--edge);border-radius:3px;padding:0 4px;
 }
-.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);padding:2px;gap:2px}
+.seg{display:flex;height:34px;background:var(--panel);border:1px solid var(--edge);border-radius:7px;padding:3px;gap:2px}
 .seg button{
-  padding:5px 10px;border-radius:6px;font-size:12px;color:var(--muted);
-  font-family:var(--mono);letter-spacing:.02em;
+  padding:0 11px;border-radius:5px;font-family:var(--mono);font-size:11.5px;color:var(--muted);
+  display:grid;place-items:center;transition:background .12s,color .12s;
 }
-.seg button[aria-pressed="true"]{background:var(--raise);color:var(--ink);box-shadow:inset 0 0 0 1px rgba(157,92,255,.3)}
+.seg button:hover{color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--raise);color:var(--ink)}
 .btn{
-  display:inline-flex;align-items:center;gap:7px;
-  padding:7px 12px;border-radius:var(--r-md);font-size:12.5px;
-  background:var(--panel);border:1px solid var(--line);color:var(--ink-2);
+  display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;
+  border-radius:7px;font-size:12.5px;font-weight:500;
+  background:var(--panel);border:1px solid var(--edge);color:var(--ink-2);
   transition:border-color .12s,color .12s,background .12s;
 }
-.btn:hover{border-color:rgba(157,92,255,.5);color:var(--ink);background:var(--panel-2)}
-.btn.on{background:rgba(45,212,167,.1);border-color:rgba(45,212,167,.4);color:#8FEBD3}
-.btn.primary{background:linear-gradient(160deg,#9D5CFF,#6E2BD1);border-color:#B47BFF;color:#FFF}
-.btn.primary:hover{filter:brightness(1.08)}
-.btn.small{padding:5px 9px;font-size:11.5px}
-
-/* ---------- contenu ---------- */
-.main{min-width:0;display:flex;flex-direction:column}
-.view{padding:18px 22px 40px;display:grid;gap:16px;min-width:0}
-.view[hidden]{display:none}
-h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
-.page-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap}
-.page-title{font-size:21px;font-weight:600;letter-spacing:.01em}
-.page-sub{font-size:12.5px;color:var(--muted)}
-.page-sub b{color:var(--ink-2);font-weight:500;font-family:var(--mono)}
-.section-title{
-  font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
-  color:var(--muted);font-weight:500;
-}
-</style>
-<style>
-/* ---------- bandeau de mise en garde (données de démonstration) ---------- */
-.demo-note{
-  display:flex;align-items:flex-start;gap:10px;
-  padding:9px 13px;border-radius:var(--r-md);
-  background:rgba(255,176,32,.07);border:1px solid rgba(255,176,32,.25);
-  color:#F6D9A6;font-size:12.5px;
-}
-.demo-note b{color:#FFD08A;font-weight:600}
-.demo-note code{font-family:var(--mono);font-size:11.5px;color:#FFE0B2;background:rgba(0,0,0,.28);padding:1px 5px;border-radius:var(--r-sm)}
-
-/* ---------- tuiles de synthèse ---------- */
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px}
-.tile{
-  padding:14px 15px;border-radius:var(--r-lg);
-  background:linear-gradient(165deg, rgba(30,20,50,.75), rgba(16,10,27,.75));
-  border:1px solid var(--line);
-  display:grid;gap:4px;align-content:start;
-}
-.tile-k{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
-.tile-v{font-family:var(--display);font-size:29px;font-weight:600;line-height:1.05;font-variant-numeric:tabular-nums}
-.tile-d{font-size:11.5px;color:var(--ink-2)}
-.tile.flag{border-color:rgba(255,77,109,.38);background:linear-gradient(165deg, rgba(60,18,32,.6), rgba(20,10,20,.75))}
-.tile.flag .tile-v{color:#FF8399}
-.tile.warn{border-color:rgba(255,176,32,.34)}
-.tile.warn .tile-v{color:#FFC55C}
-.trend{font-family:var(--mono);font-size:11px}
-.trend.up{color:#FF8399} .trend.down{color:var(--ok)} .trend.flat{color:var(--muted)}
-
-/* ---------- grille du tableau de bord ---------- */
-.grid-2{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start}
-.col{display:grid;gap:14px;align-content:start;min-width:0}
-.card{
-  border:1px solid var(--line);border-radius:var(--r-lg);background:rgba(18,12,29,.72);
-  padding:15px 16px;display:grid;gap:12px;min-width:0;
-}
-.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.chart-wrap{overflow-x:auto;min-width:0}
-.chart{display:block;width:100%;min-width:460px;height:auto}
-.chart text{font-family:var(--mono);font-size:10px;fill:var(--muted)}
-.chart .grid-line{stroke:var(--line);stroke-width:1}
-.chart .bar{fill:url(#barFill)}
-.chart .bar.peak{fill:url(#barPeak)}
-.chart .bar-hit{fill:transparent}
-.chart .bar-hit:hover + .bar, .chart g:hover .bar{fill:url(#barPeak)}
-
-/* barres de répartition */
-.split{display:grid;gap:9px}
-.split-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;width:100%;text-align:left}
-.split-row:hover .split-name{color:var(--ink)}
-.split-name{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.split-track{height:6px;border-radius:3px;background:var(--line-soft);overflow:hidden;min-width:40px}
-.split-fill{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--fam),color-mix(in srgb,var(--fam) 45%, transparent))}
-.split-n{font-family:var(--mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
-
-/* liste d'alertes / joueurs */
-.mini{display:grid;gap:2px}
-.mini-row{
-  display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
-  padding:8px 9px;border-radius:var(--r-md);width:100%;text-align:left;
-}
-.mini-row:hover{background:rgba(157,92,255,.09)}
-.mini-title{display:block;font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* Les colonnes souples de ces lignes gardent min-width:auto et refusent de
-   rétrécir sous leur texte : c'est la carte entière qui s'élargissait. */
-.mini-row > *, .chain-row > *, .staff-row > *, .split-row > *{min-width:0}
-.chain-m{display:block}
-.mini-meta{font-size:11px;color:var(--muted);font-family:var(--mono)}
-.avatar{
-  width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;
-  font-family:var(--display);font-size:11px;font-weight:600;color:#0B0712;
-}
-
-/* ---------- filtres de gravité ---------- */
-.sev-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.sev-chip{
-  display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;
-  border:1px solid var(--line);background:var(--panel);font-size:11.5px;color:var(--muted);
-}
-.sev-chip:hover{border-color:color-mix(in srgb,var(--c) 55%, transparent);color:var(--ink-2)}
-.sev-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 14%, transparent);border-color:color-mix(in srgb,var(--c) 48%, transparent);color:var(--ink)}
-.sev-dot{width:7px;height:7px;border-radius:2px;background:var(--c);flex:none}
-.sev-n{font-family:var(--mono);font-size:10.5px}
-
-/* ---------- flux de logs ---------- */
-.stream{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:rgba(15,10,25,.6)}
-.stream-scroll{min-width:0;overflow:auto;max-height:calc(100dvh - 232px);overscroll-behavior:contain}
-.logs{width:100%;border-collapse:collapse;min-width:720px}
-.logs thead th{
-  position:sticky;top:0;z-index:10;
-  background:#150E23;
-  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
-  color:var(--muted);font-weight:500;text-align:left;
-  padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap;
-}
-.logs tbody tr{border-bottom:1px solid var(--line-soft);cursor:pointer;scroll-margin-top:44px}
-.logs tbody tr:hover{background:rgba(157,92,255,.07)}
-.logs tbody tr[aria-selected="true"]{background:rgba(157,92,255,.13)}
-.logs td{padding:8px 12px;vertical-align:top}
-.logs tbody tr td:first-child{
-  border-left:3px solid var(--sev);padding-left:10px;
-}
-.c-time{white-space:nowrap;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
-.c-time b{display:block;color:var(--ink-2);font-weight:500;font-size:12px}
-.c-tag{width:1%;white-space:nowrap}
-.c-actor{white-space:nowrap;min-width:132px}
-.actor{display:flex;align-items:center;gap:8px}
-.actor-name{font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;max-width:150px;white-space:nowrap}
-.actor-id{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
-.c-msg{font-size:12.8px;color:var(--ink-2);min-width:240px}
-.c-msg strong{color:var(--ink);font-weight:600}
-.c-msg .amount{font-family:var(--mono);color:#FFC55C;font-variant-numeric:tabular-nums}
-.c-msg .item{font-family:var(--mono);color:var(--vio-soft);font-size:12px}
-.c-src{white-space:nowrap;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right}
-.flag-pin{color:var(--vio-soft)}
-.flag-done{color:var(--ok)}
-.row-flags{display:inline-flex;gap:5px;margin-left:6px;vertical-align:1px}
-.empty{padding:44px 20px;text-align:center;color:var(--muted);display:grid;gap:6px;justify-items:center}
-.empty b{color:var(--ink-2);font-family:var(--display);font-size:15px;font-weight:600}
-.stream-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
-.count-note{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
-</style>
-<style>
-/* ---------- inspecteur ---------- */
-.inspector{
-  position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);z-index:60;
-  background:linear-gradient(180deg,#160F26,#0D0817);
-  border-left:1px solid var(--line);
-  box-shadow:-24px 0 60px rgba(0,0,0,.55);
-  display:flex;flex-direction:column;
-  transform:translateX(100%);transition:transform .22s ease;
-}
-.inspector.open{transform:none}
-.insp-head{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
-.insp-title{font-family:var(--display);font-size:15.5px;font-weight:600;line-height:1.25;flex:1;text-wrap:balance}
-.insp-body{overflow-y:auto;padding:14px 16px 26px;display:grid;gap:16px;align-content:start}
+.btn:hover{border-color:var(--vio);color:var(--ink)}
+.btn.live{border-color:rgba(52,211,153,.4);color:#8FEBD3;background:rgba(52,211,153,.08)}
+.btn.primary{background:var(--vio);border-color:var(--vio-hi);color:#fff}
+.btn.primary:hover{background:#9D6EFF}
+.btn.danger{background:var(--crit);border-color:#FF7D95;color:#fff}
+.btn.danger:hover{filter:brightness(1.08)}
+.btn.sm{height:27px;padding:0 10px;font-size:11.5px;border-radius:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
 .icon-btn{
-  width:28px;height:28px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;
-  border:1px solid var(--line);color:var(--muted);background:var(--panel);
+  width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:7px;
+  border:1px solid var(--edge);color:var(--muted);background:var(--panel);
 }
-.icon-btn:hover{color:var(--ink);border-color:rgba(157,92,255,.5)}
-.icon-btn.on{color:var(--vio-soft);border-color:rgba(157,92,255,.55);background:var(--vio-dim)}
-.icon-btn.done.on{color:var(--ok);border-color:rgba(45,212,167,.5);background:rgba(45,212,167,.12)}
-.kv{display:grid;grid-template-columns:104px minmax(0,1fr);gap:6px 12px;font-size:12.5px}
-.kv dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-top:2px}
-.kv dd{margin:0;color:var(--ink-2);word-break:break-word}
-.kv dd.mono{font-size:11.5px;color:var(--ink)}
+.icon-btn:hover{color:var(--ink);border-color:var(--vio)}
+.icon-btn.on{color:var(--vio-hi);border-color:var(--vio);background:var(--vio-wash)}
+.icon-btn.done.on{color:var(--ok);border-color:rgba(52,211,153,.5);background:rgba(52,211,153,.1)}
+
+.tag-mode{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  padding:4px 9px;border-radius:999px;white-space:nowrap;
+}
+.tag-mode.demo{background:rgba(245,165,36,.12);border:1px solid rgba(245,165,36,.36);color:#FFC55C}
+.tag-mode.live{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.34);color:#8FEBD3}
+.who{display:flex;align-items:center;gap:9px;padding-left:4px;border-left:1px solid var(--edge);margin-left:2px}
+.who-name{font-size:12.5px;font-weight:500;line-height:1.15}
+.who-role{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--vio-hi)}
+
+/* ---------- pastilles ---------- */
+.av{
+  flex:none;display:grid;place-items:center;border-radius:50%;
+  font-variation-settings:'wdth' 84;font-weight:700;color:#130C1E;
+  width:26px;height:26px;font-size:10px;
+}
+.av.lg{width:46px;height:46px;font-size:16px;border-radius:14px}
+.av.sm{width:20px;height:20px;font-size:8.5px}
+.code{
+  font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.09em;
+  color:var(--fam,var(--muted));
+}
+
+/* ============================================================
+   CONTENU
+   ============================================================ */
+.main{min-width:0;display:flex;flex-direction:column}
+.view{padding:0 22px 44px;min-width:0}
+.view[hidden]{display:none}
+
+.head{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  padding:22px 0 16px;
+}
+.title{font-size:23px;font-weight:700;letter-spacing:-.01em;line-height:1.1}
+.sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+.sub b{color:var(--ink-2);font-weight:500;font-family:var(--mono);font-size:12px}
+
+/* ---------- ligne d'état ----------
+   Cinq faits sur une seule ligne réglée. Cinq cartes de verre
+   auraient donné cinq objets de même poids : rien n'aurait dominé. */
+.status{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  border:1px solid var(--edge);border-radius:10px;background:var(--panel);
+  overflow:hidden;
+}
+.status-cell{padding:12px 16px;border-right:1px solid var(--edge-soft);display:grid;gap:3px}
+.status-cell:last-child{border-right:none}
+.status-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.status-v{
+  font-variation-settings:'wdth' 84;font-weight:700;font-size:22px;line-height:1.05;
+  font-variant-numeric:tabular-nums;
+}
+.status-d{font-size:11px;color:var(--muted)}
+.status-cell.crit .status-v{color:var(--crit)}
+.status-cell.warn .status-v{color:var(--warn)}
+.delta{font-family:var(--mono);font-size:10.5px}
+.delta.up{color:#FF8399}.delta.down{color:var(--ok)}.delta.flat{color:var(--muted)}
+
+/* ---------- appel à traiter ----------
+   Le seul bloc qui a le droit d'être lourd : c'est la question que
+   le panneau existe pour poser. */
+.duty{
+  margin-top:16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:22px;align-items:start;
+  border:1px solid rgba(255,67,101,.35);border-radius:12px;
+  background:linear-gradient(120deg,rgba(255,67,101,.09),rgba(20,14,31,.4) 55%);
+  padding:18px 20px;
+}
+.duty.clear{border-color:var(--edge);background:var(--panel);align-items:center}
+.duty-n{
+  font-variation-settings:'wdth' 72;font-weight:800;font-size:58px;line-height:.85;
+  color:var(--crit);font-variant-numeric:tabular-nums;
+}
+.duty.clear .duty-n{color:var(--ok);font-size:34px}
+.duty-t{font-size:15px;font-weight:600;font-variation-settings:'wdth' 90}
+.duty-s{font-size:12.5px;color:var(--ink-2);margin-top:3px}
+
+/* ---------- panneaux ---------- */
+.grid{display:grid;gap:16px;margin-top:16px}
+.grid.two{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}
+.panel{
+  border:1px solid var(--edge);border-radius:10px;background:var(--panel);
+  min-width:0;display:grid;gap:0;align-content:start;
+}
+.panel-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 16px;border-bottom:1px solid var(--edge-soft);
+}
+.panel-body{padding:14px 16px;min-width:0}
+.panel-body.flush{padding:0}
+
+/* ---------- graphique ---------- */
+.chart-box{overflow-x:auto;min-width:0;padding:6px 4px 0}
+.chart{display:block;width:100%;min-width:520px;height:auto}
+.chart text{font-family:var(--mono);font-size:9.5px;fill:var(--muted)}
+.chart .rule{stroke:var(--edge-soft);stroke-width:1}
+.legend{display:flex;gap:14px;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.legend i{width:9px;height:9px;border-radius:2px;background:var(--c);display:block}
+
+/* ---------- répartition ---------- */
+.dist{display:grid;gap:14px}
+.dist-group{display:grid;gap:6px}
+.dist-row{display:grid;grid-template-columns:1fr 46px;align-items:center;gap:10px;width:100%;padding:2px 0}
+.dist-row:hover .dist-name{color:var(--ink)}
+.dist-name{font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dist-bar{height:3px;border-radius:2px;background:var(--fam);margin-top:4px;min-width:2px}
+.dist-track{height:3px;border-radius:2px;background:var(--edge-soft);margin-top:4px;overflow:hidden}
+.dist-n{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- petites listes ---------- */
+.rows{display:grid}
+.row-lite{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:center;
+  width:100%;padding:9px 16px;border-bottom:1px solid var(--edge-soft);
+}
+.rows .row-lite:last-child{border-bottom:none}
+.row-lite:hover{background:var(--vio-wash)}
+.row-lite > *{min-width:0}
+.lite-t{font-size:12.5px;color:var(--ink);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lite-m{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.sev-sq{width:8px;height:8px;border-radius:2px;background:var(--c);flex:none}
+
+/* ============================================================
+   FLUX — une timeline, pas un tableau
+   ============================================================ */
+.filters{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding-bottom:14px}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 11px;border-radius:999px;
+  border:1px solid var(--edge);background:var(--panel);font-size:11.5px;color:var(--muted);
+}
+.chip:hover{border-color:color-mix(in srgb,var(--c) 55%,transparent);color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 14%,transparent);border-color:color-mix(in srgb,var(--c) 50%,transparent);color:var(--ink)}
+.chip i{width:7px;height:7px;border-radius:2px;background:var(--c);display:block}
+.chip b{font-family:var(--mono);font-size:10.5px;font-weight:500}
+
+.feed{border:1px solid var(--edge);border-radius:10px;background:var(--panel);overflow:hidden}
+.feed-scroll{min-width:0;overflow:auto;max-height:calc(100dvh - 250px);overscroll-behavior:contain}
+.ev{
+  display:grid;grid-template-columns:76px 3px minmax(0,1fr);
+  border-bottom:1px solid var(--edge-soft);cursor:pointer;
+  transition:background .1s;
+}
+.ev:last-child{border-bottom:none}
+.ev:hover{background:var(--vio-wash)}
+.ev[aria-selected="true"]{background:var(--raise)}
+.ev-time{
+  padding:10px 10px 10px 16px;text-align:right;
+  font-family:var(--mono);font-variant-numeric:tabular-nums;
+}
+.ev-h{display:block;font-size:11.5px;color:var(--ink-2)}
+.ev-ago{display:block;font-size:9.5px;color:var(--muted);margin-top:2px}
+.ev-sev{background:var(--sev);opacity:.85}
+.ev[aria-selected="true"] .ev-sev{opacity:1}
+.ev-body{padding:9px 16px 10px 14px;display:grid;gap:3px;min-width:0}
+.ev-meta{display:flex;align-items:center;gap:8px;min-width:0}
+.ev-actor{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.ev-name{font-size:12px;font-weight:500;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-sid{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.ev-res{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
+.ev-msg{font-size:13px;color:var(--ink-2);min-width:0}
+.ev-msg .amount{font-family:var(--mono);font-size:12.5px;color:var(--warn);font-variant-numeric:tabular-nums}
+.ev-msg .item{font-family:var(--mono);font-size:12.5px;color:var(--vio-hi)}
+.ev-msg strong{color:var(--ink);font-weight:600}
+.ev-flags{display:inline-flex;gap:6px;margin-left:6px;font-size:11px}
+.pin-f{color:var(--vio-hi)}
+.done-f{color:var(--ok)}
+.day-sep{
+  padding:7px 16px;background:var(--panel-2);border-bottom:1px solid var(--edge-soft);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+}
+.feed-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;border-top:1px solid var(--edge);flex-wrap:wrap}
+.count{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.void{padding:52px 20px;text-align:center;display:grid;gap:8px;justify-items:center;color:var(--muted)}
+.void b{color:var(--ink-2);font-size:15px;font-weight:600;font-variation-settings:'wdth' 88}
+
+/* ============================================================
+   REGISTRE DES BANNISSEMENTS
+   ============================================================ */
+.reg-scroll{overflow-x:auto;min-width:0}
+.reg{width:100%;border-collapse:collapse;min-width:720px}
+.reg thead th{
+  position:sticky;top:0;z-index:5;background:var(--panel-2);
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;text-align:left;
+  padding:9px 14px;border-bottom:1px solid var(--edge);white-space:nowrap;
+}
+.reg tbody tr{border-bottom:1px solid var(--edge-soft)}
+.reg tbody tr:hover{background:var(--vio-wash)}
+.reg td{padding:10px 14px;vertical-align:middle;font-size:12.5px}
+.reg .t-player{min-width:170px}
+.reg .t-why{color:var(--ink-2)}
+.reg .t-when{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.reg .t-act{text-align:right;white-space:nowrap}
+.state{
+  display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);
+}
+
+/* ============================================================
+   INSPECTEUR
+   ============================================================ */
+.insp{
+  position:fixed;inset:0 0 0 auto;width:min(430px,100vw);z-index:60;
+  background:var(--panel);border-left:1px solid var(--edge);
+  box-shadow:-30px 0 70px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .2s ease;
+}
+.insp.open{transform:none}
+.insp-head{display:flex;align-items:flex-start;gap:9px;padding:14px 16px;border-bottom:1px solid var(--edge)}
+.insp-title{flex:1;font-size:15px;font-weight:600;line-height:1.3;font-variation-settings:'wdth' 92;text-wrap:balance}
+.insp-body{overflow-y:auto;padding:16px;display:grid;gap:18px;align-content:start}
+.block{display:grid;gap:9px;min-width:0}
+.kv{display:grid;grid-template-columns:100px minmax(0,1fr);gap:7px 12px;font-size:12.5px}
+.kv dt{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+.kv dd{margin:0;color:var(--ink-2);word-break:break-word;min-width:0}
+.kv dd.mono{font-size:11px;color:var(--ink)}
 .payload{
-  margin:0;padding:12px;border-radius:var(--r-md);
-  background:#0A0613;border:1px solid var(--line);
-  font-family:var(--mono);font-size:11.5px;line-height:1.65;color:#C6B6E0;
+  margin:0;padding:12px 13px;border-radius:8px;
+  background:var(--ground);border:1px solid var(--edge);
+  font-family:var(--mono);font-size:11.5px;line-height:1.7;color:#C8B8E4;
   overflow-x:auto;white-space:pre;
 }
-.payload .k{color:#8E7BB5}
-.payload .s{color:#9FE6C8}
-.payload .n{color:#FFC55C}
+.payload .k{color:#9A88BE}
+.payload .s{color:#8FE3C4}
+.payload .n{color:var(--warn)}
 .payload .b{color:#FF8399}
-.insp-actions{display:flex;gap:8px;flex-wrap:wrap}
-.chain{display:grid;gap:1px}
-.chain-row{display:grid;grid-template-columns:auto 1fr;gap:9px;padding:6px 8px;border-radius:var(--r-sm);width:100%;text-align:left;align-items:baseline}
-.chain-row:hover{background:rgba(157,92,255,.09)}
-.chain-t{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
-.chain-m{font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tools{display:flex;gap:7px;flex-wrap:wrap}
+.trail{display:grid}
+.trail-row{
+  display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:baseline;
+  padding:6px 8px;border-radius:5px;width:100%;
+}
+.trail-row:hover{background:var(--vio-wash)}
+.trail-t{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.trail-m{font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 
-/* ---------- dossier joueur ---------- */
-.scrim{position:fixed;inset:0;background:rgba(6,4,11,.72);backdrop-filter:blur(3px);z-index:70}
+/* ============================================================
+   FEUILLES ET DIALOGUES
+   ============================================================ */
+.scrim{position:fixed;inset:0;background:rgba(6,4,11,.74);backdrop-filter:blur(3px);z-index:70}
 .scrim[hidden]{display:none}
 .sheet{
   position:fixed;z-index:71;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:min(820px,calc(100vw - 28px));max-height:min(86dvh,900px);
-  background:linear-gradient(180deg,#181026,#0D0817);
-  border:1px solid var(--line);border-radius:var(--r-lg);
-  box-shadow:0 30px 90px rgba(0,0,0,.6);
+  width:min(840px,calc(100vw - 28px));max-height:min(86dvh,920px);
+  background:var(--panel);border:1px solid var(--edge);border-radius:14px;
+  box-shadow:0 34px 90px rgba(0,0,0,.62);
   display:flex;flex-direction:column;overflow:hidden;
 }
 .sheet[hidden]{display:none}
-.sheet-head{display:flex;align-items:center;gap:13px;padding:16px 18px;border-bottom:1px solid var(--line)}
-.avatar.lg{width:44px;height:44px;border-radius:12px;font-size:16px}
-.sheet-name{font-family:var(--display);font-size:19px;font-weight:600;line-height:1.2}
-.sheet-meta{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
-.sheet-body{overflow-y:auto;padding:16px 18px 24px;display:grid;gap:16px}
-.stat-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
-.stat{padding:10px 12px;border-radius:var(--r-md);background:rgba(30,20,50,.5);border:1px solid var(--line-soft)}
-.stat-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.stat-v{font-family:var(--display);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
-.sanction{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline;padding:8px 10px;border-radius:var(--r-md);background:rgba(255,77,109,.07);border:1px solid rgba(255,77,109,.22)}
-.sanction .s-kind{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#FF8399}
-.sanction .s-why{font-size:12.5px;color:var(--ink-2)}
-.sanction .s-when{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.sheet-head{display:flex;align-items:center;gap:14px;padding:16px 18px;border-bottom:1px solid var(--edge)}
+.sheet-name{font-size:19px;font-weight:700;line-height:1.15;font-variation-settings:'wdth' 86}
+.sheet-meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px}
+.sheet-body{overflow-y:auto;padding:16px 18px 24px;display:grid;gap:18px}
 
-/* ---------- toast ---------- */
-.toast{
-  position:fixed;left:50%;bottom:22px;transform:translate(-50%,14px);z-index:90;
-  padding:9px 16px;border-radius:999px;font-size:12.5px;
-  background:#1E1432;border:1px solid rgba(157,92,255,.45);color:var(--ink);
-  box-shadow:0 12px 34px rgba(0,0,0,.5);
-  opacity:0;pointer-events:none;transition:opacity .18s, transform .18s;
-}
-.toast.show{opacity:1;transform:translate(-50%,0)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));border:1px solid var(--edge);border-radius:9px;overflow:hidden}
+.fact{padding:10px 13px;border-right:1px solid var(--edge-soft)}
+.fact:last-child{border-right:none}
+.fact-k{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.fact-v{font-variation-settings:'wdth' 84;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;margin-top:3px}
 
-/* ---------- adaptation ---------- */
-@media (min-width:1280px){ .app.insp .main{padding-right:min(420px,32vw)} }
-/* `1fr` garde un minimum automatique : la piste s'élargissait pour loger
-   le graphique au lieu de le laisser défiler dans son cadre. */
-@media (max-width:1180px){ .grid-2{grid-template-columns:minmax(0,1fr)} }
-@media (max-width:900px){
-  .app{grid-template-columns:1fr}
-  .rail{position:static;height:auto;min-width:0;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;padding:10px 16px;border-right:none;border-bottom:1px solid var(--line)}
-  .main{min-width:0}
-  .brand{padding:0 10px 0 0;flex:none}
-  .brand-text{display:none}
-  .rail-head,.rail-foot{display:none}
-  .cat{width:auto;flex:none;grid-template-columns:auto auto;padding:6px 10px}
-  #catList{display:flex;gap:6px;flex:none}
-  .cat .cat-label{display:none}
-  .bar{padding:10px 16px;top:0}
-  .view{padding:14px 16px 36px}
-  .logs thead th{top:0}
-  .inspector{width:100%;top:auto;height:88dvh;border-left:none;border-top:1px solid var(--line);border-radius:var(--r-lg) var(--r-lg) 0 0;transform:translateY(100%)}
-  .inspector.open{transform:none}
+.banner{
+  padding:10px 13px;border-radius:8px;font-size:12.5px;
+  border:1px solid var(--c);background:color-mix(in srgb,var(--c) 10%,transparent);color:var(--ink);
 }
-@media (max-width:620px){
-  /* le message est la colonne qui compte : on laisse tomber le reste
-     et la table se replie dans la largeur plutôt que de défiler. */
-  .c-src,.c-tag,.logs thead th:nth-child(2),.logs thead th:nth-child(5){display:none}
-  .logs{min-width:0}
-  .c-msg,.c-actor{min-width:0}
-  .actor-name{max-width:92px;font-size:12px}
-  .logs td{padding:8px 9px}
-  .c-time{font-size:11px}
+.dlg{
+  position:fixed;z-index:80;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(430px,calc(100vw - 28px));
+  background:var(--panel);border:1px solid var(--edge);border-radius:12px;
+  box-shadow:0 30px 74px rgba(0,0,0,.62);display:grid;gap:14px;padding:18px;
 }
-@media (prefers-reduced-motion:reduce){
-  *{transition-duration:.01ms !important;animation-duration:.01ms !important}
+.dlg[hidden]{display:none}
+.dlg h3{font-size:16px;font-weight:700;font-variation-settings:'wdth' 88}
+.dlg-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.field{display:grid;gap:5px}
+.field label{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+.input{
+  width:100%;height:36px;padding:0 11px;border-radius:7px;font-size:13px;
+  background:var(--ground);border:1px solid var(--edge);color:var(--ink);
 }
-</style>
-<style>
-/* ---------- écran de connexion ---------- */
+select.input{height:36px}
+.input:focus{outline:none;border-color:var(--vio);box-shadow:0 0 0 3px var(--vio-wash)}
+
+/* ---------- équipe ---------- */
+.team{display:grid;gap:8px}
+.team-row{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:11px;align-items:center;
+  padding:9px 12px;border-radius:9px;border:1px solid var(--edge-soft);background:var(--panel-2);
+}
+.team-row > *{min-width:0}
+.team-row.off{opacity:.55}
+
+/* ============================================================
+   CONNEXION
+   ============================================================ */
 .gate{
   position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px 16px;
-  background:
-    radial-gradient(760px 380px at 50% -6%, rgba(157,92,255,.22), transparent 62%),
-    var(--void);
+  background:radial-gradient(720px 360px at 50% 0%,rgba(139,92,246,.2),transparent 62%),var(--ground);
 }
 .gate[hidden]{display:none}
 .gate-card{
-  width:min(380px,100%);padding:26px 24px 22px;border-radius:18px;
-  background:linear-gradient(170deg,rgba(30,20,50,.9),rgba(14,9,23,.94));
-  border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.55);
+  width:min(372px,100%);padding:26px 24px 22px;border-radius:14px;
+  background:var(--panel);border:1px solid var(--edge);box-shadow:0 26px 70px rgba(0,0,0,.55);
   display:grid;gap:14px;
 }
 .gate-head{display:flex;align-items:center;gap:11px}
-.gate-title{font-family:var(--display);font-size:17px;font-weight:700;line-height:1.15}
-.gate-sub{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase}
-.field{display:grid;gap:5px}
-.field label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.input{
-  width:100%;padding:9px 12px;border-radius:var(--r-md);font-size:13.5px;
-  background:var(--panel);border:1px solid var(--line);color:var(--ink);
-}
-.input:focus{outline:none;border-color:rgba(157,92,255,.55);background:var(--panel-2);box-shadow:0 0 0 3px rgba(157,92,255,.12)}
+.gate-t{font-size:17px;font-weight:700;font-variation-settings:'wdth' 86;line-height:1.1}
 .gate-err{
-  font-size:12.5px;color:#FF9AAC;background:rgba(255,77,109,.1);
-  border:1px solid rgba(255,77,109,.3);border-radius:var(--r-md);padding:8px 11px;
+  font-size:12.5px;color:#FFA3B4;background:rgba(255,67,101,.1);
+  border:1px solid rgba(255,67,101,.32);border-radius:8px;padding:9px 11px;
 }
-.gate-note{font-size:11.5px;color:var(--muted);line-height:1.55}
-.gate-note code{font-family:var(--mono);font-size:11px;color:var(--vio-soft)}
-.btn.block{width:100%;justify-content:center;padding:10px}
+.gate-note{font-size:11.5px;color:var(--muted);line-height:1.6}
+.gate-note code{font-family:var(--mono);font-size:11px;color:var(--vio-hi)}
+.btn.block{width:100%;justify-content:center;height:38px}
 
-/* ---------- identité du staff connecté ---------- */
-.me{display:flex;align-items:center;gap:9px;padding:4px 6px 4px 4px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
-.me .avatar{width:24px;height:24px;border-radius:999px;font-size:10px}
-.me-txt{line-height:1.15}
-.me-name{font-size:12.5px;color:var(--ink)}
-.me-role{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--vio-soft)}
+/* ---------- note de démonstration ---------- */
+.demo{
+  display:flex;align-items:flex-start;gap:10px;margin-top:16px;
+  padding:10px 14px;border-radius:9px;
+  background:rgba(245,165,36,.07);border:1px solid rgba(245,165,36,.26);
+  color:#F4D6A8;font-size:12.5px;
+}
+.demo b{color:#FFCE87;font-weight:600}
+.demo code{font-family:var(--mono);font-size:11.5px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:4px}
 
-/* ---------- boîte de dialogue d'action ---------- */
-.dialog{
-  position:fixed;z-index:80;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:min(430px,calc(100vw - 28px));
-  background:linear-gradient(175deg,#1B1230,#0D0817);
-  border:1px solid var(--line);border-radius:var(--r-lg);
-  box-shadow:0 26px 70px rgba(0,0,0,.6);
-  display:grid;gap:14px;padding:18px;
+/* ---------- notification ---------- */
+.toast{
+  position:fixed;left:50%;bottom:22px;transform:translate(-50%,14px);z-index:90;
+  padding:10px 17px;border-radius:999px;font-size:12.5px;
+  background:var(--raise);border:1px solid var(--vio);color:var(--ink);
+  box-shadow:0 14px 36px rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;
 }
-.dialog[hidden]{display:none}
-.dialog h3{font-family:var(--display);font-size:16px;font-weight:600}
-.dialog .warn{font-size:12px;color:#F6C89A;background:rgba(255,176,32,.09);border:1px solid rgba(255,176,32,.26);padding:8px 11px;border-radius:var(--r-md)}
-.dialog-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
-.btn.danger{background:linear-gradient(160deg,#FF4D6D,#B3213E);border-color:#FF7D95;color:#fff}
-.btn.danger:hover{filter:brightness(1.08)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
 
-/* ---------- actions sur un joueur ---------- */
-.act-bar{display:flex;gap:7px;flex-wrap:wrap}
-.act-bar .btn{flex:none}
-
-/* ---------- gestion de l'équipe ---------- */
-.staff-list{display:grid;gap:8px}
-.staff-row{
-  display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;
-  padding:9px 11px;border-radius:var(--r-md);background:rgba(30,20,50,.45);border:1px solid var(--line-soft);
-}
-.staff-row.off{opacity:.55}
-.pill{
-  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
-  padding:3px 7px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2);white-space:nowrap;
-}
-.pill.r3{border-color:rgba(157,92,255,.5);color:var(--vio-soft);background:var(--vio-dim)}
-.pill.r2{border-color:rgba(121,166,255,.45);color:#9FBCFF}
-.select{
-  padding:5px 8px;border-radius:var(--r-sm);background:var(--panel);
-  border:1px solid var(--line);color:var(--ink);font-size:12px;
-}
-.mode-tag{
-  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
-  padding:3px 8px;border-radius:999px;white-space:nowrap;
-}
-.mode-tag.demo{background:rgba(255,176,32,.13);border:1px solid rgba(255,176,32,.35);color:#FFC55C}
-.mode-tag.live{background:rgba(45,212,167,.11);border:1px solid rgba(45,212,167,.34);color:#8FEBD3}
+/* ============================================================
+   ADAPTATION
+   ============================================================ */
+@media (min-width:1300px){ .app.insp-open .main{padding-right:min(430px,32vw)} }
+@media (max-width:1150px){ .grid.two{grid-template-columns:minmax(0,1fr)} }
 @media (max-width:900px){
-  .me-txt{display:none}
+  .app{grid-template-columns:minmax(0,1fr)}
+  .rail{position:static;height:auto;min-width:0;flex-direction:row;align-items:center;gap:4px;
+        overflow-x:auto;overscroll-behavior-x:contain;border-right:none;border-bottom:1px solid var(--edge);padding:0 12px}
+  .brand{border-bottom:none;padding:10px 10px 10px 0;flex:none}
+  .brand-text,.rail-foot{display:none}
+  .nav{flex-direction:row;padding:8px 0;gap:4px;flex:none}
+  .nav-group{display:none}
+  .nav-item{grid-template-columns:auto auto;padding:6px 11px;flex:none}
+  .nav-item .nav-label{display:none}
+  .main{min-width:0}
+  .view{padding:0 16px 36px}
+  .head{padding:18px 0 14px}
+  .duty{grid-template-columns:1fr;gap:10px}
+  .duty-n{font-size:46px}
+  .insp{inset:auto 0 0 0;width:100%;height:88dvh;border-left:none;border-top:1px solid var(--edge);
+        border-radius:14px 14px 0 0;transform:translateY(100%)}
+  .insp.open{transform:none}
+  .feed-scroll{max-height:none}
 }
+@media (max-width:620px){
+  .ev{grid-template-columns:58px 3px minmax(0,1fr)}
+  .ev-time{padding-left:10px}
+  .ev-res{display:none}
+  .kv{grid-template-columns:86px minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){ *{transition-duration:.01ms !important;animation-duration:.01ms !important} }
 </style>
 
-<!-- ================= CONNEXION ================= -->
+<!-- ============ CONNEXION ============ -->
 <div class="gate" id="gate" hidden>
-  <form class="gate-card" id="gateForm" autocomplete="on">
+  <form class="gate-card" id="gateForm">
     <div class="gate-head">
-      <div class="brand-mark" aria-hidden="true">OR</div>
+      <div class="mark" aria-hidden="true">OR</div>
       <div>
-        <div class="gate-title">Origin Roleplay</div>
-        <div class="gate-sub">Journal serveur</div>
+        <div class="gate-t">Origin Roleplay</div>
+        <div class="brand-sub">Journal serveur</div>
       </div>
     </div>
     <div class="gate-err" id="gateErr" hidden></div>
@@ -521,7 +565,7 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
       <input class="input" id="gatePass" name="password" type="password" autocomplete="current-password" required>
     </div>
     <button class="btn primary block" id="gateGo" type="submit">Se connecter</button>
-    <div class="gate-note" id="gateNote">
+    <div class="gate-note">
       Les comptes sont créés par un fondateur, en console :
       <code>node staff.js add &lt;pseudo&gt; moderateur</code>
     </div>
@@ -529,152 +573,153 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
 </div>
 
 <div class="app" id="app" hidden>
-  <nav class="rail" aria-label="Catégories de journaux">
+  <nav class="rail" aria-label="Navigation du journal">
     <div class="brand">
-      <div class="brand-mark" aria-hidden="true">OR</div>
+      <div class="mark" aria-hidden="true">OR</div>
       <div class="brand-text">
         <div class="brand-name">Origin Roleplay</div>
         <div class="brand-sub">Journal serveur</div>
       </div>
     </div>
-
-    <div class="rail-head">Vue</div>
-    <button class="cat" data-view="overview" aria-current="true">
-      <span class="tag" style="--fam:var(--vio-soft)">VUE</span>
-      <span class="cat-label">Vue d'ensemble</span>
-      <span class="cat-count"></span>
-    </button>
-    <button class="cat" data-cat="all">
-      <span class="tag" style="--fam:var(--ink-2)">ALL</span>
-      <span class="cat-label">Flux complet</span>
-      <span class="cat-count" id="countAll">—</span>
-    </button>
-
-    <div class="rail-head">Catégories</div>
-    <div id="catList"></div>
-
+    <div class="nav" id="nav"></div>
     <div class="rail-foot">
-      <div class="foot-row"><span class="dot-live" id="liveDot"></span><span>Flux <b id="liveState">en direct</b></span></div>
-      <div class="foot-row">Dernier évènement <b id="lastTick">—</b></div>
-      <div class="foot-row">Rétention <b id="retention">30 jours</b></div>
-      <button class="btn small" id="teamBtn" hidden style="margin-top:6px">Gérer l'équipe</button>
-      <button class="btn small" id="auditBtn" hidden>Journal du panneau</button>
+      <div class="foot-line"><span class="pulse" id="pulse"></span><span>Flux <b id="liveState">en direct</b></span></div>
+      <div class="foot-line">Dernier évènement <b id="lastTick">—</b></div>
+      <div class="foot-line">Rétention <b id="retention">30 jours</b></div>
+      <button class="btn sm" id="teamBtn" hidden>Gérer l'équipe</button>
+      <button class="btn sm" id="auditBtn" hidden>Journal du panneau</button>
     </div>
   </nav>
 
   <div class="main">
     <header class="bar">
-      <div class="search">
+      <div class="find">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/>
           <path d="M10.6 10.6 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
         <input id="q" type="search" placeholder="Joueur, licence, plaque, item, montant, ID serveur…" autocomplete="off" aria-label="Rechercher dans les journaux">
-        <span class="kbd" aria-hidden="true">/</span>
+        <kbd aria-hidden="true">/</kbd>
       </div>
-
       <div class="seg" role="group" aria-label="Période">
         <button data-range="1" aria-pressed="false">1 h</button>
         <button data-range="6" aria-pressed="false">6 h</button>
         <button data-range="24" aria-pressed="true">24 h</button>
         <button data-range="168" aria-pressed="false">7 j</button>
       </div>
-
-      <button class="btn on" id="liveBtn" aria-pressed="true">
-        <span class="dot-live" aria-hidden="true"></span> Direct
-      </button>
-      <button class="btn" id="copyBtn" title="Copier la sélection courante">Exporter</button>
-      <span class="mode-tag demo" id="modeTag">démonstration</span>
-      <div class="me" id="meBox" hidden>
-        <span class="avatar" id="meAvatar">—</span>
-        <span class="me-txt"><span class="me-name" id="meName">—</span><br><span class="me-role" id="meRole">—</span></span>
+      <button class="btn live" id="liveBtn" aria-pressed="true"><span class="pulse" aria-hidden="true"></span> Direct</button>
+      <button class="btn" id="exportBtn">Exporter</button>
+      <span class="tag-mode demo" id="modeTag">démonstration</span>
+      <div class="who" id="whoBox" hidden>
+        <span class="av" id="whoAv">—</span>
+        <span><span class="who-name" id="whoName">—</span><br><span class="who-role" id="whoRole">—</span></span>
         <button class="icon-btn" id="logoutBtn" title="Se déconnecter">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 4.5V3a1 1 0 0 0-1-1H3.5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-1.5M7 8h7m0 0-2.2-2.2M14 8l-2.2 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
     </header>
 
-    <!-- ================= VUE D'ENSEMBLE ================= -->
+    <!-- ============ VUE D'ENSEMBLE ============ -->
     <section class="view" id="viewOverview" aria-label="Vue d'ensemble">
-      <div class="demo-note" id="demoNote">
+      <div class="demo" id="demoNote">
         <span aria-hidden="true">▲</span>
-        <div><b>Jeu de démonstration.</b> Aucune API n'a répondu sur cette adresse : les évènements ci-dessous sont générés localement pour montrer le panneau en fonctionnement. Servez cette page depuis <code>api/server.js</code> pour voir vos vrais journaux.</div>
+        <div><b>Jeu de démonstration.</b> Aucune API n'a répondu sur cette adresse : les évènements ci-dessous sont générés localement. Servez cette page depuis <code>api/server.js</code> pour voir vos vrais journaux.</div>
       </div>
 
-      <div class="page-head">
-        <h1 class="page-title">Vue d'ensemble</h1>
-        <div class="page-sub" id="overviewSub"></div>
+      <div class="head">
+        <div>
+          <h1 class="title">Vue d'ensemble</h1>
+          <div class="sub" id="overviewSub"></div>
+        </div>
       </div>
 
-      <div class="tiles" id="tiles"></div>
+      <div class="status" id="status"></div>
+      <div id="duty"></div>
 
-      <div class="grid-2">
-        <div class="col">
-          <div class="card">
-            <div class="card-head">
-              <h2 class="section-title">Activité par heure</h2>
-              <span class="count-note" id="chartNote"></span>
-            </div>
-            <div class="chart-wrap"><svg class="chart" id="chart" viewBox="0 0 760 190" role="img" aria-label="Nombre d'évènements par tranche horaire"></svg></div>
+      <div class="grid">
+        <div class="panel">
+          <div class="panel-head">
+            <h2 class="eyebrow">Activité par gravité</h2>
+            <div class="legend" id="legend"></div>
           </div>
-          <div class="card">
-            <div class="card-head">
-              <h2 class="section-title">À traiter — alertes et détections</h2>
-              <button class="btn small" data-cat="anticheat">Ouvrir l'anticheat</button>
-            </div>
-            <div class="mini" id="alerts"></div>
+          <div class="panel-body">
+            <div class="chart-box"><svg class="chart" id="chart" viewBox="0 0 800 200" role="img" aria-label="Évènements par tranche horaire, empilés par gravité"></svg></div>
           </div>
         </div>
-        <div class="col">
-          <div class="card">
-            <h2 class="section-title">Répartition par catégorie</h2>
-            <div class="split" id="split"></div>
+      </div>
+
+      <div class="grid two">
+        <div class="panel">
+          <div class="panel-head">
+            <h2 class="eyebrow">Répartition par catégorie</h2>
+            <span class="count" id="distNote"></span>
           </div>
-          <div class="card">
-            <h2 class="section-title">Joueurs les plus actifs</h2>
-            <div class="mini" id="topPlayers"></div>
-          </div>
+          <div class="panel-body"><div class="dist" id="dist"></div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2 class="eyebrow">Joueurs les plus actifs</h2></div>
+          <div class="panel-body flush"><div class="rows" id="topPlayers"></div></div>
         </div>
       </div>
     </section>
 
-    <!-- ================= FLUX ================= -->
+    <!-- ============ FLUX ============ -->
     <section class="view" id="viewStream" hidden aria-label="Flux d'évènements">
-      <div class="page-head">
+      <div class="head">
         <div>
-          <h1 class="page-title" id="streamTitle">Flux complet</h1>
-          <div class="page-sub" id="streamDesc"></div>
+          <h1 class="title" id="streamTitle">Flux complet</h1>
+          <div class="sub" id="streamDesc"></div>
         </div>
-        <div class="page-sub" id="streamCount"></div>
+        <div class="sub" id="streamCount"></div>
       </div>
+      <div class="filters" id="sevBar" role="group" aria-label="Filtrer par gravité"></div>
+      <div class="feed">
+        <div class="feed-scroll" id="feedScroll"><div id="rows"></div></div>
+        <div class="feed-foot">
+          <span class="count" id="foot">—</span>
+          <button class="btn sm" id="moreBtn" hidden>Charger 100 évènements de plus</button>
+        </div>
+      </div>
+    </section>
 
-      <div class="sev-bar" id="sevBar" role="group" aria-label="Filtrer par gravité"></div>
-
-      <div class="stream">
-        <div class="stream-scroll">
-          <table class="logs">
+    <!-- ============ REGISTRE DES BANNISSEMENTS ============ -->
+    <section class="view" id="viewBans" hidden aria-label="Registre des bannissements">
+      <div class="head">
+        <div>
+          <h1 class="title">Bannissements</h1>
+          <div class="sub" id="bansDesc">Le registre fait foi : c'est lui que le serveur interroge à chaque connexion.</div>
+        </div>
+        <div class="sub" id="bansCount"></div>
+      </div>
+      <div class="filters" id="bansFilters" role="group" aria-label="Filtrer le registre">
+        <button class="chip" data-banstate="actifs" style="--c:var(--crit)" aria-pressed="true"><i></i>En cours <b id="nActifs">·</b></button>
+        <button class="chip" data-banstate="expires" style="--c:var(--muted)" aria-pressed="false"><i></i>Terminés <b id="nExpires">·</b></button>
+        <button class="chip" data-banstate="tous" style="--c:var(--vio)" aria-pressed="false"><i></i>Tous <b id="nTous">·</b></button>
+        <button class="btn sm" id="bansToEvents" style="margin-left:auto">Voir les évènements de bannissement</button>
+      </div>
+      <div class="panel">
+        <div class="reg-scroll">
+          <table class="reg">
             <thead>
               <tr>
-                <th scope="col">Horodatage</th>
-                <th scope="col">Type</th>
                 <th scope="col">Joueur</th>
-                <th scope="col">Évènement</th>
-                <th scope="col" style="text-align:right">Ressource</th>
+                <th scope="col">Motif</th>
+                <th scope="col">Prononcé par</th>
+                <th scope="col">Depuis</th>
+                <th scope="col">Échéance</th>
+                <th scope="col">État</th>
+                <th scope="col" style="text-align:right">Action</th>
               </tr>
             </thead>
-            <tbody id="rows"></tbody>
+            <tbody id="bansRows"></tbody>
           </table>
-        </div>
-        <div class="stream-foot">
-          <span class="count-note" id="foot">—</span>
-          <button class="btn small" id="moreBtn" hidden>Charger 100 évènements de plus</button>
         </div>
       </div>
     </section>
   </div>
 </div>
 
-<aside class="inspector" id="inspector" aria-label="Détail de l'évènement" aria-hidden="true">
+<aside class="insp" id="inspector" aria-label="Détail de l'évènement" aria-hidden="true">
   <div class="insp-head">
     <div class="insp-title" id="inspTitle">Évènement</div>
     <button class="icon-btn" id="pinBtn" title="Épingler" aria-pressed="false">
@@ -691,9 +736,9 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
 </aside>
 
 <div class="scrim" id="scrim" hidden></div>
-<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-label="Dossier joueur">
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-label="Fiche">
   <div class="sheet-head">
-    <div class="avatar lg" id="dosAvatar">—</div>
+    <div class="av lg" id="dosAvatar">—</div>
     <div style="flex:1;min-width:0">
       <div class="sheet-name" id="dosName">—</div>
       <div class="sheet-meta" id="dosMeta">—</div>
@@ -705,10 +750,10 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
   <div class="sheet-body" id="dosBody"></div>
 </div>
 
-<div class="dialog" id="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+<div class="dlg" id="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
   <h3 id="dlgTitle">Action</h3>
   <div id="dlgBody"></div>
-  <div class="dialog-actions">
+  <div class="dlg-acts">
     <button class="btn" id="dlgCancel">Annuler</button>
     <button class="btn primary" id="dlgOk">Confirmer</button>
   </div>
@@ -718,48 +763,66 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
 
 <script>
 /* ============================================================
-   ORIGIN ROLEPLAY — panneau de journalisation
+   ORIGIN ROLEPLAY — console de journalisation
    Deux modes, un seul code :
-   · servi par api/server.js  -> vrais journaux, connexion staff
-   · ouvert seul (fichier)    -> jeu de démonstration local
-   Le catalogue ci-dessous est remplacé par celui de l'API dès
-   qu'elle répond : ajouter une catégorie côté serveur suffit.
+   · servie par api/server.js  -> vrais journaux, connexion staff
+   · ouverte seule (fichier)   -> jeu de démonstration local
    ============================================================ */
 'use strict';
 
-const FAM = { social:'var(--fam-social)', risque:'var(--fam-risque)',
-              biens:'var(--fam-biens)', civil:'var(--fam-civil)', staff:'var(--fam-staff)' };
+/* Les catégories sont rangées par MÉTIER, pas alphabétiquement.
+   Dix-neuf sigles à plat formaient un mur que personne ne lisait ;
+   c'est le groupe qui porte la couleur, pas chaque catégorie. */
+let GROUPS = [
+  { id:'moderation', label:'Modération',     fam:'var(--f-surv)'  },
+  { id:'joueurs',    label:'Joueurs',        fam:'var(--f-play)'  },
+  { id:'biens',      label:'Argent & biens', fam:'var(--f-bien)'  },
+  { id:'rp',         label:'Activités RP',   fam:'var(--f-monde)' },
+  { id:'serveur',    label:'Staff & serveur',fam:'var(--f-staff)' }
+];
 
 let CATS = [
-  {id:'connexions',    code:'CNX', label:'Connexions',          fam:FAM.social, desc:'Arrivées, départs, file d’attente et refus de whitelist.'},
-  {id:'chat',          code:'CHT', label:'Chat & commandes',    fam:FAM.social, desc:'Proximité, OOC, /me, /do, Twitter et commandes joueur.'},
-  {id:'combat',        code:'CBT', label:'Combat & morts',      fam:FAM.risque, desc:'Dégâts, éliminations, décès et réanimations EMS.'},
-  {id:'economie',      code:'ECO', label:'Économie',            fam:FAM.biens,  desc:'Liquide, banque, virements, salaires, factures et amendes.'},
-  {id:'inventaire',    code:'INV', label:'Inventaire',          fam:FAM.biens,  desc:'Échanges, sols, coffres, stockage et suppressions staff.'},
-  {id:'vehicules',     code:'VEH', label:'Véhicules',           fam:FAM.biens,  desc:'Garages, fourrière, concession, effractions et destructions.'},
-  {id:'jobs',          code:'JOB', label:'Jobs & entreprises',  fam:FAM.civil,  desc:'Embauches, grades, prises de service et comptes société.'},
-  {id:'proprietes',    code:'IMM', label:'Propriétés',          fam:FAM.civil,  desc:'Achats, loyers, clés partagées et coffres de logement.'},
-  {id:'braquages',     code:'BRQ', label:'Braquages',           fam:FAM.risque, desc:'Fleeca, Pacific, bijouterie : départ, butin, issue.'},
-  {id:'drogue',        code:'DRG', label:'Drogue & labos',      fam:FAM.risque, desc:'Champs, récolte, transformation, revente et saisies.'},
-  {id:'organisations', code:'ORG', label:'Organisations',       fam:FAM.civil,  desc:'Coffres d’orga, adhésions, grades, territoires et guerres.'},
-  {id:'craft',         code:'CRF', label:'Craft & armes',       fam:FAM.biens,  desc:'Établis, composants, armes et munitions fabriquées.'},
-  {id:'admin',         code:'ADM', label:'Administration',      fam:FAM.staff,  desc:'Actions staff en jeu : noclip, spawn, téléportation, revive.'},
-  {id:'anticheat',     code:'ACH', label:'Anticheat',           fam:FAM.risque, desc:'Détections automatiques et évènements réseau suspects.'},
-  {id:'sanctions',     code:'SNC', label:'Sanctions',           fam:FAM.risque, desc:'Kicks, avertissements, bannissements et levées.'},
-  {id:'staff',         code:'RPT', label:'Reports & tickets',   fam:FAM.staff,  desc:'Signalements joueurs, prises en charge et clôtures.'},
-  {id:'whitelist',     code:'WLT', label:'Whitelist',           fam:FAM.staff,  desc:'Candidatures Discord, entretiens, acceptations et refus.'},
-  {id:'systeme',       code:'SYS', label:'Serveur',             fam:FAM.staff,  desc:'Redémarrages, erreurs de ressource, performance et sauvegardes.'}
+  { id:'bans',         code:'BAN', label:'Bannissements',      group:'moderation', desc:'Bannissements prononcés, levés et refus de connexion.' },
+  { id:'sanctions',    code:'SNC', label:'Sanctions',          group:'moderation', desc:'Avertissements, expulsions et coupures de vocal.' },
+  { id:'anticheat',    code:'ACH', label:'Anticheat',          group:'moderation', desc:'Détections automatiques et évènements réseau suspects.' },
+  { id:'staff',        code:'RPT', label:'Reports & tickets',  group:'moderation', desc:'Signalements joueurs, prises en charge et clôtures.' },
+
+  { id:'connexions',   code:'CNX', label:'Connexions',         group:'joueurs',    desc:'Arrivées, départs, file d’attente et refus de whitelist.' },
+  { id:'chat',         code:'CHT', label:'Chat & commandes',   group:'joueurs',    desc:'Proximité, OOC, /me, /do, Twitter et commandes joueur.' },
+  { id:'combat',       code:'CBT', label:'Combat & morts',     group:'joueurs',    desc:'Dégâts, éliminations, décès et réanimations EMS.' },
+
+  { id:'economie',     code:'ECO', label:'Économie',           group:'biens',      desc:'Liquide, banque, virements, salaires, factures et amendes.' },
+  { id:'inventaire',   code:'INV', label:'Inventaire',         group:'biens',      desc:'Échanges, sols, coffres, stockage et suppressions staff.' },
+  { id:'vehicules',    code:'VEH', label:'Véhicules',          group:'biens',      desc:'Garages, fourrière, concession, effractions et destructions.' },
+  { id:'craft',        code:'CRF', label:'Craft & armes',      group:'biens',      desc:'Établis, composants, armes et munitions fabriquées.' },
+
+  { id:'jobs',         code:'JOB', label:'Jobs & entreprises', group:'rp',         desc:'Embauches, grades, prises de service et comptes société.' },
+  { id:'proprietes',   code:'IMM', label:'Propriétés',         group:'rp',         desc:'Achats, loyers, clés partagées et coffres de logement.' },
+  { id:'organisations',code:'ORG', label:'Organisations',      group:'rp',         desc:'Coffres d’orga, adhésions, grades, territoires et guerres.' },
+  { id:'braquages',    code:'BRQ', label:'Braquages',          group:'rp',         desc:'Fleeca, Pacific, bijouterie : départ, butin, issue.' },
+  { id:'drogue',       code:'DRG', label:'Drogue & labos',     group:'rp',         desc:'Champs, récolte, transformation, revente et saisies.' },
+
+  { id:'admin',        code:'ADM', label:'Administration',     group:'serveur',    desc:'Actions staff en jeu : noclip, spawn, téléportation, revive.' },
+  { id:'whitelist',    code:'WLT', label:'Whitelist',          group:'serveur',    desc:'Candidatures Discord, entretiens, acceptations et refus.' },
+  { id:'systeme',      code:'SYS', label:'Serveur',            group:'serveur',    desc:'Redémarrages, erreurs de ressource, performance et sauvegardes.' }
 ];
+
 let SEVS = [
-  {id:'critique', label:'Critique',     c:'var(--sev-critique)'},
-  {id:'alerte',   label:'Alerte',       c:'var(--sev-alerte)'},
-  {id:'notice',   label:'À vérifier',   c:'var(--sev-notice)'},
-  {id:'info',     label:'Info',         c:'var(--sev-info)'}
+  { id:'critique', label:'Critique',   c:'var(--crit)'  },
+  { id:'alerte',   label:'Alerte',     c:'var(--warn)'  },
+  { id:'notice',   label:'À vérifier', c:'var(--check)' },
+  { id:'info',     label:'Info',       c:'var(--ok)'    }
 ];
-let CAT = {}, SEV = {};
-function setCatalogue(cats, sevs){
+
+let CAT = {}, SEV = {}, GRP = {};
+function setCatalogue(cats, sevs, groups) {
+  if (groups && groups.length) GROUPS = groups;
   if (cats && cats.length) CATS = cats;
   if (sevs && sevs.length) SEVS = sevs;
+  GRP = Object.fromEntries(GROUPS.map(g => [g.id, g]));
+  // Une catégorie tient sa teinte de son groupe : c'est ce qui fait qu'un
+  // écran de 19 entrées se lit en cinq blocs plutôt qu'en dix-neuf.
+  CATS.forEach(c => { c.fam = (GRP[c.group] || {}).fam || 'var(--muted)'; });
   CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
   SEV = Object.fromEntries(SEVS.map(s => [s.id, s]));
 }
@@ -834,7 +897,7 @@ const DROGUES=[['coca','Feuilles de coca'],['weed','Pousses de weed'],['meth','M
 const LABOS=['le labo de Grapeseed','la planque de Cypress Flats','le hangar de Paleto','la cave de Mirror Park'];
 const ORGAS=['Ballas','Vagos','Families','Cartel del Norte','Triades','Lost MC'];
 const ETABLIS=['l’établi de Cypress Flats','la remise de Sandy Shores','l’atelier du port'];
-const RESSOURCES={braquages:'origin_heists',drogue:'origin_drugs',organisations:'origin_gangs',craft:'origin_craft',whitelist:'origin_whitelist',systeme:'origin_core',connexions:'origin_core',chat:'origin_chat',combat:'origin_medical',economie:'origin_banking',inventaire:'ox_inventory',vehicules:'origin_garage',jobs:'origin_jobs',proprietes:'origin_housing',admin:'txAdmin',anticheat:'origin_guard',sanctions:'origin_admin',staff:'origin_reports'};
+const RESSOURCES={bans:'origin_admin',braquages:'origin_heists',drogue:'origin_drugs',organisations:'origin_gangs',craft:'origin_craft',whitelist:'origin_whitelist',systeme:'origin_core',connexions:'origin_core',chat:'origin_chat',combat:'origin_medical',economie:'origin_banking',inventaire:'ox_inventory',vehicules:'origin_garage',jobs:'origin_jobs',proprietes:'origin_housing',admin:'txAdmin',anticheat:'origin_guard',sanctions:'origin_admin',staff:'origin_reports'};
 
 const plate=()=>hex(2).toUpperCase()+int(10,99)+String.fromCharCode(65+int(0,25))+String.fromCharCode(65+int(0,25))+int(100,999);
 const coords=()=>`vector3(${(rnd()*6000-3500).toFixed(2)}, ${(rnd()*7000-3500).toFixed(2)}, ${(rnd()*70+2).toFixed(2)})`;
@@ -943,12 +1006,16 @@ anticheat:[
  {s:'alerte',w:2,f:(a)=>({msg:`Entité blacklistée refusée — <strong>${a.name}</strong>`,d:{detection:'entity_blacklist',entite:pick(['rhino','lazer','cargoplane']),action:'suppression immédiate',position:coords()}})},
  {s:'critique',w:1,f:(a)=>({msg:`Explosion non autorisée — <strong>${a.name}</strong>`,d:{detection:'explosion_owner',type:'EXP_TAG_ROCKET',zone:pick(ZONES),victimes:int(0,7),action:'explosion annulée + kick'}})}
 ],
+bans:[
+ {s:'alerte',w:5,f:(a,b,st)=>{const j=int(2,30);return{t:st,msg:`${who(st)} a banni <strong>${a.name}</strong> pour ${j} jours`,d:{kind:'ban',type:'ban',cible:a.name,cibleKey:a.key,motif:pick(MOTIFS_SANCTION),duree:j+' jour(s)',expireAt:Date.now()+j*86400000,banId:'#'+int(1000,9999),staff:st.name,appelPossible:true}};}},
+ {s:'critique',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a banni définitivement <strong>${a.name}</strong>`,d:{kind:'ban',type:'ban',cible:a.name,cibleKey:a.key,motif:'Cheat détecté — menu illégal',duree:'permanent',expireAt:null,banId:'#'+int(1000,9999),staff:st.name,identifiants:{license:a.license,discord:a.discord,steam:a.steam},appelPossible:false}})},
+ {s:'info',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a levé le bannissement de <strong>${a.name}</strong>`,d:{kind:'unban',type:'unban',cible:a.name,cibleKey:a.key,motif:'appel accepté — erreur de détection',banId:'#'+int(1000,9999),staff:st.name}})},
+ {s:'alerte',w:3,f:(a)=>({msg:`Connexion refusée — <strong>${a.name}</strong> est banni`,d:{kind:'ban_refuse',cible:a.name,cibleKey:a.key,banId:'#'+int(1000,9999),motif:pick(MOTIFS_SANCTION),identifiants:{license:a.license,discord:a.discord}}})},
+ {s:'notice',w:2,f:(a,b,st)=>({t:st,msg:`Contestation déposée par <strong>${a.name}</strong>`,d:{kind:'appeal',cible:a.name,cibleKey:a.key,banId:'#'+int(1000,9999),canal:'Discord',examinePar:st.name}})}
+],
 sanctions:[
  {s:'notice',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a averti <strong>${a.name}</strong> — ${pick(MOTIFS_SANCTION)}`,d:{staff:st.name,cible:a.name,type:'warn',cumul:int(1,3)+'/3',consequence:'au 3e avertissement : ban 3 jours',ticket:'#'+int(400,999)}})},
  {s:'notice',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a expulsé <strong>${a.name}</strong> — ${pick(MOTIFS_SANCTION)}`,d:{staff:st.name,cible:a.name,type:'kick',license:a.license,preuve:'clip Discord'}})},
- {s:'alerte',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a banni <strong>${a.name}</strong> pour ${int(2,14)} jours`,d:{staff:st.name,cible:a.name,type:'ban_temporaire',motif:pick(MOTIFS_SANCTION),banId:'#'+int(1000,9999),license:a.license,appelPossible:true}})},
- {s:'critique',w:1,f:(a,b,st)=>({t:st,msg:`${who(st)} a banni définitivement <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,type:'ban_permanent',motif:'Cheat détecté — menu illégal',banId:'#'+int(1000,9999),identifiants:{license:a.license,discord:a.discord,steam:a.steam},appelPossible:false}})},
- {s:'info',w:1,f:(a,b,st)=>({t:st,msg:`${who(st)} a levé le bannissement de <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,banId:'#'+int(1000,9999),motif:'appel accepté — erreur de détection'}})},
  {s:'notice',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a coupé le vocal de <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,duree:int(10,120)+' min',motif:'insultes HRP'}})}
 ],
 staff:[
@@ -1006,7 +1073,7 @@ systeme:[
    Les serveurs RP vivent le soir : une distribution plate donnerait
    un graphique d'activité que personne ne reconnaîtrait. */
 const HOUR_W=[.55,.40,.25,.15,.10,.08,.10,.15,.22,.30,.38,.45,.50,.50,.55,.60,.68,.78,.90,1,1,.95,.85,.70];
-const CAT_W={chat:18,economie:12,inventaire:10,connexions:9,vehicules:8,combat:8,drogue:5,jobs:5,
+const CAT_W={bans:2,chat:18,economie:12,inventaire:10,connexions:9,vehicules:8,combat:8,drogue:5,jobs:5,
              admin:4,organisations:4,proprietes:3.5,braquages:3,craft:3,sanctions:2.5,anticheat:2,
              staff:1.5,whitelist:1.5,systeme:1};
 const CAT_PICK=[];
@@ -1021,7 +1088,7 @@ function makeEvent(t){
   let a=pick(RP), b=pick(RP); while(b===a) b=pick(RP);
   const st=pick(STAFF);
   const r=tpl.f(a,b,st);
-  const acteur=(cat==='admin'||cat==='sanctions')?st:a;
+  const acteur=(cat==='admin'||cat==='sanctions'||cat==='bans')?st:a;
   const txt=String(r.msg).replace(/<[^>]+>/g,'');
   return {
     id:'EV-'+String(SEQ++).padStart(6,'0'),
@@ -1162,7 +1229,14 @@ const Demo = {
     const prev = this.filter({ from: from - (to - from), to: from }).length;
     const size = Math.max(60000, Math.floor((to - from) / buckets));
     const series = new Array(buckets).fill(0);
-    list.forEach(e => { const i = Math.floor((e.t - from) / size); if (i >= 0 && i < buckets) series[i]++; });
+    const seriesBySev = {};
+    SEVS.forEach(x => seriesBySev[x.id] = new Array(buckets).fill(0));
+    list.forEach(e => {
+      const i = Math.floor((e.t - from) / size);
+      if (i < 0 || i >= buckets) return;
+      series[i]++;
+      if (seriesBySev[e.sev]) seriesBySev[e.sev][i]++;
+    });
     const split = {}; list.forEach(e => split[e.cat] = (split[e.cat] || 0) + 1);
     const byPlayer = {};
     list.forEach(e => { if (!e.actor.staff && e.actor.key) {
@@ -1175,7 +1249,8 @@ const Demo = {
       anticheat: list.filter(e => e.cat === 'anticheat').length,
       acCrit: list.filter(e => e.cat === 'anticheat' && e.sev === 'critique').length,
       sanctions: list.filter(e => e.cat === 'sanctions').length,
-      series, split,
+      bansActifs: this.registre().filter(b => b.encours).length,
+      series, seriesBySev, split,
       top: Object.values(byPlayer).sort((a, b) => b.n - a.n).slice(0, 6),
       alertList: alertsAll.slice(0, 7).map(e => this.decorate(e))
     };
@@ -1205,6 +1280,36 @@ const Demo = {
       ban: null
     };
   },
+
+  // Le registre n'est pas une relecture du flux : un bannissement levé
+  // trois jours plus tard doit apparaître comme terminé, pas comme deux
+  // lignes contradictoires.
+  registre() {
+    const parCible = new Map();
+    for (const e of [...EVENTS].reverse()) {
+      if (e.cat !== 'bans' || !e.d) continue;
+      const key = e.d.cibleKey; if (!key) continue;
+      if (e.d.type === 'ban') {
+        parCible.set(key, { id: e.id, player_key: key, name: e.d.cible, reason: e.d.motif,
+                            by_name: e.d.staff, created_at: e.t,
+                            expires_at: e.d.expireAt || null, lifted_at: null, active: 1 });
+      } else if (e.d.type === 'unban' && parCible.has(key)) {
+        const b = parCible.get(key); b.active = 0; b.lifted_at = e.t; b.lifted_by = e.d.staff;
+      }
+    }
+    const maintenant = Date.now();
+    return [...parCible.values()].map(b => Object.assign(b, {
+      encours: b.active === 1 && (!b.expires_at || b.expires_at > maintenant)
+    })).sort((a, b) => b.created_at - a.created_at);
+  },
+  async bans(state) {
+    await this.init();
+    const tous = this.registre();
+    const liste = state === 'actifs' ? tous.filter(b => b.encours)
+                : state === 'expires' ? tous.filter(b => !b.encours) : tous;
+    return { bans: liste, counts: { actifs: tous.filter(b => b.encours).length,
+             expires: tous.filter(b => !b.encours).length, tous: tous.length } };
+  },
   async mark(id, kind, on) {
     const set = MARKS[kind]; on ? set.add(id) : set.delete(id); saveMarks();
   },
@@ -1232,6 +1337,7 @@ const Api = {
   },
   stats(from, to, buckets) { return api('/api/stats?' + qs({ from, to, buckets })); },
   player(key) { return api('/api/players/' + encodeURIComponent(key)); },
+  bans(state) { return api('/api/bans?state=' + encodeURIComponent(state || 'actifs')); },
   mark(id, kind, on) { return api('/api/marks', { method: 'POST', body: JSON.stringify({ id, kind, on }) }); },
   action(b) { return api('/api/actions', { method: 'POST', body: JSON.stringify(b) }); },
   stream(cb) {
@@ -1251,8 +1357,8 @@ let EVENTS = [];
    État et rendu
    ============================================================ */
 const STATE = { view:'overview', cat:'all', range:24, q:'', sevs:new Set(),
-                limit:120, live:true, sel:null,
-                list:[], total:0, cursor:null, sevCounts:{}, stats:null, busy:false };
+                limit:120, live:true, sel:null, banState:'actifs',
+                list:[], total:0, cursor:null, sevCounts:{}, stats:null, bans:null };
 
 const CHART_CFG = {
   1:  { n:12, fmt:t => pad(new Date(t).getHours())+':'+pad(new Date(t).getMinutes()), every:3, title:'60 dernières minutes' },
@@ -1262,6 +1368,7 @@ const CHART_CFG = {
 };
 const windowFrom = () => Date.now() - STATE.range * 3600000;
 const catsParam  = () => (STATE.cat === 'all' ? null : [STATE.cat]);
+const visibleCats = () => (MODE === 'api' ? CATS.filter(c => ME.cats.includes(c.id)) : CATS);
 
 /* ---------- rafraîchissement ---------- */
 let refreshToken = 0;
@@ -1271,132 +1378,231 @@ async function refresh() {
   try {
     const jobs = [DS.stats(from, to, CHART_CFG[STATE.range].n)];
     if (STATE.view === 'stream') jobs.push(DS.query({
-      cats: catsParam(), sevs: [...STATE.sevs], from, to, q: STATE.q, limit: STATE.limit
-    }));
-    const [stats, page] = await Promise.all(jobs);
-    if (token !== refreshToken) return;               // une frappe plus récente a gagné
+      cats: catsParam(), sevs: [...STATE.sevs], from, to, q: STATE.q, limit: STATE.limit }));
+    else if (STATE.view === 'bans') jobs.push(DS.bans(STATE.banState));
+    const [stats, extra] = await Promise.all(jobs);
+    if (token !== refreshToken) return;
     STATE.stats = stats;
-    if (page) { STATE.list = page.events; STATE.total = page.total;
-                STATE.cursor = page.cursor; STATE.sevCounts = page.sevCounts || {}; }
+    if (extra && extra.events) { STATE.list = extra.events; STATE.total = extra.total;
+                                 STATE.cursor = extra.cursor; STATE.sevCounts = extra.sevCounts || {}; }
+    if (extra && extra.bans)   STATE.bans = extra;
     render();
   } catch (e) {
     if (String(e.message) !== '401') toast(e.message || 'Impossible de charger les journaux.');
   }
 }
 function render() {
-  renderRail();
-  const ov = STATE.view === 'overview';
-  $('#viewOverview').hidden = !ov;
-  $('#viewStream').hidden = ov;
-  if (ov) renderOverview(); else renderStream();
+  renderNav();
+  $('#viewOverview').hidden = STATE.view !== 'overview';
+  $('#viewStream').hidden   = STATE.view !== 'stream';
+  $('#viewBans').hidden     = STATE.view !== 'bans';
+  if (STATE.view === 'overview') renderOverview();
+  else if (STATE.view === 'stream') renderStream();
+  else renderBans();
 }
 
-/* ---------- rail ---------- */
-function buildRail() {
-  const host = $('#catList'); host.innerHTML = '';
-  const visibles = MODE === 'api' ? CATS.filter(c => ME.cats.includes(c.id)) : CATS;
-  visibles.forEach(c => {
-    const b = document.createElement('button');
-    b.className = 'cat'; b.dataset.cat = c.id;
-    b.innerHTML = `<span class="tag" style="--fam:${c.fam}">${c.code}</span>
-      <span class="cat-label">${esc(c.label)}</span><span class="cat-count" data-count="${c.id}">—</span>`;
-    host.appendChild(b);
-  });
+/* ============================================================
+   Rail
+   ============================================================ */
+function buildNav() {
+  const host = $('#nav');
+  const cats = visibleCats();
+  let html = `
+    <button class="nav-item" data-view="overview" style="--fam:var(--vio-hi)">
+      <span class="nav-dot"></span><span class="nav-label">Vue d'ensemble</span><span class="nav-n"></span></button>
+    <button class="nav-item" data-cat="all" style="--fam:var(--ink-2)">
+      <span class="nav-dot"></span><span class="nav-label">Flux complet</span><span class="nav-n" id="nAll">—</span></button>`;
+  for (const g of GROUPS) {
+    const dans = cats.filter(c => c.group === g.id);
+    if (!dans.length) continue;
+    html += `<div class="nav-group eyebrow">${esc(g.label)}</div>`;
+    html += dans.map(c => `
+      <button class="nav-item${c.id === 'bans' ? ' nav-bans' : ''}" data-cat="${c.id}" style="--fam:${c.fam}" title="${esc(c.desc)}">
+        <span class="nav-dot"></span>
+        <span class="nav-label">${esc(c.label)}</span>
+        <span class="nav-n" data-n="${c.id}">—</span></button>`).join('');
+  }
+  host.innerHTML = html;
 }
-function renderRail() {
+function renderNav() {
   const split = (STATE.stats && STATE.stats.split) || {};
   let total = 0;
-  document.querySelectorAll('[data-count]').forEach(n => {
-    const v = split[n.dataset.count] || 0; total += v;
+  document.querySelectorAll('[data-n]').forEach(n => {
+    const v = split[n.dataset.n] || 0; total += v;
     n.textContent = v ? v.toLocaleString('fr-FR') : '·';
+    n.parentElement.classList.toggle('flagged', n.dataset.n === 'anticheat' && v > 0);
   });
-  $('#countAll').textContent = total.toLocaleString('fr-FR');
-  document.querySelectorAll('.cat').forEach(b => {
-    const on = (STATE.view === 'overview' && b.dataset.view === 'overview') ||
-               (STATE.view === 'stream' && b.dataset.cat === STATE.cat);
+  const all = $('#nAll'); if (all) all.textContent = total.toLocaleString('fr-FR');
+  document.querySelectorAll('.nav-item').forEach(b => {
+    const on = (STATE.view === 'overview' && b.dataset.view === 'overview')
+            || (STATE.view === 'bans' && b.dataset.cat === 'bans')
+            || (STATE.view === 'stream' && b.dataset.cat === STATE.cat);
     b.setAttribute('aria-current', on ? 'true' : 'false');
   });
 }
 
-/* ---------- vue d'ensemble ---------- */
+/* ============================================================
+   Vue d'ensemble
+   ============================================================ */
 function renderOverview() {
   const s = STATE.stats; if (!s) return;
   remember(s.alertList);
   const delta = s.prev ? Math.round((s.total - s.prev) / s.prev * 100) : 0;
-  const tclass = delta > 4 ? 'up' : delta < -4 ? 'down' : 'flat';
-  const tlabel = s.prev ? (delta > 0 ? '+' : '') + delta + ' % vs période précédente' : 'aucun point de comparaison';
+  const dcl = delta > 4 ? 'up' : delta < -4 ? 'down' : 'flat';
 
   $('#overviewSub').innerHTML = `Fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b>` +
-    (MODE === 'api' ? ` · <b>${esc(ME.pseudo)}</b> voit <b>${ME.cats.length}</b> catégories` : ' · jeu de démonstration');
+    (MODE === 'api' ? ` · <b>${esc(ME.pseudo)}</b> a accès à <b>${ME.cats.length}</b> catégories`
+                    : ' · jeu de démonstration');
 
-  $('#tiles').innerHTML = `
-    <div class="tile"><div class="tile-k">Évènements</div><div class="tile-v">${s.total.toLocaleString('fr-FR')}</div><div class="tile-d"><span class="trend ${tclass}">${tlabel}</span></div></div>
-    <div class="tile"><div class="tile-k">Joueurs distincts</div><div class="tile-v">${s.uniques}</div><div class="tile-d">auteurs d’au moins un évènement</div></div>
-    <div class="tile ${s.alerts ? 'flag' : ''}"><div class="tile-k">À traiter</div><div class="tile-v">${s.alerts}</div><div class="tile-d">alertes et critiques non traitées</div></div>
-    <div class="tile ${s.anticheat ? 'warn' : ''}"><div class="tile-k">Anticheat</div><div class="tile-v">${s.anticheat}</div><div class="tile-d">${s.acCrit} détection(s) critiques</div></div>
-    <div class="tile"><div class="tile-k">Sanctions</div><div class="tile-v">${s.sanctions}</div><div class="tile-d">kick, warn, ban et levées</div></div>`;
+  $('#status').innerHTML = `
+    <div class="status-cell">
+      <span class="status-k">Évènements</span>
+      <span class="status-v">${s.total.toLocaleString('fr-FR')}</span>
+      <span class="status-d"><span class="delta ${dcl}">${s.prev ? (delta > 0 ? '+' : '') + delta + ' %' : '—'}</span> vs période précédente</span>
+    </div>
+    <div class="status-cell">
+      <span class="status-k">Joueurs</span>
+      <span class="status-v">${s.uniques}</span>
+      <span class="status-d">auteurs d’au moins un évènement</span>
+    </div>
+    <div class="status-cell ${s.anticheat ? 'warn' : ''}">
+      <span class="status-k">Anticheat</span>
+      <span class="status-v">${s.anticheat}</span>
+      <span class="status-d">${s.acCrit} critique${s.acCrit > 1 ? 's' : ''}</span>
+    </div>
+    <div class="status-cell">
+      <span class="status-k">Sanctions</span>
+      <span class="status-v">${s.sanctions}</span>
+      <span class="status-d">avertissements et expulsions</span>
+    </div>
+    <div class="status-cell ${s.bansActifs ? 'crit' : ''}">
+      <span class="status-k">Bannis</span>
+      <span class="status-v">${s.bansActifs != null ? s.bansActifs : '—'}</span>
+      <span class="status-d">bannissements en cours</span>
+    </div>`;
+
+  const liste = s.alertList || [];
+  $('#duty').innerHTML = s.alerts
+    ? `<div class="duty">
+         <div class="duty-n">${s.alerts}</div>
+         <div>
+           <div class="duty-t">${s.alerts > 1 ? 'alertes ouvertes' : 'alerte ouverte'} sur la période</div>
+           <div class="duty-s">Rien ne sort de cette file tant qu'un membre du staff ne l'a pas marquée traitée.</div>
+           <div class="rows" style="margin-top:12px;margin-inline:-20px;border-top:1px solid var(--edge-soft)">
+             ${liste.map(e => `<button class="row-lite" data-ev="${e.id}">
+               <span class="sev-sq" style="--c:${(SEV[e.sev] || {}).c || 'var(--muted)'}"></span>
+               <span><span class="lite-t">${esc(strip(e.msg))}</span>
+                 <span class="lite-m">${(CAT[e.cat] || {}).label || e.cat} · ${ago(e.t)}</span></span>
+               <span class="lite-m">${hhmmss(e.t)}</span></button>`).join('')}
+           </div>
+         </div>
+       </div>`
+    : `<div class="duty clear">
+         <div class="duty-n">0</div>
+         <div><div class="duty-t">Aucune alerte en attente</div>
+         <div class="duty-s">Tout ce qui a été signalé sur la période a été traité.</div></div>
+       </div>`;
 
   drawChart(s);
+  $('#legend').innerHTML = SEVS.map(x =>
+    `<span style="--c:${x.c}"><i></i>${esc(x.label)}</span>`).join('');
 
-  const max = Math.max(1, ...Object.values(s.split || {}));
-  const visibles = MODE === 'api' ? CATS.filter(c => ME.cats.includes(c.id)) : CATS;
-  $('#split').innerHTML = visibles.map(c => {
-    const v = (s.split || {})[c.id] || 0;
-    return `<button class="split-row" data-cat="${c.id}" style="--fam:${c.fam}" title="${esc(c.label)}">
-      <span class="tag" style="--fam:${c.fam}">${c.code}</span>
-      <span class="split-track"><span class="split-fill" style="width:${Math.max(v ? 4 : 0, v / max * 100)}%"></span></span>
-      <span class="split-n">${v}</span></button>`;
+  /* Répartition — rangée par groupe, comme le rail : on cherche
+     « où ça se passe », pas un classement de 19 nombres. */
+  const split = s.split || {};
+  const cats = visibleCats();
+  const max = Math.max(1, ...Object.values(split));
+  $('#dist').innerHTML = GROUPS.map(g => {
+    const dans = cats.filter(c => c.group === g.id);
+    if (!dans.length) return '';
+    const somme = dans.reduce((n, c) => n + (split[c.id] || 0), 0);
+    return `<div class="dist-group">
+      <div class="dist-row" style="padding-bottom:2px">
+        <span class="eyebrow" style="color:${g.fam}">${esc(g.label)}</span>
+        <span class="dist-n" style="color:var(--ink-2)">${somme}</span>
+      </div>
+      ${dans.map(c => {
+        const v = split[c.id] || 0;
+        return `<button class="dist-row" data-cat="${c.id}" style="--fam:${c.fam}">
+          <span><span class="dist-name">${esc(c.label)}</span>
+            <span class="dist-track"><span class="dist-bar" style="width:${Math.max(v ? 3 : 0, v / max * 100)}%;display:block"></span></span></span>
+          <span class="dist-n">${v || '·'}</span></button>`;
+      }).join('')}
+    </div>`;
   }).join('');
-
-  $('#alerts').innerHTML = (s.alertList || []).map(e => `
-    <button class="mini-row" data-ev="${e.id}" data-cat-of="${e.cat}">
-      <span style="width:8px;height:8px;border-radius:2px;background:${SEV[e.sev] ? SEV[e.sev].c : 'var(--muted)'}"></span>
-      <span><span class="mini-title">${esc(strip(e.msg))}</span><br><span class="mini-meta">${CAT[e.cat] ? CAT[e.cat].code : e.cat} · ${ago(e.t)}</span></span>
-      <span class="mini-meta">${hhmmss(e.t)}</span>
-    </button>`).join('') ||
-    `<div class="empty"><b>Rien à traiter</b><span>Aucune alerte ouverte sur la période.</span></div>`;
+  $('#distNote').textContent = `${Object.values(split).reduce((a, b) => a + b, 0)} évènements`;
 
   $('#topPlayers').innerHTML = (s.top || []).map(p => `
-    <button class="mini-row" data-player="${esc(p.key)}">
-      <span class="avatar" style="${avatarStyle(p)}">${initials(p)}</span>
-      <span><span class="mini-title">${esc(p.name)}</span><br><span class="mini-meta">${p.sid != null ? '[' + p.sid + ']' : ''}</span></span>
-      <span class="mini-meta">${p.n} évts</span></button>`).join('') ||
-    `<div class="empty"><b>Aucun joueur</b><span>Élargissez la période.</span></div>`;
+    <button class="row-lite" data-player="${esc(p.key)}">
+      <span class="av sm" style="${avatarStyle(p)}">${initials(p)}</span>
+      <span><span class="lite-t">${esc(p.name)}</span>
+        <span class="lite-m">${p.sid != null ? '[' + p.sid + ']' : 'hors ligne'}</span></span>
+      <span class="lite-m">${p.n}</span></button>`).join('')
+    || `<div class="void"><b>Aucun joueur</b><span>Élargissez la période.</span></div>`;
 }
 
+/* ---------- graphique empilé ----------
+   Le volume seul ne dit rien : 40 évènements peuvent être 40 messages
+   de chat ou 3 détections. L'empilement par gravité montre QUAND la
+   soirée a dérapé. */
 function drawChart(s) {
   const cfg = CHART_CFG[STATE.range];
-  const series = s.series || [], size = s.bucketSize || 3600000, start = s.from;
-  const max = Math.max(1, ...series), peak = series.indexOf(max);
-  const W = 760, H = 190, L = 38, R = 8, Tp = 14, B = 28, pw = W - L - R, ph = H - Tp - B;
-  const bw = pw / Math.max(1, series.length), gap = Math.min(7, bw * .22);
-  let out = `<defs>
-    <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#9D5CFF" stop-opacity=".85"/><stop offset="100%" stop-color="#6D2BD9" stop-opacity=".35"/></linearGradient>
-    <linearGradient id="barPeak" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#DCC2FF"/><stop offset="100%" stop-color="#9D5CFF" stop-opacity=".55"/></linearGradient></defs>`;
-  [0, .5, 1].forEach(f => { const y = Tp + ph - ph * f;
-    out += `<line class="grid-line" x1="${L}" y1="${y.toFixed(1)}" x2="${W - R}" y2="${y.toFixed(1)}"/>`;
-    out += `<text x="${L - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end">${Math.round(max * f)}</text>`; });
-  series.forEach((v, i) => {
-    const h = Math.max(v ? 2 : 0, ph * v / max), x = L + i * bw + gap / 2, y = Tp + ph - h, w = Math.max(2, bw - gap);
-    out += `<g><title>${cfg.fmt(start + i * size)} — ${v} évènement${v > 1 ? 's' : ''}</title>`;
-    out += `<rect class="bar-hit" x="${x.toFixed(1)}" y="${Tp}" width="${w.toFixed(1)}" height="${ph}"/>`;
-    out += `<rect class="bar${i === peak ? ' peak' : ''}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2"/></g>`;
-    if (i % cfg.every === 0)
-      out += `<text x="${(x + w / 2).toFixed(1)}" y="${H - 9}" text-anchor="middle">${cfg.fmt(start + i * size)}</text>`;
+  const size = s.bucketSize || 3600000, start = s.from;
+  const bySev = s.seriesBySev || null;
+  const order = ['info', 'notice', 'alerte', 'critique'];
+  const n = (s.series || []).length || cfg.n;
+  const piles = order.map(id => (bySev && bySev[id]) || new Array(n).fill(0));
+  const totaux = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    totaux[i] = bySev ? piles.reduce((a, p) => a + (p[i] || 0), 0) : ((s.series || [])[i] || 0);
+  }
+  const max = Math.max(1, ...totaux), peak = totaux.indexOf(max);
+  const W = 800, H = 200, L = 40, R = 10, T = 12, B = 30;
+  const pw = W - L - R, ph = H - T - B;
+  const bw = pw / n, gap = Math.min(6, bw * .2), w = Math.max(2, bw - gap);
+
+  let out = '';
+  [0, .5, 1].forEach(f => {
+    const y = T + ph - ph * f;
+    out += `<line class="rule" x1="${L}" y1="${y.toFixed(1)}" x2="${W - R}" y2="${y.toFixed(1)}"/>`;
+    out += `<text x="${L - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end">${Math.round(max * f)}</text>`;
   });
+  for (let i = 0; i < n; i++) {
+    const x = L + i * bw + gap / 2;
+    let y = T + ph;
+    const detail = order.map((id, k) => `${(SEV[id] || {}).label || id} ${piles[k][i] || 0}`).reverse().join(' · ');
+    out += `<g><title>${cfg.fmt(start + i * size)} — ${totaux[i]} évènement${totaux[i] > 1 ? 's' : ''}\n${detail}</title>`;
+    out += `<rect class="hit" x="${x.toFixed(1)}" y="${T}" width="${w.toFixed(1)}" height="${ph}" fill="transparent"/>`;
+    order.forEach((id, k) => {
+      const v = piles[k][i] || 0; if (!v) return;
+      const h = ph * v / max; y -= h;
+      // `var()` ne fonctionne PAS dans l'attribut fill : seule la
+      // propriété CSS l'accepte. L'attribut donnait des barres noires.
+      out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}"
+               style="fill:${(SEV[id] || {}).c || 'var(--muted)'}" opacity="${id === 'info' ? .42 : .92}"/>`;
+    });
+    if (!bySev && totaux[i]) {
+      const h = ph * totaux[i] / max;
+      out += `<rect x="${x.toFixed(1)}" y="${(T + ph - h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" style="fill:var(--vio)" opacity=".8"/>`;
+    }
+    if (i === peak && totaux[i])
+      out += `<rect x="${x.toFixed(1)}" y="${(y - 3).toFixed(1)}" width="${w.toFixed(1)}" height="2" style="fill:var(--vio-hi)"/>`;
+    out += `</g>`;
+    if (i % cfg.every === 0)
+      out += `<text x="${(x + w / 2).toFixed(1)}" y="${H - 10}" text-anchor="middle">${cfg.fmt(start + i * size)}</text>`;
+  }
   $('#chart').innerHTML = out;
-  $('#chartNote').textContent = `${cfg.title} · pic à ${max} évts`;
 }
 
-/* ---------- flux ---------- */
+/* ============================================================
+   Flux
+   ============================================================ */
 function renderSevBar() {
   const by = STATE.sevCounts || {};
-  $('#sevBar').innerHTML = SEVS.map(s => `
-    <button class="sev-chip" data-sev="${s.id}" style="--c:${s.c}" aria-pressed="${STATE.sevs.has(s.id)}">
-      <span class="sev-dot"></span>${esc(s.label)}<span class="sev-n">${by[s.id] || 0}</span></button>`).join('')
-    + (STATE.sevs.size ? `<button class="btn small" id="sevClear">Tout afficher</button>` : '');
+  $('#sevBar').innerHTML = SEVS.map(x => `
+    <button class="chip" data-sev="${x.id}" style="--c:${x.c}" aria-pressed="${STATE.sevs.has(x.id)}">
+      <i></i>${esc(x.label)}<b>${by[x.id] || 0}</b></button>`).join('')
+    + (STATE.sevs.size ? `<button class="btn sm" id="sevClear">Tout afficher</button>` : '');
 }
 function renderStream() {
   remember(STATE.list);
@@ -1406,34 +1612,87 @@ function renderStream() {
   renderSevBar();
   $('#streamCount').innerHTML = `<b>${STATE.total.toLocaleString('fr-FR')}</b> évènement(s) · ${CHART_CFG[STATE.range].title.toLowerCase()}`;
 
-  const tb = $('#rows');
+  const host = $('#rows');
   if (!STATE.list.length) {
-    tb.innerHTML = `<tr><td colspan="5"><div class="empty"><b>Aucun évènement</b>
+    host.innerHTML = `<div class="void"><b>Aucun évènement</b>
       <span>Rien ne correspond à ces filtres sur la période choisie.</span>
-      <button class="btn small" id="resetFilters">Réinitialiser les filtres</button></div></td></tr>`;
-  } else {
-    let lastDay = '';
-    tb.innerHTML = STATE.list.map(e => {
-      const d = dayLabel(e.t), newDay = d !== lastDay; lastDay = d;
-      const cat = CAT[e.cat] || { code: e.cat.slice(0, 3).toUpperCase(), fam: 'var(--muted)' };
-      const sev = SEV[e.sev] || { c: 'var(--muted)' };
-      return `<tr data-ev="${e.id}" aria-selected="${STATE.sel === e.id}" style="--sev:${sev.c}">
-        <td class="c-time"><b>${hhmmss(e.t)}</b>${newDay ? d : '<span style="opacity:.45">' + ago(e.t) + '</span>'}</td>
-        <td class="c-tag"><span class="tag" style="--fam:${cat.fam}">${cat.code}</span></td>
-        <td class="c-actor"><span class="actor"><span class="avatar" style="${avatarStyle(e.actor)};width:22px;height:22px;border-radius:7px;font-size:9.5px">${initials(e.actor)}</span>
-          <span><span class="actor-name">${esc(e.actor.name)}</span><br><span class="actor-id">${e.actor.sid != null ? '[' + e.actor.sid + ']' : ''}${e.actor.staff ? ' · staff' : ''}</span></span></span></td>
-        <td class="c-msg">${fmtMsg(e)}<span class="row-flags">${e.pin ? '<span class="flag-pin" title="Épinglé">◆</span>' : ''}${e.done ? '<span class="flag-done" title="Traité">✓</span>' : ''}</span></td>
-        <td class="c-src">${esc(e.res || '')}</td></tr>`;
-    }).join('');
+      <button class="btn sm" id="resetFilters">Réinitialiser les filtres</button></div>`;
+    $('#foot').textContent = '0 résultat';
+    $('#moreBtn').hidden = true;
+    return;
   }
-  $('#foot').textContent = STATE.total ? `${STATE.list.length} sur ${STATE.total} affichés` : '0 résultat';
+  let jour = '';
+  host.innerHTML = STATE.list.map(e => {
+    const d = dayLabel(e.t);
+    const sep = d !== jour ? `<div class="day-sep">${d}</div>` : '';
+    jour = d;
+    const cat = CAT[e.cat] || { code:e.cat.slice(0,3).toUpperCase(), label:e.cat, fam:'var(--muted)' };
+    const sev = SEV[e.sev] || { c:'var(--muted)' };
+    return sep + `<div class="ev" data-ev="${e.id}" aria-selected="${STATE.sel === e.id}" style="--sev:${sev.c}">
+      <div class="ev-time"><span class="ev-h">${hhmmss(e.t)}</span><span class="ev-ago">${ago(e.t).replace('il y a ', '')}</span></div>
+      <div class="ev-sev"></div>
+      <div class="ev-body">
+        <div class="ev-meta">
+          <span class="code" style="--fam:${cat.fam}">${cat.code}</span>
+          <span class="ev-actor">
+            <span class="av sm" style="${avatarStyle(e.actor)}">${initials(e.actor)}</span>
+            <span class="ev-name">${esc(e.actor.name)}</span>
+            <span class="ev-sid">${e.actor.sid != null ? '[' + e.actor.sid + ']' : ''}${e.actor.staff ? ' staff' : ''}</span>
+          </span>
+          <span class="ev-res">${esc(e.res || '')}</span>
+        </div>
+        <div class="ev-msg">${fmtMsg(e)}<span class="ev-flags">${e.pin ? '<span class="pin-f" title="Épinglé">◆</span>' : ''}${e.done ? '<span class="done-f" title="Traité">✓</span>' : ''}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+  $('#foot').textContent = `${STATE.list.length} sur ${STATE.total} affichés`;
   $('#moreBtn').hidden = !STATE.cursor;
+}
+
+/* ============================================================
+   Registre des bannissements
+   ============================================================ */
+function renderBans() {
+  const d = STATE.bans;
+  if (!d) { $('#bansRows').innerHTML = ''; return; }
+  const c = d.counts || {};
+  $('#nActifs').textContent = c.actifs != null ? c.actifs : '·';
+  $('#nExpires').textContent = c.expires != null ? c.expires : '·';
+  $('#nTous').textContent = c.tous != null ? c.tous : '·';
+  document.querySelectorAll('[data-banstate]').forEach(b =>
+    b.setAttribute('aria-pressed', b.dataset.banstate === STATE.banState));
+  $('#bansCount').innerHTML = `<b>${(d.bans || []).length}</b> ligne(s) au registre`;
+
+  if (!d.bans.length) {
+    $('#bansRows').innerHTML = `<tr><td colspan="7"><div class="void"><b>Registre vide</b>
+      <span>${STATE.banState === 'actifs' ? 'Aucun bannissement en cours.' : 'Rien à afficher pour ce filtre.'}</span></div></td></tr>`;
+    return;
+  }
+  $('#bansRows').innerHTML = d.bans.map(b => {
+    const perm = !b.expires_at;
+    const etat = b.encours ? (perm ? ['Définitif', 'var(--crit)'] : ['En cours', 'var(--warn)'])
+               : (b.lifted_at ? ['Levé', 'var(--ok)'] : ['Expiré', 'var(--muted)']);
+    return `<tr>
+      <td class="t-player"><span style="display:flex;align-items:center;gap:8px">
+        <span class="av sm" style="${avatarStyle(b)}">${initials(b)}</span>
+        <button class="lite-t" data-player="${esc(b.player_key)}" style="text-align:left">${esc(b.name || 'Inconnu')}</button>
+      </span></td>
+      <td class="t-why">${esc(b.reason || '—')}</td>
+      <td class="t-why">${esc(b.by_name || '—')}</td>
+      <td class="t-when">${dayLabel(b.created_at)} ${hhmmss(b.created_at)}</td>
+      <td class="t-when">${perm ? 'aucune' : new Date(b.expires_at).toLocaleDateString('fr-FR')}</td>
+      <td><span class="state" style="--c:${etat[1]}">${etat[0]}</span></td>
+      <td class="t-act">${b.encours && can('actions.unban')
+        ? `<button class="btn sm" data-act="unban" data-key="${esc(b.player_key)}" data-name="${esc(b.name || '')}">Lever</button>`
+        : '<span class="lite-m">—</span>'}</td>
+    </tr>`;
+  }).join('');
 }
 </script>
 
 <script>
 /* ============================================================
-   Inspecteur, dossier joueur, actions de modération
+   Inspecteur, dossier joueur, modération, équipe
    ============================================================ */
 const SEEN = new Map();
 const remember = list => (list || []).forEach(e => SEEN.set(e.id, e));
@@ -1446,89 +1705,91 @@ function jsonHtml(obj) {
     .replace(/: (true|false|null)/g, ': <span class="b">$1</span>');
 }
 
-/* ---------- boutons d'action sur un joueur ---------- */
+/* ---------- boutons de modération ---------- */
 function actionBar(key, name, banni) {
   if (!key || key === '— masqué —') return '';
   const b = [];
-  if (can('actions.warn')) b.push(`<button class="btn small" data-act="warn" data-key="${esc(key)}" data-name="${esc(name)}">Avertir</button>`);
-  if (can('actions.kick')) b.push(`<button class="btn small" data-act="kick" data-key="${esc(key)}" data-name="${esc(name)}">Expulser</button>`);
-  if (can('actions.ban') && !banni) b.push(`<button class="btn small danger" data-act="ban" data-key="${esc(key)}" data-name="${esc(name)}">Bannir</button>`);
-  if (can('actions.unban') && banni) b.push(`<button class="btn small" data-act="unban" data-key="${esc(key)}" data-name="${esc(name)}">Lever le bannissement</button>`);
-  if (can('actions.give')) b.push(`<button class="btn small" data-act="give" data-key="${esc(key)}" data-name="${esc(name)}">Rendre un bien</button>`);
-  return b.length ? `<div><h3 class="section-title" style="margin-bottom:8px">Modération</h3><div class="act-bar">${b.join('')}</div></div>` : '';
+  if (can('actions.warn')) b.push(`<button class="btn sm" data-act="warn" data-key="${esc(key)}" data-name="${esc(name)}">Avertir</button>`);
+  if (can('actions.kick')) b.push(`<button class="btn sm" data-act="kick" data-key="${esc(key)}" data-name="${esc(name)}">Expulser</button>`);
+  if (can('actions.ban') && !banni) b.push(`<button class="btn sm danger" data-act="ban" data-key="${esc(key)}" data-name="${esc(name)}">Bannir</button>`);
+  if (can('actions.unban') && banni) b.push(`<button class="btn sm" data-act="unban" data-key="${esc(key)}" data-name="${esc(name)}">Lever le bannissement</button>`);
+  if (can('actions.give')) b.push(`<button class="btn sm" data-act="give" data-key="${esc(key)}" data-name="${esc(name)}">Rendre un bien</button>`);
+  return b.length ? `<div class="block"><h3 class="eyebrow">Modération</h3><div class="tools">${b.join('')}</div></div>` : '';
 }
 
+/* ---------- inspecteur ---------- */
 function openInspector(id) {
   const e = SEEN.get(id); if (!e) return;
   STATE.sel = id;
-  const cat = CAT[e.cat] || { code: e.cat, label: e.cat, fam: 'var(--muted)' };
-  const sev = SEV[e.sev] || { label: e.sev, c: 'var(--muted)' };
+  const cat = CAT[e.cat] || { code:e.cat, label:e.cat, fam:'var(--muted)' };
+  const sev = SEV[e.sev] || { label:e.sev, c:'var(--muted)' };
   $('#inspTitle').innerHTML = fmtMsg(e);
   $('#pinBtn').setAttribute('aria-pressed', !!e.pin);  $('#pinBtn').classList.toggle('on', !!e.pin);
   $('#doneBtn').setAttribute('aria-pressed', !!e.done); $('#doneBtn').classList.toggle('on', !!e.done);
   $('#pinBtn').hidden = !can('logs.mark'); $('#doneBtn').hidden = !can('logs.mark');
 
   const d = new Date(e.t);
-  const around = [...SEEN.values()].filter(x => x.actor.name === e.actor.name && x.id !== e.id)
+  const autour = [...SEEN.values()].filter(x => x.actor.name === e.actor.name && x.id !== e.id)
     .sort((a, b) => b.t - a.t).slice(0, 6);
+  const sujet = (!e.actor.staff && e.actor.key) ? e.actor
+              : (e.target && e.target.key ? e.target : null);
+  const dejaBanni = e.cat === 'bans' && e.d && e.d.type === 'ban';
 
   $('#inspBody').innerHTML = `
     <dl class="kv">
       <dt>Identifiant</dt><dd class="mono">${esc(String(e.id))}</dd>
       <dt>Horodatage</dt><dd class="mono">${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${hhmmss(e.t)} · ${ago(e.t)}</dd>
-      <dt>Catégorie</dt><dd><span class="tag" style="--fam:${cat.fam}">${cat.code}</span> ${esc(cat.label)}</dd>
-      <dt>Gravité</dt><dd><span class="sev-chip" style="--c:${sev.c}" aria-pressed="true"><span class="sev-dot"></span>${esc(sev.label)}</span></dd>
+      <dt>Catégorie</dt><dd><span class="code" style="--fam:${cat.fam}">${cat.code}</span> ${esc(cat.label)}</dd>
+      <dt>Gravité</dt><dd><span class="state" style="--c:${sev.c}">${esc(sev.label)}</span></dd>
       <dt>Ressource</dt><dd class="mono">${esc(e.res || '—')}</dd>
       <dt>Auteur</dt><dd>${e.actor.key
-        ? `<button class="btn small" data-player="${esc(e.actor.key)}">${esc(e.actor.name)}${e.actor.sid != null ? ' [' + e.actor.sid + ']' : ''}</button>`
+        ? `<button class="btn sm" data-player="${esc(e.actor.key)}">${esc(e.actor.name)}${e.actor.sid != null ? ' [' + e.actor.sid + ']' : ''}</button>`
         : esc(e.actor.name)}</dd>
-      ${e.target && e.target.key ? `<dt>Concerné</dt><dd><button class="btn small" data-player="${esc(e.target.key)}">${esc(e.target.name)}</button></dd>` : ''}
-      ${e.actor.license ? `<dt>Licence</dt><dd class="mono" style="font-size:10.5px">${esc(e.actor.license)}</dd>` : ''}
+      ${e.target && e.target.key ? `<dt>Concerné</dt><dd><button class="btn sm" data-player="${esc(e.target.key)}">${esc(e.target.name)}</button></dd>` : ''}
+      ${e.actor.license ? `<dt>Licence</dt><dd class="mono">${esc(e.actor.license)}</dd>` : ''}
       ${e.done && e.doneBy ? `<dt>Traité par</dt><dd>${esc(e.doneBy)}</dd>` : ''}
     </dl>
-    <div>
-      <h3 class="section-title" style="margin-bottom:8px">Données brutes</h3>
+    <div class="block">
+      <h3 class="eyebrow">Données brutes</h3>
       <pre class="payload">${jsonHtml(e.d || {})}</pre>
     </div>
-    <div class="insp-actions">
-      <button class="btn small" data-copy="json">Copier le JSON</button>
-      <button class="btn small" data-copy="line">Copier la ligne</button>
-      ${e.actor.key ? `<button class="btn small" data-player="${esc(e.actor.key)}">Ouvrir le dossier joueur</button>` : ''}
+    <div class="tools">
+      <button class="btn sm" data-copy="json">Copier le JSON</button>
+      <button class="btn sm" data-copy="line">Copier la ligne</button>
+      ${e.actor.key ? `<button class="btn sm" data-player="${esc(e.actor.key)}">Dossier joueur</button>` : ''}
     </div>
-    ${(() => { const sujet = (!e.actor.staff && e.actor.key) ? e.actor
-        : (e.target && e.target.key ? e.target : null);
-      return sujet ? actionBar(sujet.key, sujet.name, false) : ''; })()}
-    <div>
-      <h3 class="section-title" style="margin-bottom:8px">Contexte joueur — ${esc(e.actor.name)}</h3>
-      <div class="chain">${around.map(x => `<button class="chain-row" data-ev="${x.id}">
-        <span class="chain-t">${hhmmss(x.t)}</span><span class="chain-m">${esc(strip(x.msg))}</span></button>`).join('')
-        || '<span class="mini-meta">Aucun autre évènement chargé pour ce joueur.</span>'}</div>
+    ${sujet ? actionBar(sujet.key, sujet.name, dejaBanni) : ''}
+    <div class="block">
+      <h3 class="eyebrow">Contexte — ${esc(e.actor.name)}</h3>
+      <div class="trail">${autour.map(x => `<button class="trail-row" data-ev="${x.id}">
+        <span class="trail-t">${hhmmss(x.t)}</span><span class="trail-m">${esc(strip(x.msg))}</span></button>`).join('')
+        || '<span class="lite-m">Aucun autre évènement chargé pour ce joueur.</span>'}</div>
     </div>`;
   $('#inspector').classList.add('open');
   $('#inspector').setAttribute('aria-hidden', 'false');
-  document.querySelector('.app').classList.add('insp');
-  document.querySelectorAll('.logs tbody tr').forEach(r => r.setAttribute('aria-selected', r.dataset.ev === String(id)));
+  $('#app').classList.add('insp-open');
+  document.querySelectorAll('.ev').forEach(r => r.setAttribute('aria-selected', r.dataset.ev === String(id)));
 }
 function closeInspector() {
   $('#inspector').classList.remove('open');
   $('#inspector').setAttribute('aria-hidden', 'true');
-  document.querySelector('.app').classList.remove('insp');
+  $('#app').classList.remove('insp-open');
   STATE.sel = null;
-  document.querySelectorAll('.logs tbody tr').forEach(r => r.setAttribute('aria-selected', 'false'));
+  document.querySelectorAll('.ev').forEach(r => r.setAttribute('aria-selected', 'false'));
 }
 
-/* ---------- dossier joueur ---------- */
+/* ---------- feuille ---------- */
 const moneyFr = n => Number(n || 0).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' $';
-function openSheet(title, meta, avatarSeed, body) {
-  $('#dosAvatar').style.cssText = avatarStyle(avatarSeed);
-  $('#dosAvatar').textContent = initials(avatarSeed);
-  $('#dosName').textContent = title;
+function openSheet(titre, meta, graine, corps) {
+  $('#dosAvatar').style.cssText = avatarStyle(graine);
+  $('#dosAvatar').textContent = initials(graine);
+  $('#dosName').textContent = titre;
   $('#dosMeta').innerHTML = meta;
-  $('#dosBody').innerHTML = body;
+  $('#dosBody').innerHTML = corps;
   $('#sheet').hidden = false; $('#scrim').hidden = false;
   $('#dosClose').focus();
 }
-const closeSheet = () => { $('#sheet').hidden = true; $('#scrim').hidden = true; };
+const closeSheet = () => { $('#sheet').hidden = true; if ($('#dialog').hidden) $('#scrim').hidden = true; };
 
 async function openDossier(key) {
   let f;
@@ -1538,56 +1799,56 @@ async function openDossier(key) {
   remember(f.last);
   const banni = !!f.ban;
   openSheet(p.name,
-    `${p.sid != null ? '[' + p.sid + '] · ' : ''}${esc(p.job || 'sans emploi')}${p.grade != null ? ' · grade ' + p.grade : ''}` +
+    `${p.sid != null ? '[' + p.sid + '] · ' : ''}${esc(p.job || 'sans emploi')}` +
+    `${p.grade != null ? ' · grade ' + p.grade : ''}` +
     `${p.playtime ? ' · ' + Math.round(p.playtime / 60) + ' h de jeu' : ''}` +
     `${p.firstSeen ? ' · vu depuis ' + dayLabel(p.firstSeen) : ''}`,
-    p,
-    `
-    ${banni ? `<div class="gate-err">Joueur banni — ${esc(f.ban.reason || 'sans motif')}${f.ban.expires_at ? ' · jusqu’au ' + new Date(f.ban.expires_at).toLocaleDateString('fr-FR') : ' · définitif'}</div>` : ''}
-    <div class="stat-strip">
-      <div class="stat"><div class="stat-k">Évènements</div><div class="stat-v">${s.events}</div></div>
-      <div class="stat"><div class="stat-k">Sessions</div><div class="stat-v">${s.sessions}</div></div>
-      <div class="stat"><div class="stat-k">Éliminations</div><div class="stat-v">${s.kills}</div></div>
-      <div class="stat"><div class="stat-k">Décès</div><div class="stat-v">${s.deaths}</div></div>
-      <div class="stat"><div class="stat-k">Détections</div><div class="stat-v" style="${s.flags ? 'color:#FF8399' : ''}">${s.flags}</div></div>
+    p, `
+    ${banni ? `<div class="banner" style="--c:var(--crit)"><b>Banni</b> — ${esc(f.ban.reason || 'sans motif')}${
+      f.ban.expires_at ? ' · jusqu’au ' + new Date(f.ban.expires_at).toLocaleDateString('fr-FR') : ' · définitif'}</div>` : ''}
+    <div class="facts">
+      <div class="fact"><div class="fact-k">Évènements</div><div class="fact-v">${s.events}</div></div>
+      <div class="fact"><div class="fact-k">Sessions</div><div class="fact-v">${s.sessions}</div></div>
+      <div class="fact"><div class="fact-k">Éliminations</div><div class="fact-v">${s.kills}</div></div>
+      <div class="fact"><div class="fact-k">Décès</div><div class="fact-v">${s.deaths}</div></div>
+      <div class="fact"><div class="fact-k">Détections</div><div class="fact-v" style="${s.flags ? 'color:var(--crit)' : ''}">${s.flags}</div></div>
     </div>
-    ${p.bank != null ? `<div class="card" style="background:rgba(30,20,50,.35)">
-      <h3 class="section-title">Comptes</h3>
-      <div class="stat-strip">
-        <div class="stat"><div class="stat-k">Liquide</div><div class="stat-v">${moneyFr(p.cash)}</div></div>
-        <div class="stat"><div class="stat-k">Banque</div><div class="stat-v">${moneyFr(p.bank)}</div></div>
-        <div class="stat"><div class="stat-k">Argent sale</div><div class="stat-v" style="${p.dirty ? 'color:#FFC55C' : ''}">${moneyFr(p.dirty)}</div></div>
-      </div></div>` : ''}
+    ${p.bank != null ? `<div class="facts">
+      <div class="fact"><div class="fact-k">Liquide</div><div class="fact-v">${moneyFr(p.cash)}</div></div>
+      <div class="fact"><div class="fact-k">Banque</div><div class="fact-v">${moneyFr(p.bank)}</div></div>
+      <div class="fact"><div class="fact-k">Argent sale</div><div class="fact-v" style="${p.dirty ? 'color:var(--warn)' : ''}">${moneyFr(p.dirty)}</div></div>
+    </div>` : ''}
     ${actionBar(p.key, p.name, banni)}
-    <div>
-      <h3 class="section-title" style="margin-bottom:8px">Identifiants</h3>
-      ${p.discord || p.steam || p.key !== '— masqué —' ? `<dl class="kv">
-        <dt>License</dt><dd class="mono" style="font-size:10.5px">${esc(p.key)}</dd>
-        ${p.discord ? `<dt>Discord</dt><dd class="mono" style="font-size:10.5px">${esc(p.discord)}</dd>` : ''}
-        ${p.steam ? `<dt>Steam</dt><dd class="mono" style="font-size:10.5px">${esc(p.steam)}</dd>` : ''}
-        ${p.fivem ? `<dt>FiveM</dt><dd class="mono" style="font-size:10.5px">${esc(p.fivem)}</dd>` : ''}
-      </dl>` : `<span class="mini-meta">Votre rôle ne donne pas accès aux identifiants.</span>`}
+    <div class="block">
+      <h3 class="eyebrow">Identifiants</h3>
+      ${p.key !== '— masqué —' ? `<dl class="kv">
+        <dt>License</dt><dd class="mono">${esc(p.key)}</dd>
+        ${p.discord ? `<dt>Discord</dt><dd class="mono">${esc(p.discord)}</dd>` : ''}
+        ${p.steam ? `<dt>Steam</dt><dd class="mono">${esc(p.steam)}</dd>` : ''}
+        ${p.fivem ? `<dt>FiveM</dt><dd class="mono">${esc(p.fivem)}</dd>` : ''}
+      </dl>` : `<span class="lite-m">Votre rôle ne donne pas accès aux identifiants.</span>`}
     </div>
-    <div>
-      <h3 class="section-title" style="margin-bottom:8px">Sanctions (${f.sanctions.length})</h3>
-      <div class="mini" style="gap:6px">${f.sanctions.map(x => `
-        <div class="sanction"><span class="s-kind">${esc(String(x.type).replace(/_/g, ' '))}</span>
-        <span class="s-why">${esc(x.reason || '—')}${x.by_name ? ' — par ' + esc(x.by_name) : ''}</span>
-        <span class="s-when">${dayLabel(x.created_at)} ${hhmmss(x.created_at)}</span></div>`).join('')
-        || '<span class="mini-meta">Aucune sanction enregistrée.</span>'}</div>
+    <div class="block">
+      <h3 class="eyebrow">Sanctions (${f.sanctions.length})</h3>
+      ${f.sanctions.length ? f.sanctions.map(x => `
+        <div class="banner" style="--c:${x.type === 'ban' ? 'var(--crit)' : 'var(--warn)'};display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:baseline">
+          <span class="code" style="--fam:var(--c)">${esc(String(x.type).toUpperCase())}</span>
+          <span>${esc(x.reason || '—')}${x.by_name ? ' — par ' + esc(x.by_name) : ''}</span>
+          <span class="lite-m">${dayLabel(x.created_at)}</span>
+        </div>`).join('') : '<span class="lite-m">Aucune sanction enregistrée.</span>'}
     </div>
-    <div>
-      <h3 class="section-title" style="margin-bottom:8px">Derniers évènements</h3>
-      <div class="chain">${f.last.map(e => {
-        const c = CAT[e.cat] || { code: e.cat, fam: 'var(--muted)' };
-        return `<button class="chain-row" data-ev="${e.id}">
-          <span class="chain-t">${hhmmss(e.t)}</span>
-          <span class="chain-m"><span class="tag" style="--fam:${c.fam};margin-right:6px">${c.code}</span>${esc(strip(e.msg))}</span></button>`;
+    <div class="block">
+      <h3 class="eyebrow">Derniers évènements</h3>
+      <div class="trail">${f.last.map(e => {
+        const c = CAT[e.cat] || { code:e.cat, fam:'var(--muted)' };
+        return `<button class="trail-row" data-ev="${e.id}">
+          <span class="trail-t">${hhmmss(e.t)}</span>
+          <span class="trail-m"><span class="code" style="--fam:${c.fam};margin-right:7px">${c.code}</span>${esc(strip(e.msg))}</span></button>`;
       }).join('')}</div>
     </div>`);
 }
 
-/* ---------- boîte de dialogue d'action ---------- */
+/* ---------- dialogue d'action ---------- */
 let pendingAction = null;
 const DUREES = [[0,'Définitif'],[1,'1 jour'],[3,'3 jours'],[7,'7 jours'],[14,'14 jours'],[30,'30 jours']];
 const TITRES = { warn:'Avertir', kick:'Expulser', ban:'Bannir', unban:'Lever le bannissement', give:'Rendre un bien' };
@@ -1598,9 +1859,9 @@ function askAction(type, key, name) {
   $('#dlgOk').className = 'btn ' + (type === 'ban' ? 'danger' : 'primary');
   $('#dlgOk').textContent = TITRES[type];
   $('#dlgBody').innerHTML = `
-    ${type === 'ban' ? `<div class="warn">Le joueur sera déconnecté et sa reconnexion refusée. La sanction apparaîtra au journal avec votre pseudo.</div>` : ''}
-    ${type === 'unban' ? `<div class="warn">Le joueur pourra se reconnecter immédiatement.</div>` : ''}
-    ${type !== 'unban' ? `<div class="field" style="margin-top:10px">
+    ${type === 'ban' ? `<div class="banner" style="--c:var(--warn)">Le joueur sera déconnecté et sa reconnexion refusée. La sanction entre au registre avec votre pseudo.</div>` : ''}
+    ${type === 'unban' ? `<div class="banner" style="--c:var(--ok)">Le joueur pourra se reconnecter immédiatement.</div>` : ''}
+    ${type !== 'unban' ? `<div class="field" style="margin-top:12px">
       <label for="dlgReason">Motif${type === 'give' ? ' (ticket, contexte)' : ''}</label>
       <input class="input" id="dlgReason" placeholder="${type === 'give' ? 'Remboursement — ticket #412' : 'RDM sur Legion Square'}" maxlength="300">
     </div>` : ''}
@@ -1613,15 +1874,17 @@ function askAction(type, key, name) {
       <input class="input" id="dlgLabel" placeholder="120 000 $ / 1× Médikit / Sultan RS" maxlength="120">
     </div>` : ''}`;
   $('#dialog').hidden = false; $('#scrim').hidden = false;
-  const first = $('#dlgReason') || $('#dlgOk'); first.focus();
+  ($('#dlgReason') || $('#dlgOk')).focus();
 }
-function closeDialog() { $('#dialog').hidden = true; pendingAction = null; if ($('#sheet').hidden) $('#scrim').hidden = true; }
-
+function closeDialog() {
+  $('#dialog').hidden = true; pendingAction = null;
+  if ($('#sheet').hidden) $('#scrim').hidden = true;
+}
 async function confirmAction() {
   if (!pendingAction) return;
   const { type, key, name } = pendingAction;
   const reason = ($('#dlgReason') && $('#dlgReason').value.trim()) || '';
-  if (type !== 'unban' && reason.length < 3) { toast('Un motif d’au moins 3 caractères est obligatoire.'); return; }
+  if (type !== 'unban' && reason.length < 3) return toast('Un motif d’au moins 3 caractères est obligatoire.');
   const days = $('#dlgDays') ? Number($('#dlgDays').value) : 0;
   const label = $('#dlgLabel') ? $('#dlgLabel').value.trim() : '';
   $('#dlgOk').disabled = true;
@@ -1634,25 +1897,24 @@ async function confirmAction() {
   finally { $('#dlgOk').disabled = false; }
 }
 
-/* ---------- équipe et journal du panneau ---------- */
+/* ---------- équipe et audit ---------- */
 async function openTeam() {
   let d;
   try { d = await api('/api/staff'); } catch (e) { return toast(e.message); }
-  const rows = d.staff.map(s => `
-    <div class="staff-row ${s.disabled ? 'off' : ''}">
-      <span class="avatar" style="${avatarStyle(s)}">${initials(s)}</span>
-      <span><span class="mini-title">${esc(s.pseudo)}</span><br>
-        <span class="mini-meta">${s.last_login ? 'vu ' + dayLabel(s.last_login) : 'jamais connecté'}</span></span>
-      <select class="select" data-staff-role="${s.id}">
-        ${d.roles.map(r => `<option value="${r.id}" ${r.id === s.role ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
-      </select>
-      <button class="btn small" data-staff-toggle="${s.id}" data-off="${s.disabled ? 1 : 0}">${s.disabled ? 'Réactiver' : 'Suspendre'}</button>
-    </div>`).join('');
   openSheet('Équipe staff', `${d.staff.length} compte(s) · un rôle donne des droits, jamais l’inverse`,
-    { name: 'Équipe', hue: 268 }, `
-    <div class="staff-list">${rows}</div>
-    <div class="card" style="background:rgba(30,20,50,.35)">
-      <h3 class="section-title">Ajouter un membre</h3>
+    { name:'Équipe', hue:268 }, `
+    <div class="team">${d.staff.map(s => `
+      <div class="team-row ${s.disabled ? 'off' : ''}">
+        <span class="av sm" style="${avatarStyle(s)}">${initials(s)}</span>
+        <span><span class="lite-t">${esc(s.pseudo)}</span>
+          <span class="lite-m">${s.last_login ? 'vu ' + dayLabel(s.last_login) : 'jamais connecté'}</span></span>
+        <select class="input" style="height:30px;width:auto" data-staff-role="${s.id}">
+          ${d.roles.map(r => `<option value="${r.id}" ${r.id === s.role ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+        </select>
+        <button class="btn sm" data-staff-toggle="${s.id}" data-off="${s.disabled ? 1 : 0}">${s.disabled ? 'Réactiver' : 'Suspendre'}</button>
+      </div>`).join('')}</div>
+    <div class="block">
+      <h3 class="eyebrow">Ajouter un membre</h3>
       <div class="field"><label for="nsPseudo">Pseudo</label><input class="input" id="nsPseudo" autocomplete="off"></div>
       <div class="field"><label for="nsPass">Mot de passe (10 caractères minimum)</label><input class="input" id="nsPass" type="text" autocomplete="off"></div>
       <div class="field"><label for="nsRole">Rôle</label>
@@ -1663,11 +1925,11 @@ async function openTeam() {
 async function openAudit() {
   let d;
   try { d = await api('/api/audit'); } catch (e) { return toast(e.message); }
-  openSheet('Journal du panneau', 'Qui a consulté quoi, qui a sanctionné qui', { name: 'Audit', hue: 210 }, `
-    <div class="chain">${d.audit.map(a => `<div class="chain-row">
-      <span class="chain-t">${dayLabel(a.ts)} ${hhmmss(a.ts)}</span>
-      <span class="chain-m"><strong>${esc(a.pseudo || 'anonyme')}</strong> — ${esc(a.action)}${a.detail ? ' · ' + esc(a.detail) : ''}</span>
-    </div>`).join('') || '<span class="mini-meta">Rien à afficher.</span>'}</div>`);
+  openSheet('Journal du panneau', 'Qui a consulté quoi, qui a sanctionné qui', { name:'Audit', hue:210 }, `
+    <div class="trail">${d.audit.map(a => `<div class="trail-row">
+      <span class="trail-t">${dayLabel(a.ts)} ${hhmmss(a.ts)}</span>
+      <span class="trail-m"><strong>${esc(a.pseudo || 'anonyme')}</strong> — ${esc(a.action)}${a.detail ? ' · ' + esc(a.detail) : ''}</span>
+    </div>`).join('') || '<span class="lite-m">Rien à afficher.</span>'}</div>`);
 }
 </script>
 
@@ -1679,23 +1941,32 @@ function goStream(cat) {
   STATE.view = 'stream'; STATE.cat = cat; STATE.limit = 120; STATE.list = [];
   render(); refresh(); window.scrollTo({ top: 0 });
 }
+function goBans() {
+  STATE.view = 'bans'; STATE.cat = 'bans';
+  render(); refresh(); window.scrollTo({ top: 0 });
+}
 function goOverview() { STATE.view = 'overview'; render(); refresh(); }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-staff-toggle]');
+  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-staff-toggle],[data-banstate]');
   if (!t) return;
 
   if (t.dataset.view === 'overview') return goOverview();
   if (t.dataset.act)    return askAction(t.dataset.act, t.dataset.key, t.dataset.name);
   if (t.dataset.player) { closeInspector(); return openDossier(t.dataset.player); }
+  if (t.dataset.banstate) { STATE.banState = t.dataset.banstate; return refresh(); }
   if (t.dataset.ev) {
     const id = Number(t.dataset.ev) || t.dataset.ev;
     closeSheet();
-    const known = SEEN.get(id);
-    if (STATE.view === 'overview' && known) { goStream(known.cat); }
+    const connu = SEEN.get(id);
+    if (STATE.view === 'overview' && connu) goStream(connu.cat);
     return openInspector(id);
   }
-  if (t.dataset.cat)  return goStream(t.dataset.cat);
+  if (t.dataset.cat) {
+    // Bannissements : le registre d'abord. Le flux ne dit pas qui est
+    // banni EN CE MOMENT, et c'est la seule question qu'on se pose ici.
+    return t.dataset.cat === 'bans' ? goBans() : goStream(t.dataset.cat);
+  }
   if (t.dataset.sev) {
     const s = t.dataset.sev;
     STATE.sevs.has(s) ? STATE.sevs.delete(s) : STATE.sevs.add(s);
@@ -1707,8 +1978,9 @@ document.addEventListener('click', async ev => {
     return refresh();
   }
   if (t.dataset.staffToggle) {
-    try { await api('/api/staff/' + t.dataset.staffToggle, { method: 'PATCH',
-            body: JSON.stringify({ disabled: t.dataset.off === '1' ? false : true }) });
+    try {
+      await api('/api/staff/' + t.dataset.staffToggle, { method:'PATCH',
+        body: JSON.stringify({ disabled: t.dataset.off !== '1' }) });
       toast('Compte mis à jour.'); openTeam();
     } catch (e) { toast(e.message); }
     return;
@@ -1716,9 +1988,9 @@ document.addEventListener('click', async ev => {
   if (t.dataset.copy) {
     const e = SEEN.get(STATE.sel); if (!e) return;
     const txt = t.dataset.copy === 'json'
-      ? JSON.stringify({ id: e.id, horodatage: new Date(e.t).toISOString(), categorie: e.cat, gravite: e.sev,
-                         ressource: e.res, joueur: e.actor.name, serverId: e.actor.sid,
-                         evenement: strip(e.msg), donnees: e.d }, null, 2)
+      ? JSON.stringify({ id:e.id, horodatage:new Date(e.t).toISOString(), categorie:e.cat, gravite:e.sev,
+                         ressource:e.res, joueur:e.actor.name, serverId:e.actor.sid,
+                         evenement:strip(e.msg), donnees:e.d }, null, 2)
       : `${new Date(e.t).toISOString()}\t${(CAT[e.cat]||{}).code||e.cat}\t${(SEV[e.sev]||{}).label||e.sev}\t${e.actor.name}\t${strip(e.msg)}\t${e.res}`;
     copy(txt, t.dataset.copy === 'json' ? 'JSON copié' : 'Ligne copiée');
   }
@@ -1726,24 +1998,26 @@ document.addEventListener('click', async ev => {
 
 document.addEventListener('change', async ev => {
   const sel = ev.target.closest('[data-staff-role]'); if (!sel) return;
-  try { await api('/api/staff/' + sel.dataset.staffRole, { method: 'PATCH', body: JSON.stringify({ role: sel.value }) });
+  try { await api('/api/staff/' + sel.dataset.staffRole, { method:'PATCH', body: JSON.stringify({ role: sel.value }) });
         toast('Rôle modifié.'); openTeam(); }
   catch (e) { toast(e.message); openTeam(); }
 });
 
 document.addEventListener('click', async ev => {
   const id = ev.target.id;
-  if (id === 'sevClear')     { STATE.sevs.clear(); refresh(); }
-  if (id === 'resetFilters') { STATE.sevs.clear(); STATE.q = ''; $('#q').value = ''; STATE.range = 168;
+  if (id === 'sevClear')      { STATE.sevs.clear(); refresh(); }
+  if (id === 'bansToEvents')  goStream('bans');
+  if (id === 'resetFilters')  { STATE.sevs.clear(); STATE.q = ''; $('#q').value = ''; STATE.range = 168;
     document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-pressed', b.dataset.range === '168')); refresh(); }
-  if (id === 'moreBtn')      loadMore();
-  if (id === 'teamBtn')      openTeam();
-  if (id === 'auditBtn')     openAudit();
+  if (id === 'moreBtn')  loadMore();
+  if (id === 'teamBtn')  openTeam();
+  if (id === 'auditBtn') openAudit();
   if (id === 'nsGo') {
-    const pseudo = $('#nsPseudo').value.trim(), password = $('#nsPass').value, role = $('#nsRole').value;
-    try { await api('/api/staff', { method: 'POST', body: JSON.stringify({ pseudo, password, role }) });
-          toast('Compte créé.'); openTeam(); }
-    catch (e) { toast(e.message); }
+    try {
+      await api('/api/staff', { method:'POST', body: JSON.stringify({
+        pseudo: $('#nsPseudo').value.trim(), password: $('#nsPass').value, role: $('#nsRole').value }) });
+      toast('Compte créé.'); openTeam();
+    } catch (e) { toast(e.message); }
   }
 });
 
@@ -1758,46 +2032,46 @@ async function loadMore() {
 }
 
 function copy(txt, msg) {
-  const done = () => toast(msg);
-  const fallback = () => {
+  const fini = () => toast(msg);
+  const repli = () => {
     const ta = document.createElement('textarea');
     ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
     document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); done(); } catch (e) { toast('Copie impossible dans ce contexte'); }
+    try { document.execCommand('copy'); fini(); } catch (e) { toast('Copie impossible dans ce contexte'); }
     document.body.removeChild(ta);
   };
-  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, fallback);
-  else fallback();
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(fini, repli);
+  else repli();
 }
 
-$('#copyBtn').addEventListener('click', () => {
+$('#exportBtn').addEventListener('click', () => {
   if (!can('logs.export')) return toast('Votre rôle ne permet pas l’export.');
   if (MODE === 'api') {
-    const p = { cat: catsParam(), sev: [...STATE.sevs], from: windowFrom(), to: Date.now(), q: STATE.q };
-    window.location.href = '/api/export?' + qs(p);
+    window.location.href = '/api/export?' + qs({ cat: catsParam(), sev: [...STATE.sevs],
+      from: windowFrom(), to: Date.now(), q: STATE.q });
     return toast('Export CSV en cours de téléchargement…');
   }
-  if (!STATE.list.length) return toast('Rien à exporter sur ces filtres');
-  const head = 'horodatage;categorie;gravite;joueur;server_id;evenement;ressource';
-  const csv = [head].concat(STATE.list.map(e => [new Date(e.t).toISOString(), e.cat, e.sev, e.actor.name,
+  if (!STATE.list.length) return toast('Rien à exporter — ouvrez d’abord un flux.');
+  const tete = 'horodatage;categorie;gravite;joueur;server_id;evenement;ressource';
+  const csv = [tete].concat(STATE.list.map(e => [new Date(e.t).toISOString(), e.cat, e.sev, e.actor.name,
       e.actor.sid == null ? '' : e.actor.sid, '"' + strip(e.msg).replace(/"/g, '""') + '"', e.res].join(';'))).join('\n');
   copy(csv, `${STATE.list.length} lignes copiées en CSV`);
 });
 
-/* épingler / traiter */
 async function toggleMark(kind) {
   if (!STATE.sel) return;
   if (!can('logs.mark')) return toast('Votre rôle ne permet pas cette marque.');
   const e = SEEN.get(STATE.sel); if (!e) return;
-  const on = !e[kind === 'pin' ? 'pin' : 'done'];
+  const champ = kind === 'pin' ? 'pin' : 'done';
+  const on = !e[champ];
   try {
     await DS.mark(e.id, kind, on);
-    e[kind === 'pin' ? 'pin' : 'done'] = on;
+    e[champ] = on;
     if (kind === 'done') e.doneBy = on ? (ME.pseudo || 'moi') : null;
     toast(kind === 'pin' ? (on ? 'Évènement épinglé' : 'Épingle retirée')
                          : (on ? 'Marqué comme traité' : 'Remis à traiter'));
     openInspector(e.id);
-    if (STATE.view === 'stream') renderStream(); else refresh();
+    refresh();
   } catch (err) { toast(err.message); }
 }
 $('#pinBtn').addEventListener('click', () => toggleMark('pin'));
@@ -1808,24 +2082,24 @@ $('#scrim').addEventListener('click', () => { if (!$('#dialog').hidden) closeDia
 $('#dlgCancel').addEventListener('click', closeDialog);
 $('#dlgOk').addEventListener('click', confirmAction);
 
-/* recherche */
 let qh;
 $('#q').addEventListener('input', e => {
   clearTimeout(qh);
   qh = setTimeout(() => {
     STATE.q = e.target.value; STATE.limit = 120;
-    if (STATE.view === 'overview' && STATE.q) goStream(STATE.cat); else refresh();
+    if (STATE.view !== 'stream' && STATE.q) goStream(STATE.cat === 'bans' ? 'all' : STATE.cat);
+    else refresh();
   }, 220);
 });
 
-/* direct */
+/* ---------- direct ---------- */
 let stopStream = null, softTimer = null;
 function matchesFilters(e) {
   if (STATE.cat !== 'all' && e.cat !== STATE.cat) return false;
   if (STATE.sevs.size && !STATE.sevs.has(e.sev)) return false;
   if (STATE.q) {
-    const hay = (strip(e.msg) + ' ' + e.actor.name + ' ' + JSON.stringify(e.d || {})).toLowerCase();
-    if (!hay.includes(STATE.q.trim().toLowerCase())) return false;
+    const foin = (strip(e.msg) + ' ' + e.actor.name + ' ' + JSON.stringify(e.d || {})).toLowerCase();
+    if (!foin.includes(STATE.q.trim().toLowerCase())) return false;
   }
   return true;
 }
@@ -1845,15 +2119,15 @@ function startStream() { if (stopStream) stopStream(); stopStream = DS.stream(on
 
 $('#liveBtn').addEventListener('click', () => {
   STATE.live = !STATE.live;
-  $('#liveBtn').classList.toggle('on', STATE.live);
+  $('#liveBtn').classList.toggle('live', STATE.live);
   $('#liveBtn').setAttribute('aria-pressed', String(STATE.live));
   $('#liveState').textContent = STATE.live ? 'en direct' : 'en pause';
-  $('#liveDot').classList.toggle('off', !STATE.live);
+  $('#pulse').classList.toggle('off', !STATE.live);
   toast(STATE.live ? 'Flux repris' : 'Flux en pause — la liste ne bouge plus');
   if (STATE.live) refresh();
 });
 
-/* clavier */
+/* ---------- clavier ---------- */
 document.addEventListener('keydown', e => {
   if (!$('#gate').hidden) return;
   if (e.key === '/' && document.activeElement !== $('#q')) { e.preventDefault(); $('#q').focus(); $('#q').select(); return; }
@@ -1865,13 +2139,13 @@ document.addEventListener('keydown', e => {
     return;
   }
   if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && STATE.view === 'stream' && document.activeElement !== $('#q')) {
-    const rows = [...document.querySelectorAll('.logs tbody tr[data-ev]')];
-    if (!rows.length) return;
+    const lignes = [...document.querySelectorAll('.ev[data-ev]')];
+    if (!lignes.length) return;
     e.preventDefault();
-    const i = rows.findIndex(r => r.dataset.ev === String(STATE.sel));
-    const n = e.key === 'ArrowDown' ? Math.min(rows.length - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
-    openInspector(Number(rows[n].dataset.ev) || rows[n].dataset.ev);
-    rows[n].scrollIntoView({ block: 'nearest' });
+    const i = lignes.findIndex(r => r.dataset.ev === String(STATE.sel));
+    const n = e.key === 'ArrowDown' ? Math.min(lignes.length - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
+    openInspector(Number(lignes[n].dataset.ev) || lignes[n].dataset.ev);
+    lignes[n].scrollIntoView({ block: 'nearest' });
   }
 });
 
@@ -1890,9 +2164,9 @@ function applyMe(d) {
 }
 $('#gateForm').addEventListener('submit', async ev => {
   ev.preventDefault();
-  const btn = $('#gateGo'); btn.disabled = true; btn.textContent = 'Connexion…';
+  const b = $('#gateGo'); b.disabled = true; b.textContent = 'Connexion…';
   try {
-    const d = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({
+    const d = await api('/api/auth/login', { method:'POST', body: JSON.stringify({
       pseudo: $('#gatePseudo').value.trim(), password: $('#gatePass').value }) });
     applyMe(d);
     $('#gate').hidden = true;
@@ -1900,47 +2174,46 @@ $('#gateForm').addEventListener('submit', async ev => {
   } catch (e) {
     $('#gateErr').hidden = false; $('#gateErr').textContent = e.message || 'Connexion impossible.';
     $('#gatePass').value = ''; $('#gatePass').focus();
-  } finally { btn.disabled = false; btn.textContent = 'Se connecter'; }
+  } finally { b.disabled = false; b.textContent = 'Se connecter'; }
 });
 $('#logoutBtn').addEventListener('click', async () => {
-  try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+  try { await api('/api/auth/logout', { method:'POST' }); } catch (e) {}
   location.reload();
 });
 
 async function startPanel() {
   $('#gate').hidden = true;
   $('#app').hidden = false;
-
   if (MODE === 'api') {
     try {
-      const cat = await api('/api/catalogue');
-      setCatalogue(cat.cats, cat.sevs);
-      $('#retention').textContent = (cat.retention || 30) + ' jours';
+      const c = await api('/api/catalogue');
+      setCatalogue(c.cats, c.sevs, c.groups);
+      $('#retention').textContent = (c.retention || 30) + ' jours';
     } catch (e) {}
-    $('#modeTag').className = 'mode-tag live';
+    $('#modeTag').className = 'tag-mode live';
     $('#modeTag').textContent = 'en production';
     $('#demoNote').hidden = true;
-    $('#meBox').hidden = false;
-    $('#meName').textContent = ME.pseudo;
-    $('#meRole').textContent = ME.roleLabel || ME.role;
-    $('#meAvatar').style.cssText = avatarStyle({ name: ME.pseudo, hue: 268 });
-    $('#meAvatar').textContent = initials({ name: ME.pseudo });
+    $('#whoBox').hidden = false;
+    $('#whoName').textContent = ME.pseudo;
+    $('#whoRole').textContent = ME.roleLabel || ME.role;
+    $('#whoAv').style.cssText = avatarStyle({ name: ME.pseudo, hue: 268 });
+    $('#whoAv').textContent = initials({ name: ME.pseudo });
     $('#teamBtn').hidden = !can('accounts.manage');
     $('#auditBtn').hidden = !can('audit.view');
     document.title = `Origin Roleplay — Journal serveur (${ME.pseudo})`;
   }
-  buildRail();
+  buildNav();
   await refresh();
   startStream();
 }
 
 (async function boot() {
-  let etat = 'demo';
-  // Ouverte en fichier local, la page n'a aucune API à interroger : la
-  // sonder produirait une erreur CORS dans la console pour rien.
+  // Ouverte en fichier local, la page n'a aucune API à interroger :
+  // la sonder produirait une erreur CORS dans la console pour rien.
   if (location.protocol === 'file:') { MODE = 'demo'; DS = Demo; return startPanel(); }
+  let etat = 'demo';
   try {
-    const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
+    const r = await fetch('/api/auth/me', { credentials:'same-origin' });
     const ct = r.headers.get('content-type') || '';
     if (!ct.includes('json')) throw new Error('pas une API');
     if (r.status === 200) { applyMe(await r.json()); etat = 'ouvert'; }

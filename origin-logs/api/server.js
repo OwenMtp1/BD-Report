@@ -158,7 +158,7 @@ function ingest(list, server) {
       }
       // Une sanction reçue du jeu doit exister comme sanction, pas seulement
       // comme ligne de log : c'est elle qui décide d'un refus de connexion.
-      if (e.cat === 'sanctions' && e._data && e._data.type) {
+      if ((e.cat === 'sanctions' || e.cat === 'bans') && e._data && e._data.type) {
         const d = e._data, key = S(d.cibleKey) || e.target_key;
         if (key) {
           if (d.type === 'unban') uLift.run(e.ts, e.actor_name, key);
@@ -283,10 +283,20 @@ function statsOf(me, from, to, buckets) {
                       .get(...cats, from - span, from)).n;
 
   const size = Math.max(60000, Math.floor(span / buckets));
-  const bRows = db.prepare(`SELECT CAST((e.ts - ?) / ? AS INTEGER) b, COUNT(*) n ${base} GROUP BY b`)
-                  .all(from, size, ...A);
   const series = new Array(buckets).fill(0);
-  for (const r of bRows) { const i = Number(r.b); if (i >= 0 && i < buckets) series[i] = Number(r.n); }
+  const seriesBySev = {};
+  for (const id of CAT.SEV_IDS) seriesBySev[id] = new Array(buckets).fill(0);
+  // Une barre qui ne dit que le VOLUME ne dit rien : 40 évènements peuvent
+  // être 40 messages de chat ou 3 détections. On compte par gravité.
+  for (const r of db.prepare(`SELECT CAST((e.ts - ?) / ? AS INTEGER) b, e.sev, COUNT(*) n ${base}
+                              GROUP BY b, e.sev`).all(from, size, ...A)) {
+    const i = Number(r.b);
+    if (i < 0 || i >= buckets) continue;
+    series[i] += Number(r.n);
+    if (seriesBySev[r.sev]) seriesBySev[r.sev][i] = Number(r.n);
+  }
+  const bansActifs = DB.row(db.prepare(`SELECT COUNT(*) n FROM sanctions
+      WHERE type='ban' AND active=1 AND (expires_at IS NULL OR expires_at > ?)`).get(now())).n;
 
   const split = {};
   for (const r of db.prepare(`SELECT e.cat, COUNT(*) n ${base} GROUP BY e.cat`).all(...A)) split[r.cat] = Number(r.n);
@@ -301,7 +311,7 @@ function statsOf(me, from, to, buckets) {
       ORDER BY e.ts DESC LIMIT 7`).all(...A).map(r => outEvent(DB.row(r), me));
 
   return { from, to, bucketSize: size, total, prev, uniques, alerts, anticheat, acCrit, sanctions,
-           series, split, top, alertList: alertRows };
+           bansActifs, series, seriesBySev, split, top, alertList: alertRows };
 }
 
 function playerFile(me, key) {
@@ -366,7 +376,7 @@ function doAction(me, b, ip) {
 
   ingest([{
     ts: now(),
-    cat: type === 'give' ? 'admin' : 'sanctions',
+    cat: type === 'give' ? 'admin' : (type === 'ban' || type === 'unban') ? 'bans' : 'sanctions',
     sev: type === 'ban' ? (days ? 'alerte' : 'critique') : type === 'unban' ? 'info' : 'notice',
     actor: { name: me.pseudo, staff: true },
     target: { name, key },
@@ -519,7 +529,7 @@ async function route(req, res) {
                      perms: me.perms, cats: me.cats });
   }
   if (p === '/api/catalogue') {
-    return ok(res, { cats: CAT.CATS, sevs: CAT.SEVS, roles: CAT.ROLES, perms: CAT.PERMS,
+    return ok(res, { cats: CAT.CATS, sevs: CAT.SEVS, groups: CAT.GROUPS, roles: CAT.ROLES, perms: CAT.PERMS,
                      retention: CFG.retention });
   }
 
@@ -549,6 +559,27 @@ async function route(req, res) {
       if (!f) return fail(res, 404, 'Joueur inconnu.');
       audit(me, 'dossier.ouvert', key, ip);
       return ok(res, f);
+    }
+    if (p === '/api/bans' && method === 'GET') {
+      if (!need('logs.view')) return;
+      // Le registre n'est pas une relecture du flux : il dit qui est
+      // banni MAINTENANT, ce qu'aucune liste d'évènements ne répond.
+      const etat = ['actifs', 'expires', 'tous'].includes(Q.state) ? Q.state : 'actifs';
+      const t = now();
+      const encours = `(active=1 AND (expires_at IS NULL OR expires_at > ${t}))`;
+      const filtre = etat === 'actifs' ? `WHERE type='ban' AND ${encours}`
+                   : etat === 'expires' ? `WHERE type='ban' AND NOT ${encours}`
+                   : `WHERE type='ban'`;
+      const rows = db.prepare(`SELECT * FROM sanctions ${filtre} ORDER BY created_at DESC LIMIT 300`).all().map(DB.row);
+      const ids = me.perms.includes('players.identifiers');
+      const compte = k => DB.row(db.prepare(`SELECT COUNT(*) n FROM sanctions WHERE type='ban' AND ${k}`).get()).n;
+      return ok(res, {
+        bans: rows.map(b => Object.assign({}, b, {
+          player_key: ids ? b.player_key : '— masqué —',
+          encours: b.active === 1 && (!b.expires_at || b.expires_at > t)
+        })),
+        counts: { actifs: compte(encours), expires: compte('NOT ' + encours), tous: compte('1=1') }
+      });
     }
     if (p === '/api/marks' && method === 'POST') {
       if (!need('logs.mark')) return;

@@ -26,6 +26,7 @@ Config.QueueMax  = 3000      -- file de secours si l'API est injoignable
 -- Catégories émises. Couper une catégorie ici arrête l'émission à la
 -- source : c'est plus efficace que de la masquer dans le panneau.
 Config.Categories = {
+  bans = true,
   connexions = true, chat = true, combat = true, economie = true,
   inventaire = true, vehicules = true, jobs = true, proprietes = true,
   braquages = true, drogue = true, organisations = true, craft = true,

@@ -20,28 +20,36 @@ Installation pas à pas : **[DEPLOIEMENT.md](DEPLOIEMENT.md)**.
 
 ## Ce que le panneau couvre
 
-**18 catégories**, chacune avec son code de log à trois lettres :
+**19 catégories**, rangées par métier — le groupe porte la couleur, la
+catégorie porte le nom :
 
-| | | | |
-|---|---|---|---|
-| `CNX` Connexions | `CHT` Chat & commandes | `CBT` Combat & morts | `ECO` Économie |
-| `INV` Inventaire | `VEH` Véhicules | `JOB` Jobs & entreprises | `IMM` Propriétés |
-| `BRQ` Braquages | `DRG` Drogue & labos | `ORG` Organisations | `CRF` Craft & armes |
-| `ADM` Administration | `ACH` Anticheat | `SNC` Sanctions | `RPT` Reports & tickets |
-| `WLT` Whitelist | `SYS` Serveur | | |
+| Groupe | Catégories |
+|---|---|
+| **Modération** | `BAN` Bannissements · `SNC` Sanctions · `ACH` Anticheat · `RPT` Reports & tickets |
+| **Joueurs** | `CNX` Connexions · `CHT` Chat & commandes · `CBT` Combat & morts |
+| **Argent & biens** | `ECO` Économie · `INV` Inventaire · `VEH` Véhicules · `CRF` Craft & armes |
+| **Activités RP** | `JOB` Jobs · `IMM` Propriétés · `ORG` Organisations · `BRQ` Braquages · `DRG` Drogue & labos |
+| **Staff & serveur** | `ADM` Administration · `WLT` Whitelist · `SYS` Serveur |
 
 **Quatre gravités** — critique, alerte, à vérifier, info — lisibles d'un coup
 d'œil à la strie de couleur en début de ligne.
 
 ### Écrans
 
-- **Vue d'ensemble** — volume et écart avec la période précédente, joueurs
-  distincts, alertes non traitées, détections anticheat, sanctions ; activité
-  par tranche horaire ; répartition par catégorie ; file des alertes ouvertes ;
-  joueurs les plus actifs.
-- **Flux** — table dense, recherche plein texte (nom, licence, plaque, item,
-  montant, ID serveur), filtres par catégorie, gravité et période
-  (1 h / 6 h / 24 h / 7 j), pagination, export CSV.
+- **Vue d'ensemble** — une ligne d'état (volume et écart avec la période
+  précédente, joueurs distincts, anticheat, sanctions, bannis en cours), puis
+  la file des alertes ouvertes en tête d'écran : c'est la seule question que
+  le panneau existe pour poser. Le graphique d'activité est **empilé par
+  gravité** — 40 évènements peuvent être 40 messages de chat ou 3 détections,
+  et seul l'empilement montre quand la soirée a dérapé.
+- **Bannissements** — un **registre**, pas une relecture du flux : qui est
+  banni *maintenant*, pour quoi, par qui, jusqu'à quand. C'est cette table
+  que le serveur de jeu interroge à chaque connexion. Filtres en cours /
+  terminés / tous, et levée en un clic pour qui en a le droit.
+- **Flux** — une timeline : gouttière d'horodatage, barre de gravité, code
+  de catégorie, auteur et message. Recherche plein texte (nom, licence,
+  plaque, item, montant, ID serveur), filtres par catégorie, gravité et
+  période (1 h / 6 h / 24 h / 7 j), pagination, export CSV.
 - **Inspecteur** — payload brut de l'évènement, identifiants, ressource
   émettrice, contexte des évènements voisins du même joueur, épingle et
   marquage « traité » **partagés entre le staff**.
@@ -65,11 +73,12 @@ Trois rôles, définis dans `api/catalogue.js` :
 | | Modérateur | Administrateur | Fondateur |
 |---|---|---|---|
 | Lire les journaux | ✔ | ✔ | ✔ |
-| Catégories visibles | 15 (sans Administration, Whitelist, Serveur) | 18 | 18 |
+| Catégories visibles | 16 (sans Administration, Whitelist, Serveur) | 19 | 19 |
 | Épingler / marquer traité | ✔ | ✔ | ✔ |
 | Voir les identifiants (license, Discord, Steam) | — | ✔ | ✔ |
 | Avertir, expulser | ✔ | ✔ | ✔ |
 | Bannir, lever un ban, rendre un bien | — | ✔ | ✔ |
+| Registre des bannissements (lecture) | ✔ | ✔ | ✔ |
 | Journal du panneau | — | ✔ | ✔ |
 | Gérer les comptes staff | — | — | ✔ |
 

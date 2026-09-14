@@ -7,40 +7,47 @@
 // ============================================================
 'use strict';
 
-const FAM = {
-  social: 'var(--fam-social)',
-  risque: 'var(--fam-risque)',
-  biens:  'var(--fam-biens)',
-  civil:  'var(--fam-civil)',
-  staff:  'var(--fam-staff)'
-};
+// Les catégories sont rangées par MÉTIER : le groupe porte la couleur,
+// la catégorie porte le nom. Dix-neuf sigles à plat ne se lisaient pas.
+const GROUPS = [
+  { id:'moderation', label:'Modération',      fam:'var(--f-surv)'  },
+  { id:'joueurs',    label:'Joueurs',         fam:'var(--f-play)'  },
+  { id:'biens',      label:'Argent & biens',  fam:'var(--f-bien)'  },
+  { id:'rp',         label:'Activités RP',    fam:'var(--f-monde)' },
+  { id:'serveur',    label:'Staff & serveur', fam:'var(--f-staff)' }
+];
 
 const CATS = [
-  { id:'connexions',    code:'CNX', label:'Connexions',           fam:FAM.social, desc:'Arrivées, départs, file d’attente et refus de whitelist.' },
-  { id:'chat',          code:'CHT', label:'Chat & commandes',     fam:FAM.social, desc:'Proximité, OOC, /me, /do, Twitter et commandes joueur.' },
-  { id:'combat',        code:'CBT', label:'Combat & morts',       fam:FAM.risque, desc:'Dégâts, éliminations, décès et réanimations EMS.' },
-  { id:'economie',      code:'ECO', label:'Économie',             fam:FAM.biens,  desc:'Liquide, banque, virements, salaires, factures et amendes.' },
-  { id:'inventaire',    code:'INV', label:'Inventaire',           fam:FAM.biens,  desc:'Échanges, sols, coffres, stockage et suppressions staff.' },
-  { id:'vehicules',     code:'VEH', label:'Véhicules',            fam:FAM.biens,  desc:'Garages, fourrière, concession, effractions et destructions.' },
-  { id:'jobs',          code:'JOB', label:'Jobs & entreprises',   fam:FAM.civil,  desc:'Embauches, grades, prises de service et comptes société.' },
-  { id:'proprietes',    code:'IMM', label:'Propriétés',           fam:FAM.civil,  desc:'Achats, loyers, clés partagées et coffres de logement.' },
-  { id:'braquages',     code:'BRQ', label:'Braquages',            fam:FAM.risque, desc:'Fleeca, Pacific, bijouterie, magasins : départ, butin, issue.' },
-  { id:'drogue',        code:'DRG', label:'Drogue & labos',       fam:FAM.risque, desc:'Champs, récolte, transformation, revente et saisies.' },
-  { id:'organisations', code:'ORG', label:'Organisations',        fam:FAM.civil,  desc:'Coffres d’orga, adhésions, grades, territoires et guerres.' },
-  { id:'craft',         code:'CRF', label:'Craft & armes',        fam:FAM.biens,  desc:'Établis, composants, armes et munitions fabriquées.' },
-  { id:'admin',         code:'ADM', label:'Administration',       fam:FAM.staff,  desc:'Actions staff en jeu : noclip, spawn, téléportation, revive.' },
-  { id:'anticheat',     code:'ACH', label:'Anticheat',            fam:FAM.risque, desc:'Détections automatiques et évènements réseau suspects.' },
-  { id:'sanctions',     code:'SNC', label:'Sanctions',            fam:FAM.risque, desc:'Kicks, avertissements, bannissements et levées.' },
-  { id:'staff',         code:'RPT', label:'Reports & tickets',    fam:FAM.staff,  desc:'Signalements joueurs, prises en charge et clôtures.' },
-  { id:'whitelist',     code:'WLT', label:'Whitelist',            fam:FAM.staff,  desc:'Candidatures Discord, entretiens, acceptations et refus.' },
-  { id:'systeme',       code:'SYS', label:'Serveur',              fam:FAM.staff,  desc:'Redémarrages, erreurs de ressource, performance et sauvegardes.' }
+  { id:'bans',         code:'BAN', label:'Bannissements',      group:'moderation', desc:'Bannissements prononcés, levés et refus de connexion.' },
+  { id:'sanctions',    code:'SNC', label:'Sanctions',          group:'moderation', desc:'Avertissements, expulsions et coupures de vocal.' },
+  { id:'anticheat',    code:'ACH', label:'Anticheat',          group:'moderation', desc:'Détections automatiques et évènements réseau suspects.' },
+  { id:'staff',        code:'RPT', label:'Reports & tickets',  group:'moderation', desc:'Signalements joueurs, prises en charge et clôtures.' },
+
+  { id:'connexions',   code:'CNX', label:'Connexions',         group:'joueurs',    desc:'Arrivées, départs, file d’attente et refus de whitelist.' },
+  { id:'chat',         code:'CHT', label:'Chat & commandes',   group:'joueurs',    desc:'Proximité, OOC, /me, /do, Twitter et commandes joueur.' },
+  { id:'combat',       code:'CBT', label:'Combat & morts',     group:'joueurs',    desc:'Dégâts, éliminations, décès et réanimations EMS.' },
+
+  { id:'economie',     code:'ECO', label:'Économie',           group:'biens',      desc:'Liquide, banque, virements, salaires, factures et amendes.' },
+  { id:'inventaire',   code:'INV', label:'Inventaire',         group:'biens',      desc:'Échanges, sols, coffres, stockage et suppressions staff.' },
+  { id:'vehicules',    code:'VEH', label:'Véhicules',          group:'biens',      desc:'Garages, fourrière, concession, effractions et destructions.' },
+  { id:'craft',        code:'CRF', label:'Craft & armes',      group:'biens',      desc:'Établis, composants, armes et munitions fabriquées.' },
+
+  { id:'jobs',         code:'JOB', label:'Jobs & entreprises', group:'rp',         desc:'Embauches, grades, prises de service et comptes société.' },
+  { id:'proprietes',   code:'IMM', label:'Propriétés',         group:'rp',         desc:'Achats, loyers, clés partagées et coffres de logement.' },
+  { id:'organisations',code:'ORG', label:'Organisations',      group:'rp',         desc:'Coffres d’orga, adhésions, grades, territoires et guerres.' },
+  { id:'braquages',    code:'BRQ', label:'Braquages',          group:'rp',         desc:'Fleeca, Pacific, bijouterie : départ, butin, issue.' },
+  { id:'drogue',       code:'DRG', label:'Drogue & labos',     group:'rp',         desc:'Champs, récolte, transformation, revente et saisies.' },
+
+  { id:'admin',        code:'ADM', label:'Administration',     group:'serveur',    desc:'Actions staff en jeu : noclip, spawn, téléportation, revive.' },
+  { id:'whitelist',    code:'WLT', label:'Whitelist',          group:'serveur',    desc:'Candidatures Discord, entretiens, acceptations et refus.' },
+  { id:'systeme',      code:'SYS', label:'Serveur',            group:'serveur',    desc:'Redémarrages, erreurs de ressource, performance et sauvegardes.' }
 ];
 
 const SEVS = [
-  { id:'critique', label:'Critique',   c:'var(--sev-critique)' },
-  { id:'alerte',   label:'Alerte',     c:'var(--sev-alerte)' },
-  { id:'notice',   label:'À vérifier', c:'var(--sev-notice)' },
-  { id:'info',     label:'Info',       c:'var(--sev-info)' }
+  { id:'critique', label:'Critique',   c:'var(--crit)'  },
+  { id:'alerte',   label:'Alerte',     c:'var(--warn)'  },
+  { id:'notice',   label:'À vérifier', c:'var(--check)' },
+  { id:'info',     label:'Info',       c:'var(--ok)'    }
 ];
 
 // Droits atomiques. Un droit absent ne masque pas seulement un bouton :
@@ -91,5 +98,5 @@ const canSeeCat = (r, c) => catsOf(r).includes(c);
 const CAT_IDS = CATS.map(c => c.id);
 const SEV_IDS = SEVS.map(s => s.id);
 
-module.exports = { CATS, SEVS, CAT_IDS, SEV_IDS, PERMS, PERM_IDS, ROLES,
+module.exports = { CATS, SEVS, GROUPS, CAT_IDS, SEV_IDS, PERMS, PERM_IDS, ROLES,
                    roleOf, permsOf, catsOf, hasPerm, canSeeCat };

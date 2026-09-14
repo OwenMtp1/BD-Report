@@ -37,9 +37,12 @@ AddEventHandler('playerConnecting', function(name, setKickReason, deferrals)
         ('Fin du bannissement : ' .. os.date('%d/%m/%Y à %H:%M', math.floor(ban.expires_at / 1000)))
         or 'Ce bannissement est définitif.'
       deferrals.done(Config.BanMessage:format(ban.reason or 'non précisé', fin))
-      Origin.Alerte('connexions',
+      -- Un refus pour bannissement appartient au registre, pas à la
+      -- liste des arrivées : c'est là qu'on ira voir s'il conteste.
+      Origin.Alerte('bans',
         ('Connexion refusée — %s est banni'):format(name),
-        { kind = 'ban_refuse', banId = ban.id, motif = ban.reason, identifiants = ids })
+        { kind = 'ban_refuse', type = 'refus', cible = name, cibleKey = ids.license,
+          banId = ban.id, motif = ban.reason, identifiants = ids })
     else
       deferrals.done()
       Origin.Info('connexions', ('%s se connecte'):format(name),

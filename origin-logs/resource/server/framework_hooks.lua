@@ -85,7 +85,7 @@ CreateThread(function()
   AddEventHandler('txAdmin:events:playerBanned', function(d)
     local perm = not d.expiration
     Origin.Log({
-      cat = 'sanctions', sev = perm and 'critique' or 'alerte',
+      cat = 'bans', sev = perm and 'critique' or 'alerte',
       msg = ('%s a banni %s %s — %s'):format(d.author or 'staff', d.target or '?',
             perm and 'définitivement' or 'temporairement', d.reason or 'sans motif'),
       data = { kind = 'ban', type = 'ban', cible = d.target, motif = d.reason, staff = d.author,

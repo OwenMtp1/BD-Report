@@ -54,6 +54,9 @@ const M = [
   [3, 'anticheat','alerte',  (a)=>[`Téléportation anormale — ${a.name}`,{kind:'flag',detection:'position_delta',distance:I(400,4200)+' m',duree:'0,2 s'},'origin_guard']],
   [1, 'anticheat','critique',(a)=>[`Injection de ressource détectée — ${a.name}`,{kind:'flag',detection:'resource_injection',ressource:R(['eulen','redengine','lynx'])},'origin_guard']],
   [2, 'sanctions','notice',  (a,b,s)=>[`${s.name} a averti ${a.name} — ${R(MOTIFS)}`,{kind:'warn',type:'warn',cible:a.name,cibleKey:a.key,motif:R(MOTIFS),staff:s.name},'origin_admin',a,s]],
+  [2, 'bans','alerte',       (a,b,s)=>{const j=I(2,30);return [`${s.name} a banni ${a.name} pour ${j} jours`,{kind:'ban',type:'ban',cible:a.name,cibleKey:a.key,motif:R(MOTIFS),duree:j+' jour(s)',expireAt:Date.now()+j*86400000,staff:s.name},'origin_admin',a,s];}],
+  [1, 'bans','critique',     (a,b,s)=>[`${s.name} a banni ${a.name} définitivement`,{kind:'ban',type:'ban',cible:a.name,cibleKey:a.key,motif:'Cheat détecté — menu illégal',duree:'permanent',expireAt:null,staff:s.name},'origin_admin',a,s]],
+  [1, 'bans','info',         (a,b,s)=>[`${s.name} a levé le bannissement de ${a.name}`,{kind:'unban',type:'unban',cible:a.name,cibleKey:a.key,motif:'appel accepté',staff:s.name},'origin_admin',a,s]],
   [2, 'staff','notice',      (a,b)=>[`${a.name} a signalé ${b.name} — ${R(MOTIFS)}`,{kind:'report',ticket:'#'+I(400,999),vise:b.name},'origin_reports',b]],
   [2, 'whitelist','info',    (a,b,s)=>[`${s.name} a accepté la candidature de ${a.name}`,{kind:'accept',candidat:a.name,staff:s.name},'origin_whitelist',null,s]],
   [2, 'systeme','info',      ()=>[`Sauvegarde de la base terminée`,{kind:'backup',duree:I(2,40)+' s',taille:I(40,900)+' Mo'},'origin_core',null,{name:'Système',staff:true}]]
@@ -87,5 +90,5 @@ while (events.length < N && garde++ < N * 40) {
     envoyes += (await r.json()).recus || 0;
   }
   console.log(`\n  ${envoyes} évènements déposés sur ${URL_API}`);
-  console.log('  Ouvrez le panneau : les 18 catégories doivent se remplir.\n');
+  console.log('  Ouvrez le panneau : les 19 catégories doivent se remplir.\n');
 })().catch(e => { console.error('\n  ' + e.message + '\n'); process.exit(1); });
