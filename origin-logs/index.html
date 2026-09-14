@@ -1,0 +1,1287 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>:root{color-scheme:dark}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Origin Roleplay — Journal serveur</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* ============================================================
+   ORIGIN ROLEPLAY — panneau de journalisation
+   Monde visuel unique : console sombre violette. Tout est peint
+   explicitement, la page ne doit rien emprunter au fond de l'hôte.
+   ============================================================ */
+:root{
+  color-scheme: dark;
+  --void:#0A0710;
+  --panel:#120C1D;
+  --panel-2:#180F28;
+  --raise:#1E1432;
+  --line:#241A36;
+  --line-soft:#1B1329;
+  --ink:#EFE9FA;
+  --ink-2:#BCACD8;
+  --muted:#8B7BA8;
+  --vio:#9D5CFF;
+  --vio-soft:#C9A2FF;
+  --vio-dim:rgba(157,92,255,.14);
+
+  --sev-critique:#FF4D6D;
+  --sev-alerte:#FFB020;
+  --sev-notice:#7FA9FF;
+  --sev-info:#5E9E8B;
+  --ok:#2DD4A7;
+
+  --fam-social:#A97BFF;
+  --fam-risque:#FF6B86;
+  --fam-biens:#F0A93C;
+  --fam-civil:#37C4B4;
+  --fam-staff:#79A6FF;
+
+  --display:'Chakra Petch', 'Trebuchet MS', sans-serif;
+  --body:'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --mono:'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --rail:238px;
+  --r-sm:4px; --r-md:8px; --r-lg:14px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--void);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+/* nappe d'ambiance : deux halos violets très diffus, fixes */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(900px 420px at 14% -8%, rgba(157,92,255,.16), transparent 62%),
+    radial-gradient(700px 380px at 96% 4%, rgba(88,48,160,.14), transparent 60%);
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+a{color:var(--vio-soft)}
+:focus-visible{outline:2px solid var(--vio-soft);outline-offset:2px;border-radius:var(--r-sm)}
+::selection{background:rgba(157,92,255,.35)}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- coquille ---------- */
+.app{position:relative;z-index:1;display:grid;grid-template-columns:var(--rail) minmax(0,1fr);min-height:100dvh}
+
+/* ---------- rail ---------- */
+.rail{
+  border-right:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(24,15,40,.92), rgba(14,9,23,.92));
+  display:flex;flex-direction:column;gap:2px;
+  padding:16px 12px 22px;
+  position:sticky;top:0;height:100dvh;overflow-y:auto;
+}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 6px 16px}
+.brand-mark{
+  width:34px;height:34px;flex:none;border-radius:10px;
+  background:linear-gradient(145deg,#B47BFF,#6D2BD9);
+  display:grid;place-items:center;
+  font-family:var(--display);font-weight:700;font-size:17px;color:#120C1D;
+  box-shadow:0 0 0 1px rgba(201,162,255,.35), 0 6px 18px rgba(109,43,217,.45);
+}
+.brand-name{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.02em;line-height:1.15}
+.brand-sub{font-size:10.5px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;font-family:var(--mono)}
+.rail-head{
+  font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);padding:14px 8px 7px;
+}
+.cat{
+  display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px;
+  width:100%;padding:7px 8px;border-radius:var(--r-md);
+  color:var(--ink-2);text-align:left;transition:background .12s, color .12s;
+}
+.cat:hover{background:rgba(157,92,255,.09);color:var(--ink)}
+.cat[aria-current="true"]{background:var(--vio-dim);color:var(--ink);box-shadow:inset 2px 0 0 var(--vio)}
+.tag{
+  font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;
+  padding:3px 5px;border-radius:var(--r-sm);white-space:nowrap;
+  background:color-mix(in srgb, var(--fam) 18%, transparent);
+  color:var(--fam);
+  border:1px solid color-mix(in srgb, var(--fam) 26%, transparent);
+}
+.cat-label{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat-count{font-family:var(--mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.cat[aria-current="true"] .cat-count{color:var(--vio-soft)}
+.rail-foot{margin-top:auto;padding:14px 8px 0;border-top:1px solid var(--line-soft);display:grid;gap:6px}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 3px rgba(45,212,167,.16)}
+.dot-live.off{background:var(--muted);box-shadow:none}
+.foot-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted)}
+.foot-row b{color:var(--ink-2);font-weight:500;font-family:var(--mono);font-size:11px}
+
+/* ---------- barre de commande ---------- */
+.bar{
+  position:sticky;top:0;z-index:30;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:11px 22px;
+  background:rgba(10,7,16,.86);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.bar::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:linear-gradient(90deg, transparent, rgba(157,92,255,.55), transparent)}
+.search{position:relative;flex:1 1 260px;min-width:0}
+.search input{
+  width:100%;padding:8px 12px 8px 32px;border-radius:var(--r-md);
+  background:var(--panel);border:1px solid var(--line);color:var(--ink);font-size:13px;
+}
+.search input::placeholder{color:var(--muted)}
+.search input:focus{border-color:rgba(157,92,255,.55);background:var(--panel-2);outline:none;box-shadow:0 0 0 3px rgba(157,92,255,.12)}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.kbd{
+  position:absolute;right:9px;top:50%;transform:translateY(-50%);
+  font-family:var(--mono);font-size:10px;color:var(--muted);
+  border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 5px;background:var(--panel-2);
+}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);padding:2px;gap:2px}
+.seg button{
+  padding:5px 10px;border-radius:6px;font-size:12px;color:var(--muted);
+  font-family:var(--mono);letter-spacing:.02em;
+}
+.seg button[aria-pressed="true"]{background:var(--raise);color:var(--ink);box-shadow:inset 0 0 0 1px rgba(157,92,255,.3)}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:7px 12px;border-radius:var(--r-md);font-size:12.5px;
+  background:var(--panel);border:1px solid var(--line);color:var(--ink-2);
+  transition:border-color .12s,color .12s,background .12s;
+}
+.btn:hover{border-color:rgba(157,92,255,.5);color:var(--ink);background:var(--panel-2)}
+.btn.on{background:rgba(45,212,167,.1);border-color:rgba(45,212,167,.4);color:#8FEBD3}
+.btn.primary{background:linear-gradient(160deg,#9D5CFF,#6E2BD1);border-color:#B47BFF;color:#FFF}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.small{padding:5px 9px;font-size:11.5px}
+
+/* ---------- contenu ---------- */
+.main{min-width:0;display:flex;flex-direction:column}
+.view{padding:18px 22px 40px;display:grid;gap:16px;min-width:0}
+.view[hidden]{display:none}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
+.page-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.page-title{font-size:21px;font-weight:600;letter-spacing:.01em}
+.page-sub{font-size:12.5px;color:var(--muted)}
+.page-sub b{color:var(--ink-2);font-weight:500;font-family:var(--mono)}
+.section-title{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;
+}
+</style>
+<style>
+/* ---------- bandeau de mise en garde (données de démonstration) ---------- */
+.demo-note{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:9px 13px;border-radius:var(--r-md);
+  background:rgba(255,176,32,.07);border:1px solid rgba(255,176,32,.25);
+  color:#F6D9A6;font-size:12.5px;
+}
+.demo-note b{color:#FFD08A;font-weight:600}
+.demo-note code{font-family:var(--mono);font-size:11.5px;color:#FFE0B2;background:rgba(0,0,0,.28);padding:1px 5px;border-radius:var(--r-sm)}
+
+/* ---------- tuiles de synthèse ---------- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px}
+.tile{
+  padding:14px 15px;border-radius:var(--r-lg);
+  background:linear-gradient(165deg, rgba(30,20,50,.75), rgba(16,10,27,.75));
+  border:1px solid var(--line);
+  display:grid;gap:4px;align-content:start;
+}
+.tile-k{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.tile-v{font-family:var(--display);font-size:29px;font-weight:600;line-height:1.05;font-variant-numeric:tabular-nums}
+.tile-d{font-size:11.5px;color:var(--ink-2)}
+.tile.flag{border-color:rgba(255,77,109,.38);background:linear-gradient(165deg, rgba(60,18,32,.6), rgba(20,10,20,.75))}
+.tile.flag .tile-v{color:#FF8399}
+.tile.warn{border-color:rgba(255,176,32,.34)}
+.tile.warn .tile-v{color:#FFC55C}
+.trend{font-family:var(--mono);font-size:11px}
+.trend.up{color:#FF8399} .trend.down{color:var(--ok)} .trend.flat{color:var(--muted)}
+
+/* ---------- grille du tableau de bord ---------- */
+.grid-2{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start}
+.col{display:grid;gap:14px;align-content:start;min-width:0}
+.card{
+  border:1px solid var(--line);border-radius:var(--r-lg);background:rgba(18,12,29,.72);
+  padding:15px 16px;display:grid;gap:12px;min-width:0;
+}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.chart-wrap{overflow-x:auto}
+.chart{display:block;width:100%;min-width:460px;height:auto}
+.chart text{font-family:var(--mono);font-size:10px;fill:var(--muted)}
+.chart .grid-line{stroke:var(--line);stroke-width:1}
+.chart .bar{fill:url(#barFill)}
+.chart .bar.peak{fill:url(#barPeak)}
+.chart .bar-hit{fill:transparent}
+.chart .bar-hit:hover + .bar, .chart g:hover .bar{fill:url(#barPeak)}
+
+/* barres de répartition */
+.split{display:grid;gap:9px}
+.split-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;width:100%;text-align:left}
+.split-row:hover .split-name{color:var(--ink)}
+.split-name{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.split-track{height:6px;border-radius:3px;background:var(--line-soft);overflow:hidden;min-width:40px}
+.split-fill{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--fam),color-mix(in srgb,var(--fam) 45%, transparent))}
+.split-n{font-family:var(--mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* liste d'alertes / joueurs */
+.mini{display:grid;gap:2px}
+.mini-row{
+  display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+  padding:8px 9px;border-radius:var(--r-md);width:100%;text-align:left;
+}
+.mini-row:hover{background:rgba(157,92,255,.09)}
+.mini-title{font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini-meta{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.avatar{
+  width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;
+  font-family:var(--display);font-size:11px;font-weight:600;color:#0B0712;
+}
+
+/* ---------- filtres de gravité ---------- */
+.sev-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sev-chip{
+  display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;
+  border:1px solid var(--line);background:var(--panel);font-size:11.5px;color:var(--muted);
+}
+.sev-chip:hover{border-color:color-mix(in srgb,var(--c) 55%, transparent);color:var(--ink-2)}
+.sev-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 14%, transparent);border-color:color-mix(in srgb,var(--c) 48%, transparent);color:var(--ink)}
+.sev-dot{width:7px;height:7px;border-radius:2px;background:var(--c);flex:none}
+.sev-n{font-family:var(--mono);font-size:10.5px}
+
+/* ---------- flux de logs ---------- */
+.stream{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:rgba(15,10,25,.6)}
+.stream-scroll{overflow:auto;max-height:calc(100dvh - 232px);overscroll-behavior:contain}
+.logs{width:100%;border-collapse:collapse;min-width:720px}
+.logs thead th{
+  position:sticky;top:0;z-index:10;
+  background:#150E23;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;text-align:left;
+  padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap;
+}
+.logs tbody tr{border-bottom:1px solid var(--line-soft);cursor:pointer;scroll-margin-top:44px}
+.logs tbody tr:hover{background:rgba(157,92,255,.07)}
+.logs tbody tr[aria-selected="true"]{background:rgba(157,92,255,.13)}
+.logs td{padding:8px 12px;vertical-align:top}
+.logs tbody tr td:first-child{
+  border-left:3px solid var(--sev);padding-left:10px;
+}
+.c-time{white-space:nowrap;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.c-time b{display:block;color:var(--ink-2);font-weight:500;font-size:12px}
+.c-tag{width:1%;white-space:nowrap}
+.c-actor{white-space:nowrap;min-width:132px}
+.actor{display:flex;align-items:center;gap:8px}
+.actor-name{font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;max-width:150px;white-space:nowrap}
+.actor-id{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.c-msg{font-size:12.8px;color:var(--ink-2);min-width:240px}
+.c-msg strong{color:var(--ink);font-weight:600}
+.c-msg .amount{font-family:var(--mono);color:#FFC55C;font-variant-numeric:tabular-nums}
+.c-msg .item{font-family:var(--mono);color:var(--vio-soft);font-size:12px}
+.c-src{white-space:nowrap;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right}
+.flag-pin{color:var(--vio-soft)}
+.flag-done{color:var(--ok)}
+.row-flags{display:inline-flex;gap:5px;margin-left:6px;vertical-align:1px}
+.empty{padding:44px 20px;text-align:center;color:var(--muted);display:grid;gap:6px;justify-items:center}
+.empty b{color:var(--ink-2);font-family:var(--display);font-size:15px;font-weight:600}
+.stream-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+.count-note{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+</style>
+<style>
+/* ---------- inspecteur ---------- */
+.inspector{
+  position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);z-index:60;
+  background:linear-gradient(180deg,#160F26,#0D0817);
+  border-left:1px solid var(--line);
+  box-shadow:-24px 0 60px rgba(0,0,0,.55);
+  display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .22s ease;
+}
+.inspector.open{transform:none}
+.insp-head{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.insp-title{font-family:var(--display);font-size:15.5px;font-weight:600;line-height:1.25;flex:1;text-wrap:balance}
+.insp-body{overflow-y:auto;padding:14px 16px 26px;display:grid;gap:16px;align-content:start}
+.icon-btn{
+  width:28px;height:28px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;
+  border:1px solid var(--line);color:var(--muted);background:var(--panel);
+}
+.icon-btn:hover{color:var(--ink);border-color:rgba(157,92,255,.5)}
+.icon-btn.on{color:var(--vio-soft);border-color:rgba(157,92,255,.55);background:var(--vio-dim)}
+.icon-btn.done.on{color:var(--ok);border-color:rgba(45,212,167,.5);background:rgba(45,212,167,.12)}
+.kv{display:grid;grid-template-columns:104px minmax(0,1fr);gap:6px 12px;font-size:12.5px}
+.kv dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+.kv dd{margin:0;color:var(--ink-2);word-break:break-word}
+.kv dd.mono{font-size:11.5px;color:var(--ink)}
+.payload{
+  margin:0;padding:12px;border-radius:var(--r-md);
+  background:#0A0613;border:1px solid var(--line);
+  font-family:var(--mono);font-size:11.5px;line-height:1.65;color:#C6B6E0;
+  overflow-x:auto;white-space:pre;
+}
+.payload .k{color:#8E7BB5}
+.payload .s{color:#9FE6C8}
+.payload .n{color:#FFC55C}
+.payload .b{color:#FF8399}
+.insp-actions{display:flex;gap:8px;flex-wrap:wrap}
+.chain{display:grid;gap:1px}
+.chain-row{display:grid;grid-template-columns:auto 1fr;gap:9px;padding:6px 8px;border-radius:var(--r-sm);width:100%;text-align:left;align-items:baseline}
+.chain-row:hover{background:rgba(157,92,255,.09)}
+.chain-t{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.chain-m{font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- dossier joueur ---------- */
+.scrim{position:fixed;inset:0;background:rgba(6,4,11,.72);backdrop-filter:blur(3px);z-index:70}
+.scrim[hidden]{display:none}
+.sheet{
+  position:fixed;z-index:71;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(820px,calc(100vw - 28px));max-height:min(86dvh,900px);
+  background:linear-gradient(180deg,#181026,#0D0817);
+  border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:0 30px 90px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.sheet[hidden]{display:none}
+.sheet-head{display:flex;align-items:center;gap:13px;padding:16px 18px;border-bottom:1px solid var(--line)}
+.avatar.lg{width:44px;height:44px;border-radius:12px;font-size:16px}
+.sheet-name{font-family:var(--display);font-size:19px;font-weight:600;line-height:1.2}
+.sheet-meta{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.sheet-body{overflow-y:auto;padding:16px 18px 24px;display:grid;gap:16px}
+.stat-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.stat{padding:10px 12px;border-radius:var(--r-md);background:rgba(30,20,50,.5);border:1px solid var(--line-soft)}
+.stat-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.stat-v{font-family:var(--display);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+.sanction{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline;padding:8px 10px;border-radius:var(--r-md);background:rgba(255,77,109,.07);border:1px solid rgba(255,77,109,.22)}
+.sanction .s-kind{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#FF8399}
+.sanction .s-why{font-size:12.5px;color:var(--ink-2)}
+.sanction .s-when{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* ---------- toast ---------- */
+.toast{
+  position:fixed;left:50%;bottom:22px;transform:translate(-50%,14px);z-index:90;
+  padding:9px 16px;border-radius:999px;font-size:12.5px;
+  background:#1E1432;border:1px solid rgba(157,92,255,.45);color:var(--ink);
+  box-shadow:0 12px 34px rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity .18s, transform .18s;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- adaptation ---------- */
+@media (min-width:1280px){ .app.insp .main{padding-right:min(420px,32vw)} }
+@media (max-width:1180px){ .grid-2{grid-template-columns:1fr} }
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  .rail{position:static;height:auto;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;padding:10px 16px;border-right:none;border-bottom:1px solid var(--line)}
+  .brand{padding:0 10px 0 0;flex:none}
+  .brand-text{display:none}
+  .rail-head,.rail-foot{display:none}
+  .cat{width:auto;flex:none;grid-template-columns:auto auto;padding:6px 10px}
+  #catList{display:flex;gap:6px;flex:none}
+  .cat .cat-label{display:none}
+  .bar{padding:10px 16px;top:0}
+  .view{padding:14px 16px 36px}
+  .logs thead th{top:0}
+  .inspector{width:100%;top:auto;height:88dvh;border-left:none;border-top:1px solid var(--line);border-radius:var(--r-lg) var(--r-lg) 0 0;transform:translateY(100%)}
+  .inspector.open{transform:none}
+}
+@media (max-width:620px){
+  /* le message est la colonne qui compte : on laisse tomber le reste
+     et la table se replie dans la largeur plutôt que de défiler. */
+  .c-src,.c-tag,.logs thead th:nth-child(2),.logs thead th:nth-child(5){display:none}
+  .logs{min-width:0}
+  .c-msg,.c-actor{min-width:0}
+  .actor-name{max-width:92px;font-size:12px}
+  .logs td{padding:8px 9px}
+  .c-time{font-size:11px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+</style>
+
+<div class="app">
+  <nav class="rail" aria-label="Catégories de journaux">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">OR</div>
+      <div class="brand-text">
+        <div class="brand-name">Origin Roleplay</div>
+        <div class="brand-sub">Journal serveur</div>
+      </div>
+    </div>
+
+    <div class="rail-head">Vue</div>
+    <button class="cat" data-view="overview" aria-current="true">
+      <span class="tag" style="--fam:var(--vio-soft)">SYS</span>
+      <span class="cat-label">Vue d'ensemble</span>
+      <span class="cat-count"></span>
+    </button>
+    <button class="cat" data-cat="all">
+      <span class="tag" style="--fam:var(--ink-2)">ALL</span>
+      <span class="cat-label">Flux complet</span>
+      <span class="cat-count" id="countAll">—</span>
+    </button>
+
+    <div class="rail-head">Catégories</div>
+    <div id="catList"></div>
+
+    <div class="rail-foot">
+      <div class="foot-row"><span class="dot-live" id="liveDot"></span><span>Flux <b id="liveState">en direct</b></span></div>
+      <div class="foot-row">Dernier évènement <b id="lastTick">—</b></div>
+      <div class="foot-row">Rétention <b>30 jours</b></div>
+      <div class="foot-row">origin_logs <b>v2.4.1</b></div>
+    </div>
+  </nav>
+
+  <div class="main">
+    <header class="bar">
+      <div class="search">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10.6 10.6 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input id="q" type="search" placeholder="Joueur, licence, plaque, item, montant, ID serveur…" autocomplete="off" aria-label="Rechercher dans les journaux">
+        <span class="kbd" aria-hidden="true">/</span>
+      </div>
+
+      <div class="seg" role="group" aria-label="Période">
+        <button data-range="1" aria-pressed="false">1 h</button>
+        <button data-range="6" aria-pressed="false">6 h</button>
+        <button data-range="24" aria-pressed="true">24 h</button>
+        <button data-range="168" aria-pressed="false">7 j</button>
+      </div>
+
+      <button class="btn on" id="liveBtn" aria-pressed="true">
+        <span class="dot-live" aria-hidden="true"></span> Direct
+      </button>
+      <button class="btn" id="copyBtn" title="Copier la sélection courante">Exporter</button>
+    </header>
+
+    <!-- ================= VUE D'ENSEMBLE ================= -->
+    <section class="view" id="viewOverview" aria-label="Vue d'ensemble">
+      <div class="demo-note">
+        <span aria-hidden="true">▲</span>
+        <div><b>Jeu de démonstration.</b> Les évènements ci-dessous sont générés localement pour montrer le panneau en fonctionnement. Branchez votre serveur en remplaçant <code>DataSource.fetch()</code> par votre endpoint <code>origin_logs</code> — le reste de l'écran ne bouge pas.</div>
+      </div>
+
+      <div class="page-head">
+        <h1 class="page-title">Vue d'ensemble</h1>
+        <div class="page-sub" id="overviewSub"></div>
+      </div>
+
+      <div class="tiles" id="tiles"></div>
+
+      <div class="grid-2">
+        <div class="col">
+          <div class="card">
+            <div class="card-head">
+              <h2 class="section-title">Activité par heure</h2>
+              <span class="count-note" id="chartNote"></span>
+            </div>
+            <div class="chart-wrap"><svg class="chart" id="chart" viewBox="0 0 760 190" role="img" aria-label="Nombre d'évènements par heure"></svg></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <h2 class="section-title">À traiter — alertes et détections</h2>
+              <button class="btn small" data-cat="anticheat">Ouvrir l'anticheat</button>
+            </div>
+            <div class="mini" id="alerts"></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card">
+            <h2 class="section-title">Répartition par catégorie</h2>
+            <div class="split" id="split"></div>
+          </div>
+          <div class="card">
+            <h2 class="section-title">Joueurs les plus actifs</h2>
+            <div class="mini" id="topPlayers"></div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ================= FLUX ================= -->
+    <section class="view" id="viewStream" hidden aria-label="Flux d'évènements">
+      <div class="page-head">
+        <div>
+          <h1 class="page-title" id="streamTitle">Tous les évènements</h1>
+          <div class="page-sub" id="streamDesc"></div>
+        </div>
+        <div class="page-sub" id="streamCount"></div>
+      </div>
+
+      <div class="sev-bar" id="sevBar" role="group" aria-label="Filtrer par gravité"></div>
+
+      <div class="stream">
+        <div class="stream-scroll">
+          <table class="logs">
+            <thead>
+              <tr>
+                <th scope="col">Horodatage</th>
+                <th scope="col">Type</th>
+                <th scope="col">Joueur</th>
+                <th scope="col">Évènement</th>
+                <th scope="col" style="text-align:right">Ressource</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="stream-foot">
+          <span class="count-note" id="foot">—</span>
+          <button class="btn small" id="moreBtn" hidden>Charger 100 évènements de plus</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<aside class="inspector" id="inspector" aria-label="Détail de l'évènement" aria-hidden="true">
+  <div class="insp-head">
+    <div class="insp-title" id="inspTitle">Évènement</div>
+    <button class="icon-btn" id="pinBtn" title="Épingler" aria-pressed="false">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 1.5h4l-.6 4.2 2.3 2.1H4.3l2.3-2.1L6 1.5ZM8 8v6.5" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="icon-btn done" id="doneBtn" title="Marquer comme traité" aria-pressed="false">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4 6.4 12 13 4.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="icon-btn" id="inspClose" title="Fermer (Échap)">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="insp-body" id="inspBody"></div>
+</aside>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-label="Dossier joueur">
+  <div class="sheet-head">
+    <div class="avatar lg" id="dosAvatar">—</div>
+    <div style="flex:1;min-width:0">
+      <div class="sheet-name" id="dosName">—</div>
+      <div class="sheet-meta" id="dosMeta">—</div>
+    </div>
+    <button class="icon-btn" id="dosClose" title="Fermer">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body" id="dosBody"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ============================================================
+   ORIGIN ROLEPLAY — origin_logs v2.4.1
+   Panneau de journalisation. Jeu de démonstration généré
+   localement (graine fixe -> écran stable d'un chargement à
+   l'autre). Pour brancher le vrai serveur : voir DataSource.
+   ============================================================ */
+'use strict';
+
+/* ---------- graine déterministe ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rnd=mulberry32(20260914);
+const pick=a=>a[Math.floor(rnd()*a.length)];
+const int=(a,b)=>a+Math.floor(rnd()*(b-a+1));
+const chance=p=>rnd()<p;
+
+/* ---------- catégories ---------- */
+const CATS=[
+  {id:'connexions', code:'CNX', label:'Connexions',          fam:'var(--fam-social)', desc:'Arrivées, départs, file d’attente et refus de whitelist.'},
+  {id:'chat',       code:'CHT', label:'Chat & commandes',    fam:'var(--fam-social)', desc:'Proximité, OOC, /me, /do, Twitter et commandes joueur.'},
+  {id:'combat',     code:'CBT', label:'Combat & morts',      fam:'var(--fam-risque)', desc:'Dégâts, éliminations, décès et réanimations EMS.'},
+  {id:'economie',   code:'ECO', label:'Économie',            fam:'var(--fam-biens)',  desc:'Liquide, banque, virements, salaires, factures et amendes.'},
+  {id:'inventaire', code:'INV', label:'Inventaire',          fam:'var(--fam-biens)',  desc:'Échanges, sols, coffres, craft et suppressions staff.'},
+  {id:'vehicules',  code:'VEH', label:'Véhicules',           fam:'var(--fam-biens)',  desc:'Garages, fourrière, concession, effractions et destructions.'},
+  {id:'jobs',       code:'JOB', label:'Jobs & entreprises',  fam:'var(--fam-civil)',  desc:'Embauches, grades, prises de service et comptes société.'},
+  {id:'proprietes', code:'IMM', label:'Propriétés',          fam:'var(--fam-civil)',  desc:'Achats, locations, clés partagées et coffres de logement.'},
+  {id:'admin',      code:'ADM', label:'Administration',      fam:'var(--fam-staff)',  desc:'Actions staff en jeu : noclip, spawn, téléportation, revive.'},
+  {id:'anticheat',  code:'ACH', label:'Anticheat',           fam:'var(--fam-risque)', desc:'Détections automatiques et évènements réseau suspects.'},
+  {id:'sanctions',  code:'SNC', label:'Sanctions',           fam:'var(--fam-risque)', desc:'Kicks, avertissements, bannissements et levées.'},
+  {id:'staff',      code:'RPT', label:'Reports & tickets',   fam:'var(--fam-staff)',  desc:'Signalements joueurs, prises en charge et clôtures.'}
+];
+const CAT=Object.fromEntries(CATS.map(c=>[c.id,c]));
+
+const SEVS=[
+  {id:'critique', label:'Critique', c:'var(--sev-critique)'},
+  {id:'alerte',   label:'Alerte',   c:'var(--sev-alerte)'},
+  {id:'notice',   label:'À vérifier', c:'var(--sev-notice)'},
+  {id:'info',     label:'Info',     c:'var(--sev-info)'}
+];
+const SEV=Object.fromEntries(SEVS.map(s=>[s.id,s]));
+
+/* ---------- joueurs ---------- */
+const PRENOMS=['Luca','Enzo','Maya','Théo','Sofia','Nathan','Camille','Yanis','Léa','Adam','Chloé','Rayan','Jade','Ilyes','Manon','Noah','Inès','Gabriel','Louna','Amir','Sarah','Tom','Nina','Kevin','Elena','Malik'];
+const NOMS=['Moreau','Delacroix','Ferrand','Bianchi','Okonkwo','Vasquez','Lambert','Reyes','Nguyen','Costa','Bellucci','Traoré','Sorensen','Marchetti','Dubois','Kaminski','Oswald','Rossi','Ferreira','Blake','Mercier','Abadi','Novak','Grant','Ivanova','Sultani'];
+const JOBS=[['lspd','LSPD'],['ems','EMS'],['mecano','Mécano'],['taxi','Taxi'],['unemployed','Sans emploi'],['pecheur','Pêcheur'],['bennys','Benny’s'],['journaliste','Presse'],['ballas','Ballas'],['vagos','Vagos'],['avocat','Avocat'],['juge','Juge']];
+const HEX='0123456789abcdef';
+const hex=n=>Array.from({length:n},()=>HEX[Math.floor(rnd()*16)]).join('');
+
+const PLAYERS=[];
+(function buildPlayers(){
+  const used=new Set();
+  for(let i=0;i<26;i++){
+    let name;
+    do{ name=pick(PRENOMS)+' '+pick(NOMS); }while(used.has(name));
+    used.add(name);
+    const [jk,jl]=pick(JOBS);
+    PLAYERS.push({
+      name, sid:int(2,180),
+      license:'license:'+hex(40),
+      discord:'discord:'+String(int(2,9))+hex(1)+String(int(100000000000000,999999999999999)).slice(0,17),
+      steam:'steam:11000010'+hex(8),
+      fivem:'fivem:'+int(100000,4999999),
+      jobKey:jk, job:jl, grade:int(0,6),
+      hue:Math.floor(rnd()*360),
+      staff: false,
+      ping:int(24,118),
+      cash:int(120,9800), bank:int(2000,340000), dirty: chance(.25)?int(500,42000):0,
+      joined: Date.now()-int(14,720)*86400000,
+      hours: int(12,1840)
+    });
+  }
+  // équipe staff : pseudos, pas des identités RP
+  ['Nyx','Vortex','Kaleb','Orion','Sasha'].forEach(n=>{
+    PLAYERS.push({name:n,sid:int(1,12),license:'license:'+hex(40),discord:'discord:9'+String(int(10000000000000000,99999999999999999)),
+      steam:'steam:11000010'+hex(8),fivem:'fivem:'+int(1000,99999),jobKey:'staff',job:'Staff',grade:int(3,5),
+      hue:268,staff:true,ping:int(18,52),cash:0,bank:0,dirty:0,joined:Date.now()-int(200,900)*86400000,hours:int(600,3200)});
+  });
+})();
+const RP=PLAYERS.filter(p=>!p.staff);
+const STAFF=PLAYERS.filter(p=>p.staff);
+
+/* ---------- vocabulaire du serveur ---------- */
+const ARMES=[['WEAPON_PISTOL','Pistolet'],['WEAPON_COMBATPISTOL','Pistolet de combat'],['WEAPON_SMG','SMG'],['WEAPON_PUMPSHOTGUN','Fusil à pompe'],['WEAPON_KNIFE','Couteau'],['WEAPON_BAT','Batte'],['WEAPON_MACHINEPISTOL','Machine-pistolet'],['WEAPON_CARBINERIFLE','Carabine']];
+const ITEMS=[['bread','Pain'],['water','Bouteille d’eau'],['bandage','Bandage'],['medikit','Médikit'],['lockpick','Crochet'],['phone','Téléphone'],['radio','Radio'],['ammo-9','Munitions 9mm'],['weapon_pistol','Pistolet'],['cocaine_pooch','Sachet de coke'],['weed_pooch','Sachet de weed'],['gold_chain','Chaîne en or'],['repairkit','Kit de réparation'],['binoculars','Jumelles'],['handcuffs','Menottes']];
+const VEHS=[['sultanrs','Sultan RS'],['blista','Blista'],['sandking','Sandking'],['panto','Panto'],['police3','Interceptor LSPD'],['ambulance','Ambulance EMS'],['t20','T20'],['faggio','Faggio'],['dominator','Dominator'],['kamacho','Kamacho'],['buffalo4','Buffalo STX']];
+const ZONES=['Vespucci Beach','Sandy Shores','Mirror Park','Grove Street','Legion Square','Paleto Bay','Vinewood Hills','La Mesa','Cayo Perico','Route 68','Port de Los Santos','Aéroport LSIA'];
+const ENTREPRISES=['Benny’s Motorworks','Unicorn','Pearls','Auto Exotic','Burger Shot','Vanilla Unicorn','Digital Den'];
+const RESSOURCES={connexions:'origin_core',chat:'origin_chat',combat:'origin_medical',economie:'origin_banking',inventaire:'ox_inventory',vehicules:'origin_garage',jobs:'origin_jobs',proprietes:'origin_housing',admin:'txAdmin',anticheat:'origin_guard',sanctions:'origin_admin',staff:'origin_reports'};
+
+const plate=()=>hex(2).toUpperCase()+int(10,99)+String.fromCharCode(65+int(0,25))+String.fromCharCode(65+int(0,25))+int(100,999);
+const coords=()=>`vector3(${(rnd()*6000-3500).toFixed(2)}, ${(rnd()*7000-3500).toFixed(2)}, ${(rnd()*70+2).toFixed(2)})`;
+const money=n=>n.toLocaleString('fr-FR').replace(/ | /g,' ')+' $';
+const amt=n=>`<span class="amount">${money(n)}</span>`;
+const it=s=>`<span class="item">${s}</span>`;
+const who=p=>`<strong>${p.name}</strong>`;
+</script>
+
+<script>
+/* ============================================================
+   Catalogue d'évènements — un modèle par geste réellement
+   journalisé sur un serveur FiveM. `w` = fréquence relative.
+   ============================================================ */
+const PHRASES=['on se retrouve au garage dans 10 minutes','j’ai besoin d’un mécano sur Route 68','tu me dois encore 2 000 pour la caisse','la police est déjà passée deux fois ce soir','ramène le van, on charge et on part','j’ai vu le deal se faire devant le Unicorn','appelle le 911 tout de suite','je monte dans la Sultan, suis-moi'];
+const MES=['sort lentement les mains de ses poches','s’essuie le front, encore essoufflé','pose un sac de sport sur le capot','regarde autour de lui, méfiant','allume une cigarette et souffle la fumée'];
+const DOS=['Le moteur fume légèrement ?','La radio grésille en fond ?','Des traces de sang sur le siège passager ?','Le portail est-il forcé ?'];
+const RAISONS_DECO=['Exited','Timed out','Client crashed','Kicked: AFK 30 min','Disconnected by user'];
+const MORTS=['chute depuis un toit','collision frontale','noyade','explosion de véhicule','overdose'];
+const MOTIFS_SANCTION=['RDM sur Legion Square','VDM répété','Fail RP en braquage','Metagaming Discord','Insultes HRP en vocal','Cheat détecté — menu illégal','Combat log en cours de scène','Powergaming en interpellation'];
+
+const T={
+connexions:[
+ {s:'info',w:9,f:(a)=>({msg:`${who(a)} a rejoint le serveur`,d:{serverId:a.sid,slot:`${int(60,128)}/128`,ping:a.ping+' ms',endpoint:'92.184.'+int(10,250)+'.***',identifiants:{license:a.license,discord:a.discord,steam:a.steam},onesync:'infinity'}})},
+ {s:'info',w:8,f:(a)=>({msg:`${who(a)} s’est déconnecté`,d:{serverId:a.sid,raison:pick(RAISONS_DECO),session:`${int(12,340)} min`,derniereZone:pick(ZONES)}})},
+ {s:'info',w:3,f:(a)=>({msg:`${who(a)} est entré en file d’attente`,d:{position:int(2,34),priorite:chance(.3)?'VIP':'aucune',attente:`${int(1,26)} min`}})},
+ {s:'notice',w:2,f:(a)=>({msg:`Connexion refusée — <strong>${a.name}</strong> n’est pas whitelisté`,d:{license:a.license,discord:a.discord,motif:'whitelist_missing',candidature:chance(.5)?'en attente':'jamais déposée'}})},
+ {s:'alerte',w:1,f:(a)=>({msg:`Tentative de connexion avec un identifiant banni — <strong>${a.name}</strong>`,d:{license:a.license,banId:'#'+int(1000,9999),expire:'permanent',motif:pick(MOTIFS_SANCTION)}})}
+],
+chat:[
+ {s:'info',w:10,f:(a)=>({msg:`${who(a)} <em>(proximité)</em> : « ${pick(PHRASES)} »`,d:{canal:'proximite',portee:'15 m',zone:pick(ZONES),ecoutes:int(1,9)}})},
+ {s:'info',w:5,f:(a)=>({msg:`${who(a)} <em>/me</em> ${pick(MES)}`,d:{canal:'me',zone:pick(ZONES)}})},
+ {s:'info',w:3,f:(a)=>({msg:`${who(a)} <em>/do</em> ${pick(DOS)}`,d:{canal:'do',zone:pick(ZONES)}})},
+ {s:'info',w:4,f:(a)=>({msg:`${who(a)} <em>(OOC)</em> : « ${pick(['quelqu’un a vu mon véhicule ?','je reboot, 2 min','ticket ouvert pour un bug de coffre'])} »`,d:{canal:'ooc',global:true}})},
+ {s:'info',w:3,f:(a)=>({msg:`${who(a)} a publié sur Twitter : « ${pick(['Vends Sultan RS, tarif à négocier.','Recherche mécano dispo ce soir.','Encore un braquage à Paleto…'])} »`,d:{canal:'twitter',pseudo:'@'+a.name.split(' ')[0].toLowerCase()+int(10,99),abonnes:int(20,1400)}})},
+ {s:'info',w:3,f:(a)=>({msg:`${who(a)} a utilisé <span class="item">/911</span> — ${pick(['fusillade en cours','accident de la route','braquage de supérette'])}`,d:{commande:'/911',zone:pick(ZONES),unitesDisponibles:int(0,6)}})},
+ {s:'notice',w:1,f:(a)=>({msg:`Message filtré pour <strong>${a.name}</strong> — terme HRP interdit`,d:{canal:'ooc',filtre:'insultes_hrp',action:'message bloqué',recidive:int(1,4)+' ce mois'}})}
+],
+combat:[
+ {s:'notice',w:7,f:(a,b)=>{const w=pick(ARMES);return{t:b,msg:`${who(a)} a éliminé ${who(b)} — ${it(w[1])}`,d:{arme:w[0],distance:int(2,140)+' m',headshot:chance(.25),zone:pick(ZONES),position:coords(),scene:chance(.6)?'braquage en cours':'non renseignée'}};}},
+ {s:'info',w:8,f:(a,b)=>({t:b,msg:`${who(a)} a infligé <span class="amount">${int(4,68)}</span> dégâts à ${who(b)}`,d:{arme:pick(ARMES)[0],partie:pick(['torse','bras gauche','jambe droite','tête']),santeRestante:int(12,96)+'%'}})},
+ {s:'info',w:5,f:(a)=>({msg:`${who(a)} est mort — ${pick(MORTS)}`,d:{cause:'environnement',zone:pick(ZONES),position:coords(),tempsAuSol:int(1,15)+' min'}})},
+ {s:'info',w:4,f:(a,b)=>({t:b,msg:`${who(b)} a réanimé ${who(a)} <em>(EMS)</em>`,d:{soignant:b.name,job:'ems',item:'medikit',dureeIntervention:int(2,18)+' min',hopital:pick(['Pillbox Hill','Sandy Shores','Paleto Bay'])}})},
+ {s:'alerte',w:2,f:(a,b)=>({t:b,msg:`Tir en zone protégée — ${who(a)} a ouvert le feu sur ${who(b)}`,d:{zone:'Safe zone — '+pick(['Legion Square','Hôpital Pillbox','Commissariat Mission Row']),arme:pick(ARMES)[0],regleServeur:'art. 4.2 — pas de violence en zone verte'}})}
+],
+economie:[
+ {s:'info',w:7,f:(a)=>{const n=int(50,4000);return{msg:`${who(a)} a retiré ${amt(n)} au distributeur`,d:{compte:'bank',montant:n,soldeApres:money(a.bank-n),distributeur:pick(ZONES)}};}},
+ {s:'info',w:6,f:(a)=>{const n=int(100,9000);return{msg:`${who(a)} a déposé ${amt(n)} en banque`,d:{compte:'bank',montant:n,soldeApres:money(a.bank+n),agence:'Fleeca '+pick(ZONES)}};}},
+ {s:'info',w:6,f:(a,b)=>{const n=int(200,25000);return{t:b,msg:`${who(a)} a viré ${amt(n)} à ${who(b)}`,d:{de:a.name,vers:b.name,montant:n,motif:pick(['achat véhicule','remboursement','prestation mécano','loyer']),reference:'TR-'+int(100000,999999)}};}},
+ {s:'info',w:5,f:(a)=>{const n=int(400,3200);return{msg:`Salaire versé à ${who(a)} — ${amt(n)}`,d:{job:a.jobKey,grade:a.grade,montant:n,periode:'paye horaire',source:'société'}};}},
+ {s:'info',w:3,f:(a)=>{const n=int(600,4800);return{msg:`${who(a)} a payé une amende de ${amt(n)}`,d:{emetteur:'LSPD',motif:pick(['excès de vitesse','conduite dangereuse','port d’arme non déclaré']),montant:n,statut:'réglée'}};}},
+ {s:'info',w:3,f:(a)=>{const e=pick(ENTREPRISES),n=int(900,18000);return{msg:`${who(a)} a facturé ${amt(n)} au nom de ${it(e)}`,d:{entreprise:e,montant:n,tva:'20 %',statut:chance(.7)?'payée':'en attente'}};}},
+ {s:'notice',w:2,f:(a)=>{const n=int(5000,60000),e=pick(ENTREPRISES);return{msg:`${who(a)} a retiré ${amt(n)} du compte de ${it(e)}`,d:{entreprise:e,montant:n,grade:'patron',soldeSociete:money(int(1000,90000)),justificatif:'aucun'}};}},
+ {s:'alerte',w:1,f:(a)=>{const n=int(40000,320000);return{msg:`Blanchiment inhabituel — ${who(a)} a converti ${amt(n)} d’argent sale`,d:{montantSale:n,taux:'62 %',montantPropre:money(Math.round(n*.62)),lieu:pick(['Blanchisserie de La Mesa','Casino']),cumul24h:money(n+int(10000,90000)),seuilAlerte:money(50000)}};}}
+],
+inventaire:[
+ {s:'info',w:8,f:(a,b)=>{const i=pick(ITEMS),q=int(1,12);return{t:b,msg:`${who(a)} a donné ${q}× ${it(i[1])} à ${who(b)}`,d:{item:i[0],quantite:q,de:a.name,vers:b.name,distance:int(1,4)+' m',poidsApres:int(12,48)+'/60 kg'}};}},
+ {s:'info',w:5,f:(a)=>{const i=pick(ITEMS),q=int(1,5);return{msg:`${who(a)} a jeté ${q}× ${it(i[1])} au sol`,d:{item:i[0],quantite:q,position:coords(),expiration:'10 min'}};}},
+ {s:'info',w:5,f:(a)=>{const i=pick(ITEMS),q=int(1,5);return{msg:`${who(a)} a ramassé ${q}× ${it(i[1])}`,d:{item:i[0],quantite:q,origine:chance(.5)?'sol':'fouille de corps',position:coords()}};}},
+ {s:'info',w:4,f:(a)=>{const i=pick(ITEMS);return{msg:`${who(a)} a fabriqué ${it(i[1])}`,d:{item:i[0],etabli:pick(['Benny’s','Atelier clandestin','Cuisine mobile']),composants:['plastic ×2','metal ×1'],duree:int(6,40)+' s'}};}},
+ {s:'info',w:4,f:(a)=>{const i=pick(ITEMS),e=pick(ENTREPRISES),q=int(1,20);return{msg:`${who(a)} a déposé ${q}× ${it(i[1])} dans le coffre de ${it(e)}`,d:{coffre:'society_'+e.toLowerCase().replace(/[^a-z]/g,''),item:i[0],quantite:q,capacite:int(120,400)+'/500 kg'}};}},
+ {s:'notice',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a supprimé un item de l’inventaire de <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,item:pick(ITEMS)[0],quantite:int(1,5),motif:'duplication signalée',ticket:'#'+int(400,999)}})},
+ {s:'alerte',w:1,f:(a)=>{const i=pick(ITEMS),q=int(180,900);return{msg:`Quantité anormale — ${who(a)} détient ${q}× ${it(i[1])}`,d:{item:i[0],quantite:q,plafondServeur:int(20,60),poids:int(300,900)+' kg',detection:'origin_guard/inventory_cap'}};}}
+],
+vehicules:[
+ {s:'info',w:8,f:(a)=>{const v=pick(VEHS);return{msg:`${who(a)} a sorti ${it(v[1])} du garage`,d:{modele:v[0],plaque:plate(),garage:pick(['Pinkcage','Aéroport','Sandy Shores']),carburant:int(18,100)+'%',etatMoteur:int(420,1000)+'/1000'}};}},
+ {s:'info',w:6,f:(a)=>{const v=pick(VEHS);return{msg:`${who(a)} a rangé ${it(v[1])} au garage`,d:{modele:v[0],plaque:plate(),kmSession:int(2,48)+' km',degats:chance(.4)?'carrosserie endommagée':'aucun'}};}},
+ {s:'info',w:3,f:(a)=>{const v=pick(VEHS),n=int(400,2500);return{msg:`${who(a)} a récupéré ${it(v[1])} à la fourrière — ${amt(n)}`,d:{modele:v[0],plaque:plate(),frais:n,motifMiseEnFourriere:pick(['stationnement gênant','véhicule abandonné','saisie LSPD'])}};}},
+ {s:'info',w:3,f:(a)=>{const v=pick(VEHS),n=int(18000,420000);return{msg:`${who(a)} a acheté ${it(v[1])} — ${amt(n)}`,d:{modele:v[0],plaque:plate(),prix:n,concession:'PDM',paiement:chance(.5)?'banque':'crédit 12 mois'}};}},
+ {s:'notice',w:3,f:(a)=>{const v=pick(VEHS),ok=chance(.45);return{msg:`${who(a)} a ${ok?'crocheté':'échoué à crocheter'} ${it(v[1])}`,d:{modele:v[0],plaque:plate(),resultat:ok?'succès':'échec',item:'lockpick',alarme:chance(.6),position:coords()}};}},
+ {s:'info',w:3,f:(a)=>{const v=pick(VEHS);return{msg:`${it(v[1])} de ${who(a)} a été détruit`,d:{modele:v[0],plaque:plate(),cause:pick(['collision','tirs','explosion']),assurance:chance(.6)?'couverte':'non couverte'}};}},
+ {s:'info',w:2,f:(a,b)=>{const v=pick(VEHS);return{t:b,msg:`${who(a)} a partagé les clés de ${it(v[1])} avec ${who(b)}`,d:{modele:v[0],plaque:plate(),beneficiaire:b.name,duree:'permanent'}};}}
+],
+jobs:[
+ {s:'info',w:5,f:(a,b)=>({t:b,msg:`${who(b)} a embauché ${who(a)} — ${it(a.job)}`,d:{job:a.jobKey,grade:0,libelleGrade:'recrue',recruteur:b.name,entreprise:pick(ENTREPRISES)}})},
+ {s:'info',w:4,f:(a,b)=>({t:b,msg:`${who(a)} est passé grade ${int(1,6)} — ${it(a.job)}`,d:{job:a.jobKey,ancienGrade:a.grade,nouveauGrade:a.grade+1,decidePar:b.name,salaireHoraire:money(int(300,1800))}})},
+ {s:'info',w:6,f:(a)=>({msg:`${who(a)} a pris son service — ${it(a.job)}`,d:{job:a.jobKey,grade:a.grade,effectifEnService:int(1,9),radio:int(1,12)+'.0'}})},
+ {s:'info',w:5,f:(a)=>({msg:`${who(a)} a terminé son service — ${it(a.job)}`,d:{job:a.jobKey,dureeService:int(24,280)+' min',interventions:int(0,14)}})},
+ {s:'notice',w:2,f:(a,b)=>({t:b,msg:`${who(b)} a licencié ${who(a)} — ${it(a.job)}`,d:{job:a.jobKey,motif:pick(['absences répétées','faute grave','départ volontaire']),soldeToutCompte:money(int(500,6000))}})},
+ {s:'info',w:1,f:(a)=>{const e=pick(ENTREPRISES);return{msg:`${who(a)} a créé l’entreprise ${it(e)}`,d:{entreprise:e,type:'SARL',capital:money(int(25000,150000)),patron:a.name,employes:0}};}}
+],
+proprietes:[
+ {s:'info',w:4,f:(a)=>{const n=int(180000,1400000);return{msg:`${who(a)} a acheté un logement à ${it(pick(ZONES))} — ${amt(n)}`,d:{bien:'Villa '+int(1,40),prix:n,quartier:pick(ZONES),garagePlaces:int(2,10),coffre:'500 kg'}};}},
+ {s:'info',w:5,f:(a)=>{const n=int(2500,18000);return{msg:`${who(a)} a payé son loyer — ${amt(n)}`,d:{bien:'Appartement '+int(100,899),loyer:n,echeance:'hebdomadaire',retard:chance(.2)?int(1,3)+' jour(s)':'aucun'}};}},
+ {s:'info',w:4,f:(a,b)=>({t:b,msg:`${who(a)} a donné un accès de logement à ${who(b)}`,d:{bien:'Appartement '+int(100,899),beneficiaire:b.name,droits:['porte','coffre','garage'],revocable:true}})},
+ {s:'info',w:4,f:(a)=>{const i=pick(ITEMS),q=int(1,14);return{msg:`${who(a)} a ${chance(.5)?'déposé':'retiré'} ${q}× ${it(i[1])} dans le coffre de son logement`,d:{bien:'Villa '+int(1,40),item:i[0],quantite:q,poidsCoffre:int(40,480)+'/500 kg'}};}},
+ {s:'alerte',w:1,f:(a,b)=>({t:b,msg:`Effraction — ${who(a)} est entré chez ${who(b)}`,d:{bien:'Appartement '+int(100,899),proprietaire:b.name,methode:'crochetage',alarme:'déclenchée',lspdPrevenu:chance(.7)}})}
+],
+admin:[
+ {s:'info',w:6,f:(a,b,st)=>({t:st,msg:`${who(st)} a ${chance(.5)?'activé':'désactivé'} le noclip`,d:{staff:st.name,rang:'Modérateur',position:coords(),duree:int(1,22)+' min'}})},
+ {s:'info',w:5,f:(a,b,st)=>({t:st,msg:`${who(st)} a réanimé <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,motif:'bug de mort — ticket #'+int(400,999),santeRendue:'100 %'}})},
+ {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} s’est téléporté sur <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,commande:'/goto '+a.sid,position:coords()}})},
+ {s:'notice',w:3,f:(a,b,st)=>{const v=pick(VEHS);return{t:st,msg:`${who(st)} a fait apparaître ${it(v[1])}`,d:{staff:st.name,modele:v[0],plaque:'ADMIN'+int(10,99),motif:'test de véhicule',supprimeApres:'10 min'}};}},
+ {s:'notice',w:3,f:(a,b,st)=>{const i=pick(ITEMS),q=int(1,10);return{t:st,msg:`${who(st)} a donné ${q}× ${it(i[1])} à <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,item:i[0],quantite:q,motif:'restitution après bug',ticket:'#'+int(400,999)}};}},
+ {s:'alerte',w:2,f:(a,b,st)=>{const n=int(10000,250000);return{t:st,msg:`${who(st)} a crédité ${amt(n)} à <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,montant:n,compte:'bank',motif:'remboursement — perte de véhicule',validePar:pick(STAFF).name,ticket:'#'+int(400,999)}};}},
+ {s:'notice',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a activé le mode invincible`,d:{staff:st.name,duree:int(1,14)+' min',contexte:'intervention sur scène bloquée'}})},
+ {s:'info',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a diffusé une annonce serveur`,d:{staff:st.name,texte:pick(['Redémarrage dans 15 minutes.','Rappel : pas de HRP en vocal.','Event braquage à 21 h.']),destinataires:int(60,128)+' joueurs'}})}
+],
+anticheat:[
+ {s:'critique',w:3,f:(a)=>({msg:`Évènement réseau refusé — <strong>${a.name}</strong> a déclenché un trigger protégé`,d:{detection:'trigger_blacklist',trigger:'origin_banking:server:giveMoney',payload:'{ amount: 999999 }',action:'bloqué + capture',license:a.license,recidive:int(1,6),score:int(72,100)+'/100'}})},
+ {s:'critique',w:2,f:(a)=>({msg:`Injection de ressource détectée — <strong>${a.name}</strong>`,d:{detection:'resource_injection',ressource:pick(['lynx_menu','eulen','redengine']),action:'déconnexion immédiate + bannissement auto',license:a.license,score:'100/100'}})},
+ {s:'alerte',w:3,f:(a)=>({msg:`Santé modifiée hors gameplay — <strong>${a.name}</strong>`,d:{detection:'health_regen',valeurAvant:int(4,40),valeurApres:200,fenetre:'0,4 s',action:'santé restaurée + signalement',score:int(58,88)+'/100'}})},
+ {s:'alerte',w:3,f:(a)=>({msg:`Téléportation anormale — <strong>${a.name}</strong>`,d:{detection:'position_delta',distance:int(400,4200)+' m',duree:'0,2 s',depart:coords(),arrivee:coords(),action:'position rétablie'}})},
+ {s:'notice',w:3,f:(a)=>({msg:`Vitesse véhicule anormale — <strong>${a.name}</strong>`,d:{detection:'vehicle_speed',modele:pick(VEHS)[0],vitesse:int(320,690)+' km/h',plafondModele:int(180,260)+' km/h',action:'signalé, aucune sanction automatique'}})},
+ {s:'alerte',w:2,f:(a)=>({msg:`Entité blacklistée refusée — <strong>${a.name}</strong>`,d:{detection:'entity_blacklist',entite:pick(['rhino','lazer','cargoplane']),action:'suppression immédiate',position:coords()}})},
+ {s:'critique',w:1,f:(a)=>({msg:`Explosion non autorisée — <strong>${a.name}</strong>`,d:{detection:'explosion_owner',type:'EXP_TAG_ROCKET',zone:pick(ZONES),victimes:int(0,7),action:'explosion annulée + kick'}})}
+],
+sanctions:[
+ {s:'notice',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a averti <strong>${a.name}</strong> — ${pick(MOTIFS_SANCTION)}`,d:{staff:st.name,cible:a.name,type:'warn',cumul:int(1,3)+'/3',consequence:'au 3e avertissement : ban 3 jours',ticket:'#'+int(400,999)}})},
+ {s:'notice',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a expulsé <strong>${a.name}</strong> — ${pick(MOTIFS_SANCTION)}`,d:{staff:st.name,cible:a.name,type:'kick',license:a.license,preuve:'clip Discord'}})},
+ {s:'alerte',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a banni <strong>${a.name}</strong> pour ${int(2,14)} jours`,d:{staff:st.name,cible:a.name,type:'ban_temporaire',motif:pick(MOTIFS_SANCTION),banId:'#'+int(1000,9999),license:a.license,appelPossible:true}})},
+ {s:'critique',w:1,f:(a,b,st)=>({t:st,msg:`${who(st)} a banni définitivement <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,type:'ban_permanent',motif:'Cheat détecté — menu illégal',banId:'#'+int(1000,9999),identifiants:{license:a.license,discord:a.discord,steam:a.steam},appelPossible:false}})},
+ {s:'info',w:1,f:(a,b,st)=>({t:st,msg:`${who(st)} a levé le bannissement de <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,banId:'#'+int(1000,9999),motif:'appel accepté — erreur de détection'}})},
+ {s:'notice',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a coupé le vocal de <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,duree:int(10,120)+' min',motif:'insultes HRP'}})}
+],
+staff:[
+ {s:'notice',w:5,f:(a,b)=>({t:b,msg:`${who(a)} a signalé ${who(b)} — ${pick(MOTIFS_SANCTION)}`,d:{ticket:'#'+int(400,999),auteur:a.name,vise:b.name,priorite:pick(['haute','moyenne','basse']),preuve:chance(.6)?'clip joint':'aucune'}})},
+ {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a pris en charge le ticket <span class="item">#${int(400,999)}</span>`,d:{staff:st.name,delaiPriseEnCharge:int(1,38)+' min',categorie:pick(['bug','report joueur','remboursement'])}})},
+ {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a clôturé le ticket <span class="item">#${int(400,999)}</span>`,d:{staff:st.name,resolution:pick(['sanction appliquée','sans suite','bug corrigé','remboursement']),duree:int(4,180)+' min',satisfaction:int(3,5)+'/5'}})}
+]};
+</script>
+
+<script>
+/* ============================================================
+   Source de données
+   ------------------------------------------------------------
+   Le panneau ne connaît que DataSource : remplacez le corps de
+   `fetch` par un appel à votre backend (REST, websocket, export
+   Discord) en renvoyant le même format d'évènement, et rien
+   d'autre dans cet écran n'a besoin de changer.
+
+   { id, t, cat, sev, actor, target, msg, d, res }
+   ============================================================ */
+const HOUR_W=[.55,.40,.25,.15,.10,.08,.10,.15,.22,.30,.38,.45,.50,.50,.55,.60,.68,.78,.90,1,1,.95,.85,.70];
+const CAT_W={chat:22,economie:14,inventaire:12,connexions:11,vehicules:10,combat:9,jobs:6,admin:5,proprietes:4,sanctions:3,anticheat:2.5,staff:1.5};
+const CAT_PICK=[];Object.entries(CAT_W).forEach(([k,w])=>{for(let i=0;i<Math.round(w*2);i++)CAT_PICK.push(k);});
+const strip=h=>h.replace(/<[^>]+>/g,'');
+let SEQ=1;
+
+function makeEvent(t){
+  const cat=pick(CAT_PICK);
+  const tpl=(()=>{const list=T[cat],bag=[];list.forEach((x,i)=>{for(let k=0;k<x.w;k++)bag.push(i);});return list[pick(bag)];})();
+  let a=pick(RP),b=pick(RP);while(b===a)b=pick(RP);
+  const st=pick(STAFF);
+  const r=tpl.f(a,b,st);
+  const actor=(cat==='admin'||cat==='sanctions')?st:a;
+  return {
+    id:'EV-'+String(SEQ++).padStart(6,'0'),
+    t, cat, sev:tpl.s,
+    actor, target:r.t&&r.t!==actor?r.t:null,
+    msg:r.msg, d:r.d, res:RESSOURCES[cat],
+    search:(strip(r.msg)+' '+actor.name+' '+actor.sid+' '+actor.license+' '+JSON.stringify(r.d)).toLowerCase()
+  };
+}
+function generate(n,spanH){
+  const now=Date.now(),out=[];let guard=0;
+  while(out.length<n&&guard++<n*40){
+    const t=now-Math.floor(rnd()*spanH*3600000);
+    if(rnd()>HOUR_W[new Date(t).getHours()])continue;
+    out.push(makeEvent(t));
+  }
+  return out.sort((x,y)=>y.t-x.t);
+}
+const DataSource={
+  async fetch(){ return generate(1700,168); },      // ← branchez votre endpoint ici
+  subscribe(cb){ return setInterval(()=>{ if(STATE.live) cb(makeEvent(Date.now())); }, 5200); }
+};
+
+/* ---------- état ---------- */
+const ONLINE=97;
+const STATE={view:'overview',cat:'all',range:24,q:'',sevs:new Set(),limit:120,live:true,sel:null};
+let EVENTS=[];
+const MARKS={pin:new Set(),done:new Set()};
+const LSK='origin_logs_marks_v1';
+try{const raw=localStorage.getItem(LSK);if(raw){const m=JSON.parse(raw);(m.pin||[]).forEach(x=>MARKS.pin.add(x));(m.done||[]).forEach(x=>MARKS.done.add(x));}}catch(e){}
+const saveMarks=()=>{try{localStorage.setItem(LSK,JSON.stringify({pin:[...MARKS.pin],done:[...MARKS.done]}));}catch(e){}};
+
+/* ---------- utilitaires ---------- */
+const $=s=>document.querySelector(s);
+const el=(tag,cls,html)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(html!=null)n.innerHTML=html;return n;};
+const pad=n=>String(n).padStart(2,'0');
+const DAYS=['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+const hhmmss=t=>{const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());};
+const dayLabel=t=>{const d=new Date(t),n=new Date();
+  if(d.toDateString()===n.toDateString())return "aujourd'hui";
+  const y=new Date(n-86400000);if(d.toDateString()===y.toDateString())return 'hier';
+  return DAYS[d.getDay()]+' '+pad(d.getDate())+'/'+pad(d.getMonth()+1);};
+const ago=t=>{const s=Math.max(0,(Date.now()-t)/1000);
+  if(s<60)return 'il y a '+Math.floor(s)+' s';
+  if(s<3600)return 'il y a '+Math.floor(s/60)+' min';
+  if(s<86400)return 'il y a '+Math.floor(s/3600)+' h';
+  return 'il y a '+Math.floor(s/86400)+' j';};
+const avatarStyle=p=>`background:linear-gradient(150deg, hsl(${p.hue} 72% 72%), hsl(${(p.hue+40)%360} 64% 52%))`;
+const initials=p=>p.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2100);}
+
+/* ---------- filtrage ---------- */
+function windowStart(){return Date.now()-STATE.range*3600000;}
+function inWindow(e,from){return e.t>=from;}
+function filtered(){
+  const from=windowStart(), q=STATE.q.trim().toLowerCase();
+  return EVENTS.filter(e=>
+    inWindow(e,from) &&
+    (STATE.cat==='all'||e.cat===STATE.cat) &&
+    (STATE.sevs.size===0||STATE.sevs.has(e.sev)) &&
+    (!q||e.search.includes(q))
+  );
+}
+function scoped(){ // ignore la gravité : sert aux compteurs de gravité
+  const from=windowStart(), q=STATE.q.trim().toLowerCase();
+  return EVENTS.filter(e=>inWindow(e,from)&&(STATE.cat==='all'||e.cat===STATE.cat)&&(!q||e.search.includes(q)));
+}
+</script>
+
+<script>
+/* ============================================================
+   Rendu
+   ============================================================ */
+function baseList(){const from=windowStart(),q=STATE.q.trim().toLowerCase();
+  return EVENTS.filter(e=>e.t>=from&&(!q||e.search.includes(q)));}
+
+/* ---------- rail ---------- */
+function buildRail(){
+  const host=$('#catList');host.innerHTML='';
+  CATS.forEach(c=>{
+    const b=el('button','cat');b.dataset.cat=c.id;
+    b.innerHTML=`<span class="tag" style="--fam:${c.fam}">${c.code}</span>
+      <span class="cat-label">${c.label}</span><span class="cat-count" data-count="${c.id}">—</span>`;
+    host.appendChild(b);
+  });
+}
+function renderRailCounts(){
+  const list=baseList(),by={};list.forEach(e=>by[e.cat]=(by[e.cat]||0)+1);
+  document.querySelectorAll('[data-count]').forEach(n=>{const v=by[n.dataset.count]||0;n.textContent=v?v.toLocaleString('fr-FR'):'·';});
+  $('#countAll').textContent=list.length.toLocaleString('fr-FR');
+  document.querySelectorAll('.cat').forEach(b=>{
+    const on=(STATE.view==='overview'&&b.dataset.view==='overview')||(STATE.view==='stream'&&b.dataset.cat===STATE.cat);
+    b.setAttribute('aria-current',on?'true':'false');
+  });
+  const last=EVENTS[0];$('#lastTick').textContent=last?hhmmss(last.t):'—';
+}
+
+/* ---------- vue d'ensemble ---------- */
+const CHART_CFG={
+  1:{n:12,ms:300000,fmt:t=>pad(new Date(t).getHours())+':'+pad(new Date(t).getMinutes()),every:3,title:'60 dernières minutes'},
+  6:{n:12,ms:1800000,fmt:t=>pad(new Date(t).getHours())+'h'+pad(new Date(t).getMinutes()),every:3,title:'6 dernières heures'},
+  24:{n:24,ms:3600000,fmt:t=>pad(new Date(t).getHours())+'h',every:4,title:'24 dernières heures'},
+  168:{n:14,ms:43200000,fmt:t=>DAYS[new Date(t).getDay()]+' '+pad(new Date(t).getHours())+'h',every:2,title:'7 derniers jours'}
+};
+function renderOverview(){
+  const list=baseList(),from=windowStart(),span=STATE.range*3600000;
+  const prev=EVENTS.filter(e=>e.t>=from-span&&e.t<from);
+  const uniq=new Set(list.map(e=>e.actor.name)).size;
+  const alerts=list.filter(e=>(e.sev==='critique'||e.sev==='alerte')&&!MARKS.done.has(e.id));
+  const ach=list.filter(e=>e.cat==='anticheat');
+  const snc=list.filter(e=>e.cat==='sanctions');
+  const delta=prev.length?Math.round((list.length-prev.length)/prev.length*100):0;
+  const tclass=delta>4?'up':delta<-4?'down':'flat';
+  const tlabel=prev.length?(delta>0?'+':'')+delta+' % vs période précédente':'aucun point de comparaison';
+
+  $('#overviewSub').innerHTML=`Fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b> · <b>${ONLINE}</b>/128 joueurs connectés`;
+  $('#tiles').innerHTML=`
+    <div class="tile"><div class="tile-k">Évènements</div><div class="tile-v">${list.length.toLocaleString('fr-FR')}</div><div class="tile-d"><span class="trend ${tclass}">${tlabel}</span></div></div>
+    <div class="tile"><div class="tile-k">Joueurs distincts</div><div class="tile-v">${uniq}</div><div class="tile-d">auteurs d’au moins un évènement</div></div>
+    <div class="tile ${alerts.length?'flag':''}"><div class="tile-k">À traiter</div><div class="tile-v">${alerts.length}</div><div class="tile-d">alertes et critiques non traitées</div></div>
+    <div class="tile ${ach.length?'warn':''}"><div class="tile-k">Anticheat</div><div class="tile-v">${ach.length}</div><div class="tile-d">${ach.filter(e=>e.sev==='critique').length} détection(s) critiques</div></div>
+    <div class="tile"><div class="tile-k">Sanctions</div><div class="tile-v">${snc.length}</div><div class="tile-d">kick, warn, ban et levées</div></div>`;
+
+  drawChart(list);
+
+  const by={};list.forEach(e=>by[e.cat]=(by[e.cat]||0)+1);
+  const max=Math.max(1,...Object.values(by));
+  $('#split').innerHTML=CATS.map(c=>{
+    const v=by[c.id]||0;
+    return `<button class="split-row" data-cat="${c.id}" style="--fam:${c.fam}">
+      <span class="tag" style="--fam:${c.fam}">${c.code}</span>
+      <span class="split-track"><span class="split-fill" style="width:${Math.max(v?4:0,v/max*100)}%"></span></span>
+      <span class="split-n">${v}</span></button>`;
+  }).join('');
+
+  $('#alerts').innerHTML=alerts.slice(0,7).map(e=>`
+    <button class="mini-row" data-ev="${e.id}">
+      <span class="sev-dot" style="--c:${SEV[e.sev].c};width:8px;height:8px;border-radius:2px;background:${SEV[e.sev].c}"></span>
+      <span><span class="mini-title">${strip(e.msg)}</span><br><span class="mini-meta">${CAT[e.cat].code} · ${ago(e.t)}</span></span>
+      <span class="mini-meta">${hhmmss(e.t)}</span>
+    </button>`).join('')||`<div class="empty"><b>Rien à traiter</b><span>Aucune alerte ouverte sur la période.</span></div>`;
+
+  const pc={};list.forEach(e=>{if(!e.actor.staff)pc[e.actor.name]=(pc[e.actor.name]||0)+1;});
+  $('#topPlayers').innerHTML=Object.entries(pc).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([n,v])=>{
+    const p=PLAYERS.find(x=>x.name===n);
+    return `<button class="mini-row" data-player="${n}">
+      <span class="avatar" style="${avatarStyle(p)}">${initials(p)}</span>
+      <span><span class="mini-title">${n}</span><br><span class="mini-meta">[${p.sid}] · ${p.job}</span></span>
+      <span class="mini-meta">${v} évts</span></button>`;
+  }).join('')||`<div class="empty"><b>Aucun joueur</b><span>Élargissez la période.</span></div>`;
+}
+
+function drawChart(list){
+  const cfg=CHART_CFG[STATE.range],now=Date.now(),start=now-cfg.n*cfg.ms;
+  const buckets=new Array(cfg.n).fill(0);
+  list.forEach(e=>{const i=Math.floor((e.t-start)/cfg.ms);if(i>=0&&i<cfg.n)buckets[i]++;});
+  const max=Math.max(1,...buckets),peak=buckets.indexOf(max);
+  const W=760,H=190,L=38,R=8,Tp=14,B=28,pw=W-L-R,ph=H-Tp-B;
+  const bw=pw/cfg.n,gap=Math.min(7,bw*.22);
+  let s=`<defs>
+    <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9D5CFF" stop-opacity=".85"/><stop offset="100%" stop-color="#6D2BD9" stop-opacity=".35"/></linearGradient>
+    <linearGradient id="barPeak" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#DCC2FF"/><stop offset="100%" stop-color="#9D5CFF" stop-opacity=".55"/></linearGradient>
+  </defs>`;
+  [0,.5,1].forEach(f=>{const y=Tp+ph-ph*f;
+    s+=`<line class="grid-line" x1="${L}" y1="${y.toFixed(1)}" x2="${W-R}" y2="${y.toFixed(1)}"/>`;
+    s+=`<text x="${L-8}" y="${(y+3.5).toFixed(1)}" text-anchor="end">${Math.round(max*f)}</text>`;});
+  buckets.forEach((v,i)=>{
+    const h=Math.max(v?2:0,ph*v/max),x=L+i*bw+gap/2,y=Tp+ph-h,w=Math.max(2,bw-gap);
+    s+=`<g><title>${cfg.fmt(start+i*cfg.ms)} — ${v} évènement${v>1?'s':''}</title>`;
+    s+=`<rect class="bar-hit" x="${x.toFixed(1)}" y="${Tp}" width="${w.toFixed(1)}" height="${ph}"/>`;
+    s+=`<rect class="bar${i===peak?' peak':''}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2"/></g>`;
+    if(i%cfg.every===0)s+=`<text x="${(x+w/2).toFixed(1)}" y="${H-9}" text-anchor="middle">${cfg.fmt(start+i*cfg.ms)}</text>`;
+  });
+  $('#chart').innerHTML=s;
+  $('#chartNote').textContent=`${cfg.title} · pic à ${max} évts`;
+}
+
+/* ---------- flux ---------- */
+function renderSevBar(){
+  const sc=scoped(),by={};sc.forEach(e=>by[e.sev]=(by[e.sev]||0)+1);
+  $('#sevBar').innerHTML=SEVS.map(s=>`
+    <button class="sev-chip" data-sev="${s.id}" style="--c:${s.c}" aria-pressed="${STATE.sevs.has(s.id)}">
+      <span class="sev-dot"></span>${s.label}<span class="sev-n">${by[s.id]||0}</span></button>`).join('')
+    +(STATE.sevs.size?`<button class="btn small" id="sevClear">Tout afficher</button>`:'');
+}
+function renderStream(){
+  const c=STATE.cat==='all'?null:CAT[STATE.cat];
+  $('#streamTitle').textContent=c?c.label:'Tous les évènements';
+  $('#streamDesc').textContent=c?c.desc:'Flux complet, toutes catégories confondues.';
+  renderSevBar();
+  const list=filtered(),shown=list.slice(0,STATE.limit);
+  $('#streamCount').innerHTML=`<b>${list.length.toLocaleString('fr-FR')}</b> évènement(s) · ${CHART_CFG[STATE.range].title.toLowerCase()}`;
+  const tb=$('#rows');
+  if(!list.length){
+    tb.innerHTML=`<tr><td colspan="5"><div class="empty"><b>Aucun évènement</b>
+      <span>Rien ne correspond à ces filtres sur la période choisie.</span>
+      <button class="btn small" id="resetFilters">Réinitialiser les filtres</button></div></td></tr>`;
+  }else{
+    let lastDay='';
+    tb.innerHTML=shown.map(e=>{
+      const d=dayLabel(e.t),newDay=d!==lastDay;lastDay=d;
+      const cat=CAT[e.cat];
+      return `<tr data-ev="${e.id}" aria-selected="${STATE.sel===e.id}" style="--sev:${SEV[e.sev].c}">
+        <td class="c-time"><b>${hhmmss(e.t)}</b>${newDay?d:'<span style="opacity:.45">'+ago(e.t)+'</span>'}</td>
+        <td class="c-tag"><span class="tag" style="--fam:${cat.fam}">${cat.code}</span></td>
+        <td class="c-actor"><span class="actor"><span class="avatar" style="${avatarStyle(e.actor)};width:22px;height:22px;border-radius:7px;font-size:9.5px">${initials(e.actor)}</span>
+          <span><span class="actor-name">${e.actor.name}</span><br><span class="actor-id">[${e.actor.sid}]${e.actor.staff?' · staff':''}</span></span></span></td>
+        <td class="c-msg">${e.msg}<span class="row-flags">${MARKS.pin.has(e.id)?'<span class="flag-pin" title="Épinglé">◆</span>':''}${MARKS.done.has(e.id)?'<span class="flag-done" title="Traité">✓</span>':''}</span></td>
+        <td class="c-src">${e.res}</td></tr>`;
+    }).join('');
+  }
+  $('#foot').textContent=list.length?`${Math.min(STATE.limit,list.length)} sur ${list.length} affichés`:'0 résultat';
+  $('#moreBtn').hidden=list.length<=STATE.limit;
+}
+</script>
+
+<script>
+/* ---------- inspecteur ---------- */
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function jsonHtml(obj){
+  return esc(JSON.stringify(obj,null,2))
+    .replace(/"([^"]+)":/g,'<span class="k">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span class="s">"$1"</span>')
+    .replace(/: (-?\d+(?:\.\d+)?)/g,': <span class="n">$1</span>')
+    .replace(/: (true|false|null)/g,': <span class="b">$1</span>');
+}
+function openInspector(id){
+  const e=EVENTS.find(x=>x.id===id);if(!e)return;
+  STATE.sel=id;
+  const cat=CAT[e.cat],sev=SEV[e.sev];
+  $('#inspTitle').innerHTML=e.msg;
+  $('#pinBtn').setAttribute('aria-pressed',MARKS.pin.has(id));
+  $('#pinBtn').classList.toggle('on',MARKS.pin.has(id));
+  $('#doneBtn').setAttribute('aria-pressed',MARKS.done.has(id));
+  $('#doneBtn').classList.toggle('on',MARKS.done.has(id));
+
+  const around=EVENTS.filter(x=>x.actor.name===e.actor.name&&x.id!==e.id).slice(0,6);
+  const d=new Date(e.t);
+  $('#inspBody').innerHTML=`
+    <dl class="kv">
+      <dt>Identifiant</dt><dd class="mono">${e.id}</dd>
+      <dt>Horodatage</dt><dd class="mono">${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${hhmmss(e.t)} · ${ago(e.t)}</dd>
+      <dt>Catégorie</dt><dd><span class="tag" style="--fam:${cat.fam}">${cat.code}</span> ${cat.label}</dd>
+      <dt>Gravité</dt><dd><span class="sev-chip" style="--c:${sev.c}" aria-pressed="true"><span class="sev-dot"></span>${sev.label}</span></dd>
+      <dt>Ressource</dt><dd class="mono">${e.res}</dd>
+      <dt>Auteur</dt><dd><button class="btn small" data-player="${e.actor.name}">${e.actor.name} [${e.actor.sid}]</button></dd>
+      ${e.target?`<dt>Concerné</dt><dd><button class="btn small" data-player="${e.target.name}">${e.target.name} [${e.target.sid}]</button></dd>`:''}
+      <dt>Licence</dt><dd class="mono" style="font-size:10.5px">${e.actor.license}</dd>
+    </dl>
+    <div>
+      <h3 class="section-title" style="margin-bottom:8px">Données brutes</h3>
+      <pre class="payload">${jsonHtml(e.d)}</pre>
+    </div>
+    <div class="insp-actions">
+      <button class="btn small" data-copy="json">Copier le JSON</button>
+      <button class="btn small" data-copy="line">Copier la ligne</button>
+      <button class="btn small" data-player="${e.actor.name}">Ouvrir le dossier joueur</button>
+    </div>
+    <div>
+      <h3 class="section-title" style="margin-bottom:8px">Contexte joueur — ${e.actor.name}</h3>
+      <div class="chain">${around.map(x=>`<button class="chain-row" data-ev="${x.id}">
+        <span class="chain-t">${hhmmss(x.t)}</span><span class="chain-m">${strip(x.msg)}</span></button>`).join('')
+        ||'<span class="mini-meta">Aucun autre évènement pour ce joueur.</span>'}</div>
+    </div>`;
+  document.querySelector('.app').classList.add('insp');
+  $('#inspector').classList.add('open');
+  $('#inspector').setAttribute('aria-hidden','false');
+  document.querySelectorAll('.logs tbody tr').forEach(r=>r.setAttribute('aria-selected',r.dataset.ev===id));
+}
+function closeInspector(){document.querySelector('.app').classList.remove('insp');$('#inspector').classList.remove('open');$('#inspector').setAttribute('aria-hidden','true');STATE.sel=null;
+  document.querySelectorAll('.logs tbody tr').forEach(r=>r.setAttribute('aria-selected','false'));}
+
+/* ---------- dossier joueur ---------- */
+function openDossier(name){
+  const p=PLAYERS.find(x=>x.name===name);if(!p)return;
+  const mine=EVENTS.filter(e=>e.actor.name===name||(e.target&&e.target.name===name)||(e.d&&e.d.cible===name));
+  const kills=EVENTS.filter(e=>e.cat==='combat'&&e.actor.name===name&&/a éliminé/.test(e.msg)).length;
+  const morts=EVENTS.filter(e=>e.cat==='combat'&&((e.target&&e.target.name===name&&/a éliminé/.test(e.msg))||(e.actor.name===name&&/est mort/.test(e.msg)))).length;
+  const sessions=EVENTS.filter(e=>e.cat==='connexions'&&e.actor.name===name&&/a rejoint/.test(e.msg)).length;
+  const sanctions=EVENTS.filter(e=>e.cat==='sanctions'&&e.d&&e.d.cible===name);
+  const flags=EVENTS.filter(e=>e.cat==='anticheat'&&e.actor.name===name);
+
+  $('#dosAvatar').style.cssText=avatarStyle(p);
+  $('#dosAvatar').textContent=initials(p);
+  $('#dosName').textContent=p.name;
+  $('#dosMeta').innerHTML=`[${p.sid}] · ${p.job}${p.staff?'':' · grade '+p.grade} · ${p.hours} h de jeu · inscrit ${dayLabel(p.joined)}`;
+  $('#dosBody').innerHTML=`
+    <div class="stat-strip">
+      <div class="stat"><div class="stat-k">Évènements</div><div class="stat-v">${mine.length}</div></div>
+      <div class="stat"><div class="stat-k">Sessions</div><div class="stat-v">${sessions}</div></div>
+      <div class="stat"><div class="stat-k">Éliminations</div><div class="stat-v">${kills}</div></div>
+      <div class="stat"><div class="stat-k">Décès</div><div class="stat-v">${morts}</div></div>
+      <div class="stat"><div class="stat-k">Détections</div><div class="stat-v" style="${flags.length?'color:#FF8399':''}">${flags.length}</div></div>
+    </div>
+    ${p.staff?'':`<div class="card" style="background:rgba(30,20,50,.35)">
+      <h3 class="section-title">Comptes</h3>
+      <div class="stat-strip">
+        <div class="stat"><div class="stat-k">Liquide</div><div class="stat-v">${money(p.cash)}</div></div>
+        <div class="stat"><div class="stat-k">Banque</div><div class="stat-v">${money(p.bank)}</div></div>
+        <div class="stat"><div class="stat-k">Argent sale</div><div class="stat-v" style="${p.dirty?'color:#FFC55C':''}">${money(p.dirty)}</div></div>
+      </div></div>`}
+    <div>
+      <h3 class="section-title" style="margin-bottom:8px">Identifiants</h3>
+      <dl class="kv">
+        <dt>License</dt><dd class="mono" style="font-size:10.5px">${p.license}</dd>
+        <dt>Discord</dt><dd class="mono" style="font-size:10.5px">${p.discord}</dd>
+        <dt>Steam</dt><dd class="mono" style="font-size:10.5px">${p.steam}</dd>
+        <dt>FiveM</dt><dd class="mono" style="font-size:10.5px">${p.fivem}</dd>
+        <dt>Ping moyen</dt><dd class="mono">${p.ping} ms</dd>
+      </dl>
+    </div>
+    <div>
+      <h3 class="section-title" style="margin-bottom:8px">Sanctions (${sanctions.length})</h3>
+      <div class="mini" style="gap:6px">${sanctions.slice(0,6).map(e=>`
+        <div class="sanction"><span class="s-kind">${(e.d.type||'sanction').replace(/_/g,' ')}</span>
+        <span class="s-why">${e.d.motif||'—'} — par ${e.d.staff}</span>
+        <span class="s-when">${dayLabel(e.t)} ${hhmmss(e.t)}</span></div>`).join('')
+        ||'<span class="mini-meta">Aucune sanction enregistrée.</span>'}</div>
+    </div>
+    <div>
+      <h3 class="section-title" style="margin-bottom:8px">Derniers évènements</h3>
+      <div class="chain">${mine.slice(0,14).map(e=>`<button class="chain-row" data-ev="${e.id}">
+        <span class="chain-t">${hhmmss(e.t)}</span>
+        <span class="chain-m"><span class="tag" style="--fam:${CAT[e.cat].fam};margin-right:6px">${CAT[e.cat].code}</span>${strip(e.msg)}</span></button>`).join('')}</div>
+    </div>`;
+  $('#sheet').hidden=false;$('#scrim').hidden=false;
+  $('#dosClose').focus();
+}
+function closeDossier(){$('#sheet').hidden=true;$('#scrim').hidden=true;}
+</script>
+
+<script>
+/* ============================================================
+   Interactions
+   ============================================================ */
+function render(){
+  renderRailCounts();
+  const ov=STATE.view==='overview';
+  $('#viewOverview').hidden=!ov;
+  $('#viewStream').hidden=ov;
+  ov?renderOverview():renderStream();
+}
+function goStream(cat){STATE.view='stream';STATE.cat=cat;STATE.limit=120;render();window.scrollTo({top:0,behavior:'instant'});}
+function goOverview(){STATE.view='overview';render();}
+
+document.addEventListener('click',ev=>{
+  const t=ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range]');
+  if(!t)return;
+
+  if(t.dataset.view==='overview'){goOverview();return;}
+  if(t.dataset.player){closeInspector();openDossier(t.dataset.player);return;}
+  if(t.dataset.ev){
+    const e=EVENTS.find(x=>x.id===t.dataset.ev);
+    closeDossier();
+    if(e&&STATE.view==='overview')goStream(e.cat);
+    openInspector(t.dataset.ev);
+    return;
+  }
+  if(t.dataset.cat){goStream(t.dataset.cat);return;}
+  if(t.dataset.sev){
+    const s=t.dataset.sev;
+    STATE.sevs.has(s)?STATE.sevs.delete(s):STATE.sevs.add(s);
+    STATE.limit=120;render();return;
+  }
+  if(t.dataset.range){
+    STATE.range=Number(t.dataset.range);STATE.limit=120;
+    document.querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',b===t));
+    render();return;
+  }
+  if(t.dataset.copy){
+    const e=EVENTS.find(x=>x.id===STATE.sel);if(!e)return;
+    const txt=t.dataset.copy==='json'
+      ? JSON.stringify({id:e.id,horodatage:new Date(e.t).toISOString(),categorie:e.cat,gravite:e.sev,ressource:e.res,joueur:e.actor.name,serverId:e.actor.sid,license:e.actor.license,evenement:strip(e.msg),donnees:e.d},null,2)
+      : `${new Date(e.t).toISOString()}\t${CAT[e.cat].code}\t${SEV[e.sev].label}\t${e.actor.name} [${e.actor.sid}]\t${strip(e.msg)}\t${e.res}`;
+    copy(txt,t.dataset.copy==='json'?'JSON copié':'Ligne copiée');
+  }
+});
+document.addEventListener('click',ev=>{
+  if(ev.target.id==='sevClear'){STATE.sevs.clear();render();}
+  if(ev.target.id==='resetFilters'){STATE.sevs.clear();STATE.q='';$('#q').value='';STATE.range=168;
+    document.querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.range==='168'));render();}
+  if(ev.target.id==='moreBtn'){STATE.limit+=100;renderStream();}
+});
+
+function copy(txt,msg){
+  const done=()=>toast(msg);
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(txt).then(done,()=>fallback());}
+  else fallback();
+  function fallback(){
+    const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');done();}catch(e){toast('Copie impossible dans ce contexte');}
+    document.body.removeChild(ta);
+  }
+}
+$('#copyBtn').addEventListener('click',()=>{
+  const list=filtered();
+  if(!list.length){toast('Rien à exporter sur ces filtres');return;}
+  const head='horodatage;categorie;gravite;joueur;server_id;license;evenement;ressource';
+  const csv=[head].concat(list.slice(0,2000).map(e=>[
+    new Date(e.t).toISOString(),CAT[e.cat].code,e.sev,e.actor.name,e.actor.sid,e.actor.license,
+    '"'+strip(e.msg).replace(/"/g,'""')+'"',e.res].join(';'))).join('\n');
+  copy(csv,`${Math.min(2000,list.length)} lignes copiées en CSV`);
+});
+
+/* épingler / traiter */
+$('#pinBtn').addEventListener('click',()=>{
+  if(!STATE.sel)return;const id=STATE.sel;
+  MARKS.pin.has(id)?MARKS.pin.delete(id):MARKS.pin.add(id);saveMarks();
+  toast(MARKS.pin.has(id)?'Évènement épinglé':'Épingle retirée');openInspector(id);renderStream();
+});
+$('#doneBtn').addEventListener('click',()=>{
+  if(!STATE.sel)return;const id=STATE.sel;
+  MARKS.done.has(id)?MARKS.done.delete(id):MARKS.done.add(id);saveMarks();
+  toast(MARKS.done.has(id)?'Marqué comme traité':'Remis à traiter');openInspector(id);renderStream();
+});
+$('#inspClose').addEventListener('click',closeInspector);
+$('#dosClose').addEventListener('click',closeDossier);
+$('#scrim').addEventListener('click',closeDossier);
+
+/* recherche */
+let qh;
+$('#q').addEventListener('input',e=>{clearTimeout(qh);qh=setTimeout(()=>{
+  STATE.q=e.target.value;STATE.limit=120;
+  if(STATE.view==='overview'&&STATE.q)goStream(STATE.cat);else render();},140);});
+
+/* direct */
+$('#liveBtn').addEventListener('click',()=>{
+  STATE.live=!STATE.live;
+  $('#liveBtn').classList.toggle('on',STATE.live);
+  $('#liveBtn').setAttribute('aria-pressed',String(STATE.live));
+  $('#liveState').textContent=STATE.live?'en direct':'en pause';
+  $('#liveDot').classList.toggle('off',!STATE.live);
+  toast(STATE.live?'Flux repris':'Flux en pause — la liste ne bouge plus');
+});
+
+/* clavier */
+document.addEventListener('keydown',e=>{
+  if(e.key==='/'&&document.activeElement!==$('#q')){e.preventDefault();$('#q').focus();$('#q').select();return;}
+  if(e.key==='Escape'){
+    if(!$('#sheet').hidden){closeDossier();return;}
+    if($('#inspector').classList.contains('open')){closeInspector();return;}
+    if(document.activeElement===$('#q')){$('#q').value='';STATE.q='';render();}
+    return;
+  }
+  if((e.key==='ArrowDown'||e.key==='ArrowUp')&&STATE.view==='stream'&&document.activeElement!==$('#q')){
+    const rows=[...document.querySelectorAll('.logs tbody tr[data-ev]')];
+    if(!rows.length)return;e.preventDefault();
+    const i=rows.findIndex(r=>r.dataset.ev===STATE.sel);
+    const n=e.key==='ArrowDown'?Math.min(rows.length-1,i+1):Math.max(0,i<0?0:i-1);
+    openInspector(rows[n].dataset.ev);
+    rows[n].scrollIntoView({block:'nearest'});
+  }
+});
+
+/* ---------- démarrage ---------- */
+buildRail();
+DataSource.fetch().then(list=>{
+  EVENTS=list;
+  render();
+  DataSource.subscribe(e=>{
+    EVENTS.unshift(e);
+    if(EVENTS.length>4000)EVENTS.length=4000;
+    $('#lastTick').textContent=hhmmss(e.t);
+    if(!$('#inspector').classList.contains('open')&&$('#sheet').hidden&&window.scrollY<160)render();
+    else renderRailCounts();
+  });
+});
+</script>
+</body>
+</html>
