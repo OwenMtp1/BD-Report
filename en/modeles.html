@@ -1,0 +1,288 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+<title>Three templates we wish we'd had — BD Report</title>
+<meta name="description" content="A commission grid to fill in, a cold-call script with its five branches, and the format of a daily that fits in nine minutes. Written to be used on Monday morning, not to illustrate a product.">
+<link rel="icon" type="image/svg+xml" href="app/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/BD-Report/assets/site.css">
+<script>
+  /* Mêmes clés que le formulaire de contact : un modèle téléchargé arrive dans
+     « Nouvelles demandes », au même endroit que les autres prises de contact. */
+  window.bdrDeob = function(b64){var p='bdreport-obf-2026-v1';var b=Uint8Array.from(atob(b64),function(c){return c.charCodeAt(0);});var o=b.map(function(x,i){return x^p.charCodeAt(i%p.length);});return new TextDecoder().decode(o);};
+  window.BDR_SUPABASE_URL = window.bdrDeob('ChAGFQNVXVtUDQ4LRUVUU0BPEUUIEAsDAxoLGwMcFxZMUFFBUwMVXg==');
+  window.BDR_SUPABASE_ANON_KEY = window.bdrDeob('Bx04DRIoER1iBigveEh5A3hEP0IrCiBQEyw7QmQEEj57cXoLGEgPexIHQSgZIBs+Vws6JEVrXXRMdyV4ES0cLxw1Gz0bJgwKRFB3A1lJRGMKAB8vHgs1BB0KNTxXVmheQGQfRgsHH1wDNSE9GyYPIFhQAgZfYTV7Ej0qNBkgGDEeICYjV310YwdgDGARLR8zRAwxPRsiCCcYfFpZBGAyZBgqOlVeMEVZHgQRB3hWe15CXgxGKSIIPToOHixkO1MoAEFRBXdXLl4nAy09MikeMQ==');
+</script>
+<style>
+  .kits { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 8px 0 4px }
+  @media (max-width: 860px) { .kits { grid-template-columns: 1fr } }
+  .kit { display: flex; flex-direction: column }
+  .kit .ico { font-size: 30px; margin-bottom: 8px }
+  .kit h3 { font-size: 17px; margin-bottom: 6px }
+  .kit p { font-size: 14px; color: var(--muted); flex: 1 }
+  .kit .meta { font-size: 12px; color: var(--muted2); margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px }
+  .grab { max-width: 520px; margin: 0 auto; display: grid; gap: 12px }
+  .grab input { width: 100%; padding: 13px 16px; border-radius: 12px; border: 1px solid var(--line2);
+                background: var(--veil); color: var(--text); font-family: inherit; font-size: 15px }
+  .grab input:focus { outline: none; border-color: var(--violet); background: rgba(124,92,255,.06) }
+  .grab ::placeholder { color: var(--muted2) }
+  .files { display: none; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px }
+  .files.on { display: flex }
+  .files a { border: 1px solid rgba(34,211,166,.35); background: rgba(34,211,166,.08); color: #6EE7C4;
+             border-radius: 12px; padding: 11px 18px; font-weight: 700; font-size: 14px }
+</style>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Modèles gratuits pour équipes BDR — barème, cold call, daily">
+<meta property="og:description" content="Trois modèles prêts à l'emploi pour une équipe BDR : un barème de commissions à remplir, une trame de cold call avec ses cinq bifurcations, et le format d'un daily de neuf minutes.">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/en/modeles.html">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Modèles gratuits pour équipes BDR — barème, cold call, daily">
+<meta name="twitter:description" content="Trois modèles prêts à l'emploi pour une équipe BDR : un barème de commissions à remplir, une trame de cold call avec ses cinq bifurcations, et le format d'un daily de neuf minutes.">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<script>(function(){try{var t=localStorage.getItem('bdr_site_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
+<style>
+.theme-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line2);
+  background:var(--veil);color:var(--muted);border-radius:10px;width:34px;height:34px;padding:0;
+  cursor:pointer;transition:color .2s,background .2s,border-color .2s}
+.theme-btn:hover{color:var(--text);background:var(--veil2)}
+.theme-btn svg{width:17px;height:17px;display:block}
+</style>
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/en/modeles.html">
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/modeles.html">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/en/modeles.html">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/es/modeles.html">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/modeles.html">
+</head>
+<body>
+<div class="bg-layer"></div><div class="bg-grid"></div>
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="index.html">
+      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9B84FF"></stop><stop offset="1" stop-color="#22D3A6"></stop></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"></rect><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#0B0F16" opacity=".85"></rect><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#0B0F16" opacity=".9"></rect><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#0B0F16"></rect></svg>
+      <span><b>BD</b> Report</span>
+    </a>
+    <div class="nav-right">
+      <a href="comparatif.html" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.compare">Compare</a>
+      <a href="index.html#tarifs" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.pricing">Pricing</a>
+      <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧 EN</button>
+      <a class="btn btn-primary" href="app/" data-i18n="nav.login">Log in</a>
+    </div>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="chip" data-i18n="hero.chip">📎 Resources</span>
+    <h1 data-i18n="hero.title">Three templates we wish we'd had</h1>
+    <p data-i18n="hero.pitch">A commission grid to fill in, a cold-call script with its five branches, and the format of a daily that fits in nine minutes. Written to be used on Monday morning, not to illustrate a product.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <section class="sec">
+    <div class="kits">
+      <div class="card kit">
+        <div class="ico">💶</div>
+        <h3 data-i18n="k1.t">BDR commission grid</h3>
+        <p data-i18n="k1.d">The four decisions to make before writing a plan, the grid to fill in, the accelerator, and the three rules to put in writing so you never reopen a closed month.</p>
+        <div class="meta" data-i18n="k1.m">2-page PDF + ready-to-fill CSV</div>
+      </div>
+      <div class="card kit">
+        <div class="ico">📞</div>
+        <h3 data-i18n="k2.t">Cold-call script</h3>
+        <p data-i18n="k2.d">Two openers that survive the first ten seconds, how to frame the problem, the five most common objections with their answers, and what to measure.</p>
+        <div class="meta" data-i18n="k2.m">2-page PDF</div>
+      </div>
+      <div class="card kit">
+        <div class="ico">📊</div>
+        <h3 data-i18n="k3.t">The nine-minute daily</h3>
+        <p data-i18n="k3.d">The minute-by-minute breakdown, the three round-table questions, the five ways to kill a daily, and the manager's sheet to fill in during it.</p>
+        <div class="meta" data-i18n="k3.m">2-page PDF</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <h2 style="text-align:center"><span data-i18n="form.title">Get the three templates</span></h2>
+      <p style="text-align:center;color:var(--muted);font-size:14px;margin-bottom:16px" data-i18n="form.sub">A work address, and the links appear on this page right away.</p>
+      <form class="grab" id="kitForm" onsubmit="return grabKit(event)">
+        <input type="text" id="kName" data-i18n-ph="form.name" placeholder="Your first name and company" required="">
+        <input type="email" id="kEmail" data-i18n-ph="form.email" placeholder="Your work email" required="">
+        <button class="btn btn-primary" type="submit" style="justify-content:center" data-i18n="form.send">Show the downloads</button>
+        <p id="kHint" style="font-size:12.5px;color:var(--muted);text-align:center"></p>
+      </form>
+      <div class="files" id="kFiles">
+        <a href="/BD-Report/assets/modeles/bd-report-bareme-commissions.pdf" download="" data-i18n="dl.1">💶 Grid (PDF)</a>
+        <a href="/BD-Report/assets/modeles/bd-report-bareme-commissions.csv" download="" data-i18n="dl.2">📗 Grid (CSV)</a>
+        <a href="/BD-Report/assets/modeles/bd-report-script-cold-call.pdf" download="" data-i18n="dl.3">📞 Cold call (PDF)</a>
+        <a href="/BD-Report/assets/modeles/bd-report-trame-daily.pdf" download="" data-i18n="dl.4">📊 Daily (PDF)</a>
+      </div>
+      <p style="text-align:center;font-size:12px;color:var(--muted2);margin-top:14px" data-i18n="form.legal">Your address is only used to contact you about BD Report. No resale, no sharing — see the <a href="confidentialite.html" style="color:var(--violet2)">privacy policy</a>.</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">🔎</span> <span data-i18n="why.t">Why these three</span></h2>
+      <p data-i18n="why.p">These are the three documents a BDR team recreates every time, badly, under pressure — and whose absence costs the most. A vague grid is paid for in end-of-month disputes; a missing cold-call script is paid for in thirty wasted seconds on every call; a daily without a format is paid for in half an hour per person per day. They are free to reuse inside your company.</p>
+    </div>
+  </section>
+
+  <div class="cta">
+    <h2 data-i18n="cta.title">And to have the grid compute itself</h2>
+    <p data-i18n="cta.sub">That's exactly what BD Report does: you write the rule once, it applies to every opportunity.</p>
+    <a class="btn btn-primary" href="app/" data-i18n="cta.btn">Create my workspace, free</a>
+  </div>
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2026 <b style="color:#7C9BFF">BD</b> Report — <span data-i18n="foot.tag">Run your pipeline. Cash your bonuses.</span></span>
+    <span style="display:flex;gap:18px;flex-wrap:wrap">
+      <a href="securite.html" data-i18n="nav.security">Security</a>
+      <a href="cgv.html">CGV</a>
+      <a href="confidentialite.html">Confidentialité</a>
+      <a href="index.html" data-i18n="foot.back">← Back to the site</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+// Le contact arrive dans « Nouvelles demandes » comme le formulaire de contact.
+// Les liens sont ensuite AFFICHÉS, pas déverrouillés : sur un site statique, un
+// fichier public reste accessible à qui connaît son adresse. On demande une
+// adresse, on ne prétend pas la contrôler — et on ne fait pas semblant.
+function localStoreContact(item){
+  var KEY='bdrflow_contact_inbox_v1', inbox=[];
+  try{ inbox=JSON.parse(localStorage.getItem(KEY))||[]; }catch(_){ inbox=[]; }
+  if(!Array.isArray(inbox)) inbox=[];
+  inbox.push({ id:item.id, name:item.name, email:item.email, message:item.message, lang:item.lang, createdAt:item.created_at });
+  if(inbox.length>200) inbox=inbox.slice(-200);
+  localStorage.setItem(KEY, JSON.stringify(inbox));
+}
+async function bdrEncField(str){
+  try{
+    if(!(window.crypto&&window.crypto.subtle)) return str;
+    var hex=window.bdrDeob('AAZDVENaEUFPDVMFFAYHA1QeT1RTUUdVFF9HQUkKA1JOVwMDARtOBlQAQFJJC0MRG19bAkkLBFMOFEAAUQUTVw==');
+    var raw=new Uint8Array(hex.match(/.{2}/g).map(function(h){return parseInt(h,16);}));
+    var key=await window.crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt']);
+    var iv=window.crypto.getRandomValues(new Uint8Array(12));
+    var ct=await window.crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(String(str)));
+    var packed=new Uint8Array(iv.length+ct.byteLength); packed.set(iv,0); packed.set(new Uint8Array(ct),iv.length);
+    return 'enc:'+btoa(String.fromCharCode.apply(null,packed));
+  }catch(_){ return str; }
+}
+async function grabKit(e){
+  e.preventDefault();
+  var name=document.getElementById('kName').value.trim();
+  var email=document.getElementById('kEmail').value.trim();
+  if(!name||!email) return false;
+  var curLang=(localStorage.getItem('bdr_site_lang')||'fr');
+  var msg='[Modèles téléchargés] barème de commissions, trame de cold call, daily de 9 minutes.';
+  var item={ id:'k'+Date.now().toString(36)+Math.random().toString(36).slice(2,7), name:name, email:email, message:msg, lang:curLang, created_at:new Date().toISOString() };
+  try{
+    if(window.BDR_SUPABASE_URL && window.BDR_SUPABASE_ANON_KEY){
+      var mod=await import('https://esm.sh/@supabase/supabase-js@2.45.4');
+      var sb=mod.createClient(window.BDR_SUPABASE_URL, window.BDR_SUPABASE_ANON_KEY);
+      var enc={ id:item.id, name:await bdrEncField(name), email:await bdrEncField(email), message:await bdrEncField(msg), lang:curLang, created_at:item.created_at };
+      var res=await sb.from('contact_requests').insert(enc);
+      if(res.error) throw res.error;
+    }
+    localStoreContact(item);
+  }catch(err){ try{ localStoreContact(item); }catch(_){} }
+  // Les liens s'affichent quoi qu'il arrive : un incident d'enregistrement de notre
+  // côté ne doit pas priver quelqu'un du document qu'il vient de demander.
+  document.getElementById('kFiles').classList.add('on');
+  document.getElementById('kitForm').style.display='none';
+  var hint=document.getElementById('kHint');
+  var ok={fr:'Merci — vos modèles sont ci-dessous.',en:'Thanks — your templates are below.',es:'Gracias — tus plantillas están abajo.'};
+  hint.textContent=ok[curLang]||ok.fr;
+  return false;
+}
+</script>
+
+
+<script>
+(function(){
+  var host = document.querySelector('.nav-right') || document.querySelector('.nav-links');
+  if (!host) return;
+  var b = document.createElement('button');
+  b.className = 'theme-btn'; b.type = 'button';
+  // Pictogrammes tracés au trait plutôt qu'émoji : un émoji est rendu différemment par
+  // chaque système, en couleur, et jure avec le reste d'une interface sobre.
+  var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.4M12 19.2v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
+  var root = document.documentElement;
+  function isLight(){
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'light';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+  // Les captures du produit suivent le thème du site : montrer une interface sombre
+  // sur une page claire donne l'impression d'une image collée là par erreur.
+  function swapShots(light){
+    var imgs = document.querySelectorAll('img[src*="/assets/"], img[src^="assets/"], img[src^="../assets/"]');
+    for (var i = 0; i < imgs.length; i++) {
+      var el = imgs[i], src = el.getAttribute('src');
+      if (!src || src.indexOf('og.png') > -1 || src.indexOf('.svg') > -1) continue;
+      var isLightSrc = src.indexOf('-light.') > -1;
+      if (light && !isLightSrc) el.setAttribute('src', src.replace(/(.[a-z]+)$/, '-light$1'));
+      else if (!light && isLightSrc) el.setAttribute('src', src.replace('-light.', '.'));
+    }
+  }
+  function paint(){
+    var light = isLight();
+    b.innerHTML = light ? MOON : SUN;
+    b.title = light ? 'Passer en mode sombre' : 'Passer en mode clair';
+    b.setAttribute('aria-label', b.title);
+    swapShots(light);
+  }
+  b.onclick = function(){
+    var next = isLight() ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('bdr_site_theme', next); } catch (e) {}
+    paint();
+  };
+  paint();
+  var lang = host.querySelector('#langBtn');
+  if (lang) host.insertBefore(b, lang); else host.appendChild(b);
+})();
+</script>
+
+<script>
+(function(){
+  var urls = {"fr":"https://owenmtp1.github.io/BD-Report/modeles.html","en":"https://owenmtp1.github.io/BD-Report/en/modeles.html","es":"https://owenmtp1.github.io/BD-Report/es/modeles.html"};
+  var seq = ['fr','en','es'], cur = "fr";
+  var btn = document.getElementById('langBtn');
+  if (!btn) return;
+  var labels = { fr: '\uD83C\uDDEC\uD83C\uDDE7 EN', en: '\uD83C\uDDEA\uD83C\uDDF8 ES', es: '\uD83C\uDDEB\uD83C\uDDF7 FR' };
+  btn.textContent = labels[cur];
+  btn.onclick = function(){
+    var next = seq[(seq.indexOf(cur) + 1) % seq.length];
+    try { localStorage.setItem('bdr_site_lang', next); } catch (e) {}
+    window.location.href = urls[next];
+  };
+})();
+</script>
+
+
+
+<script>
+(function(){
+  var urls = {"fr":"https://owenmtp1.github.io/BD-Report/modeles.html","en":"https://owenmtp1.github.io/BD-Report/en/modeles.html","es":"https://owenmtp1.github.io/BD-Report/es/modeles.html"};
+  var seq = ['fr','en','es'], cur = "en";
+  var btn = document.getElementById('langBtn');
+  if (!btn) return;
+  var labels = { fr: '\uD83C\uDDEC\uD83C\uDDE7 EN', en: '\uD83C\uDDEA\uD83C\uDDF8 ES', es: '\uD83C\uDDEB\uD83C\uDDF7 FR' };
+  btn.textContent = labels[cur];
+  btn.onclick = function(){
+    var next = seq[(seq.indexOf(cur) + 1) % seq.length];
+    try { localStorage.setItem('bdr_site_lang', next); } catch (e) {}
+    window.location.href = urls[next];
+  };
+})();
+</script>
+</body></html>

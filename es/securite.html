@@ -1,0 +1,233 @@
+<!DOCTYPE html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+<title>La seguridad de tus datos, por diseño — BD Report</title>
+<meta name="description" content="BD Report protege tu información comercial con los estándares del sector: alojamiento en la Unión Europea, cifrado en tránsito y en reposo, separación estricta de los datos y cumplimiento del RGPD.">
+<link rel="icon" type="image/svg+xml" href="app/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/BD-Report/assets/site.css">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:locale" content="es_ES">
+<meta property="og:title" content="BD Report — Sécurité &amp; protection des données">
+<meta property="og:description" content="Hébergement UE, chiffrement AES-256 et TLS, Row Level Security, sauvegardes quotidiennes et conformité RGPD : comment BD Report protège vos données.">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/es/securite.html">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BD Report — Sécurité &amp; protection des données">
+<meta name="twitter:description" content="Hébergement UE, chiffrement AES-256 et TLS, Row Level Security, sauvegardes quotidiennes et conformité RGPD : comment BD Report protège vos données.">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<script>(function(){try{var t=localStorage.getItem('bdr_site_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
+<style>
+.theme-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line2);
+  background:var(--veil);color:var(--muted);border-radius:10px;width:34px;height:34px;padding:0;
+  cursor:pointer;transition:color .2s,background .2s,border-color .2s}
+.theme-btn:hover{color:var(--text);background:var(--veil2)}
+.theme-btn svg{width:17px;height:17px;display:block}
+</style>
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/es/securite.html">
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/securite.html">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/en/securite.html">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/es/securite.html">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/securite.html">
+</head>
+<body>
+<div class="bg-layer"></div><div class="bg-grid"></div>
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="index.html">
+      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B5BDB"></stop><stop offset="1" stop-color="#0EA5E9"></stop></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"></rect><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"></rect><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"></rect><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"></rect><circle cx="45.5" cy="11" r="4" fill="#A7F3D0"></circle></svg>
+      <span><b>BD</b> Report</span>
+    </a>
+    <div class="nav-right">
+      <a href="index.html#tarifs" style="font-weight:600;font-size:14px;color:var(--muted)">Tarifs</a>
+      <a href="index.html#contact" style="font-weight:600;font-size:14px;color:var(--muted)">Contact</a>
+      <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧 EN</button>
+      <a class="btn btn-primary" href="app/" data-i18n="nav.login">Iniciar sesión</a>
+    </div>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="chip" data-i18n="hero.chip">🔒 Seguridad</span>
+    <h1 data-i18n="hero.title">La seguridad de tus datos, por diseño</h1>
+    <p data-i18n="hero.pitch">BD Report protege tu información comercial con los estándares del sector: alojamiento en la Unión Europea, cifrado en tránsito y en reposo, separación estricta de los datos y cumplimiento del RGPD.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="intro" data-i18n="intro">Esta página describe las medidas técnicas y organizativas aplicadas para garantizar la confidencialidad, la integridad y la disponibilidad de tus datos.</p>
+
+  <section class="sec">
+    <div class="card">
+      <h2><span class="ic">🛡️</span> <span data-i18n="s1.t">Seguridad de los datos</span></h2>
+      <p data-i18n="s1.p1">Proteger tus datos está en el centro de BD Report. Aplicamos las mejores prácticas del sector para garantizar su confidencialidad, integridad y disponibilidad.</p>
+      <p data-i18n="s1.p2"><strong>Ningún dato se vende, comparte ni explota con fines comerciales.</strong> Tus datos te pertenecen y solo sirven para que el servicio funcione para ti.</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">🏛️</span> <span data-i18n="s2.t">Alojamiento e infraestructura</span></h2>
+      <p data-i18n="s2.p">Tus datos se alojan en la <strong>Unión Europea</strong>, sobre la infraestructura de <strong>Supabase</strong>, operada en centros de datos profesionales, con aislamiento de red y supervisión continua.</p>
+      <div class="badges">
+        <span class="badge" data-i18n="s2.b1">🇪🇺 Alojamiento UE</span>
+        <span class="badge" data-i18n="s2.b2">Supervisión 24/7</span>
+        <span class="badge" data-i18n="s2.b3">Aislamiento de red</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">🔐</span> <span data-i18n="s3.t">Cifrado</span></h2>
+      <p data-i18n="s3.p">Todos los datos se cifran <strong>en reposo</strong> con <strong>AES‑256</strong>, y <strong>en tránsito</strong> mediante <strong>HTTPS / TLS 1.2 o superior</strong>. Los intercambios entre tu navegador y nuestros servidores están siempre protegidos.</p>
+      <div class="badges">
+        <span class="badge green" data-i18n="s3.b1">AES‑256 en reposo</span>
+        <span class="badge green" data-i18n="s3.b2">TLS 1.2+ en tránsito</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">👤</span> <span data-i18n="s4.t">Accesos y permisos</span></h2>
+      <p data-i18n="s4.p">Los accesos se controlan por <strong>rol</strong> — Fundador, Manager, Miembro, Soporte — con permisos detallados por funcionalidad, y cada espacio de trabajo puede protegerse con un código de acceso.</p>
+      <ul>
+        <li data-i18n="s4.l1">Cada rol solo ve las pantallas y los datos que sus permisos autorizan.</li>
+        <li data-i18n="s4.l2">Los espacios personales están separados por empresa y por colaborador.</li>
+        <li data-i18n="s4.l3">Cada acción queda fechada en un registro de auditoría consultable y exportable.</li>
+      </ul>
+      <div class="note" data-i18n="s4.note"><strong>Dónde estamos realmente, dicho claro:</strong> hoy la separación la aplica la aplicación, y los datos están cifrados en reposo. El aislamiento a nivel de base de datos (Row Level Security por organización) está en despliegue y se anunciará aquí cuando esté activo. Preferimos describir lo que existe antes que lo que está previsto.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">💾</span> <span data-i18n="s5.t">Copias de seguridad y continuidad</span></h2>
+      <p data-i18n="s5.p">Se realizan <strong>copias de seguridad automáticas diarias</strong> para asegurar la continuidad del servicio y una restauración rápida en caso de incidente.</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">⚖️</span> <span data-i18n="s6.t">Cumplimiento del RGPD</span></h2>
+      <p data-i18n="s6.p">BD Report cumple el <strong>Reglamento General de Protección de Datos (RGPD)</strong>. Dispones en todo momento de los siguientes derechos:</p>
+      <ul>
+        <li data-i18n="s6.l1"><strong>Derecho de acceso</strong> a tus datos personales.</li>
+        <li data-i18n="s6.l2"><strong>Derecho de rectificación</strong> de información inexacta.</li>
+        <li data-i18n="s6.l3"><strong>Derecho de supresión</strong> («derecho al olvido»).</li>
+        <li data-i18n="s6.l4"><strong>Derecho a la portabilidad</strong> de tus datos.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">📤</span> <span data-i18n="s7.t">Supresión y exportación de los datos</span></h2>
+      <p data-i18n="s7.p1">Puedes <strong>exportar todos tus datos</strong> en cualquier momento desde la aplicación (Ajustes → Descargar), en formato JSON.</p>
+      <p data-i18n="s7.p2">También puedes solicitar la <strong>supresión completa de tus datos</strong> mediante nuestro <a href="index.html#contact" style="color:var(--violet2);font-weight:700">formulario de contacto</a> o por correo (ver abajo). Tu solicitud se atiende con prontitud.</p>
+    </div>
+  </section>
+
+  <div class="contact-cta">
+    <h2><span class="ic" style="background:rgba(255,255,255,.15);border-color:transparent">✉️</span> <span data-i18n="cta.t">Contacto de seguridad</span></h2>
+    <p style="color:rgba(255,255,255,.85);margin:8px 0 4px" data-i18n="cta.p">¿Una duda sobre seguridad o una vulnerabilidad que reportar?</p>
+    <p style="font-size:18px"><a id="secEmail" href="#">chargement…</a></p>
+  </div>
+
+  <p class="muted" style="margin:18px 0 30px" data-i18n="updated">Última actualización: junio de 2026. Este documento describe nuestros compromisos y prácticas de seguridad; podrá evolucionar para reflejar las mejoras aportadas al servicio.</p>
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2026 <b style="color:#7C9BFF">BD</b> Report — Pilotez votre prospection. Encaissez vos primes.</span>
+    <span style="display:flex;gap:18px;flex-wrap:wrap">
+      <a href="cgv.html">CGV</a>
+      <a href="confidentialite.html">Confidentialité</a>
+      <a href="index.html">← Retour au site</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+  // E-mail de contact sécurité — à remplacer par une adresse dédiée à votre domaine si besoin.
+  var SECURITY_EMAIL = 'contact@bdreport.app';
+  var el = document.getElementById('secEmail');
+  el.textContent = SECURITY_EMAIL;
+  el.href = 'mailto:' + SECURITY_EMAIL + '?subject=' + encodeURIComponent('[Sécurité] BD Report');
+</script>
+
+<script>
+(function(){
+  var host = document.querySelector('.nav-right') || document.querySelector('.nav-links');
+  if (!host) return;
+  var b = document.createElement('button');
+  b.className = 'theme-btn'; b.type = 'button';
+  // Pictogrammes tracés au trait plutôt qu'émoji : un émoji est rendu différemment par
+  // chaque système, en couleur, et jure avec le reste d'une interface sobre.
+  var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.4M12 19.2v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
+  var root = document.documentElement;
+  function isLight(){
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'light';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+  // Les captures du produit suivent le thème du site : montrer une interface sombre
+  // sur une page claire donne l'impression d'une image collée là par erreur.
+  function swapShots(light){
+    var imgs = document.querySelectorAll('img[src*="/assets/"], img[src^="assets/"], img[src^="../assets/"]');
+    for (var i = 0; i < imgs.length; i++) {
+      var el = imgs[i], src = el.getAttribute('src');
+      if (!src || src.indexOf('og.png') > -1 || src.indexOf('.svg') > -1) continue;
+      var isLightSrc = src.indexOf('-light.') > -1;
+      if (light && !isLightSrc) el.setAttribute('src', src.replace(/(.[a-z]+)$/, '-light$1'));
+      else if (!light && isLightSrc) el.setAttribute('src', src.replace('-light.', '.'));
+    }
+  }
+  function paint(){
+    var light = isLight();
+    b.innerHTML = light ? MOON : SUN;
+    b.title = light ? 'Passer en mode sombre' : 'Passer en mode clair';
+    b.setAttribute('aria-label', b.title);
+    swapShots(light);
+  }
+  b.onclick = function(){
+    var next = isLight() ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('bdr_site_theme', next); } catch (e) {}
+    paint();
+  };
+  paint();
+  var lang = host.querySelector('#langBtn');
+  if (lang) host.insertBefore(b, lang); else host.appendChild(b);
+})();
+</script>
+
+<script>
+(function(){
+  var urls = {"fr":"https://owenmtp1.github.io/BD-Report/securite.html","en":"https://owenmtp1.github.io/BD-Report/en/securite.html","es":"https://owenmtp1.github.io/BD-Report/es/securite.html"};
+  var seq = ['fr','en','es'], cur = "fr";
+  var btn = document.getElementById('langBtn');
+  if (!btn) return;
+  var labels = { fr: '\uD83C\uDDEC\uD83C\uDDE7 EN', en: '\uD83C\uDDEA\uD83C\uDDF8 ES', es: '\uD83C\uDDEB\uD83C\uDDF7 FR' };
+  btn.textContent = labels[cur];
+  btn.onclick = function(){
+    var next = seq[(seq.indexOf(cur) + 1) % seq.length];
+    try { localStorage.setItem('bdr_site_lang', next); } catch (e) {}
+    window.location.href = urls[next];
+  };
+})();
+</script>
+
+
+
+<script>
+(function(){
+  var urls = {"fr":"https://owenmtp1.github.io/BD-Report/securite.html","en":"https://owenmtp1.github.io/BD-Report/en/securite.html","es":"https://owenmtp1.github.io/BD-Report/es/securite.html"};
+  var seq = ['fr','en','es'], cur = "es";
+  var btn = document.getElementById('langBtn');
+  if (!btn) return;
+  var labels = { fr: '\uD83C\uDDEC\uD83C\uDDE7 EN', en: '\uD83C\uDDEA\uD83C\uDDF8 ES', es: '\uD83C\uDDEB\uD83C\uDDF7 FR' };
+  btn.textContent = labels[cur];
+  btn.onclick = function(){
+    var next = seq[(seq.indexOf(cur) + 1) % seq.length];
+    try { localStorage.setItem('bdr_site_lang', next); } catch (e) {}
+    window.location.href = urls[next];
+  };
+})();
+</script>
+</body></html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+<title>Your sales data, clean and under control — BD Report</title>
+<meta name="description" content="Contacts auto-fed from every meeting, filtered CSV and Excel exports, timestamped audit logs, 30-day trash and full backup: your data is an asset, BD Report treats it like one.">
+<link rel="icon" type="image/svg+xml" href="../app/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/BD-Report/assets/site.css">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="BD Report — Données : Votre donnée commerciale, propre et sous contrôle">
+<meta property="og:description" content="Contacts auto-alimentés à chaque RDV, exports CSV et Excel filtrés, logs d'audit horodatés, corbeille 30 jours et sauvegarde complète : votre donnée e">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/en/produit/donnees.html">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BD Report — Données : Votre donnée commerciale, propre et sous contrôle">
+<meta name="twitter:description" content="Contacts auto-alimentés à chaque RDV, exports CSV et Excel filtrés, logs d'audit horodatés, corbeille 30 jours et sauvegarde complète : votre donnée e">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"BD Report","item":"https://owenmtp1.github.io/BD-Report/"},{"@type":"ListItem","position":2,"name":"Produit","item":"https://owenmtp1.github.io/BD-Report/produit/"}]}</script>
+<script>(function(){try{var t=localStorage.getItem('bdr_site_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
+<style>
+.theme-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line2);
+  background:var(--veil);color:var(--muted);border-radius:10px;width:34px;height:34px;padding:0;
+  cursor:pointer;transition:color .2s,background .2s,border-color .2s}
+.theme-btn:hover{color:var(--text);background:var(--veil2)}
+.theme-btn svg{width:17px;height:17px;display:block}
+</style>
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/en/produit/donnees.html">
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/produit/donnees.html">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/en/produit/donnees.html">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/es/produit/donnees.html">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/produit/donnees.html">
+</head>
+<body>
+<div class="bg-layer"></div><div class="bg-grid"></div>
+<nav>
+  <div class="wrap nav-in">
+    <a class="logo" href="../index.html">
+      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B5BDB"></stop><stop offset="1" stop-color="#0EA5E9"></stop></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"></rect><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"></rect><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"></rect><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"></rect><circle cx="45.5" cy="11" r="4" fill="#A7F3D0"></circle></svg>
+      <span><b>BD</b> Report</span>
+    </a>
+    <div class="nav-right">
+      <a href="../index.html#tarifs" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.pricing">Pricing</a>
+      <a href="../index.html#contact" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.contact">Contact</a>
+      <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧 EN</button>
+      <a class="btn btn-primary" href="../app/" data-i18n="nav.login">Log in</a>
+    </div>
+    <!-- prod page nav -->
+  </div>
+</nav>
+<div class="cat-tabs"><div class="wrap"><a href="pilotage.html" class="">📈 <span data-i18n="cat.pilotage">Steering</span></a><a href="activite.html" class="">📅 <span data-i18n="cat.activite">Activity</span></a><a href="pipeline.html" class="">🧲 <span data-i18n="cat.pipeline">Pipeline</span></a><a href="remuneration.html" class="">💶 <span data-i18n="cat.remuneration">Compensation</span></a><a href="collaboration.html" class="">🤝 <span data-i18n="cat.collaboration">Collaboration</span></a><a href="donnees.html" class="cur">🗄️ <span data-i18n="cat.donnees">Data</span></a></div></div>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="chip">🗄️ <span data-i18n="hero.cat">Data</span></span>
+    <h1 data-i18n="hero.title">Your sales data, clean and under control</h1>
+    <p data-i18n="hero.pitch">Contacts auto-fed from every meeting, filtered CSV and Excel exports, timestamped audit logs, 30-day trash and full backup: your data is an asset, BD Report treats it like one.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="points">
+      <div class="point"><h3 data-i18n="pt.0.t">An address book that fills itself</h3><p data-i18n="pt.0.d">Every meeting contact joins your address book automatically, deduplicated. CSV import, CSV/Excel export — filtered or complete.</p></div>
+      <div class="point"><h3 data-i18n="pt.1.t">Everything is traced</h3><p data-i18n="pt.1.d">Creation, edits, deletion, SQL transitions, reassignment: every action is timestamped in the logs, filterable by task and date.</p></div>
+      <div class="point"><h3 data-i18n="pt.2.t">Nothing gets lost</h3><p data-i18n="pt.2.d">Accidental deletion? The trash keeps everything for 30 days. Need to migrate? The JSON backup carries it all.</p></div>
+    </div>
+    <figure class="shot"><img src="/BD-Report/assets/contacts.png" alt="Mes contacts : recherche, filtres, sélection, exports CSV et Excel." loading="lazy"><figcaption data-i18n="shot.0">Contacts: search, filters, selection, CSV and Excel exports.</figcaption></figure>
+    <figure class="shot"><img src="/BD-Report/assets/logs.png" alt="Les logs d'audit : chaque action horodatée, filtrable par tâche et par période." loading="lazy"><figcaption data-i18n="shot.1">Audit logs: every action timestamped, filterable by task and period.</figcaption></figure>
+    <h2 class="sec" data-i18n="sec.feats">Everything this brick includes</h2>
+    <ul class="featlist">
+      <li data-i18n="ft.0">Sealed multi-environments protected by PIN</li>
+      <li data-i18n="ft.1">Filterable audit logs</li>
+      <li data-i18n="ft.2">30-day restorable trash</li>
+      <li data-i18n="ft.3">JSON backup &amp; restore</li>
+      <li data-i18n="ft.4">HubSpot integration: one connected portal per company</li>
+      <li data-i18n="ft.5">Installable app on mobile and desktop</li>
+    </ul>
+  </div>
+</section>
+
+<div class="wrap">
+  <div class="cta">
+    <h2 data-i18n="cta.title">Try BD Report today</h2>
+    <p data-i18n="cta.sub">Join the exclusive beta — limited seats.</p>
+    <a class="btn btn-primary" href="../app/" data-i18n="cta.btn">Log in to my workspace</a>
+  </div>
+</div>
+
+<footer><div class="wrap foot">
+  <span>© 2026 <b style="color:var(--violet2)">BD</b> Report</span>
+  <span><a href="../index.html" style="color:var(--violet2);font-weight:700" data-i18n="foot.back">← Back to the site</a></span>
+</div></footer>
+
+
+<script>
+(function(){
+  var host = document.querySelector('.nav-right') || document.querySelector('.nav-links');
+  if (!host) return;
+  var b = document.createElement('button');
+  b.className = 'theme-btn'; b.type = 'button';
+  // Pictogrammes tracés au trait plutôt qu'émoji : un émoji est rendu différemment par
+  // chaque système, en couleur, et jure avec le reste d'une interface sobre.
+  var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.4M12 19.2v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
+  var root = document.documentElement;
+  function isLight(){
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'light';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+  // Les captures du produit suivent le thème du site : montrer une interface sombre
+  // sur une page claire donne l'impression d'une image collée là par erreur.
+  function swapShots(light){
+    var imgs = document.querySelectorAll('img[src*="/assets/"], img[src^="assets/"], img[src^="../assets/"]');
+    for (var i = 0; i < imgs.length; i++) {
+      var el = imgs[i], src = el.getAttribute('src');
+      if (!src || src.indexOf('og.png') > -1 || src.indexOf('.svg') > -1) continue;
+      var isLightSrc = src.indexOf('-light.') > -1;
+      if (light && !isLightSrc) el.setAttribute('src', src.replace(/(.[a-z]+)$/, '-light$1'));
+      else if (!light && isLightSrc) el.setAttribute('src', src.replace('-light.', '.'));
+    }
+  }
+  function paint(){
+    var light = isLight();
+    b.innerHTML = light ? MOON : SUN;
+    b.title = light ? 'Passer en mode sombre' : 'Passer en mode clair';
+    b.setAttribute('aria-label', b.title);
+    swapShots(light);
+  }
+  b.onclick = function(){
+    var next = isLight() ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('bdr_site_theme', next); } catch (e) {}
+    paint();
+  };
+  paint();
+  var lang = host.querySelector('#langBtn');
+  if (lang) host.insertBefore(b, lang); else host.appendChild(b);
+})();
+</script>
+
+<script>
+(function(){
+  var urls = {"fr":"https://owenmtp1.github.io/BD-Report/produit/donnees.html","en":"https://owenmtp1.github.io/BD-Report/en/produit/donnees.html","es":"https://owenmtp1.github.io/BD-Report/es/produit/donnees.html"};
+  var seq = ['fr','en','es'], cur = "fr";
+  var btn = document.getElementById('langBtn');
+  if (!btn) return;
+  var labels = { fr: '\uD83C\uDDEC\uD83C\uDDE7 EN', en: '\uD83C\uDDEA\uD83C\uDDF8 ES', es: '\uD83C\uDDEB\uD83C\uDDF7 FR' };
+  btn.textContent = labels[cur];
+  btn.onclick = function(){
+    var next = seq[(seq.indexOf(cur) + 1) % seq.length];
+    try { localStorage.setItem('bdr_site_lang', next); } catch (e) {}
+    window.location.href = urls[next];
+  };
+})();
+</script>
+
+
+<script>
+(function(){
+  var urls = {"fr":"https://owenmtp1.github.io/BD-Report/produit/donnees.html","en":"https://owenmtp1.github.io/BD-Report/en/produit/donnees.html","es":"https://owenmtp1.github.io/BD-Report/es/produit/donnees.html"};
+  var seq = ['fr','en','es'], cur = "en";
+  var btn = document.getElementById('langBtn');
+  if (!btn) return;
+  var labels = { fr: '\uD83C\uDDEC\uD83C\uDDE7 EN', en: '\uD83C\uDDEA\uD83C\uDDF8 ES', es: '\uD83C\uDDEB\uD83C\uDDF7 FR' };
+  btn.textContent = labels[cur];
+  btn.onclick = function(){
+    var next = seq[(seq.indexOf(cur) + 1) % seq.length];
+    try { localStorage.setItem('bdr_site_lang', next); } catch (e) {}
+    window.location.href = urls[next];
+  };
+})();
+</script>
+</body></html>

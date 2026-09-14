@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+<title>BD Report — Sécurité & protection des données</title>
+<meta name="description" content="Hébergement UE, chiffrement AES-256 et TLS, Row Level Security, sauvegardes quotidiennes et conformité RGPD : comment BD Report protège vos données.">
+<link rel="icon" type="image/svg+xml" href="app/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/securite.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="BD Report — Sécurité &amp; protection des données">
+<meta property="og:description" content="Hébergement UE, chiffrement AES-256 et TLS, Row Level Security, sauvegardes quotidiennes et conformité RGPD : comment BD Report protège vos données.">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/securite.html">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BD Report — Sécurité &amp; protection des données">
+<meta name="twitter:description" content="Hébergement UE, chiffrement AES-256 et TLS, Row Level Security, sauvegardes quotidiennes et conformité RGPD : comment BD Report protège vos données.">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<script>(function(){try{var t=localStorage.getItem('bdr_site_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
+<style>
+.theme-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line2);
+  background:var(--veil);color:var(--muted);border-radius:10px;width:34px;height:34px;padding:0;
+  cursor:pointer;transition:color .2s,background .2s,border-color .2s}
+.theme-btn:hover{color:var(--text);background:var(--veil2)}
+.theme-btn svg{width:17px;height:17px;display:block}
+</style>
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/securite.html">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/en/securite.html">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/es/securite.html">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/securite.html">
+</head>
+<body>
+<div class="bg-layer"></div><div class="bg-grid"></div>
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="index.html">
+      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B5BDB"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"/><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"/><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"/><circle cx="45.5" cy="11" r="4" fill="#A7F3D0"/></svg>
+      <span><b>BD</b> Report</span>
+    </a>
+    <div class="nav-right">
+      <a href="index.html#tarifs" style="font-weight:600;font-size:14px;color:var(--muted)">Tarifs</a>
+      <a href="index.html#contact" style="font-weight:600;font-size:14px;color:var(--muted)">Contact</a>
+      <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧 EN</button>
+      <a class="btn btn-primary" href="app/" data-i18n="nav.login">Se connecter</a>
+    </div>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="chip" data-i18n="hero.chip">🔒 Sécurité</span>
+    <h1 data-i18n="hero.title">La sécurité de vos données, par conception</h1>
+    <p data-i18n="hero.pitch">BD Report protège vos informations commerciales avec les standards de l'industrie : hébergement en Union européenne, chiffrement de bout en bout, isolation stricte des données et conformité RGPD.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="intro" data-i18n="intro">Cette page décrit les mesures techniques et organisationnelles mises en œuvre pour assurer la confidentialité, l'intégrité et la disponibilité de vos données.</p>
+
+  <section class="sec">
+    <div class="card">
+      <h2><span class="ic">🛡️</span> <span data-i18n="s1.t">Sécurité des données</span></h2>
+      <p data-i18n="s1.p1">La protection de vos données est au cœur de BD Report. Nous appliquons les meilleures pratiques de l'industrie pour garantir leur confidentialité, leur intégrité et leur disponibilité.</p>
+      <p data-i18n="s1.p2"><strong>Aucune donnée n'est vendue, partagée ou exploitée à des fins commerciales.</strong> Vos données vous appartiennent et ne servent qu'à faire fonctionner le service pour vous.</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">🏛️</span> <span data-i18n="s2.t">Hébergement et infrastructure</span></h2>
+      <p data-i18n="s2.p">Vos données sont hébergées au sein de l'<strong>Union européenne</strong>, sur l'infrastructure de <strong>Supabase</strong>, opérée dans des centres de données professionnels. L'infrastructure bénéficie d'une isolation réseau et d'une surveillance continue.</p>
+      <div class="badges">
+        <span class="badge" data-i18n="s2.b1">🇪🇺 Hébergement UE</span>
+        <span class="badge" data-i18n="s2.b2">Surveillance 24/7</span>
+        <span class="badge" data-i18n="s2.b3">Isolation réseau</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">🔐</span> <span data-i18n="s3.t">Chiffrement</span></h2>
+      <p data-i18n="s3.p">Toutes les données sont chiffrées <strong>au repos</strong> avec l'algorithme <strong>AES‑256</strong>, et <strong>en transit</strong> via <strong>HTTPS / TLS 1.2 ou supérieur</strong>. Les échanges entre votre navigateur et nos serveurs sont systématiquement sécurisés.</p>
+      <div class="badges">
+        <span class="badge green" data-i18n="s3.b1">AES‑256 au repos</span>
+        <span class="badge green" data-i18n="s3.b2">TLS 1.2+ en transit</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">👤</span> <span data-i18n="s4.t">Accès et permissions</span></h2>
+      <p data-i18n="s4.p">Les accès sont contrôlés par <strong>rôles</strong> — Fondateur, Manager, Membre, Support — avec des permissions détaillées par fonctionnalité, et chaque espace de travail peut être protégé par un code d'accès.</p>
+      <ul>
+        <li data-i18n="s4.l1">Chaque rôle ne voit que les écrans et les données que ses permissions autorisent.</li>
+        <li data-i18n="s4.l2">Les espaces personnels sont cloisonnés par entreprise et par collaborateur.</li>
+        <li data-i18n="s4.l3">Chaque action est horodatée dans un journal d'audit consultable et exportable.</li>
+      </ul>
+      <div class="note" data-i18n="s4.note"><strong>État actuel, dit franchement :</strong> le cloisonnement est aujourd'hui appliqué par l'application, et les données sont chiffrées au repos. L'isolation au niveau de la base de données (Row Level Security par organisation) est en cours de mise en place et sera annoncée ici une fois déployée. Nous préférons décrire ce qui existe plutôt que ce qui est prévu.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">💾</span> <span data-i18n="s5.t">Sauvegardes et continuité</span></h2>
+      <p data-i18n="s5.p">Des <strong>sauvegardes automatiques quotidiennes</strong> sont réalisées afin d'assurer la continuité de service et une restauration rapide en cas d'incident.</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">⚖️</span> <span data-i18n="s6.t">Conformité RGPD</span></h2>
+      <p data-i18n="s6.p">BD Report respecte le <strong>Règlement général sur la protection des données (RGPD)</strong>. Vous disposez à tout moment des droits suivants :</p>
+      <ul>
+        <li data-i18n="s6.l1"><strong>Droit d'accès</strong> à vos données personnelles.</li>
+        <li data-i18n="s6.l2"><strong>Droit de rectification</strong> des informations inexactes.</li>
+        <li data-i18n="s6.l3"><strong>Droit à l'effacement</strong> (« droit à l'oubli »).</li>
+        <li data-i18n="s6.l4"><strong>Droit à la portabilité</strong> de vos données.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">📤</span> <span data-i18n="s7.t">Suppression et export des données</span></h2>
+      <p data-i18n="s7.p1">Vous pouvez <strong>exporter l'intégralité de vos données</strong> à tout moment depuis l'application (Paramètres → Télécharger), au format JSON.</p>
+      <p data-i18n="s7.p2">Vous pouvez également demander la <strong>suppression complète de vos données</strong> via notre <a href="index.html#contact" style="color:var(--violet2);font-weight:700">formulaire de contact</a> ou par e‑mail (voir ci‑dessous). Votre demande est traitée dans les meilleurs délais.</p>
+    </div>
+  </section>
+
+  <div class="contact-cta">
+    <h2><span class="ic" style="background:rgba(255,255,255,.15);border-color:transparent">✉️</span> <span data-i18n="cta.t">Contact sécurité</span></h2>
+    <p style="color:rgba(255,255,255,.85);margin:8px 0 4px" data-i18n="cta.p">Une question sur la sécurité, ou une vulnérabilité à signaler ?</p>
+    <p style="font-size:18px"><a id="secEmail" href="#">chargement…</a></p>
+  </div>
+
+  <p class="muted" style="margin:18px 0 30px" data-i18n="updated">Dernière mise à jour : juin 2026. Ce document décrit nos engagements et pratiques de sécurité ; il pourra évoluer pour refléter les améliorations apportées au service.</p>
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2026 <b style="color:#7C9BFF">BD</b> Report — Pilotez votre prospection. Encaissez vos primes.</span>
+    <span style="display:flex;gap:18px;flex-wrap:wrap">
+      <a href="cgv.html">CGV</a>
+      <a href="confidentialite.html">Confidentialité</a>
+      <a href="index.html">← Retour au site</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+  // E-mail de contact sécurité — à remplacer par une adresse dédiée à votre domaine si besoin.
+  var SECURITY_EMAIL = 'contact@bdreport.app';
+  var el = document.getElementById('secEmail');
+  el.textContent = SECURITY_EMAIL;
+  el.href = 'mailto:' + SECURITY_EMAIL + '?subject=' + encodeURIComponent('[Sécurité] BD Report');
+</script>
+<script>
+const DICTS = {
+  en: {"nav.login": "Log in", "hero.chip": "🔒 Security", "hero.title": "Your data's security, by design", "hero.pitch": "BD Report protects your commercial information with industry standards: hosting in the European Union, encryption in transit and at rest, strict data separation and GDPR compliance.", "intro": "This page describes the technical and organisational measures in place to ensure the confidentiality, integrity and availability of your data.", "s1.t": "Data security", "s1.p1": "Protecting your data sits at the core of BD Report. We apply industry best practice to guarantee its confidentiality, integrity and availability.", "s1.p2": "<strong>No data is sold, shared or exploited for commercial purposes.</strong> Your data belongs to you and only serves to run the service for you.", "s2.t": "Hosting and infrastructure", "s2.p": "Your data is hosted within the <strong>European Union</strong>, on <strong>Supabase</strong> infrastructure operated in professional data centres, with network isolation and continuous monitoring.", "s2.b1": "🇪🇺 EU hosting", "s2.b2": "24/7 monitoring", "s2.b3": "Network isolation", "s3.t": "Encryption", "s3.p": "All data is encrypted <strong>at rest</strong> with <strong>AES‑256</strong>, and <strong>in transit</strong> over <strong>HTTPS / TLS 1.2 or above</strong>. Exchanges between your browser and our servers are always secured.", "s3.b1": "AES‑256 at rest", "s3.b2": "TLS 1.2+ in transit", "s4.t": "Access and permissions", "s4.p": "Access is controlled by <strong>role</strong> — Founder, Manager, Member, Support — with detailed per-feature permissions, and every workspace can be protected by an access code.", "s4.l1": "Each role only sees the screens and data its permissions allow.", "s4.l2": "Personal workspaces are separated by company and by teammate.", "s4.l3": "Every action is timestamped in an audit log you can read and export.", "s4.note": "<strong>Where we actually stand, plainly:</strong> separation is currently enforced by the application, and data is encrypted at rest. Database-level isolation (Row Level Security per organisation) is being rolled out and will be announced here once deployed. We'd rather describe what exists than what is planned.", "s5.t": "Backups and continuity", "s5.p": "<strong>Automatic daily backups</strong> are taken to ensure service continuity and fast restoration in case of an incident.", "s6.t": "GDPR compliance", "s6.p": "BD Report complies with the <strong>General Data Protection Regulation (GDPR)</strong>. You have the following rights at any time:", "s6.l1": "<strong>Right of access</strong> to your personal data.", "s6.l2": "<strong>Right to rectification</strong> of inaccurate information.", "s6.l3": "<strong>Right to erasure</strong> (“right to be forgotten”).", "s6.l4": "<strong>Right to portability</strong> of your data.", "s7.t": "Deleting and exporting your data", "s7.p1": "You can <strong>export all of your data</strong> at any time from the app (Settings → Download), in JSON format.", "s7.p2": "You can also request <strong>complete deletion of your data</strong> through our <a href='index.html#contact' style='color:var(--violet2);font-weight:700'>contact form</a> or by email (see below). Your request is handled promptly.", "cta.t": "Security contact", "cta.p": "A question about security, or a vulnerability to report?", "updated": "Last updated: June 2026. This document describes our security commitments and practices; it may change to reflect improvements made to the service."},
+  es: {"nav.login": "Iniciar sesión", "hero.chip": "🔒 Seguridad", "hero.title": "La seguridad de tus datos, por diseño", "hero.pitch": "BD Report protege tu información comercial con los estándares del sector: alojamiento en la Unión Europea, cifrado en tránsito y en reposo, separación estricta de los datos y cumplimiento del RGPD.", "intro": "Esta página describe las medidas técnicas y organizativas aplicadas para garantizar la confidencialidad, la integridad y la disponibilidad de tus datos.", "s1.t": "Seguridad de los datos", "s1.p1": "Proteger tus datos está en el centro de BD Report. Aplicamos las mejores prácticas del sector para garantizar su confidencialidad, integridad y disponibilidad.", "s1.p2": "<strong>Ningún dato se vende, comparte ni explota con fines comerciales.</strong> Tus datos te pertenecen y solo sirven para que el servicio funcione para ti.", "s2.t": "Alojamiento e infraestructura", "s2.p": "Tus datos se alojan en la <strong>Unión Europea</strong>, sobre la infraestructura de <strong>Supabase</strong>, operada en centros de datos profesionales, con aislamiento de red y supervisión continua.", "s2.b1": "🇪🇺 Alojamiento UE", "s2.b2": "Supervisión 24/7", "s2.b3": "Aislamiento de red", "s3.t": "Cifrado", "s3.p": "Todos los datos se cifran <strong>en reposo</strong> con <strong>AES‑256</strong>, y <strong>en tránsito</strong> mediante <strong>HTTPS / TLS 1.2 o superior</strong>. Los intercambios entre tu navegador y nuestros servidores están siempre protegidos.", "s3.b1": "AES‑256 en reposo", "s3.b2": "TLS 1.2+ en tránsito", "s4.t": "Accesos y permisos", "s4.p": "Los accesos se controlan por <strong>rol</strong> — Fundador, Manager, Miembro, Soporte — con permisos detallados por funcionalidad, y cada espacio de trabajo puede protegerse con un código de acceso.", "s4.l1": "Cada rol solo ve las pantallas y los datos que sus permisos autorizan.", "s4.l2": "Los espacios personales están separados por empresa y por colaborador.", "s4.l3": "Cada acción queda fechada en un registro de auditoría consultable y exportable.", "s4.note": "<strong>Dónde estamos realmente, dicho claro:</strong> hoy la separación la aplica la aplicación, y los datos están cifrados en reposo. El aislamiento a nivel de base de datos (Row Level Security por organización) está en despliegue y se anunciará aquí cuando esté activo. Preferimos describir lo que existe antes que lo que está previsto.", "s5.t": "Copias de seguridad y continuidad", "s5.p": "Se realizan <strong>copias de seguridad automáticas diarias</strong> para asegurar la continuidad del servicio y una restauración rápida en caso de incidente.", "s6.t": "Cumplimiento del RGPD", "s6.p": "BD Report cumple el <strong>Reglamento General de Protección de Datos (RGPD)</strong>. Dispones en todo momento de los siguientes derechos:", "s6.l1": "<strong>Derecho de acceso</strong> a tus datos personales.", "s6.l2": "<strong>Derecho de rectificación</strong> de información inexacta.", "s6.l3": "<strong>Derecho de supresión</strong> («derecho al olvido»).", "s6.l4": "<strong>Derecho a la portabilidad</strong> de tus datos.", "s7.t": "Supresión y exportación de los datos", "s7.p1": "Puedes <strong>exportar todos tus datos</strong> en cualquier momento desde la aplicación (Ajustes → Descargar), en formato JSON.", "s7.p2": "También puedes solicitar la <strong>supresión completa de tus datos</strong> mediante nuestro <a href='index.html#contact' style='color:var(--violet2);font-weight:700'>formulario de contacto</a> o por correo (ver abajo). Tu solicitud se atiende con prontitud.", "cta.t": "Contacto de seguridad", "cta.p": "¿Una duda sobre seguridad o una vulnerabilidad que reportar?", "updated": "Última actualización: junio de 2026. Este documento describe nuestros compromisos y prácticas de seguridad; podrá evolucionar para reflejar las mejoras aportadas al servicio."},
+}
+const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
+let lang = localStorage.getItem('bdr_site_lang') || 'fr'
+const FR = {}
+document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
+function applyLang(){
+  document.documentElement.lang = lang
+  const d = DICTS[lang]
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = lang === 'fr' ? FR[el.dataset.i18n] : ((d && d[el.dataset.i18n]) ?? FR[el.dataset.i18n]) })
+  document.getElementById('langBtn').textContent = BTN[lang]
+}
+function toggleLang(){ lang = SEQ[(SEQ.indexOf(lang) + 1) % SEQ.length]; localStorage.setItem('bdr_site_lang', lang); applyLang() }
+applyLang()
+</script>
+<script>
+(function(){
+  var host = document.querySelector('.nav-right') || document.querySelector('.nav-links');
+  if (!host) return;
+  var b = document.createElement('button');
+  b.className = 'theme-btn'; b.type = 'button';
+  // Pictogrammes tracés au trait plutôt qu'émoji : un émoji est rendu différemment par
+  // chaque système, en couleur, et jure avec le reste d'une interface sobre.
+  var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.4M12 19.2v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
+  var root = document.documentElement;
+  function isLight(){
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'light';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+  // Les captures du produit suivent le thème du site : montrer une interface sombre
+  // sur une page claire donne l'impression d'une image collée là par erreur.
+  function swapShots(light){
+    var imgs = document.querySelectorAll('img[src*="/assets/"], img[src^="assets/"], img[src^="../assets/"]');
+    for (var i = 0; i < imgs.length; i++) {
+      var el = imgs[i], src = el.getAttribute('src');
+      if (!src || src.indexOf('og.png') > -1 || src.indexOf('.svg') > -1) continue;
+      var isLightSrc = src.indexOf('-light.') > -1;
+      if (light && !isLightSrc) el.setAttribute('src', src.replace(/(.[a-z]+)$/, '-light$1'));
+      else if (!light && isLightSrc) el.setAttribute('src', src.replace('-light.', '.'));
+    }
+  }
+  function paint(){
+    var light = isLight();
+    b.innerHTML = light ? MOON : SUN;
+    b.title = light ? 'Passer en mode sombre' : 'Passer en mode clair';
+    b.setAttribute('aria-label', b.title);
+    swapShots(light);
+  }
+  b.onclick = function(){
+    var next = isLight() ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('bdr_site_theme', next); } catch (e) {}
+    paint();
+  };
+  paint();
+  var lang = host.querySelector('#langBtn');
+  if (lang) host.insertBefore(b, lang); else host.appendChild(b);
+})();
+</script>
+
+<script>
+(function(){
+  var urls = {"fr":"https://owenmtp1.github.io/BD-Report/securite.html","en":"https://owenmtp1.github.io/BD-Report/en/securite.html","es":"https://owenmtp1.github.io/BD-Report/es/securite.html"};
+  var seq = ['fr','en','es'], cur = "fr";
+  var btn = document.getElementById('langBtn');
+  if (!btn) return;
+  var labels = { fr: '\uD83C\uDDEC\uD83C\uDDE7 EN', en: '\uD83C\uDDEA\uD83C\uDDF8 ES', es: '\uD83C\uDDEB\uD83C\uDDF7 FR' };
+  btn.textContent = labels[cur];
+  btn.onclick = function(){
+    var next = seq[(seq.indexOf(cur) + 1) % seq.length];
+    try { localStorage.setItem('bdr_site_lang', next); } catch (e) {}
+    window.location.href = urls[next];
+  };
+})();
+</script>
+</body>
+</html>
