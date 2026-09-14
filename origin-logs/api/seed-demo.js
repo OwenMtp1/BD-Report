@@ -7,6 +7,11 @@
 //   SERVER_KEY=... node seed-demo.js [nombre]
 // ============================================================
 'use strict';
+try {
+  const fs = require('node:fs'), path = require('node:path');
+  const f = path.join(__dirname, '.env');
+  if (fs.existsSync(f) && typeof process.loadEnvFile === 'function') process.loadEnvFile(f);
+} catch (e) {}
 const URL_API = process.env.API_URL || 'http://127.0.0.1:' + (process.env.PORT || 8080);
 const KEY = process.env.SERVER_KEY || '';
 const N = Math.min(5000, Math.max(1, Number(process.argv[2]) || 600));

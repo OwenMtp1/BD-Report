@@ -18,6 +18,13 @@ const AUTH = require('./auth.js');
 const CAT = require('./catalogue.js');
 
 /* ---------- configuration ---------- */
+// setup.js écrit un .env ; sans cette lecture, `npm start` réclamerait
+// encore la clé à la main et le fichier ne servirait à rien.
+try {
+  const envFile = path.join(__dirname, '.env');
+  if (fs.existsSync(envFile) && typeof process.loadEnvFile === 'function') process.loadEnvFile(envFile);
+} catch (e) { console.error('[.env] ignoré :', e.message); }
+
 const CFG = {
   port:       Number(process.env.PORT || 8080),
   host:       process.env.HOST || '0.0.0.0',
@@ -175,6 +182,26 @@ function ingest(list, server) {
   return n;
 }
 
+/* ---------- poignée de joueur ----------
+   Le panneau a besoin d'un identifiant pour ouvrir un dossier ou viser
+   une sanction. Lui donner la LICENCE reviendrait à publier l'identifiant
+   à qui n'a pas le droit de le lire : on lui donne un alias, dérivé de la
+   clé serveur, qui ne sort pas d'ici et ne se remonte pas. */
+const ALIAS_SEL = crypto.createHash('sha256').update('origin-alias:' + CFG.serverKey).digest();
+const aliasOf = k => (k ? 'k:' + crypto.createHmac('sha256', ALIAS_SEL).update(String(k)).digest('hex').slice(0, 24) : null);
+const aliasCache = new Map();
+function resolveKey(k) {
+  if (!k || !String(k).startsWith('k:')) return k;
+  if (aliasCache.has(k)) return aliasCache.get(k);
+  for (const r of db.prepare('SELECT key FROM players').all()) {
+    const a = aliasOf(r.key);
+    aliasCache.set(a, r.key);
+    if (a === k) return r.key;
+  }
+  return k;
+}
+const keyFor = (me, k) => (!me || me.perms.includes('players.identifiers') ? k : aliasOf(k));
+
 /* ---------- sortie d'un évènement ---------- */
 function outEvent(r, me) {
   const showIds = !me || me.perms.includes('players.identifiers');
@@ -186,9 +213,9 @@ function outEvent(r, me) {
   }
   return {
     id: r.id, t: r.ts, cat: r.cat, sev: r.sev, res: r.res, server: r.server,
-    actor: { name: r.actor_name || 'Système', sid: r.actor_sid, key: r.actor_key,
+    actor: { name: r.actor_name || 'Système', sid: r.actor_sid, key: keyFor(me, r.actor_key),
              staff: !!r.actor_staff, license: showIds ? r.actor_key : null },
-    target: r.target_name ? { name: r.target_name, key: r.target_key } : null,
+    target: r.target_name ? { name: r.target_name, key: keyFor(me, r.target_key) } : null,
     msg: r.msg, d: data || {},
     pin: !!r.pin, done: !!r.done, doneBy: r.done_by || null
   };
@@ -333,7 +360,7 @@ function playerFile(me, key) {
       .all(...me.cats, key, key).map(r => outEvent(DB.row(r), me));
   const ids = me.perms.includes('players.identifiers');
   return {
-    player: { key: ids ? p.key : '— masqué —', name: p.name, sid: p.sid, job: p.job, grade: p.grade,
+    player: { key: ids ? p.key : aliasOf(p.key), keyMasquee: !ids, name: p.name, sid: p.sid, job: p.job, grade: p.grade,
               discord: ids ? p.discord : null, steam: ids ? p.steam : null, fivem: ids ? p.fivem : null,
               firstSeen: p.first_seen, lastSeen: p.last_seen, playtime: p.playtime, events: p.events },
     stats, sanctions, last,
@@ -358,7 +385,7 @@ function doAction(me, b, ip) {
   const type = String(b.type || '');
   if (!ACTION_PERM[type]) return { error: 'Action inconnue.' };
   if (!me.perms.includes(ACTION_PERM[type])) return { error: 'Votre rôle ne permet pas cette action.', code: 403 };
-  const key = S(b.key), name = S(b.name) || 'Joueur inconnu';
+  const key = resolveKey(S(b.key)), name = S(b.name) || 'Joueur inconnu';
   if (!key) return { error: 'Joueur non identifié.' };
   const reason = String(b.reason || '').trim().slice(0, 300);
   if (type !== 'unban' && reason.length < 3) return { error: 'Un motif est obligatoire.' };
@@ -552,9 +579,17 @@ async function route(req, res) {
       const to = N(Q.to) || now(), from = N(Q.from) || to - 86400000;
       return ok(res, statsOf(me, from, to, Math.min(48, Math.max(6, N(Q.buckets) || 24))));
     }
+    if (p === '/api/players' && method === 'GET') {
+      if (!need('players.view')) return;
+      const terme = String(Q.q || '').trim();
+      if (terme.length < 2) return ok(res, { players: [] });
+      const rows = db.prepare(`SELECT key, name, sid, job FROM players
+        WHERE name LIKE ? ORDER BY last_seen DESC LIMIT 6`).all('%' + terme + '%').map(DB.row);
+      return ok(res, { players: rows.map(r => ({ key: keyFor(me, r.key), name: r.name, sid: r.sid, job: r.job })) });
+    }
     if (p.startsWith('/api/players/') && method === 'GET') {
       if (!need('players.view')) return;
-      const key = decodeURIComponent(p.slice('/api/players/'.length));
+      const key = resolveKey(decodeURIComponent(p.slice('/api/players/'.length)));
       const f = playerFile(me, key);
       if (!f) return fail(res, 404, 'Joueur inconnu.');
       audit(me, 'dossier.ouvert', key, ip);
@@ -575,7 +610,7 @@ async function route(req, res) {
       const compte = k => DB.row(db.prepare(`SELECT COUNT(*) n FROM sanctions WHERE type='ban' AND ${k}`).get()).n;
       return ok(res, {
         bans: rows.map(b => Object.assign({}, b, {
-          player_key: ids ? b.player_key : '— masqué —',
+          player_key: keyFor(me, b.player_key),
           encours: b.active === 1 && (!b.expires_at || b.expires_at > t)
         })),
         counts: { actifs: compte(encours), expires: compte('NOT ' + encours), tous: compte('1=1') }

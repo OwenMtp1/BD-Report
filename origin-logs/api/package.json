@@ -4,8 +4,11 @@
   "private": true,
   "type": "commonjs",
   "description": "API du panneau de logs Origin Roleplay — aucune dépendance, Node 22+",
-  "engines": { "node": ">=22.5.0" },
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
+    "setup": "node setup.js",
     "start": "node server.js",
     "staff": "node staff.js",
     "demo": "node seed-demo.js"

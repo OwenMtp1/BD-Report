@@ -13,18 +13,25 @@ Prérequis : **Node 22.5 ou plus récent** sur la machine qui héberge le site
 ```bash
 # sur le serveur web, pas sur le serveur de jeu
 cd origin-logs/api
-
-# Générez une clé une bonne fois pour toutes et NOTEZ-LA :
-#   elle sera réclamée par la ressource FiveM à l'étape 3.
-openssl rand -hex 24
+node setup.js VotrePseudo
 ```
 
-Créez `origin-logs/api/.env` — ou passez les variables directement à la
-commande, au choix :
+Une seule commande : elle génère la clé serveur, écrit `.env`, crée votre
+compte fondateur et affiche la marche à suivre — y compris la ligne exacte à
+coller dans `resource/config.lua`. **Notez le mot de passe affiché** : il
+n'est stocké nulle part en clair.
+
+```bash
+npm start              # http://localhost:8080
+npm run demo -- 600    # facultatif : remplir le panneau sans serveur de jeu
+```
+
+L'API relit `.env` au démarrage ; il n'y a rien à retaper. Vous pouvez y
+ajuster :
 
 | Variable | Rôle | Défaut |
 |---|---|---|
-| `SERVER_KEY` | **obligatoire** — la clé générée ci-dessus | — |
+| `SERVER_KEY` | clé partagée avec la ressource FiveM | écrite par `setup.js` |
 | `PORT` | port d'écoute | `8080` |
 | `HOST` | interface d'écoute | `0.0.0.0` |
 | `DB_FILE` | fichier de base | `api/data/origin-logs.db` |
@@ -32,22 +39,8 @@ commande, au choix :
 | `SECURE_COOKIE` | `1` dès que le site est en HTTPS | `0` |
 | `SESSION_DAYS` | durée d'une session staff | `7` |
 
-Lancez et créez votre compte :
-
-```bash
-SERVER_KEY=votre-cle node server.js       # dans un premier terminal
-node staff.js add VotrePseudo fondateur   # dans un second
-```
-
-`staff.js` affiche un mot de passe aléatoire si vous n'en donnez pas.
-**Notez-le : il n'est stocké nulle part en clair.**
-
-Vérifiez sur `http://IP:8080` — l'écran de connexion doit s'afficher.
-Pour voir le panneau se remplir avant d'avoir branché le jeu :
-
-```bash
-SERVER_KEY=votre-cle node seed-demo.js 600
-```
+Pour ajouter des membres ensuite : depuis le panneau (bouton **Gérer
+l'équipe**) ou `node staff.js add <pseudo> moderateur`.
 
 ### En service permanent (systemd)
 

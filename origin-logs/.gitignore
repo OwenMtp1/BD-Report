@@ -1,0 +1,3 @@
+# La clé serveur et la base de journaux ne quittent jamais la machine.
+api/.env
+api/data/

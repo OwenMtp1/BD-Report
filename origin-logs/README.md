@@ -62,7 +62,24 @@ d'œil à la strie de couleur en début de ligne.
 - **Journal du panneau** — qui a consulté quel dossier, qui a exporté, qui a
   sanctionné. La surveillance est elle-même surveillée.
 
-Raccourcis : `/` recherche · `↑` `↓` navigation · `Échap` ferme.
+### Au quotidien
+
+- **La recherche propose, elle ne devine pas.** Tapez trois lettres : elle
+  offre la recherche texte (action par défaut, `Entrée`), les écrans qui
+  correspondent, et les **joueurs** — dont le dossier s'ouvre directement.
+- **Le nom d'un joueur dans le flux ouvre son dossier.** Pas besoin d'ouvrir
+  l'évènement d'abord.
+- **La coche au survol d'une ligne** marque l'évènement traité : la file
+  d'alertes se vide sans rien ouvrir.
+- **Les filtres en vigueur sont écrits** en haut d'écran et se retirent d'un
+  clic — un écran vide dit pourquoi il est vide, et propose d'élargir à 7 jours.
+- **L'adresse suit l'écran.** Le bouton Retour du navigateur fonctionne, un
+  rechargement garde votre place, et un lien collé dans Discord rouvre
+  exactement la même vue (`#/flux/anticheat?p=168`).
+
+Raccourcis : `/` recherche · `↑` `↓` parcourir · `Entrée` ouvrir · `Échap`
+fermer · `g` puis `o` / `f` / `b` (vue d'ensemble, flux, bannissements) ·
+`?` l'aide complète.
 
 ---
 
@@ -84,8 +101,13 @@ Trois rôles, définis dans `api/catalogue.js` :
 
 ⚠️ **Les restrictions sont appliquées par l'API, pas par l'interface.** Un
 modérateur qui demanderait explicitement la catégorie `admin` ne l'obtient
-pas, et les identifiants sont remplacés par « — masqué — » dans la réponse
-elle-même. Masquer un bouton n'a jamais protégé une donnée.
+pas, et les identifiants sont masqués dans la réponse elle-même. Masquer un
+bouton n'a jamais protégé une donnée.
+
+⚠️ **Le panneau ne manipule jamais la licence d'un joueur.** Ouvrir un
+dossier ou viser une sanction demande un identifiant : sans le droit
+`players.identifiers`, l'API renvoie un **alias** dérivé de la clé serveur
+(`k:…`), utilisable pour agir mais impossible à remonter jusqu'à la licence.
 
 ---
 
@@ -110,10 +132,15 @@ sont intégrés à Node. Un seul processus sert aussi le panneau.
 
 ```bash
 cd api
-SERVER_KEY=$(openssl rand -hex 24) node server.js
-node staff.js add VotrePseudo fondateur     # premier compte
-node seed-demo.js 600                       # facultatif : jeu d'essai
+node setup.js VotrePseudo   # clé serveur, .env, compte fondateur, marche à suivre
+npm start                   # puis http://localhost:8080
+npm run demo -- 600         # facultatif : remplir le panneau sans serveur de jeu
 ```
+
+`setup.js` écrit la clé dans `.env`, que l'API relit au démarrage : il n'y a
+rien à retaper. Elle n'est **jamais régénérée** si elle existe déjà — la
+ressource FiveM la porte de son côté, et la changer couperait l'arrivée des
+logs.
 
 Réglages par variables d'environnement : `PORT`, `DB_FILE`, `SERVER_KEY`,
 `RETENTION_DAYS` (30 par défaut), `SECURE_COOKIE=1` derrière HTTPS,

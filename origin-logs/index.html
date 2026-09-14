@@ -512,6 +512,78 @@ select.input{height:36px}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
 /* ============================================================
+   AIDES À L'USAGE
+   ============================================================ */
+
+/* ---------- suggestions de recherche ----------
+   Chercher « le mec qui a RDM » suppose de savoir dans quelle
+   catégorie regarder. La recherche propose donc des JOUEURS et des
+   ÉCRANS, pas seulement du texte à faire correspondre. */
+.suggest{
+  position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:50;
+  background:var(--panel-2);border:1px solid var(--edge);border-radius:9px;
+  box-shadow:0 18px 44px rgba(0,0,0,.55);overflow:hidden;max-height:340px;overflow-y:auto;
+}
+.suggest[hidden]{display:none}
+.sug-head{
+  padding:7px 12px 5px;font-family:var(--mono);font-size:9px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted);border-top:1px solid var(--edge-soft);
+}
+.sug-head:first-child{border-top:none}
+.sug{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;
+  width:100%;padding:8px 12px;
+}
+.sug > *{min-width:0}
+.sug:hover,.sug[aria-selected="true"]{background:var(--vio-wash)}
+.sug[aria-selected="true"]{box-shadow:inset 2px 0 0 var(--vio-hi)}
+.sug-t{font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.sug-m{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.sug-go{font-family:var(--mono);font-size:9.5px;color:var(--muted);white-space:nowrap}
+
+/* ---------- filtres actifs ----------
+   Un écran vide sans explication fait croire à une panne. Les filtres
+   en vigueur sont donc écrits, et chacun se retire d'un clic. */
+.afilters{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:0 0 14px}
+.af{
+  display:inline-flex;align-items:center;gap:7px;height:27px;padding:0 6px 0 11px;
+  border-radius:999px;border:1px solid var(--vio);background:var(--vio-wash);
+  font-size:11.5px;color:var(--ink);
+}
+.af b{font-weight:600}
+.af-x{
+  width:17px;height:17px;border-radius:50%;display:grid;place-items:center;flex:none;
+  color:var(--ink-2);font-size:13px;line-height:1;
+}
+.af-x:hover{background:var(--vio);color:#fff}
+.af-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--vio-hi)}
+
+/* ---------- action rapide sur une ligne ----------
+   Vider la file d'alertes ne devrait pas demander d'ouvrir chaque
+   évènement : la coche est sur la ligne, au survol. */
+.ev-quick{
+  opacity:0;margin-left:8px;width:22px;height:22px;flex:none;border-radius:6px;
+  display:grid;place-items:center;border:1px solid var(--edge);color:var(--muted);
+  background:var(--panel-2);transition:opacity .12s,color .12s,border-color .12s;
+}
+.ev:hover .ev-quick,.ev-quick:focus-visible,.row-lite:hover .ev-quick{opacity:1}
+.ev-quick:hover{color:var(--ok);border-color:rgba(52,211,153,.5)}
+.ev-quick.on{opacity:1;color:var(--ok);border-color:rgba(52,211,153,.5);background:rgba(52,211,153,.1)}
+
+/* ---------- aide clavier ---------- */
+.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:9px}
+.key-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:11px;align-items:center}
+.key{
+  display:inline-flex;gap:4px;flex:none;
+}
+.key kbd{
+  font-family:var(--mono);font-size:10.5px;color:var(--ink-2);
+  border:1px solid var(--edge);border-bottom-width:2px;border-radius:5px;
+  padding:2px 6px;background:var(--panel-2);white-space:nowrap;
+}
+.key-d{font-size:12.5px;color:var(--ink-2);min-width:0}
+
+/* ============================================================
    ADAPTATION
    ============================================================ */
 @media (min-width:1300px){ .app.insp-open .main{padding-right:min(430px,32vw)} }
@@ -600,6 +672,7 @@ select.input{height:36px}
         </svg>
         <input id="q" type="search" placeholder="Joueur, licence, plaque, item, montant, ID serveur…" autocomplete="off" aria-label="Rechercher dans les journaux">
         <kbd aria-hidden="true">/</kbd>
+        <div class="suggest" id="suggest" hidden role="listbox" aria-label="Suggestions"></div>
       </div>
       <div class="seg" role="group" aria-label="Période">
         <button data-range="1" aria-pressed="false">1 h</button>
@@ -609,6 +682,9 @@ select.input{height:36px}
       </div>
       <button class="btn live" id="liveBtn" aria-pressed="true"><span class="pulse" aria-hidden="true"></span> Direct</button>
       <button class="btn" id="exportBtn">Exporter</button>
+      <button class="icon-btn" id="helpBtn" title="Raccourcis clavier (?)" aria-label="Raccourcis clavier">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5.9 5.9a2.2 2.2 0 1 1 3 2.05c-.6.25-.9.75-.9 1.35v.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12.2" r=".9" fill="currentColor"/></svg>
+      </button>
       <span class="tag-mode demo" id="modeTag">démonstration</span>
       <div class="who" id="whoBox" hidden>
         <span class="av" id="whoAv">—</span>
@@ -618,6 +694,8 @@ select.input{height:36px}
         </button>
       </div>
     </header>
+
+    <div class="afilters" id="afilters" hidden aria-label="Filtres actifs"></div>
 
     <!-- ============ VUE D'ENSEMBLE ============ -->
     <section class="view" id="viewOverview" aria-label="Vue d'ensemble">
@@ -1393,6 +1471,7 @@ async function refresh() {
 }
 function render() {
   renderNav();
+  renderActiveFilters();
   $('#viewOverview').hidden = STATE.view !== 'overview';
   $('#viewStream').hidden   = STATE.view !== 'stream';
   $('#viewBans').hidden     = STATE.view !== 'bans';
@@ -1489,11 +1568,16 @@ function renderOverview() {
            <div class="duty-t">${s.alerts > 1 ? 'alertes ouvertes' : 'alerte ouverte'} sur la période</div>
            <div class="duty-s">Rien ne sort de cette file tant qu'un membre du staff ne l'a pas marquée traitée.</div>
            <div class="rows" style="margin-top:12px;margin-inline:-20px;border-top:1px solid var(--edge-soft)">
-             ${liste.map(e => `<button class="row-lite" data-ev="${e.id}">
+             ${liste.map(e => `<div class="row-lite" data-ev="${e.id}" role="button" tabindex="0">
                <span class="sev-sq" style="--c:${(SEV[e.sev] || {}).c || 'var(--muted)'}"></span>
                <span><span class="lite-t">${esc(strip(e.msg))}</span>
                  <span class="lite-m">${(CAT[e.cat] || {}).label || e.cat} · ${ago(e.t)}</span></span>
-               <span class="lite-m">${hhmmss(e.t)}</span></button>`).join('')}
+               <span style="display:flex;align-items:center;gap:8px">
+                 <span class="lite-m">${hhmmss(e.t)}</span>
+                 ${can('logs.mark') ? `<button class="ev-quick" data-mark="${e.id}" title="Marquer comme traité">
+                   <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4 6.4 12 13 4.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                 </button>` : ''}
+               </span></div>`).join('')}
            </div>
          </div>
        </div>`
@@ -1615,8 +1699,11 @@ function renderStream() {
   const host = $('#rows');
   if (!STATE.list.length) {
     host.innerHTML = `<div class="void"><b>Aucun évènement</b>
-      <span>Rien ne correspond à ces filtres sur la période choisie.</span>
-      <button class="btn sm" id="resetFilters">Réinitialiser les filtres</button></div>`;
+      <span>Rien ne correspond à ces filtres sur ${CHART_CFG[STATE.range].title.toLowerCase()}.</span>
+      <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        ${STATE.range !== 168 ? `<button class="btn sm" id="widenRange">Chercher sur 7 jours</button>` : ''}
+        <button class="btn sm" id="resetFilters">Tout réinitialiser</button>
+      </span></div>`;
     $('#foot').textContent = '0 résultat';
     $('#moreBtn').hidden = true;
     return;
@@ -1634,12 +1721,17 @@ function renderStream() {
       <div class="ev-body">
         <div class="ev-meta">
           <span class="code" style="--fam:${cat.fam}">${cat.code}</span>
-          <span class="ev-actor">
+          ${e.actor.key && can('players.view')
+            ? `<button class="ev-actor" data-player="${esc(e.actor.key)}" title="Ouvrir le dossier de ${esc(e.actor.name)}">`
+            : `<span class="ev-actor">`}
             <span class="av sm" style="${avatarStyle(e.actor)}">${initials(e.actor)}</span>
             <span class="ev-name">${esc(e.actor.name)}</span>
             <span class="ev-sid">${e.actor.sid != null ? '[' + e.actor.sid + ']' : ''}${e.actor.staff ? ' staff' : ''}</span>
-          </span>
+          ${e.actor.key && can('players.view') ? '</button>' : '</span>'}
           <span class="ev-res">${esc(e.res || '')}</span>
+          ${can('logs.mark') ? `<button class="ev-quick${e.done ? ' on' : ''}" data-mark="${e.id}" title="${e.done ? 'Remettre à traiter' : 'Marquer comme traité'}" aria-pressed="${!!e.done}">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4 6.4 12 13 4.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>` : ''}
         </div>
         <div class="ev-msg">${fmtMsg(e)}<span class="ev-flags">${e.pin ? '<span class="pin-f" title="Épinglé">◆</span>' : ''}${e.done ? '<span class="done-f" title="Traité">✓</span>' : ''}</span></div>
       </div>
@@ -1821,7 +1913,7 @@ async function openDossier(key) {
     ${actionBar(p.key, p.name, banni)}
     <div class="block">
       <h3 class="eyebrow">Identifiants</h3>
-      ${p.key !== '— masqué —' ? `<dl class="kv">
+      ${!p.keyMasquee ? `<dl class="kv">
         <dt>License</dt><dd class="mono">${esc(p.key)}</dd>
         ${p.discord ? `<dt>Discord</dt><dd class="mono">${esc(p.discord)}</dd>` : ''}
         ${p.steam ? `<dt>Steam</dt><dd class="mono">${esc(p.steam)}</dd>` : ''}
@@ -1935,17 +2027,259 @@ async function openAudit() {
 
 <script>
 /* ============================================================
+   Aides à l'usage
+   Trois gestes revenaient trop cher : retrouver un joueur, comprendre
+   pourquoi un écran est vide, et revenir en arrière.
+   ============================================================ */
+
+/* ---------- l'écran est dans l'adresse ----------
+   Le bouton Retour du navigateur marche, on recharge sans perdre sa
+   place, et un lien collé dans Discord ouvre exactement la même vue. */
+function syncHash(replace) {
+  const chemin = STATE.view === 'overview' ? '/vue'
+               : STATE.view === 'bans'     ? '/bans/' + STATE.banState
+               :                             '/flux/' + STATE.cat;
+  const qp = [];
+  if (STATE.q) qp.push('q=' + encodeURIComponent(STATE.q));
+  if (STATE.range !== 24) qp.push('p=' + STATE.range);
+  if (STATE.sevs.size) qp.push('s=' + [...STATE.sevs].join(','));
+  const h = '#' + chemin + (qp.length ? '?' + qp.join('&') : '');
+  if (location.hash === h) return;
+  try { replace ? history.replaceState(null, '', h) : history.pushState(null, '', h); }
+  catch (e) { location.hash = h; }
+}
+function applyHash() {
+  const brut = location.hash.replace(/^#/, '');
+  if (!brut) return false;
+  const [chemin, requete] = brut.split('?');
+  const seg = chemin.split('/').filter(Boolean);
+  if (seg[0] === 'flux')      { STATE.view = 'stream'; STATE.cat = seg[1] || 'all'; }
+  else if (seg[0] === 'bans') { STATE.view = 'bans'; STATE.cat = 'bans';
+                                STATE.banState = ['actifs','expires','tous'].includes(seg[1]) ? seg[1] : 'actifs'; }
+  else                        { STATE.view = 'overview'; STATE.cat = 'all'; }
+  const p = new URLSearchParams(requete || '');
+  STATE.q = p.get('q') || '';
+  const per = Number(p.get('p'));
+  STATE.range = [1, 6, 24, 168].includes(per) ? per : 24;
+  STATE.sevs = new Set((p.get('s') || '').split(',').filter(Boolean));
+  STATE.limit = 120; STATE.list = [];
+  const champ = $('#q'); if (champ) champ.value = STATE.q;
+  document.querySelectorAll('[data-range]').forEach(b =>
+    b.setAttribute('aria-pressed', String(Number(b.dataset.range) === STATE.range)));
+  return true;
+}
+window.addEventListener('popstate', () => { if (applyHash()) { render(); refresh(); } });
+
+/* ---------- filtres actifs, écrits et retirables ---------- */
+const NOM_PERIODE = { 1:'1 heure', 6:'6 heures', 24:'24 heures', 168:'7 jours' };
+function renderActiveFilters() {
+  const host = $('#afilters'); if (!host) return;
+  const bits = [];
+  if (STATE.view === 'stream' && STATE.cat !== 'all')
+    bits.push(['Catégorie', (CAT[STATE.cat] || {}).label || STATE.cat, 'cat']);
+  if (STATE.q) bits.push(['Recherche', '« ' + STATE.q + ' »', 'q']);
+  [...STATE.sevs].forEach(id => bits.push(['Gravité', (SEV[id] || {}).label || id, 'sev:' + id]));
+  if (STATE.range !== 24) bits.push(['Période', NOM_PERIODE[STATE.range], 'range']);
+  host.hidden = !bits.length;
+  host.innerHTML = bits.map(([k, v, id]) =>
+    `<span class="af"><span class="af-label">${esc(k)}</span><b>${esc(v)}</b>
+      <button class="af-x" data-clear="${esc(id)}" title="Retirer ce filtre" aria-label="Retirer ${esc(k)}">×</button></span>`).join('')
+    + (bits.length > 1 ? `<button class="btn sm" data-clear="tout">Tout effacer</button>` : '');
+}
+function clearFilter(quoi) {
+  if (quoi === 'cat')   { STATE.cat = 'all'; STATE.view = 'stream'; }
+  else if (quoi === 'q'){ STATE.q = ''; $('#q').value = ''; }
+  else if (quoi === 'range') STATE.range = 24;
+  else if (quoi === 'tout') { STATE.q = ''; $('#q').value = ''; STATE.sevs.clear(); STATE.range = 24; STATE.cat = 'all'; }
+  else if (quoi.startsWith('sev:')) STATE.sevs.delete(quoi.slice(4));
+  STATE.limit = 120;
+  document.querySelectorAll('[data-range]').forEach(b =>
+    b.setAttribute('aria-pressed', String(Number(b.dataset.range) === STATE.range)));
+  syncHash(); render(); refresh();
+}
+
+/* ---------- recherche : des joueurs et des écrans, pas que du texte ----------
+   « Le mec qui a RDM » suppose de deviner la bonne catégorie. On propose
+   donc directement les joueurs et les écrans qui correspondent. */
+Demo.searchPlayers = async function (q) {
+  await this.init();
+  const t = q.toLowerCase();
+  return { players: PLAYERS.filter(p => p.name.toLowerCase().includes(t))
+    .slice(0, 5).map(p => ({ key:p.key, name:p.name, sid:p.sid, job:p.job })) };
+};
+Api.searchPlayers = function (q) { return api('/api/players?q=' + encodeURIComponent(q)); };
+
+let SUG = { items: [], i: -1, token: 0 };
+const hideSuggest = () => { $('#suggest').hidden = true; SUG.items = []; SUG.i = -1; };
+
+async function buildSuggest(q) {
+  const t = q.trim();
+  if (t.length < 2) return hideSuggest();
+  const token = ++SUG.token;
+  const items = [{ groupe:'Journaux', titre:'Chercher « ' + t + ' »', meta:'dans tous les évènements',
+                   action:'Entrée', go: () => lancerRecherche(t) }];
+
+  const cats = visibleCats().filter(c =>
+    c.label.toLowerCase().includes(t.toLowerCase()) || c.code.toLowerCase() === t.toLowerCase());
+  cats.slice(0, 3).forEach(c => items.push({
+    groupe:'Écrans', titre:c.label, meta:c.code, action:'Ouvrir', fam:c.fam,
+    go: () => (c.id === 'bans' ? goBans() : goStream(c.id))
+  }));
+
+  let joueurs = [];
+  try { joueurs = (await DS.searchPlayers(t)).players || []; } catch (e) {}
+  if (token !== SUG.token) return;
+  joueurs.forEach(p => items.push({
+    groupe:'Joueurs', titre:p.name, meta:(p.sid != null ? '[' + p.sid + '] ' : '') + (p.job || ''),
+    action:'Dossier', av:p,
+    go: () => { hideSuggest(); openDossier(p.key); }
+  }));
+
+  SUG.items = items; SUG.i = 0;
+  const host = $('#suggest');
+  let html = '', dernierGroupe = '';
+  items.forEach((it, i) => {
+    if (it.groupe !== dernierGroupe) { html += `<div class="sug-head">${esc(it.groupe)}</div>`; dernierGroupe = it.groupe; }
+    html += `<button class="sug" data-sug="${i}" role="option" aria-selected="${i === SUG.i}">
+      ${it.av ? `<span class="av sm" style="${avatarStyle(it.av)}">${initials(it.av)}</span>`
+              : `<span class="nav-dot" style="--fam:${it.fam || 'var(--muted)'}"></span>`}
+      <span><span class="sug-t">${esc(it.titre)}</span>${it.meta ? `<span class="sug-m">${esc(it.meta)}</span>` : ''}</span>
+      <span class="sug-go">${esc(it.action)}</span></button>`;
+  });
+  host.innerHTML = html;
+  host.hidden = false;
+}
+function moveSuggest(d) {
+  if ($('#suggest').hidden || !SUG.items.length) return false;
+  SUG.i = (SUG.i + d + SUG.items.length) % SUG.items.length;
+  document.querySelectorAll('[data-sug]').forEach(n =>
+    n.setAttribute('aria-selected', String(Number(n.dataset.sug) === SUG.i)));
+  const actif = document.querySelector('[data-sug][aria-selected="true"]');
+  if (actif) actif.scrollIntoView({ block:'nearest' });
+  return true;
+}
+function lancerRecherche(t) {
+  hideSuggest();
+  STATE.q = t; STATE.limit = 120;
+  if (STATE.view !== 'stream') { STATE.view = 'stream'; if (STATE.cat === 'bans') STATE.cat = 'all'; }
+  syncHash(); render(); refresh();
+  $('#q').blur();
+}
+
+/* ---------- solder une alerte sans rien ouvrir ---------- */
+async function quickDone(id) {
+  if (!can('logs.mark')) return toast('Votre rôle ne permet pas cette marque.');
+  const e = SEEN.get(Number(id) || id) || SEEN.get(String(id));
+  if (!e) return;
+  const on = !e.done;
+  try {
+    await DS.mark(e.id, 'done', on);
+    e.done = on; e.doneBy = on ? (ME.pseudo || 'moi') : null;
+    toast(on ? 'Marqué comme traité' : 'Remis à traiter');
+    render(); refresh();
+  } catch (err) { toast(err.message); }
+}
+
+/* ---------- aide ---------- */
+const RACCOURCIS = [
+  [['/'], 'Aller à la recherche'],
+  [['↑','↓'], 'Parcourir les suggestions ou le flux'],
+  [['Entrée'], 'Ouvrir la suggestion retenue'],
+  [['Échap'], 'Fermer, ou vider la recherche'],
+  [['g','puis','o'], 'Vue d’ensemble'],
+  [['g','puis','f'], 'Flux complet'],
+  [['g','puis','b'], 'Bannissements'],
+  [['?'], 'Cette aide']
+];
+function openHelp() {
+  openSheet('Prise en main', 'Tout se fait au clavier, et l’adresse retient où vous êtes',
+    { name:'Aide', hue:268 }, `
+    <div class="block">
+      <h3 class="eyebrow">Raccourcis</h3>
+      <div class="keys">${RACCOURCIS.map(([k, d]) => `<div class="key-row">
+        <span class="key">${k.map(x => x === 'puis' ? `<span class="lite-m">puis</span>` : `<kbd>${esc(x)}</kbd>`).join('')}</span>
+        <span class="key-d">${esc(d)}</span></div>`).join('')}</div>
+    </div>
+    <div class="block">
+      <h3 class="eyebrow">Trois choses qui font gagner du temps</h3>
+      <div class="keys" style="grid-template-columns:1fr">
+        <div class="key-d">Le <b>nom d’un joueur</b> dans le flux ouvre son dossier directement — pas besoin d’ouvrir l’évènement.</div>
+        <div class="key-d">La <b>coche au survol d’une ligne</b> marque l’évènement traité : la file d’alertes se vide sans rien ouvrir.</div>
+        <div class="key-d">L’<b>adresse suit l’écran</b> : le bouton Retour fonctionne, et un lien collé dans Discord rouvre exactement la même vue.</div>
+      </div>
+    </div>`);
+}
+
+/* ---------- interception clavier (avant le reste) ---------- */
+let chordG = false;
+document.addEventListener('keydown', e => {
+  if (!$('#gate').hidden) return;
+  const dansChamp = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
+
+  if (document.activeElement === $('#q') && !$('#suggest').hidden) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); e.stopImmediatePropagation(); return moveSuggest(1); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); e.stopImmediatePropagation(); return moveSuggest(-1); }
+    if (e.key === 'Enter')     { e.preventDefault(); e.stopImmediatePropagation();
+                                 const it = SUG.items[SUG.i]; if (it) it.go(); return; }
+    if (e.key === 'Escape')    { e.preventDefault(); e.stopImmediatePropagation(); return hideSuggest(); }
+  }
+  if (document.activeElement === $('#q') && e.key === 'Enter') {
+    e.preventDefault(); e.stopImmediatePropagation();
+    return lancerRecherche($('#q').value.trim());
+  }
+  if (dansChamp) return;
+
+  if (e.key === '?' || (e.key === '/' && e.shiftKey)) { e.preventDefault(); e.stopImmediatePropagation(); return openHelp(); }
+  if (chordG) {
+    chordG = false;
+    const k = e.key.toLowerCase();
+    if (k === 'o') { e.stopImmediatePropagation(); return goOverview(); }
+    if (k === 'f') { e.stopImmediatePropagation(); return goStream('all'); }
+    if (k === 'b') { e.stopImmediatePropagation(); return goBans(); }
+  }
+  if (e.key === 'g') { chordG = true; setTimeout(() => chordG = false, 1200); }
+}, true);
+
+/* ---------- clics des nouvelles commandes ---------- */
+document.addEventListener('click', ev => {
+  const q = ev.target.closest('[data-mark],[data-clear],[data-sug]');
+  if (!q) {
+    if (!ev.target.closest('.find')) hideSuggest();
+    if (ev.target.id === 'helpBtn') { ev.stopImmediatePropagation(); return openHelp(); }
+    if (ev.target.id === 'widenRange') {
+      ev.stopImmediatePropagation();
+      STATE.range = 168;
+      document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.range === '168')));
+      syncHash(); return refresh();
+    }
+    return;
+  }
+  ev.preventDefault();
+  ev.stopImmediatePropagation();   // la ligne ne doit pas s'ouvrir derrière
+  if (q.dataset.mark)  return quickDone(q.dataset.mark);
+  if (q.dataset.clear) return clearFilter(q.dataset.clear);
+  if (q.dataset.sug)   { const it = SUG.items[Number(q.dataset.sug)]; if (it) it.go(); }
+}, true);
+
+$('#q').addEventListener('input', e => {
+  clearTimeout($('#q')._h);
+  $('#q')._h = setTimeout(() => buildSuggest(e.target.value), 140);
+});
+$('#q').addEventListener('focus', e => { if (e.target.value.trim().length >= 2) buildSuggest(e.target.value); });
+</script>
+<script>
+/* ============================================================
    Interactions et démarrage
    ============================================================ */
 function goStream(cat) {
   STATE.view = 'stream'; STATE.cat = cat; STATE.limit = 120; STATE.list = [];
-  render(); refresh(); window.scrollTo({ top: 0 });
+  syncHash(); render(); refresh(); window.scrollTo({ top: 0 });
 }
 function goBans() {
   STATE.view = 'bans'; STATE.cat = 'bans';
-  render(); refresh(); window.scrollTo({ top: 0 });
+  syncHash(); render(); refresh(); window.scrollTo({ top: 0 });
 }
-function goOverview() { STATE.view = 'overview'; render(); refresh(); }
+function goOverview() { STATE.view = 'overview'; syncHash(); render(); refresh(); }
 
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-staff-toggle],[data-banstate]');
@@ -1954,7 +2288,7 @@ document.addEventListener('click', async ev => {
   if (t.dataset.view === 'overview') return goOverview();
   if (t.dataset.act)    return askAction(t.dataset.act, t.dataset.key, t.dataset.name);
   if (t.dataset.player) { closeInspector(); return openDossier(t.dataset.player); }
-  if (t.dataset.banstate) { STATE.banState = t.dataset.banstate; return refresh(); }
+  if (t.dataset.banstate) { STATE.banState = t.dataset.banstate; syncHash(); return refresh(); }
   if (t.dataset.ev) {
     const id = Number(t.dataset.ev) || t.dataset.ev;
     closeSheet();
@@ -1970,12 +2304,12 @@ document.addEventListener('click', async ev => {
   if (t.dataset.sev) {
     const s = t.dataset.sev;
     STATE.sevs.has(s) ? STATE.sevs.delete(s) : STATE.sevs.add(s);
-    STATE.limit = 120; return refresh();
+    STATE.limit = 120; syncHash(); return refresh();
   }
   if (t.dataset.range) {
     STATE.range = Number(t.dataset.range); STATE.limit = 120;
     document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-pressed', b === t));
-    return refresh();
+    syncHash(); return refresh();
   }
   if (t.dataset.staffToggle) {
     try {
@@ -2005,10 +2339,9 @@ document.addEventListener('change', async ev => {
 
 document.addEventListener('click', async ev => {
   const id = ev.target.id;
-  if (id === 'sevClear')      { STATE.sevs.clear(); refresh(); }
+  if (id === 'sevClear')      { STATE.sevs.clear(); syncHash(); refresh(); }
   if (id === 'bansToEvents')  goStream('bans');
-  if (id === 'resetFilters')  { STATE.sevs.clear(); STATE.q = ''; $('#q').value = ''; STATE.range = 168;
-    document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-pressed', b.dataset.range === '168')); refresh(); }
+  if (id === 'resetFilters')  clearFilter('tout');
   if (id === 'moreBtn')  loadMore();
   if (id === 'teamBtn')  openTeam();
   if (id === 'auditBtn') openAudit();
@@ -2081,16 +2414,6 @@ $('#dosClose').addEventListener('click', closeSheet);
 $('#scrim').addEventListener('click', () => { if (!$('#dialog').hidden) closeDialog(); else closeSheet(); });
 $('#dlgCancel').addEventListener('click', closeDialog);
 $('#dlgOk').addEventListener('click', confirmAction);
-
-let qh;
-$('#q').addEventListener('input', e => {
-  clearTimeout(qh);
-  qh = setTimeout(() => {
-    STATE.q = e.target.value; STATE.limit = 120;
-    if (STATE.view !== 'stream' && STATE.q) goStream(STATE.cat === 'bans' ? 'all' : STATE.cat);
-    else refresh();
-  }, 220);
-});
 
 /* ---------- direct ---------- */
 let stopStream = null, softTimer = null;
@@ -2203,6 +2526,8 @@ async function startPanel() {
     document.title = `Origin Roleplay — Journal serveur (${ME.pseudo})`;
   }
   buildNav();
+  if (!applyHash()) syncHash(true);   // l'adresse fait foi au chargement
+  render();
   await refresh();
   startStream();
 }
