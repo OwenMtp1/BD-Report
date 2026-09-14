@@ -1999,4 +1999,17 @@ export const UI_DICT = [
   ['Mon pipeline', 'My pipeline', 'Mi pipeline'],
   ['Vue de toute l\'organisation. Glissez-déposez les leads de chaque collègue pour changer leur statut (et leur phase). Ouvrez une fiche entreprise pour un commentaire partagé.', 'The whole organisation at a glance. Drag and drop each teammate\'s leads to change their status (and stage). Open a company sheet for a shared comment.', 'Vista de toda la organización. Arrastra y suelta los leads de cada compañero para cambiar su estado (y su fase). Abre una ficha de empresa para un comentario compartido.'],
   ['Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut — la phase de transaction est mise à jour automatiquement.', 'One card = one company (never a duplicate). Drag and drop to change its status — the deal stage updates itself.', 'Una tarjeta = una empresa (sin duplicados). Arrastra y suelta para cambiar su estado: la fase de la operación se actualiza sola.'],
+
+  // ⚠️ Les quatre derniers libellés sont passés en PROPS à un composant maison
+  // (MultiSelect), et l'extracteur de chaînes ne visite pas ces props-là : ils ne
+  // seront jamais SIGNALÉS manquants. Le balayage anglais du smoke, lui, les voit
+  // à l'exécution — c'est la seule raison pour laquelle ce trou ne dure pas.
+  ['Le plus pertinent', 'Most relevant', 'Más relevante'],
+  ['Le plus récent', 'Most recent', 'Más reciente'],
+  ['Le plus ancien', 'Oldest first', 'Más antiguo'],
+  ['Tous les comptes', 'All accounts', 'Todas las cuentas'],
+  ['compte choisi', 'account selected', 'cuenta seleccionada'],
+  ['comptes choisis', 'accounts selected', 'cuentas seleccionadas'],
+  ['Rechercher un compte', 'Search for an account', 'Buscar una cuenta'],
+  ['Rechercher', 'Search', 'Buscar'],
 ]

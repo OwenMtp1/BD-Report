@@ -13,7 +13,7 @@
 import React, { useMemo, useState } from 'react'
 import { Radar, Search, RefreshCw, ArrowRight, Check, EyeOff, Flame, X } from 'lucide-react'
 import { useStore, SIGNAL_TYPES, signalType, signalScore, SIGNAL_PRIORITIES, fmtDate } from '../store.jsx'
-import { Empty, toast } from '../ui.jsx'
+import { Empty, MultiSelect, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 import { collectEvidence, analyzeEvidence, buildContext, cachedCollect, evidencePrint, rulesPrint } from '../signals.js'
 
@@ -22,6 +22,20 @@ const STATUS = [
   { id: 'done', label: 'Traité' },
   { id: 'ignored', label: 'Ignoré' },
 ]
+// ⚠️ « Pertinent » n'est PAS « récent » : le score pèse l'importance du fait, son
+// accord avec l'offre, la corroboration entre sources et la priorité fixée par le
+// staff — la fraîcheur n'en est qu'une composante. Un très gros signal d'il y a
+// trois semaines passe devant une brève d'hier, et c'est voulu. D'où le besoin de
+// pouvoir demander explicitement l'ordre chronologique.
+const SORTS = [
+  { id: 'score', label: 'Le plus pertinent' },
+  { id: 'recent', label: 'Le plus récent' },
+  { id: 'old', label: 'Le plus ancien' },
+]
+const dateOf = (s) => {
+  const d = Date.parse(String(s.date || '').slice(0, 10))
+  return Number.isNaN(d) ? null : d
+}
 const scoreClass = (n) => n >= 75
   ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
   : n >= 50 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
@@ -41,6 +55,8 @@ export default function Signals() {
   const [type, setType] = useState('')
   const [status, setStatus] = useState('new')
   const [minScore, setMinScore] = useState(0)
+  const [sort, setSort] = useState('score')
+  const [accounts, setAccounts] = useState([]) // comptes retenus ; vide = tous
   const [busy, setBusy] = useState('')
   const [report, setReport] = useState(null) // compte rendu du dernier balayage
 
@@ -55,10 +71,14 @@ export default function Signals() {
         date: s.date, sources: s.evidence || [], priority: prio[s.type] || 'medium',
         matchConfidence: s.matchConfidence ?? 1,
       }),
-    })).sort((a, b) => b.score - a.score)
+    }))
   }, [sub?.signals, rules.signals])
 
-  const list = rows.filter(s => {
+  // ⚠️ Les autres filtres s'appliquent AVANT que les comptes ne soient proposés : c'est
+  // ce qui donne des compteurs justes. Mais le filtre par compte, lui, est mis de côté —
+  // sinon choisir « Acme » ferait disparaître tous les autres comptes de leur propre
+  // sélecteur, et on ne pourrait plus en ajouter un second.
+  const base = useMemo(() => rows.filter(s => {
     if (status && s.status !== status) return false
     if (type && s.type !== type) return false
     if (minScore && s.score < minScore) return false
@@ -67,7 +87,35 @@ export default function Signals() {
       if (!hay.includes(q.trim().toLowerCase())) return false
     }
     return true
-  })
+  }), [rows, status, type, minScore, q])
+
+  // Les comptes proposés viennent des SIGNAUX EXISTANTS, jamais d'une liste inventée :
+  // offrir un compte dont rien n'a été détecté ne peut donner qu'un écran vide.
+  const accountOptions = useMemo(() => {
+    const n = new Map()
+    base.forEach(s => n.set(s.company, (n.get(s.company) || 0) + 1))
+    // Un compte déjà coché reste listé même à zéro, sinon un autre filtre le rendrait
+    // indécochable — et la liste resterait vide sans qu'on comprenne pourquoi.
+    accounts.forEach(a => { if (!n.has(a)) n.set(a, 0) })
+    return [...n.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([id, count]) => ({ id, label: id, count }))
+  }, [base, accounts])
+
+  const list = useMemo(() => {
+    const kept = accounts.length ? base.filter(s => accounts.includes(s.company)) : base
+    const arr = [...kept]
+    if (sort === 'score') return arr.sort((a, b) => b.score - a.score)
+    // ⚠️ Un signal SANS DATE n'est pas « ancien », il est indaté : il part en fin de
+    // liste dans les DEUX sens, plutôt que de se faire passer pour le plus vieux.
+    return arr.sort((a, b) => {
+      const ta = dateOf(a), tb = dateOf(b)
+      if (ta === null && tb === null) return b.score - a.score
+      if (ta === null) return 1
+      if (tb === null) return -1
+      return (sort === 'recent' ? tb - ta : ta - tb) || b.score - a.score
+    })
+  }, [base, accounts, sort])
 
   // Entreprises à balayer : celles qu'on suit, les plus actives d'abord.
   const companies = useMemo(() => {
@@ -179,6 +227,14 @@ export default function Signals() {
           <option value={0}>Tous les scores</option>
           <option value={50}>50 et plus</option>
           <option value={75}>75 et plus — prioritaires</option>
+        </select>
+        <MultiSelect
+          options={accountOptions} selected={accounts} onChange={setAccounts}
+          allLabel="Tous les comptes" oneLabel="compte choisi" manyLabel="comptes choisis"
+          searchPlaceholder="Rechercher un compte"
+        />
+        <select className="input !w-auto !py-1.5 text-sm" value={sort} onChange={e => setSort(e.target.value)}>
+          {SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
         <span className="text-xs text-muted ml-auto">{list.length} signal{list.length > 1 ? 'aux' : ''}</span>
       </div>

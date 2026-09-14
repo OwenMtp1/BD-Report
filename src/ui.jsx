@@ -94,6 +94,70 @@ export function Select({ value, onChange, options, placeholder = '—', classNam
   )
 }
 
+/**
+ * Filtre à CHOIX MULTIPLE : un bouton, un panneau de cases à cocher, une recherche.
+ *
+ * ⚠️ Pourquoi pas un `<select multiple>` : il impose Ctrl+clic (impossible au tactile),
+ * n'affiche pas de compteur, et perd la sélection au moindre clic maladroit. Un filtre
+ * qu'on n'ose plus toucher ne filtre rien.
+ *
+ * `options` = [{ id, label, count }] — le `count` vient des DONNÉES, jamais d'une liste
+ * inventée : proposer une valeur que rien ne porte, c'est promettre un résultat vide.
+ * Une valeur DÉJÀ COCHÉE reste affichée même à zéro, sinon on ne peut plus la décocher
+ * dès qu'un autre filtre l'a vidée.
+ */
+export function MultiSelect({ options, selected, onChange, allLabel, oneLabel, manyLabel, searchPlaceholder = 'Rechercher' }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const box = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false) }
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc) }
+  }, [open])
+
+  const sel = selected || []
+  const toggle = (id) => onChange(sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id])
+  const shown = options.filter(o => !q.trim() || o.label.toLowerCase().includes(q.trim().toLowerCase()))
+
+  return (
+    <div className="relative" ref={box}>
+      <button type="button" className="input !w-auto !py-1.5 text-sm flex items-center gap-1.5" onClick={() => setOpen(o => !o)}>
+        {/* ⚠️ Le nombre est dans SON élément et le mot dans un autre : un libellé recollé
+            (« 3 comptes ») formerait un seul nœud de texte, absent du dictionnaire, donc
+            jamais traduit. */}
+        {sel.length
+          ? <><b>{sel.length}</b> <span>{sel.length > 1 ? manyLabel : oneLabel}</span></>
+          : <span>{allLabel}</span>}
+        <ChevronDown size={13} className="text-muted" />
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-64 max-w-[85vw] card p-2 space-y-1 shadow-lg">
+          {options.length > 8 && (
+            <input className="input !py-1 text-sm" placeholder={searchPlaceholder} value={q} onChange={e => setQ(e.target.value)} autoFocus />
+          )}
+          <div className="max-h-64 overflow-y-auto space-y-0.5">
+            {shown.length === 0 && <p className="text-xs text-muted px-1 py-2">Aucun résultat.</p>}
+            {shown.map(o => (
+              <label key={o.id} className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-surface cursor-pointer text-sm">
+                <input type="checkbox" checked={sel.includes(o.id)} onChange={() => toggle(o.id)} />
+                <span className="truncate flex-1">{o.label}</span>
+                <span className="text-xs text-muted shrink-0">{o.count}</span>
+              </label>
+            ))}
+          </div>
+          {sel.length > 0 && (
+            <button type="button" className="btn-ghost !py-1 text-xs w-full" onClick={() => onChange([])}>Tout désélectionner</button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Menu déroulant avec édition de la liste (petit crayon en haut du menu)
 export function EditableSelect({ value, onChange, options, onOptionsChange, placeholder = '—', label = 'valeurs' }) {
   const [open, setOpen] = useState(false)

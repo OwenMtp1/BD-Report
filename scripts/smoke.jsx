@@ -995,6 +995,63 @@ async function main() {
         }
       }
 
+      // ---- TRI et FILTRE PAR COMPTE sur l'écran Signaux.
+      // On pose trois signaux sur deux comptes, avec des dates et des poids VOLONTAIREMENT
+      // discordants : le plus pertinent est le plus ancien. C'est le seul montage qui
+      // prouve que le tri change vraiment d'ordre — avec des données concordantes, les
+      // trois tris rendraient la même liste et le test passerait sans rien vérifier.
+      {
+        const sig = (title, date, importance) => ({
+          type: 'hiring', title, summary: `Résumé de ${title}`, date,
+          importance, relevance: importance, confidence: importance,
+          evidence: [{ url: `https://preuve.test/${encodeURIComponent(title)}`, kind: 'press' }],
+        })
+        await act(async () => {
+          st().saveCompanySignals('Alpha SA', [sig('Alpha recrute en masse', '2026-01-10', 95)])
+          st().saveCompanySignals('Beta SARL', [sig('Beta ouvre un bureau', '2026-08-20', 30), sig('Beta change de DAF', '2026-05-05', 45)])
+        })
+        await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+
+        const cardNames = () => [...container.querySelectorAll('.card')]
+          .map(c => c.querySelector('button.font-bold')?.textContent?.trim())
+          .filter(n => ['Alpha SA', 'Beta SARL'].includes(n))
+        const sortSelect = [...container.querySelectorAll('select')]
+          .find(s => [...s.options].some(o => o.textContent.includes('Le plus pertinent')))
+        if (!sortSelect) throw new Error('Le sélecteur de tri est absent de l\'écran Signaux')
+        const setSort = async (v) => { await act(async () => { sortSelect.value = v; Simulate.change(sortSelect) }) }
+
+        await setSort('score')
+        if (cardNames()[0] !== 'Alpha SA') throw new Error('Tri « le plus pertinent » : le signal le mieux noté n\'est pas en tête')
+        await setSort('recent')
+        if (cardNames()[0] !== 'Beta SARL') throw new Error('Tri « le plus récent » : la date la plus récente n\'est pas en tête')
+        await setSort('old')
+        if (cardNames()[0] !== 'Alpha SA') throw new Error('Tri « le plus ancien » : la date la plus ancienne n\'est pas en tête')
+        // ⚠️ Le tri chronologique doit ORDONNER, pas seulement choisir une tête de liste :
+        // ne vérifier que le premier laisserait passer un tri qui inverse le reste.
+        const parDate = cardNames()
+        if (parDate.join('|') !== 'Alpha SA|Beta SARL|Beta SARL') throw new Error(`Ordre chronologique faux : ${parDate.join(' → ')}`)
+
+        // Filtre par compte : on n'en garde qu'un, l'autre doit disparaître.
+        await act(async () => { await click(find('button', 'Tous les comptes')) })
+        const cases = [...container.querySelectorAll('input[type="checkbox"]')]
+        const ligne = cases.map(c => c.closest('label')).filter(Boolean)
+          .find(l => l.textContent.includes('Alpha SA'))
+        if (!ligne) throw new Error('Le sélecteur de comptes ne propose pas les comptes qui ont des signaux')
+        await act(async () => { Simulate.change(ligne.querySelector('input'), { target: { checked: true } }) })
+        await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+        const filtre = cardNames()
+        if (!filtre.length || filtre.some(n => n !== 'Alpha SA')) {
+          throw new Error(`Filtre par compte : « ${filtre.join(', ')} » au lieu du seul compte choisi`)
+        }
+        // ⚠️ Le compte NON choisi doit rester proposé : sinon on ne peut plus en ajouter
+        // un second, et le filtre devient un aller sans retour.
+        if (!text().includes('Beta SARL')) throw new Error('Le compte non retenu a disparu de son propre sélecteur')
+        await act(async () => { await click(find('button', 'Tout désélectionner')) })
+        await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+        if (cardNames().length < 3) throw new Error('« Tout désélectionner » ne rend pas tous les signaux')
+        await setSort('score')
+      }
+
       await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes entreprises'))
       await act(async () => { win.dispatchEvent(new win.CustomEvent('open-company', { detail: 'Zephyr' })) })
       await act(async () => { await new Promise(r => setTimeout(r, 80)) })
