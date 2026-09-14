@@ -77,7 +77,19 @@ const json = (data, request, env, status = 200) =>
 // (toute clé du bundle est publique) — elle viendra avec les comptes Supabase,
 // dont le jeton de session pourra être vérifié ici.
 // Tant que ALLOWED_ORIGINS n'est pas renseigné, rien ne change : tout passe.
-function originRefusal(request, env) {
+//
+// ⚠️ `/health` échappe au contrôle, et c'est délibéré. Ouvrir l'URL du relais
+// dans un onglet est le premier geste quand plus rien ne marche — or une
+// navigation n'envoie PAS d'en-tête Origin : la page aurait répondu 403, et on
+// aurait cherché une panne là où il n'y avait qu'un contrôle d'accès. Elle ne
+// rend qu'un booléen (« la clé existe »), ne coûte aucun appel sortant, et ne
+// dit rien que `/diag` ne dise déjà. Rendre une protection indiscernable d'une
+// panne, c'est transformer chaque incident en enquête.
+// `/diag`, lui, reste protégé : il interroge vraiment Gemini et les annuaires,
+// donc il COÛTE. En ligne de commande, ajouter -H "Origin: https://…".
+const OPEN_PATHS = new Set(['/health', '/', ''])
+function originRefusal(request, env, pathname) {
+  if (OPEN_PATHS.has(pathname)) return null
   const allowed = String(env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)
   if (!allowed.length) return null
   const origin = request.headers.get('Origin') || ''
@@ -1218,11 +1230,12 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(request, env) })
     const url = new URL(request.url)
 
-    const refused = originRefusal(request, env)
+    // `/health` échappe aux DEUX garde-fous (origine et plafond) : c'est ce
+    // qu'on interroge quand plus rien ne marche, et les y soumettre
+    // transformerait une panne en énigme.
+    const refused = originRefusal(request, env, url.pathname)
     if (refused) return refused
-    // `/health` reste joignable sans compter : c'est ce qu'on interroge quand
-    // plus rien ne marche, et un plafond y transformerait une panne en énigme.
-    if (url.pathname !== '/health' && url.pathname !== '/' && url.pathname !== '') {
+    if (!OPEN_PATHS.has(url.pathname)) {
       const throttled = rateRefusal(request, env)
       if (throttled) return throttled
     }

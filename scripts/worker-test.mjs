@@ -712,6 +712,19 @@ console.log("Accès — l'origine est REFUSÉE, pas seulement privée de son en-
   const good = await worker.fetch(req('https://bdreport.js.org'), ENV)
   ok(good.status !== 403, 'origine autorisée → la requête passe')
 
+  // ⚠️ Une NAVIGATION n'envoie pas d'en-tête Origin : ouvrir l'URL du relais
+  // dans un onglet aurait répondu 403, et on aurait cherché une panne là où il
+  // n'y avait qu'un contrôle d'accès. /health ne rend qu'un booléen et ne coûte
+  // aucun appel sortant — le protéger ne protégeait rien et cassait le premier
+  // geste de diagnostic.
+  const sante = await worker.fetch(new Request('https://relay.test/health'), ENV)
+  ok(sante.status === 200, '/health reste ouvert : un onglet suffit à voir si le relais vit')
+  const racine = await worker.fetch(new Request('https://relay.test/'), ENV)
+  ok(racine.status === 200, 'la racine aussi')
+  // …mais /diag COÛTE (il interroge vraiment Gemini et les annuaires) : il reste gardé.
+  const diag = await worker.fetch(new Request('https://relay.test/diag'), ENV)
+  ok(diag.status === 403, '/diag reste protégé — il consomme, lui')
+
   // ⚠️ Sans ALLOWED_ORIGINS, rien ne change : un relais déjà en service ne doit
   // pas se fermer tout seul parce qu'on a déployé une nouvelle version.
   const open = await worker.fetch(req(''), { GEMINI_API_KEY: 'test-key' })
