@@ -792,6 +792,17 @@ async function officialRegistry(company, hints = {}) {
 // Wikidata les publie : base libre (CC0), sans clé, sans quota, et explicitement faite
 // pour être interrogée par des programmes. Aucun contournement, aucune page scrapée.
 const WD_API = 'https://www.wikidata.org/w/api.php'
+// ⚠️ WIKIMEDIA EXIGE UN AGENT QUI SE NOMME — c'est l'inverse exact de Google News
+// (voir plus haut : lui refuse les agents qui se déclarent robots). Leur politique
+// d'User-Agent impose d'identifier l'outil et de donner un contact ; sans en-tête,
+// ou avec celui d'une bibliothèque générique, l'API répond 403. C'est ce qui faisait
+// échouer la source en production — un refus de POLITIQUE, pas une panne, et
+// invisible d'ici puisque le relais ne tourne que chez Cloudflare.
+// https://foundation.wikimedia.org/wiki/Policy:User-Agent_policy
+const WD_HEADERS = {
+  Accept: 'application/json',
+  'User-Agent': 'BD-Report/1.0 (https://bdreport.js.org; enrichissement de fiches entreprise)',
+}
 const WD_PROPS = { site: 'P856', linkedin: 'P4264', ca: 'P2139', effectif: 'P1128' }
 // Ce qui désigne une organisation dans la description d'une entité. Sans ce filtre,
 // chercher « Orange » ramène le fruit — et l'enrichissement irait remplir la fiche
@@ -812,7 +823,7 @@ async function wikidata(company, hints = {}) {
   const name = String(company || '').trim()
   if (!name) return { found: {}, raw: null }
   const search = await fetch(`${WD_API}?action=wbsearchentities&search=${encodeURIComponent(name)}&language=fr&uselang=fr&type=item&limit=5&format=json`,
-    { headers: { Accept: 'application/json' }, cf: { cacheTtl: 86400, cacheEverything: true } })
+    { headers: WD_HEADERS, cf: { cacheTtl: 86400, cacheEverything: true } })
   if (!search.ok) throw new Error(`Wikidata : ${search.status}`)
   const hits = (await search.json())?.search || []
   // ⚠️ La correspondance EXACTE écartait presque tout : « Doctolib » contre « Doctolib SAS »,
@@ -832,7 +843,7 @@ async function wikidata(company, hints = {}) {
   if (!hit) return { found: {}, raw: { candidats: hits.map(h => `${h.label} — ${h.description || ''}`).slice(0, 3) } }
 
   const ent = await fetch(`${WD_API}?action=wbgetentities&ids=${encodeURIComponent(hit.id)}&props=claims&format=json`,
-    { headers: { Accept: 'application/json' }, cf: { cacheTtl: 86400, cacheEverything: true } })
+    { headers: WD_HEADERS, cf: { cacheTtl: 86400, cacheEverything: true } })
   if (!ent.ok) throw new Error(`Wikidata : ${ent.status}`)
   const claims = (await ent.json())?.entities?.[hit.id]?.claims || {}
   const url = `https://www.wikidata.org/wiki/${hit.id}`

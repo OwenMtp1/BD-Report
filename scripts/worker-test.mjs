@@ -690,6 +690,32 @@ console.log('Diagnostic — le relais dit lui-même ce qui bloque')
 }
 
 // ---------------------------------------------------------------------------
+console.log('Wikidata — Wikimedia exige un agent qui se nomme')
+{
+  // ⚠️ Le 403 constaté en production venait de là, et rien ici ne pouvait le voir :
+  // le relais ne tourne que chez Cloudflare, et le test simulait un serveur qui
+  // répond quoi qu'on lui envoie. On vérifie donc l'EN-TÊTE ENVOYÉ, pas la réponse.
+  const calls = stubFetch([
+    [/recherche-entreprises/, () => ({ body: { results: [] } })],
+    [WIKIDATA, (u) => ({ body: u.includes('wbsearchentities')
+      ? { search: [{ id: 'Q1', label: 'Doctolib', description: 'entreprise française' }] }
+      : { entities: { Q1: { claims: {} } } } })],
+    [/./, () => ({ body: {} })],
+  ])
+  await worker.fetch(new Request('https://relay.test/enrich', {
+    method: 'POST', body: JSON.stringify({ company: 'Doctolib', fields: ['site'] }),
+    headers: { 'Content-Type': 'application/json' },
+  }), { GEMINI_API_KEY: 'test-key' })
+
+  const wd = calls.filter(c => WIKIDATA.test(c.url))
+  ok(wd.length > 0, 'Wikidata est bien interrogé')
+  const ua = (c) => c.init?.headers?.['User-Agent'] || ''
+  ok(wd.every(c => ua(c)), 'CHAQUE appel Wikidata porte un User-Agent')
+  ok(wd.every(c => /BD-Report/.test(ua(c)) && /https?:\/\//.test(ua(c))),
+    "l'agent nomme l'outil ET donne un contact, comme la politique Wikimedia l'exige")
+}
+
+// ---------------------------------------------------------------------------
 console.log("Accès — l'origine est REFUSÉE, pas seulement privée de son en-tête")
 {
   // Le cas qui a motivé le correctif : la requête était traitée jusqu'au bout,
