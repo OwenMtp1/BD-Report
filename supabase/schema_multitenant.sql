@@ -106,7 +106,23 @@ create policy os_upd  on public.org_state for update using (public.is_org_member
 create policy os_ins  on public.org_state for insert with check (public.is_org_member(org_id) or public.is_platform_admin());
 
 -- ---------------------------------------------------------------- Temps réel
-alter publication supabase_realtime add table public.org_state;
+-- ⚠️ SEULE ligne du fichier qui n'était pas rejouable, et elle échouait pour une
+-- raison qui n'est PAS une panne : si la publication `supabase_realtime` du projet
+-- est déclarée FOR ALL TABLES, la table en fait partie à la seconde où elle est
+-- créée — `add table` répond alors « already member » (42710) et fait tomber tout
+-- le script, y compris le déclencheur d'auto-profil qui le suit. Même chose à la
+-- deuxième exécution d'un fichier pourtant conçu pour être rejoué.
+-- On ajoute donc la table SI elle n'y est pas déjà, et on ne fait rien sinon.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'org_state')
+  then
+    alter publication supabase_realtime add table public.org_state;
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------- Auto-profil
 -- À la création d'un compte Auth, crée le profil correspondant.
