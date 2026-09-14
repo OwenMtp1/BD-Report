@@ -38,8 +38,20 @@ create table if not exists public.app_state_backup as
 select id, jsonb_typeof(data), backed_up_at from public.app_state_backup;  -- doit renvoyer 1 ligne
 ```
 
-Puis `select data from app_state where id='main'` → bouton **Download** → gardez le fichier
-`backup.json` en local. **Ne supprimez rien** tant que la bascule n'est pas validée.
+Puis récupérez le blob en fichier local — c'est lui que lira l'étape 3. Deux chemins :
+
+- **Tableau de bord** : `select data from app_state where id='main'` → bouton **Download** (JSON).
+- **Terminal** (plus sûr si le fichier est gros) :
+
+```bash
+curl -s "$SUPABASE_URL/rest/v1/app_state?id=eq.main&select=data" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE" \
+  > backup.json
+```
+
+Les deux rendent une **liste d'une ligne** (`[{ "data": … }]`) : c'est la forme attendue,
+le script la déplie (comme l'objet nu et `{ data: … }`). **Ne supprimez rien** tant que la
+bascule n'est pas validée.
 
 ## Étape 1 — Créer le schéma cible (additif, sans rien casser)
 
@@ -67,6 +79,16 @@ node supabase/migrate_blob_to_orgs.mjs --blob=./backup.json --commit
 Le script crée un compte Auth par utilisateur (**sans mot de passe** : chacun reçoit un lien
 de réinitialisation — c'est cohérent avec la purge des clairs déjà faite), une org par
 environnement, les appartenances, et l'`org_state` de chaque org.
+
+**Rien à installer** : il parle à Supabase par son API REST avec le `fetch` de Node (v18+).
+Ajoutez `--no-mail` pour ne PAS envoyer les liens de réinitialisation — utile quand on migre
+d'abord vers un projet de test, où prévenir toute l'équipe n'aurait aucun sens.
+
+Ce qu'il garantit, et qui est rejoué à chaque `npm run audit` contre un Supabase simulé
+(`scripts/migrate-test.mjs`) : les trois formes de sauvegarde sont lues, un compte support
+devient admin plateforme et un membre client ne l'est pas, chaque `org_state` est chiffré au
+repos et ne contient **que** sa société, et **rejouer le script ne crée aucun doublon** —
+c'est ce qui rend l'étape 5.2 possible.
 
 ## Étape 4 — Recette sur un projet de TEST, jamais en prod
 
