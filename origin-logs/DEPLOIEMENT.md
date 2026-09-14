@@ -1,0 +1,221 @@
+# Déploiement — Origin Roleplay, journal serveur
+
+Trois étapes, dans cet ordre. Comptez une demi-heure la première fois.
+
+Prérequis : **Node 22.5 ou plus récent** sur la machine qui héberge le site
+(`node --version`). Rien d'autre — pas de base de données à installer, pas de
+`npm install`.
+
+---
+
+## 1. L'API
+
+```bash
+# sur le serveur web, pas sur le serveur de jeu
+cd origin-logs/api
+
+# Générez une clé une bonne fois pour toutes et NOTEZ-LA :
+#   elle sera réclamée par la ressource FiveM à l'étape 3.
+openssl rand -hex 24
+```
+
+Créez `origin-logs/api/.env` — ou passez les variables directement à la
+commande, au choix :
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `SERVER_KEY` | **obligatoire** — la clé générée ci-dessus | — |
+| `PORT` | port d'écoute | `8080` |
+| `HOST` | interface d'écoute | `0.0.0.0` |
+| `DB_FILE` | fichier de base | `api/data/origin-logs.db` |
+| `RETENTION_DAYS` | durée de conservation des journaux | `30` |
+| `SECURE_COOKIE` | `1` dès que le site est en HTTPS | `0` |
+| `SESSION_DAYS` | durée d'une session staff | `7` |
+
+Lancez et créez votre compte :
+
+```bash
+SERVER_KEY=votre-cle node server.js       # dans un premier terminal
+node staff.js add VotrePseudo fondateur   # dans un second
+```
+
+`staff.js` affiche un mot de passe aléatoire si vous n'en donnez pas.
+**Notez-le : il n'est stocké nulle part en clair.**
+
+Vérifiez sur `http://IP:8080` — l'écran de connexion doit s'afficher.
+Pour voir le panneau se remplir avant d'avoir branché le jeu :
+
+```bash
+SERVER_KEY=votre-cle node seed-demo.js 600
+```
+
+### En service permanent (systemd)
+
+`/etc/systemd/system/origin-logs.service` :
+
+```ini
+[Unit]
+Description=Origin Roleplay — API du journal serveur
+After=network.target
+
+[Service]
+Type=simple
+User=origin
+WorkingDirectory=/srv/origin-logs/api
+Environment=SERVER_KEY=votre-cle
+Environment=PORT=8080
+Environment=SECURE_COOKIE=1
+Environment=RETENTION_DAYS=60
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl enable --now origin-logs
+journalctl -u origin-logs -f
+```
+
+---
+
+## 2. Le site — HTTPS et reverse proxy
+
+⚠️ **N'exposez jamais le port 8080 directement.** L'API ne fait pas de TLS :
+sans proxy, le cookie de session et les mots de passe circulent en clair.
+
+Caddy (le plus court) :
+
+```
+logs.origin-rp.fr {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Nginx :
+
+```nginx
+server {
+    server_name logs.origin-rp.fr;
+    listen 443 ssl;
+    # ... vos certificats ...
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Le flux temps réel est du SSE : sans ces deux lignes, les
+        # évènements arrivent par paquets au lieu d'arriver en direct.
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+    }
+}
+```
+
+Passez ensuite `SECURE_COOKIE=1` et redémarrez le service.
+
+---
+
+## 3. La ressource FiveM
+
+```bash
+cp -r origin-logs/resource /chemin/vers/votre-serveur/resources/origin_logs
+```
+
+Éditez **`resources/origin_logs/config.lua`** — deux lignes suffisent :
+
+```lua
+Config.ApiUrl    = 'http://127.0.0.1:8080'   -- ou https://logs.origin-rp.fr
+Config.ServerKey = 'la-cle-generee-a-etape-1'
+```
+
+Si le serveur de jeu et le site sont sur la même machine, gardez
+`127.0.0.1:8080` : la clé ne sort jamais du serveur.
+
+Dans `server.cfg` :
+
+```cfg
+ensure baseevents     # sans lui, pas de morts ni d'éliminations journalisées
+ensure origin_logs
+```
+
+Redémarrez, puis dans la console du serveur de jeu :
+
+```
+origin_logs_test
+```
+
+Un évènement doit apparaître dans le panneau, catégorie **Serveur**. S'il
+n'arrive pas, la console dit laquelle des trois causes est en jeu : clé
+refusée, API injoignable, ou catégorie désactivée dans `config.lua`.
+
+---
+
+## Ajouter votre équipe
+
+Depuis le panneau : bouton **Gérer l'équipe** (fondateurs uniquement), ou en
+console :
+
+```bash
+node staff.js add Kaleb moderateur
+node staff.js list
+node staff.js role Kaleb admin
+node staff.js disable Kaleb      # ferme aussi ses sessions ouvertes
+```
+
+Donnez des comptes **nominatifs**. Le journal du panneau enregistre qui
+consulte quel dossier et qui sanctionne qui : partagé à trois, il n'enregistre
+plus rien d'utile.
+
+---
+
+## Journaliser vos propres scripts
+
+Les évènements natifs couvrent connexions, chat, morts, explosions et
+détections. Le reste — braquages, drogue, garages, coffres d'organisation —
+vit dans **vos** ressources, qui seules savent ce qui s'y passe :
+
+```lua
+exports['origin_logs']:Log({
+  cat   = 'braquages',          -- voir Config.Categories
+  sev   = 'alerte',             -- critique | alerte | notice | info
+  actor = source,               -- un id de joueur, ou une table
+  target = autreSource,         -- facultatif
+  msg   = ('%s a ouvert le coffre du Pacific'):format(GetPlayerName(source)),
+  data  = { kind = 'loot', butin = 184200, sacs = 4 },
+  res   = 'mon_script_braquage'
+})
+```
+
+`data` est rendu tel quel dans l'inspecteur : mettez-y tout ce qui aiderait à
+trancher un litige trois jours plus tard. `kind` sert aux compteurs du dossier
+joueur (`join`, `kill`, `death`).
+
+---
+
+## Sauvegarde
+
+La base est un seul fichier. Avec le service arrêté, copiez-le ; à chaud,
+préférez :
+
+```bash
+sqlite3 /srv/origin-logs/api/data/origin-logs.db ".backup '/sauvegardes/logs-$(date +%F).db'"
+```
+
+---
+
+## Si quelque chose ne marche pas
+
+| Symptôme | Cause la plus fréquente |
+|---|---|
+| Le panneau affiche « démonstration » | La page n'est pas servie par l'API — ouvrez le domaine, pas le fichier. |
+| « Clé serveur invalide » en console de jeu | `Config.ServerKey` ≠ `SERVER_KEY`. |
+| Aucun évènement n'arrive | L'API n'est pas joignable depuis le serveur de jeu : testez `curl http://127.0.0.1:8080/api/catalogue`. |
+| Pas de morts ni d'éliminations | `ensure baseevents` manque dans `server.cfg`. |
+| Le direct arrive par paquets | `proxy_buffering off;` manque côté Nginx. |
+| Déconnexion à chaque rechargement | `SECURE_COOKIE=1` sans HTTPS, ou l'inverse. |
+| Les sanctions ne partent pas | Vérifiez que la ressource tourne : elle vient chercher les tâches toutes les 5 s. |

@@ -1,0 +1,173 @@
+// ============================================================
+// Origin Roleplay — stockage
+// SQLite intégré à Node (node:sqlite) : aucune dépendance, aucun
+// service à installer. Le fichier .db se sauvegarde en le copiant.
+// ============================================================
+'use strict';
+// node:sqlite est marqué « expérimental » par Node et le crie à chaque
+// démarrage. L'API est stable dans la version que nous ciblons ; on tait
+// ce seul avertissement pour ne pas noyer les vrais messages du serveur.
+const _warn = process.emitWarning;
+process.emitWarning = (w, ...rest) => {
+  if (String(w).includes('SQLite is an experimental')) return;
+  return _warn.call(process, w, ...rest);
+};
+const { DatabaseSync } = require('node:sqlite');
+const path = require('node:path');
+const fs = require('node:fs');
+
+const SCHEMA = `
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS events(
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts          INTEGER NOT NULL,
+  cat         TEXT    NOT NULL,
+  sev         TEXT    NOT NULL,
+  server      TEXT,
+  actor_key   TEXT,
+  actor_name  TEXT,
+  actor_sid   INTEGER,
+  actor_staff INTEGER NOT NULL DEFAULT 0,
+  target_key  TEXT,
+  target_name TEXT,
+  msg         TEXT    NOT NULL,
+  data        TEXT,
+  res         TEXT,
+  search      TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ev_ts        ON events(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_ev_cat_ts    ON events(cat, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_ev_sev_ts    ON events(sev, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_ev_actor_ts  ON events(actor_key, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_ev_target_ts ON events(target_key, ts DESC);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS events_fts
+  USING fts5(search, content='events', content_rowid='id',
+             tokenize="unicode61 remove_diacritics 2");
+CREATE TRIGGER IF NOT EXISTS ev_ai AFTER INSERT ON events BEGIN
+  INSERT INTO events_fts(rowid, search) VALUES (new.id, new.search);
+END;
+CREATE TRIGGER IF NOT EXISTS ev_ad AFTER DELETE ON events BEGIN
+  INSERT INTO events_fts(events_fts, rowid, search) VALUES ('delete', old.id, old.search);
+END;
+
+CREATE TABLE IF NOT EXISTS players(
+  key        TEXT PRIMARY KEY,
+  name       TEXT,
+  sid        INTEGER,
+  discord    TEXT,
+  steam      TEXT,
+  fivem      TEXT,
+  ip_hash    TEXT,
+  job        TEXT,
+  grade      INTEGER,
+  first_seen INTEGER,
+  last_seen  INTEGER,
+  playtime   INTEGER NOT NULL DEFAULT 0,
+  events     INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pl_name ON players(name);
+CREATE INDEX IF NOT EXISTS idx_pl_seen ON players(last_seen DESC);
+
+CREATE TABLE IF NOT EXISTS sanctions(
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  player_key TEXT NOT NULL,
+  name       TEXT,
+  type       TEXT NOT NULL,          -- warn | kick | ban | mute
+  reason     TEXT,
+  by_name    TEXT,
+  by_id      INTEGER,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER,                -- NULL = définitif
+  lifted_at  INTEGER,
+  lifted_by  TEXT,
+  active     INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_sa_player ON sanctions(player_key, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sa_active ON sanctions(active, type);
+
+CREATE TABLE IF NOT EXISTS actions(
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  type        TEXT NOT NULL,         -- warn | kick | ban | unban | give
+  target_key  TEXT,
+  target_name TEXT,
+  target_sid  INTEGER,
+  payload     TEXT,
+  reason      TEXT,
+  by_id       INTEGER,
+  by_name     TEXT,
+  created_at  INTEGER NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'pending',  -- pending | sent | done | failed
+  result      TEXT,
+  done_at     INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_ac_status ON actions(status, created_at);
+
+CREATE TABLE IF NOT EXISTS marks(
+  event_id INTEGER NOT NULL,
+  kind     TEXT    NOT NULL,          -- pin | done
+  by_id    INTEGER,
+  by_name  TEXT,
+  at       INTEGER NOT NULL,
+  PRIMARY KEY(event_id, kind)
+);
+
+CREATE TABLE IF NOT EXISTS staff(
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  pseudo     TEXT UNIQUE NOT NULL,
+  pass       TEXT NOT NULL,
+  role       TEXT NOT NULL,
+  discord    TEXT,
+  disabled   INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  last_login INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS sessions(
+  token      TEXT PRIMARY KEY,
+  staff_id   INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  ua         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_se_staff ON sessions(staff_id);
+
+-- Un panneau de logs se journalise lui-même : qui a ouvert quel dossier,
+-- qui a exporté, qui a sanctionné. Sans cela, la surveillance n'est
+-- surveillée par personne.
+CREATE TABLE IF NOT EXISTS audit(
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts       INTEGER NOT NULL,
+  staff_id INTEGER,
+  pseudo   TEXT,
+  action   TEXT NOT NULL,
+  detail   TEXT,
+  ip       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_au_ts ON audit(ts DESC);
+`;
+
+function open(file) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const db = new DatabaseSync(file);
+  db.exec(SCHEMA);
+  return db;
+}
+
+/* ---------- recherche ----------
+   FTS5 refuse les caractères de sa syntaxe. On réduit la saisie à des
+   jetons et on cherche en préfixe ; si rien d'exploitable n'en sort
+   (« 3 495 $ »), on retombe sur un LIKE plutôt que de ne rien répondre. */
+function ftsQuery(q) {
+  const toks = String(q).toLowerCase().match(/[\p{L}\p{N}_:.-]{2,}/gu);
+  if (!toks || !toks.length) return null;
+  return toks.slice(0, 8).map(t => '"' + t.replace(/"/g, '') + '"*').join(' AND ');
+}
+
+const num = v => (typeof v === 'bigint' ? Number(v) : v);
+const row = r => (r ? Object.assign({}, r) : null);
+
+module.exports = { open, ftsQuery, num, row, SCHEMA };

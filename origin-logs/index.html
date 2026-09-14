@@ -215,7 +215,7 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
   padding:15px 16px;display:grid;gap:12px;min-width:0;
 }
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.chart-wrap{overflow-x:auto}
+.chart-wrap{overflow-x:auto;min-width:0}
 .chart{display:block;width:100%;min-width:460px;height:auto}
 .chart text{font-family:var(--mono);font-size:10px;fill:var(--muted)}
 .chart .grid-line{stroke:var(--line);stroke-width:1}
@@ -240,7 +240,11 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
   padding:8px 9px;border-radius:var(--r-md);width:100%;text-align:left;
 }
 .mini-row:hover{background:rgba(157,92,255,.09)}
-.mini-title{font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini-title{display:block;font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Les colonnes souples de ces lignes gardent min-width:auto et refusent de
+   rétrécir sous leur texte : c'est la carte entière qui s'élargissait. */
+.mini-row > *, .chain-row > *, .staff-row > *, .split-row > *{min-width:0}
+.chain-m{display:block}
 .mini-meta{font-size:11px;color:var(--muted);font-family:var(--mono)}
 .avatar{
   width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;
@@ -260,7 +264,7 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
 
 /* ---------- flux de logs ---------- */
 .stream{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:rgba(15,10,25,.6)}
-.stream-scroll{overflow:auto;max-height:calc(100dvh - 232px);overscroll-behavior:contain}
+.stream-scroll{min-width:0;overflow:auto;max-height:calc(100dvh - 232px);overscroll-behavior:contain}
 .logs{width:100%;border-collapse:collapse;min-width:720px}
 .logs thead th{
   position:sticky;top:0;z-index:10;
@@ -376,10 +380,13 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
 
 /* ---------- adaptation ---------- */
 @media (min-width:1280px){ .app.insp .main{padding-right:min(420px,32vw)} }
-@media (max-width:1180px){ .grid-2{grid-template-columns:1fr} }
+/* `1fr` garde un minimum automatique : la piste s'élargissait pour loger
+   le graphique au lieu de le laisser défiler dans son cadre. */
+@media (max-width:1180px){ .grid-2{grid-template-columns:minmax(0,1fr)} }
 @media (max-width:900px){
   .app{grid-template-columns:1fr}
-  .rail{position:static;height:auto;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;padding:10px 16px;border-right:none;border-bottom:1px solid var(--line)}
+  .rail{position:static;height:auto;min-width:0;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;padding:10px 16px;border-right:none;border-bottom:1px solid var(--line)}
+  .main{min-width:0}
   .brand{padding:0 10px 0 0;flex:none}
   .brand-text{display:none}
   .rail-head,.rail-foot{display:none}
@@ -406,8 +413,122 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
   *{transition-duration:.01ms !important;animation-duration:.01ms !important}
 }
 </style>
+<style>
+/* ---------- écran de connexion ---------- */
+.gate{
+  position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px 16px;
+  background:
+    radial-gradient(760px 380px at 50% -6%, rgba(157,92,255,.22), transparent 62%),
+    var(--void);
+}
+.gate[hidden]{display:none}
+.gate-card{
+  width:min(380px,100%);padding:26px 24px 22px;border-radius:18px;
+  background:linear-gradient(170deg,rgba(30,20,50,.9),rgba(14,9,23,.94));
+  border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.55);
+  display:grid;gap:14px;
+}
+.gate-head{display:flex;align-items:center;gap:11px}
+.gate-title{font-family:var(--display);font-size:17px;font-weight:700;line-height:1.15}
+.gate-sub{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.field{display:grid;gap:5px}
+.field label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.input{
+  width:100%;padding:9px 12px;border-radius:var(--r-md);font-size:13.5px;
+  background:var(--panel);border:1px solid var(--line);color:var(--ink);
+}
+.input:focus{outline:none;border-color:rgba(157,92,255,.55);background:var(--panel-2);box-shadow:0 0 0 3px rgba(157,92,255,.12)}
+.gate-err{
+  font-size:12.5px;color:#FF9AAC;background:rgba(255,77,109,.1);
+  border:1px solid rgba(255,77,109,.3);border-radius:var(--r-md);padding:8px 11px;
+}
+.gate-note{font-size:11.5px;color:var(--muted);line-height:1.55}
+.gate-note code{font-family:var(--mono);font-size:11px;color:var(--vio-soft)}
+.btn.block{width:100%;justify-content:center;padding:10px}
 
-<div class="app">
+/* ---------- identité du staff connecté ---------- */
+.me{display:flex;align-items:center;gap:9px;padding:4px 6px 4px 4px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
+.me .avatar{width:24px;height:24px;border-radius:999px;font-size:10px}
+.me-txt{line-height:1.15}
+.me-name{font-size:12.5px;color:var(--ink)}
+.me-role{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--vio-soft)}
+
+/* ---------- boîte de dialogue d'action ---------- */
+.dialog{
+  position:fixed;z-index:80;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(430px,calc(100vw - 28px));
+  background:linear-gradient(175deg,#1B1230,#0D0817);
+  border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:0 26px 70px rgba(0,0,0,.6);
+  display:grid;gap:14px;padding:18px;
+}
+.dialog[hidden]{display:none}
+.dialog h3{font-family:var(--display);font-size:16px;font-weight:600}
+.dialog .warn{font-size:12px;color:#F6C89A;background:rgba(255,176,32,.09);border:1px solid rgba(255,176,32,.26);padding:8px 11px;border-radius:var(--r-md)}
+.dialog-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.btn.danger{background:linear-gradient(160deg,#FF4D6D,#B3213E);border-color:#FF7D95;color:#fff}
+.btn.danger:hover{filter:brightness(1.08)}
+
+/* ---------- actions sur un joueur ---------- */
+.act-bar{display:flex;gap:7px;flex-wrap:wrap}
+.act-bar .btn{flex:none}
+
+/* ---------- gestion de l'équipe ---------- */
+.staff-list{display:grid;gap:8px}
+.staff-row{
+  display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;
+  padding:9px 11px;border-radius:var(--r-md);background:rgba(30,20,50,.45);border:1px solid var(--line-soft);
+}
+.staff-row.off{opacity:.55}
+.pill{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 7px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2);white-space:nowrap;
+}
+.pill.r3{border-color:rgba(157,92,255,.5);color:var(--vio-soft);background:var(--vio-dim)}
+.pill.r2{border-color:rgba(121,166,255,.45);color:#9FBCFF}
+.select{
+  padding:5px 8px;border-radius:var(--r-sm);background:var(--panel);
+  border:1px solid var(--line);color:var(--ink);font-size:12px;
+}
+.mode-tag{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  padding:3px 8px;border-radius:999px;white-space:nowrap;
+}
+.mode-tag.demo{background:rgba(255,176,32,.13);border:1px solid rgba(255,176,32,.35);color:#FFC55C}
+.mode-tag.live{background:rgba(45,212,167,.11);border:1px solid rgba(45,212,167,.34);color:#8FEBD3}
+@media (max-width:900px){
+  .me-txt{display:none}
+}
+</style>
+
+<!-- ================= CONNEXION ================= -->
+<div class="gate" id="gate" hidden>
+  <form class="gate-card" id="gateForm" autocomplete="on">
+    <div class="gate-head">
+      <div class="brand-mark" aria-hidden="true">OR</div>
+      <div>
+        <div class="gate-title">Origin Roleplay</div>
+        <div class="gate-sub">Journal serveur</div>
+      </div>
+    </div>
+    <div class="gate-err" id="gateErr" hidden></div>
+    <div class="field">
+      <label for="gatePseudo">Pseudo staff</label>
+      <input class="input" id="gatePseudo" name="username" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="gatePass">Mot de passe</label>
+      <input class="input" id="gatePass" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn primary block" id="gateGo" type="submit">Se connecter</button>
+    <div class="gate-note" id="gateNote">
+      Les comptes sont créés par un fondateur, en console :
+      <code>node staff.js add &lt;pseudo&gt; moderateur</code>
+    </div>
+  </form>
+</div>
+
+<div class="app" id="app" hidden>
   <nav class="rail" aria-label="Catégories de journaux">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true">OR</div>
@@ -419,7 +540,7 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
 
     <div class="rail-head">Vue</div>
     <button class="cat" data-view="overview" aria-current="true">
-      <span class="tag" style="--fam:var(--vio-soft)">SYS</span>
+      <span class="tag" style="--fam:var(--vio-soft)">VUE</span>
       <span class="cat-label">Vue d'ensemble</span>
       <span class="cat-count"></span>
     </button>
@@ -435,8 +556,9 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
     <div class="rail-foot">
       <div class="foot-row"><span class="dot-live" id="liveDot"></span><span>Flux <b id="liveState">en direct</b></span></div>
       <div class="foot-row">Dernier évènement <b id="lastTick">—</b></div>
-      <div class="foot-row">Rétention <b>30 jours</b></div>
-      <div class="foot-row">origin_logs <b>v2.4.1</b></div>
+      <div class="foot-row">Rétention <b id="retention">30 jours</b></div>
+      <button class="btn small" id="teamBtn" hidden style="margin-top:6px">Gérer l'équipe</button>
+      <button class="btn small" id="auditBtn" hidden>Journal du panneau</button>
     </div>
   </nav>
 
@@ -462,13 +584,21 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
         <span class="dot-live" aria-hidden="true"></span> Direct
       </button>
       <button class="btn" id="copyBtn" title="Copier la sélection courante">Exporter</button>
+      <span class="mode-tag demo" id="modeTag">démonstration</span>
+      <div class="me" id="meBox" hidden>
+        <span class="avatar" id="meAvatar">—</span>
+        <span class="me-txt"><span class="me-name" id="meName">—</span><br><span class="me-role" id="meRole">—</span></span>
+        <button class="icon-btn" id="logoutBtn" title="Se déconnecter">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 4.5V3a1 1 0 0 0-1-1H3.5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-1.5M7 8h7m0 0-2.2-2.2M14 8l-2.2 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
     </header>
 
     <!-- ================= VUE D'ENSEMBLE ================= -->
     <section class="view" id="viewOverview" aria-label="Vue d'ensemble">
-      <div class="demo-note">
+      <div class="demo-note" id="demoNote">
         <span aria-hidden="true">▲</span>
-        <div><b>Jeu de démonstration.</b> Les évènements ci-dessous sont générés localement pour montrer le panneau en fonctionnement. Branchez votre serveur en remplaçant <code>DataSource.fetch()</code> par votre endpoint <code>origin_logs</code> — le reste de l'écran ne bouge pas.</div>
+        <div><b>Jeu de démonstration.</b> Aucune API n'a répondu sur cette adresse : les évènements ci-dessous sont générés localement pour montrer le panneau en fonctionnement. Servez cette page depuis <code>api/server.js</code> pour voir vos vrais journaux.</div>
       </div>
 
       <div class="page-head">
@@ -485,7 +615,7 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
               <h2 class="section-title">Activité par heure</h2>
               <span class="count-note" id="chartNote"></span>
             </div>
-            <div class="chart-wrap"><svg class="chart" id="chart" viewBox="0 0 760 190" role="img" aria-label="Nombre d'évènements par heure"></svg></div>
+            <div class="chart-wrap"><svg class="chart" id="chart" viewBox="0 0 760 190" role="img" aria-label="Nombre d'évènements par tranche horaire"></svg></div>
           </div>
           <div class="card">
             <div class="card-head">
@@ -506,14 +636,13 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
           </div>
         </div>
       </div>
-
     </section>
 
     <!-- ================= FLUX ================= -->
     <section class="view" id="viewStream" hidden aria-label="Flux d'évènements">
       <div class="page-head">
         <div>
-          <h1 class="page-title" id="streamTitle">Tous les évènements</h1>
+          <h1 class="page-title" id="streamTitle">Flux complet</h1>
           <div class="page-sub" id="streamDesc"></div>
         </div>
         <div class="page-sub" id="streamCount"></div>
@@ -576,8 +705,66 @@ h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
   <div class="sheet-body" id="dosBody"></div>
 </div>
 
+<div class="dialog" id="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+  <h3 id="dlgTitle">Action</h3>
+  <div id="dlgBody"></div>
+  <div class="dialog-actions">
+    <button class="btn" id="dlgCancel">Annuler</button>
+    <button class="btn primary" id="dlgOk">Confirmer</button>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script>
+/* ============================================================
+   ORIGIN ROLEPLAY — panneau de journalisation
+   Deux modes, un seul code :
+   · servi par api/server.js  -> vrais journaux, connexion staff
+   · ouvert seul (fichier)    -> jeu de démonstration local
+   Le catalogue ci-dessous est remplacé par celui de l'API dès
+   qu'elle répond : ajouter une catégorie côté serveur suffit.
+   ============================================================ */
+'use strict';
+
+const FAM = { social:'var(--fam-social)', risque:'var(--fam-risque)',
+              biens:'var(--fam-biens)', civil:'var(--fam-civil)', staff:'var(--fam-staff)' };
+
+let CATS = [
+  {id:'connexions',    code:'CNX', label:'Connexions',          fam:FAM.social, desc:'Arrivées, départs, file d’attente et refus de whitelist.'},
+  {id:'chat',          code:'CHT', label:'Chat & commandes',    fam:FAM.social, desc:'Proximité, OOC, /me, /do, Twitter et commandes joueur.'},
+  {id:'combat',        code:'CBT', label:'Combat & morts',      fam:FAM.risque, desc:'Dégâts, éliminations, décès et réanimations EMS.'},
+  {id:'economie',      code:'ECO', label:'Économie',            fam:FAM.biens,  desc:'Liquide, banque, virements, salaires, factures et amendes.'},
+  {id:'inventaire',    code:'INV', label:'Inventaire',          fam:FAM.biens,  desc:'Échanges, sols, coffres, stockage et suppressions staff.'},
+  {id:'vehicules',     code:'VEH', label:'Véhicules',           fam:FAM.biens,  desc:'Garages, fourrière, concession, effractions et destructions.'},
+  {id:'jobs',          code:'JOB', label:'Jobs & entreprises',  fam:FAM.civil,  desc:'Embauches, grades, prises de service et comptes société.'},
+  {id:'proprietes',    code:'IMM', label:'Propriétés',          fam:FAM.civil,  desc:'Achats, loyers, clés partagées et coffres de logement.'},
+  {id:'braquages',     code:'BRQ', label:'Braquages',           fam:FAM.risque, desc:'Fleeca, Pacific, bijouterie : départ, butin, issue.'},
+  {id:'drogue',        code:'DRG', label:'Drogue & labos',      fam:FAM.risque, desc:'Champs, récolte, transformation, revente et saisies.'},
+  {id:'organisations', code:'ORG', label:'Organisations',       fam:FAM.civil,  desc:'Coffres d’orga, adhésions, grades, territoires et guerres.'},
+  {id:'craft',         code:'CRF', label:'Craft & armes',       fam:FAM.biens,  desc:'Établis, composants, armes et munitions fabriquées.'},
+  {id:'admin',         code:'ADM', label:'Administration',      fam:FAM.staff,  desc:'Actions staff en jeu : noclip, spawn, téléportation, revive.'},
+  {id:'anticheat',     code:'ACH', label:'Anticheat',           fam:FAM.risque, desc:'Détections automatiques et évènements réseau suspects.'},
+  {id:'sanctions',     code:'SNC', label:'Sanctions',           fam:FAM.risque, desc:'Kicks, avertissements, bannissements et levées.'},
+  {id:'staff',         code:'RPT', label:'Reports & tickets',   fam:FAM.staff,  desc:'Signalements joueurs, prises en charge et clôtures.'},
+  {id:'whitelist',     code:'WLT', label:'Whitelist',           fam:FAM.staff,  desc:'Candidatures Discord, entretiens, acceptations et refus.'},
+  {id:'systeme',       code:'SYS', label:'Serveur',             fam:FAM.staff,  desc:'Redémarrages, erreurs de ressource, performance et sauvegardes.'}
+];
+let SEVS = [
+  {id:'critique', label:'Critique',     c:'var(--sev-critique)'},
+  {id:'alerte',   label:'Alerte',       c:'var(--sev-alerte)'},
+  {id:'notice',   label:'À vérifier',   c:'var(--sev-notice)'},
+  {id:'info',     label:'Info',         c:'var(--sev-info)'}
+];
+let CAT = {}, SEV = {};
+function setCatalogue(cats, sevs){
+  if (cats && cats.length) CATS = cats;
+  if (sevs && sevs.length) SEVS = sevs;
+  CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
+  SEV = Object.fromEntries(SEVS.map(s => [s.id, s]));
+}
+setCatalogue();
+</script>
 <script>
 /* ============================================================
    ORIGIN ROLEPLAY — origin_logs v2.4.1
@@ -594,30 +781,6 @@ const pick=a=>a[Math.floor(rnd()*a.length)];
 const int=(a,b)=>a+Math.floor(rnd()*(b-a+1));
 const chance=p=>rnd()<p;
 
-/* ---------- catégories ---------- */
-const CATS=[
-  {id:'connexions', code:'CNX', label:'Connexions',          fam:'var(--fam-social)', desc:'Arrivées, départs, file d’attente et refus de whitelist.'},
-  {id:'chat',       code:'CHT', label:'Chat & commandes',    fam:'var(--fam-social)', desc:'Proximité, OOC, /me, /do, Twitter et commandes joueur.'},
-  {id:'combat',     code:'CBT', label:'Combat & morts',      fam:'var(--fam-risque)', desc:'Dégâts, éliminations, décès et réanimations EMS.'},
-  {id:'economie',   code:'ECO', label:'Économie',            fam:'var(--fam-biens)',  desc:'Liquide, banque, virements, salaires, factures et amendes.'},
-  {id:'inventaire', code:'INV', label:'Inventaire',          fam:'var(--fam-biens)',  desc:'Échanges, sols, coffres, craft et suppressions staff.'},
-  {id:'vehicules',  code:'VEH', label:'Véhicules',           fam:'var(--fam-biens)',  desc:'Garages, fourrière, concession, effractions et destructions.'},
-  {id:'jobs',       code:'JOB', label:'Jobs & entreprises',  fam:'var(--fam-civil)',  desc:'Embauches, grades, prises de service et comptes société.'},
-  {id:'proprietes', code:'IMM', label:'Propriétés',          fam:'var(--fam-civil)',  desc:'Achats, locations, clés partagées et coffres de logement.'},
-  {id:'admin',      code:'ADM', label:'Administration',      fam:'var(--fam-staff)',  desc:'Actions staff en jeu : noclip, spawn, téléportation, revive.'},
-  {id:'anticheat',  code:'ACH', label:'Anticheat',           fam:'var(--fam-risque)', desc:'Détections automatiques et évènements réseau suspects.'},
-  {id:'sanctions',  code:'SNC', label:'Sanctions',           fam:'var(--fam-risque)', desc:'Kicks, avertissements, bannissements et levées.'},
-  {id:'staff',      code:'RPT', label:'Reports & tickets',   fam:'var(--fam-staff)',  desc:'Signalements joueurs, prises en charge et clôtures.'}
-];
-const CAT=Object.fromEntries(CATS.map(c=>[c.id,c]));
-
-const SEVS=[
-  {id:'critique', label:'Critique', c:'var(--sev-critique)'},
-  {id:'alerte',   label:'Alerte',   c:'var(--sev-alerte)'},
-  {id:'notice',   label:'À vérifier', c:'var(--sev-notice)'},
-  {id:'info',     label:'Info',     c:'var(--sev-info)'}
-];
-const SEV=Object.fromEntries(SEVS.map(s=>[s.id,s]));
 
 /* ---------- joueurs ---------- */
 const PRENOMS=['Luca','Enzo','Maya','Théo','Sofia','Nathan','Camille','Yanis','Léa','Adam','Chloé','Rayan','Jade','Ilyes','Manon','Noah','Inès','Gabriel','Louna','Amir','Sarah','Tom','Nina','Kevin','Elena','Malik'];
@@ -656,6 +819,7 @@ const PLAYERS=[];
       hue:268,staff:true,ping:int(18,52),cash:0,bank:0,dirty:0,joined:Date.now()-int(200,900)*86400000,hours:int(600,3200)});
   });
 })();
+PLAYERS.forEach(p=>{p.key=p.license;});
 const RP=PLAYERS.filter(p=>!p.staff);
 const STAFF=PLAYERS.filter(p=>p.staff);
 
@@ -665,7 +829,12 @@ const ITEMS=[['bread','Pain'],['water','Bouteille d’eau'],['bandage','Bandage'
 const VEHS=[['sultanrs','Sultan RS'],['blista','Blista'],['sandking','Sandking'],['panto','Panto'],['police3','Interceptor LSPD'],['ambulance','Ambulance EMS'],['t20','T20'],['faggio','Faggio'],['dominator','Dominator'],['kamacho','Kamacho'],['buffalo4','Buffalo STX']];
 const ZONES=['Vespucci Beach','Sandy Shores','Mirror Park','Grove Street','Legion Square','Paleto Bay','Vinewood Hills','La Mesa','Cayo Perico','Route 68','Port de Los Santos','Aéroport LSIA'];
 const ENTREPRISES=['Benny’s Motorworks','Unicorn','Pearls','Auto Exotic','Burger Shot','Vanilla Unicorn','Digital Den'];
-const RESSOURCES={connexions:'origin_core',chat:'origin_chat',combat:'origin_medical',economie:'origin_banking',inventaire:'ox_inventory',vehicules:'origin_garage',jobs:'origin_jobs',proprietes:'origin_housing',admin:'txAdmin',anticheat:'origin_guard',sanctions:'origin_admin',staff:'origin_reports'};
+const BANQUES=['la Fleeca de Legion Square','la Fleeca de Route 68','le Pacific Standard','la bijouterie Vangelico','la supérette de Sandy Shores','le Blé d’Or'];
+const DROGUES=[['coca','Feuilles de coca'],['weed','Pousses de weed'],['meth','Méthamphétamine'],['opium','Pavot']];
+const LABOS=['le labo de Grapeseed','la planque de Cypress Flats','le hangar de Paleto','la cave de Mirror Park'];
+const ORGAS=['Ballas','Vagos','Families','Cartel del Norte','Triades','Lost MC'];
+const ETABLIS=['l’établi de Cypress Flats','la remise de Sandy Shores','l’atelier du port'];
+const RESSOURCES={braquages:'origin_heists',drogue:'origin_drugs',organisations:'origin_gangs',craft:'origin_craft',whitelist:'origin_whitelist',systeme:'origin_core',connexions:'origin_core',chat:'origin_chat',combat:'origin_medical',economie:'origin_banking',inventaire:'ox_inventory',vehicules:'origin_garage',jobs:'origin_jobs',proprietes:'origin_housing',admin:'txAdmin',anticheat:'origin_guard',sanctions:'origin_admin',staff:'origin_reports'};
 
 const plate=()=>hex(2).toUpperCase()+int(10,99)+String.fromCharCode(65+int(0,25))+String.fromCharCode(65+int(0,25))+int(100,999);
 const coords=()=>`vector3(${(rnd()*6000-3500).toFixed(2)}, ${(rnd()*7000-3500).toFixed(2)}, ${(rnd()*70+2).toFixed(2)})`;
@@ -673,6 +842,7 @@ const money=n=>n.toLocaleString('fr-FR').replace(/ | /g,' ')+' $';
 const amt=n=>`<span class="amount">${money(n)}</span>`;
 const it=s=>`<span class="item">${s}</span>`;
 const who=p=>`<strong>${p.name}</strong>`;
+
 </script>
 
 <script>
@@ -785,503 +955,1002 @@ staff:[
  {s:'notice',w:5,f:(a,b)=>({t:b,msg:`${who(a)} a signalé ${who(b)} — ${pick(MOTIFS_SANCTION)}`,d:{ticket:'#'+int(400,999),auteur:a.name,vise:b.name,priorite:pick(['haute','moyenne','basse']),preuve:chance(.6)?'clip joint':'aucune'}})},
  {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a pris en charge le ticket <span class="item">#${int(400,999)}</span>`,d:{staff:st.name,delaiPriseEnCharge:int(1,38)+' min',categorie:pick(['bug','report joueur','remboursement'])}})},
  {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a clôturé le ticket <span class="item">#${int(400,999)}</span>`,d:{staff:st.name,resolution:pick(['sanction appliquée','sans suite','bug corrigé','remboursement']),duree:int(4,180)+' min',satisfaction:int(3,5)+'/5'}})}
+],
+braquages:[
+ {s:'alerte',w:4,f:(a,b)=>{const q=pick(BANQUES);return{t:b,msg:`${who(a)} a lancé le braquage de ${it(q)}`,d:{kind:'start',cible:q,equipe:int(2,6),niveauAlerte:int(1,5),unitesLSPD:int(0,8),position:coords()}};}},
+ {s:'notice',w:4,f:(a)=>{const ok=chance(.6);return{msg:`${who(a)} a ${ok?'piraté':'échoué à pirater'} le coffre de ${it(pick(BANQUES))}`,d:{kind:'hack',resultat:ok?'succès':'échec',essais:int(1,4),duree:int(20,180)+' s',item:'thermal_charge'}};}},
+ {s:'alerte',w:3,f:(a)=>{const n=int(18000,420000),q=pick(BANQUES);return{msg:`${who(a)} a récupéré ${amt(n)} dans ${it(q)}`,d:{kind:'loot',cible:q,butin:n,sacs:int(1,6),partage:int(2,5)+' participants'}};}},
+ {s:'info',w:3,f:(a,b)=>({t:b,msg:`${who(b)} a interpellé ${who(a)} après le braquage`,d:{kind:'arrest',suspect:a.name,agent:b.name,butinRecupere:chance(.5),peine:int(20,90)+' mois'}})},
+ {s:'info',w:2,f:(a)=>({msg:`${who(a)} a pris la fuite — braquage clôturé`,d:{kind:'escape',duree:int(4,22)+' min',vehicule:pick(VEHS)[0],zone:pick(ZONES)}})}
+],
+drogue:[
+ {s:'info',w:6,f:(a)=>{const d=pick(DROGUES),q=int(4,40);return{msg:`${who(a)} a récolté ${q}× ${it(d[1])}`,d:{kind:'harvest',produit:d[0],quantite:q,champ:pick(ZONES),duree:int(3,20)+' min'}};}},
+ {s:'notice',w:4,f:(a)=>{const d=pick(DROGUES),q=int(2,18);return{msg:`${who(a)} a transformé ${q}× ${it(d[1])} dans ${it(pick(LABOS))}`,d:{kind:'process',produit:d[0],quantite:q,rendement:int(55,95)+' %'}};}},
+ {s:'notice',w:4,f:(a,b)=>{const d=pick(DROGUES),n=int(400,9000);return{t:b,msg:`${who(a)} a vendu ${it(d[1])} à ${who(b)} — ${amt(n)}`,d:{kind:'deal',produit:d[0],quantite:int(1,12),montant:n,zone:pick(ZONES),temoins:int(0,4)}};}},
+ {s:'info',w:3,f:(a)=>{const n=int(300,4200);return{msg:`${who(a)} a écoulé sa marchandise auprès d’un revendeur — ${amt(n)}`,d:{kind:'sell_npc',montant:n,zone:pick(ZONES),risqueInterpellation:int(5,60)+' %'}};}},
+ {s:'alerte',w:2,f:(a,b)=>({t:b,msg:`${who(b)} a saisi la marchandise de ${who(a)}`,d:{kind:'seizure',agent:b.name,produit:pick(DROGUES)[0],quantite:int(5,60),destruction:true}})},
+ {s:'alerte',w:1,f:(a)=>({msg:`Laboratoire découvert par le LSPD — ${it(pick(LABOS))}`,d:{kind:'lab_raid',proprietairePresume:a.name,saisie:int(20,200)+' unités',position:coords()}})}
+],
+organisations:[
+ {s:'info',w:5,f:(a)=>{const o=pick(ORGAS),i=pick(ITEMS),q=int(1,30);return{msg:`${who(a)} a déposé ${q}× ${it(i[1])} dans le coffre des ${it(o)}`,d:{kind:'stash_in',orga:o,item:i[0],quantite:q,capacite:int(200,900)+'/1000 kg'}};}},
+ {s:'notice',w:4,f:(a)=>{const o=pick(ORGAS),i=pick(ITEMS),q=int(1,30);return{msg:`${who(a)} a retiré ${q}× ${it(i[1])} du coffre des ${it(o)}`,d:{kind:'stash_out',orga:o,item:i[0],quantite:q,grade:pick(['membre','lieutenant','patron'])}};}},
+ {s:'info',w:3,f:(a,b)=>{const o=pick(ORGAS);return{t:b,msg:`${who(b)} a intégré ${who(a)} aux ${it(o)}`,d:{kind:'join',orga:o,parrain:b.name,grade:'recrue',effectif:int(4,28)}};}},
+ {s:'notice',w:2,f:(a,b)=>{const o=pick(ORGAS);return{t:b,msg:`${who(b)} a exclu ${who(a)} des ${it(o)}`,d:{kind:'kick',orga:o,motif:pick(['trahison','inactivité','ordre du patron'])}};}},
+ {s:'alerte',w:2,f:(a)=>{const o=pick(ORGAS);return{msg:`Territoire capturé par les ${it(o)} — ${pick(ZONES)}`,d:{kind:'turf',orga:o,zone:pick(ZONES),duree:int(6,40)+' min',pertes:int(0,7)}};}},
+ {s:'notice',w:2,f:(a)=>{const o=pick(ORGAS),n=int(5000,180000);return{msg:`${who(a)} a retiré ${amt(n)} de la caisse des ${it(o)}`,d:{kind:'funds',orga:o,montant:n,soldeApres:money(int(2000,400000)),justificatif:'aucun'}};}}
+],
+craft:[
+ {s:'alerte',w:4,f:(a)=>{const w=pick(ARMES);return{msg:`${who(a)} a fabriqué ${it(w[1])}`,d:{kind:'craft_weapon',arme:w[0],etabli:pick(ETABLIS),composants:['metal_scrap ×12','weapon_parts ×3'],duree:int(30,240)+' s'}};}},
+ {s:'notice',w:5,f:(a)=>{const q=int(20,250);return{msg:`${who(a)} a fabriqué ${q}× ${it('Munitions 9mm')}`,d:{kind:'craft_ammo',item:'ammo-9',quantite:q,etabli:pick(ETABLIS),plafondHoraire:300}};}},
+ {s:'info',w:4,f:(a)=>{const i=pick(ITEMS),q=int(1,10);return{msg:`${who(a)} a fabriqué ${q}× ${it(i[1])}`,d:{kind:'craft',item:i[0],quantite:q,etabli:pick(ETABLIS)}};}},
+ {s:'info',w:3,f:(a)=>{const q=int(5,60);return{msg:`${who(a)} a récupéré ${q}× ${it('Ferraille')} à la casse`,d:{kind:'scrap',item:'metal_scrap',quantite:q,lieu:'Casse de Sandy Shores'}};}},
+ {s:'alerte',w:1,f:(a,b)=>({t:b,msg:`${who(b)} a démantelé l’établi clandestin de ${who(a)}`,d:{kind:'raid',agent:b.name,etabli:pick(ETABLIS),saisie:int(2,14)+' armes'}})}
+],
+whitelist:[
+ {s:'info',w:5,f:(a)=>({msg:`Candidature déposée par <strong>${a.name}</strong>`,d:{kind:'apply',discord:a.discord,age:int(16,38),experienceRP:pick(['débutant','1 an','3 ans et plus']),fiche:'#'+int(1000,9999)}})},
+ {s:'notice',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a planifié l’entretien de <strong>${a.name}</strong>`,d:{kind:'interview',candidat:a.name,staff:st.name,creneau:'ce soir '+int(18,23)+' h'}})},
+ {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a accepté la candidature de <strong>${a.name}</strong>`,d:{kind:'accept',candidat:a.name,staff:st.name,delaiTraitement:int(1,6)+' jour(s)'}})},
+ {s:'notice',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a refusé la candidature de <strong>${a.name}</strong>`,d:{kind:'reject',candidat:a.name,staff:st.name,motif:pick(['background trop léger','règlement non lu','entretien non honoré']),nouvelleTentative:'dans 15 jours'}})},
+ {s:'info',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a validé le changement de nom RP de <strong>${a.name}</strong>`,d:{kind:'rename',ancien:pick(PRENOMS)+' '+pick(NOMS),nouveau:a.name,staff:st.name}})}
+],
+systeme:[
+ {s:'notice',w:4,f:()=>({msg:`Redémarrage programmé dans ${int(5,30)} minutes`,d:{kind:'restart',prevenus:int(40,128)+' joueurs',uptime:int(3,11)+' h'}})},
+ {s:'alerte',w:3,f:()=>{const r=pick(['origin_garage','ox_inventory','origin_banking','origin_housing']);return{msg:`Erreur de ressource — ${it(r)}`,d:{kind:'error',ressource:r,message:"attempt to index a nil value (field 'PlayerData')",occurrences:int(2,140)}};}},
+ {s:'info',w:4,f:()=>({msg:`Sauvegarde de la base terminée`,d:{kind:'backup',duree:int(2,40)+' s',taille:int(40,900)+' Mo',destination:'sauvegardes/'}})},
+ {s:'notice',w:3,f:()=>({msg:`Charge élevée — ${int(96,128)} joueurs connectés`,d:{kind:'load',joueurs:int(96,128),tickrate:int(12,48)+' ms',memoire:int(3,11)+' Go'}})},
+ {s:'info',w:2,f:()=>({msg:`Journalisation démarrée — framework ${pick(['qbox','qb','esx','standalone'])}`,d:{kind:'boot',ressource:'origin_logs',version:'1.0.0'}})},
+ {s:'critique',w:1,f:()=>({msg:`Le serveur a cessé de répondre pendant ${int(4,22)} secondes`,d:{kind:'hitch',duree:int(4,22)+' s',causeProbable:pick(['sauvegarde bloquante','boucle dans une ressource','pic réseau']),joueursPerdus:int(0,18)}})}
 ]};
-</script>
 
-<script>
-/* ============================================================
-   Source de données
-   ------------------------------------------------------------
-   Le panneau ne connaît que DataSource : remplacez le corps de
-   `fetch` par un appel à votre backend (REST, websocket, export
-   Discord) en renvoyant le même format d'évènement, et rien
-   d'autre dans cet écran n'a besoin de changer.
-
-   { id, t, cat, sev, actor, target, msg, d, res }
-   ============================================================ */
+/* ---------- fabrique d'évènements de démonstration ----------
+   Les serveurs RP vivent le soir : une distribution plate donnerait
+   un graphique d'activité que personne ne reconnaîtrait. */
 const HOUR_W=[.55,.40,.25,.15,.10,.08,.10,.15,.22,.30,.38,.45,.50,.50,.55,.60,.68,.78,.90,1,1,.95,.85,.70];
-const CAT_W={chat:22,economie:14,inventaire:12,connexions:11,vehicules:10,combat:9,jobs:6,admin:5,proprietes:4,sanctions:3,anticheat:2.5,staff:1.5};
-const CAT_PICK=[];Object.entries(CAT_W).forEach(([k,w])=>{for(let i=0;i<Math.round(w*2);i++)CAT_PICK.push(k);});
-const strip=h=>h.replace(/<[^>]+>/g,'');
+const CAT_W={chat:18,economie:12,inventaire:10,connexions:9,vehicules:8,combat:8,drogue:5,jobs:5,
+             admin:4,organisations:4,proprietes:3.5,braquages:3,craft:3,sanctions:2.5,anticheat:2,
+             staff:1.5,whitelist:1.5,systeme:1};
+const CAT_PICK=[];
+Object.entries(CAT_W).forEach(([k,w])=>{ for(let i=0;i<Math.round(w*2);i++) CAT_PICK.push(k); });
 let SEQ=1;
 
 function makeEvent(t){
   const cat=pick(CAT_PICK);
-  const tpl=(()=>{const list=T[cat],bag=[];list.forEach((x,i)=>{for(let k=0;k<x.w;k++)bag.push(i);});return list[pick(bag)];})();
-  let a=pick(RP),b=pick(RP);while(b===a)b=pick(RP);
+  const liste=T[cat];
+  const sac=[]; liste.forEach((x,i)=>{ for(let k=0;k<x.w;k++) sac.push(i); });
+  const tpl=liste[pick(sac)];
+  let a=pick(RP), b=pick(RP); while(b===a) b=pick(RP);
   const st=pick(STAFF);
   const r=tpl.f(a,b,st);
-  const actor=(cat==='admin'||cat==='sanctions')?st:a;
+  const acteur=(cat==='admin'||cat==='sanctions')?st:a;
+  const txt=String(r.msg).replace(/<[^>]+>/g,'');
   return {
     id:'EV-'+String(SEQ++).padStart(6,'0'),
     t, cat, sev:tpl.s,
-    actor, target:r.t&&r.t!==actor?r.t:null,
-    msg:r.msg, d:r.d, res:RESSOURCES[cat],
-    search:(strip(r.msg)+' '+actor.name+' '+actor.sid+' '+actor.license+' '+JSON.stringify(r.d)).toLowerCase()
+    actor:acteur, target:(r.t&&r.t!==acteur)?r.t:null,
+    msg:r.msg, d:r.d, res:RESSOURCES[cat]||'origin_logs',
+    search:(txt+' '+acteur.name+' '+acteur.sid+' '+acteur.license+' '+JSON.stringify(r.d)).toLowerCase()
   };
 }
 function generate(n,spanH){
-  const now=Date.now(),out=[];let guard=0;
-  while(out.length<n&&guard++<n*40){
-    const t=now-Math.floor(rnd()*spanH*3600000);
-    if(rnd()>HOUR_W[new Date(t).getHours()])continue;
+  const maintenant=Date.now(), out=[]; let garde=0;
+  while(out.length<n && garde++<n*40){
+    const t=maintenant-Math.floor(rnd()*spanH*3600000);
+    if(rnd()>HOUR_W[new Date(t).getHours()]) continue;
     out.push(makeEvent(t));
   }
   return out.sort((x,y)=>y.t-x.t);
 }
-const DataSource={
-  async fetch(){ return generate(1700,168); },      // ← branchez votre endpoint ici
-  subscribe(cb){ return setInterval(()=>{ if(STATE.live) cb(makeEvent(Date.now())); }, 5200); }
+
+</script>
+
+<script>
+/* ============================================================
+   Accès aux données
+   Une seule interface (DS) pour deux implémentations. Le reste
+   du panneau ne sait pas s'il parle à un serveur ou à un jeu de
+   démonstration — c'est ce qui permet de brancher l'API sans
+   rien réécrire de l'affichage.
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2, '0');
+const DAYS = ['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+const hhmmss = t => { const d = new Date(t); return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); };
+const dayLabel = t => {
+  const d = new Date(t), n = new Date();
+  if (d.toDateString() === n.toDateString()) return "aujourd'hui";
+  const y = new Date(n - 86400000); if (d.toDateString() === y.toDateString()) return 'hier';
+  return DAYS[d.getDay()] + ' ' + pad(d.getDate()) + '/' + pad(d.getMonth() + 1);
+};
+const ago = t => { const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return 'il y a ' + Math.floor(s) + ' s';
+  if (s < 3600) return 'il y a ' + Math.floor(s / 60) + ' min';
+  if (s < 86400) return 'il y a ' + Math.floor(s / 3600) + ' h';
+  return 'il y a ' + Math.floor(s / 86400) + ' j'; };
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const strip = h => String(h || '').replace(/<[^>]+>/g, '');
+
+// Un hash stable : deux sessions doivent donner la même couleur au
+// même joueur, sinon on ne reconnaît plus personne d'un écran à l'autre.
+function hueOf(p) {
+  if (p && typeof p.hue === 'number') return p.hue;
+  const s = (p && p.name) || '';
+  let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+const avatarStyle = p => `background:linear-gradient(150deg, hsl(${hueOf(p)} 72% 72%), hsl(${(hueOf(p)+40)%360} 64% 52%))`;
+const initials = p => String((p && p.name) || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
+// Les évènements venus du serveur sont du TEXTE : on les échappe, puis
+// on relève montants et quantités. Ceux de la démo portent déjà leur
+// mise en forme (html:true) et ne repassent pas par là.
+function fmtMsg(e) {
+  if (e.html) return e.msg;
+  return esc(e.msg)
+    .replace(/(\d[\d  ]*(?:[.,]\d+)?\s?\$)/g, '<span class="amount">$1</span>')
+    .replace(/(\d+×\s?[\wÀ-ÿ'’-]+)/g, '<span class="item">$1</span>');
+}
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* ---------- mode et identité ---------- */
+let MODE = 'demo';
+const ME = { pseudo: null, role: null, roleLabel: null, perms: [], cats: [] };
+const can = p => MODE !== 'api' || ME.perms.includes(p);
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, Object.assign({
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' }
+  }, opts));
+  if (r.status === 401 && MODE === 'api') { showGate('Votre session a expiré. Reconnectez-vous.'); throw new Error('401'); }
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || ('Erreur ' + r.status));
+  return body;
+}
+
+/* ---------- marques locales (mode démonstration seulement) ---------- */
+const MARKS = { pin: new Set(), done: new Set() };
+const LSK = 'origin_logs_marks_v1';
+try { const raw = localStorage.getItem(LSK); if (raw) { const m = JSON.parse(raw);
+  (m.pin||[]).forEach(x => MARKS.pin.add(x)); (m.done||[]).forEach(x => MARKS.done.add(x)); } } catch (e) {}
+const saveMarks = () => { try { localStorage.setItem(LSK, JSON.stringify({ pin:[...MARKS.pin], done:[...MARKS.done] })); } catch (e) {} };
+
+/* ============================================================
+   Implémentation « démonstration » — tout en mémoire
+   ============================================================ */
+const Demo = {
+  ready: false,
+  async init() {
+    if (this.ready) return;
+    EVENTS = generate(2200, 168);
+    EVENTS.forEach(e => { e.html = true; });
+    this.ready = true;
+  },
+  decorate(e) { return Object.assign({}, e, { pin: MARKS.pin.has(e.id), done: MARKS.done.has(e.id) }); },
+  filter(p) {
+    const cats = p.cats && p.cats.length ? p.cats : null;
+    const sevs = p.sevs && p.sevs.length ? p.sevs : null;
+    const q = (p.q || '').trim().toLowerCase();
+    return EVENTS.filter(e =>
+      (!p.from || e.t >= p.from) && (!p.to || e.t <= p.to) &&
+      (!cats || cats.includes(e.cat)) &&
+      (!sevs || sevs.includes(e.sev)) &&
+      (!p.actor || (e.actor.key === p.actor || (e.target && e.target.key === p.actor))) &&
+      (!q || e.search.includes(q)));
+  },
+  async query(p) {
+    await this.init();
+    // Les pastilles de gravité comptent AVANT leur propre filtre, sinon
+    // celles qu'on vient de décocher afficheraient zéro.
+    const base = this.filter(Object.assign({}, p, { sevs: null }));
+    const sevCounts = {}; base.forEach(e => sevCounts[e.sev] = (sevCounts[e.sev] || 0) + 1);
+    const all = (p.sevs && p.sevs.length) ? base.filter(e => p.sevs.includes(e.sev)) : base;
+    let list = all;
+    if (p.cursorTs) list = all.filter(e => e.t < p.cursorTs || (e.t === p.cursorTs && e.id < p.cursorId));
+    const limit = p.limit || 120;
+    const page = list.slice(0, limit).map(e => this.decorate(e));
+    const last = page[page.length - 1];
+    return { events: page, total: all.length, sevCounts,
+             cursor: last && page.length === limit ? { ts: last.t, id: last.id } : null };
+  },
+  async stats(from, to, buckets) {
+    await this.init();
+    const list = this.filter({ from, to });
+    const prev = this.filter({ from: from - (to - from), to: from }).length;
+    const size = Math.max(60000, Math.floor((to - from) / buckets));
+    const series = new Array(buckets).fill(0);
+    list.forEach(e => { const i = Math.floor((e.t - from) / size); if (i >= 0 && i < buckets) series[i]++; });
+    const split = {}; list.forEach(e => split[e.cat] = (split[e.cat] || 0) + 1);
+    const byPlayer = {};
+    list.forEach(e => { if (!e.actor.staff && e.actor.key) {
+      const k = e.actor.key; (byPlayer[k] = byPlayer[k] || { key: k, name: e.actor.name, sid: e.actor.sid, n: 0 }).n++; } });
+    const alertsAll = list.filter(e => (e.sev === 'critique' || e.sev === 'alerte') && !MARKS.done.has(e.id));
+    return {
+      from, to, bucketSize: size, total: list.length, prev,
+      uniques: new Set(list.filter(e => !e.actor.staff && e.actor.key).map(e => e.actor.key)).size,
+      alerts: alertsAll.length,
+      anticheat: list.filter(e => e.cat === 'anticheat').length,
+      acCrit: list.filter(e => e.cat === 'anticheat' && e.sev === 'critique').length,
+      sanctions: list.filter(e => e.cat === 'sanctions').length,
+      series, split,
+      top: Object.values(byPlayer).sort((a, b) => b.n - a.n).slice(0, 6),
+      alertList: alertsAll.slice(0, 7).map(e => this.decorate(e))
+    };
+  },
+  async player(key) {
+    await this.init();
+    const p = PLAYERS.find(x => x.key === key);
+    if (!p) throw new Error('Joueur inconnu.');
+    const mine = EVENTS.filter(e => e.actor.key === key || (e.target && e.target.key === key));
+    const k = kind => EVENTS.filter(e => e.d && e.d.kind === kind);
+    return {
+      player: { key: p.key, name: p.name, sid: p.sid, job: p.job, grade: p.grade,
+                discord: p.discord, steam: p.steam, fivem: p.fivem,
+                firstSeen: p.joined, lastSeen: Date.now(), playtime: p.hours * 60, events: mine.length,
+                cash: p.cash, bank: p.bank, dirty: p.dirty },
+      stats: {
+        events: mine.length,
+        sessions: EVENTS.filter(e => e.cat === 'connexions' && e.actor.key === key && /a rejoint/.test(e.msg)).length,
+        kills: EVENTS.filter(e => e.cat === 'combat' && e.actor.key === key && /a éliminé/.test(e.msg)).length,
+        deaths: EVENTS.filter(e => e.cat === 'combat' && ((e.target && e.target.key === key && /a éliminé/.test(e.msg)) || (e.actor.key === key && /est mort/.test(e.msg)))).length,
+        flags: EVENTS.filter(e => e.cat === 'anticheat' && e.actor.key === key).length
+      },
+      sanctions: EVENTS.filter(e => e.cat === 'sanctions' && e.d && e.d.cible === p.name)
+        .slice(0, 10).map(e => ({ type: e.d.type || 'sanction', reason: e.d.motif, by_name: e.d.staff,
+                                  created_at: e.t, expires_at: null, active: 1 })),
+      last: mine.slice(0, 20).map(e => this.decorate(e)),
+      ban: null
+    };
+  },
+  async mark(id, kind, on) {
+    const set = MARKS[kind]; on ? set.add(id) : set.delete(id); saveMarks();
+  },
+  async action() { throw new Error('Mode démonstration : aucune sanction n’est envoyée à un serveur.'); },
+  stream(cb) {
+    const h = setInterval(() => {
+      const e = makeEvent(Date.now()); e.html = true;
+      EVENTS.unshift(e); if (EVENTS.length > 4000) EVENTS.length = 4000;
+      cb(this.decorate(e));
+    }, 5200);
+    return () => clearInterval(h);
+  }
 };
 
-/* ---------- état ---------- */
-const ONLINE=97;
-const STATE={view:'overview',cat:'all',range:24,q:'',sevs:new Set(),limit:120,live:true,sel:null};
-let EVENTS=[];
-const MARKS={pin:new Set(),done:new Set()};
-const LSK='origin_logs_marks_v1';
-try{const raw=localStorage.getItem(LSK);if(raw){const m=JSON.parse(raw);(m.pin||[]).forEach(x=>MARKS.pin.add(x));(m.done||[]).forEach(x=>MARKS.done.add(x));}}catch(e){}
-const saveMarks=()=>{try{localStorage.setItem(LSK,JSON.stringify({pin:[...MARKS.pin],done:[...MARKS.done]}));}catch(e){}};
+/* ============================================================
+   Implémentation « API »
+   ============================================================ */
+const qs = o => Object.entries(o).filter(([, v]) => v != null && v !== '' )
+  .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(Array.isArray(v) ? v.join(',') : v)).join('&');
 
-/* ---------- utilitaires ---------- */
-const $=s=>document.querySelector(s);
-const el=(tag,cls,html)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(html!=null)n.innerHTML=html;return n;};
-const pad=n=>String(n).padStart(2,'0');
-const DAYS=['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
-const hhmmss=t=>{const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());};
-const dayLabel=t=>{const d=new Date(t),n=new Date();
-  if(d.toDateString()===n.toDateString())return "aujourd'hui";
-  const y=new Date(n-86400000);if(d.toDateString()===y.toDateString())return 'hier';
-  return DAYS[d.getDay()]+' '+pad(d.getDate())+'/'+pad(d.getMonth()+1);};
-const ago=t=>{const s=Math.max(0,(Date.now()-t)/1000);
-  if(s<60)return 'il y a '+Math.floor(s)+' s';
-  if(s<3600)return 'il y a '+Math.floor(s/60)+' min';
-  if(s<86400)return 'il y a '+Math.floor(s/3600)+' h';
-  return 'il y a '+Math.floor(s/86400)+' j';};
-const avatarStyle=p=>`background:linear-gradient(150deg, hsl(${p.hue} 72% 72%), hsl(${(p.hue+40)%360} 64% 52%))`;
-const initials=p=>p.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const Api = {
+  async query(p) {
+    return api('/api/events?' + qs({ cat: p.cats, sev: p.sevs, from: p.from, to: p.to, q: p.q,
+      actor: p.actor, limit: p.limit, cursorTs: p.cursorTs, cursorId: p.cursorId }));
+  },
+  stats(from, to, buckets) { return api('/api/stats?' + qs({ from, to, buckets })); },
+  player(key) { return api('/api/players/' + encodeURIComponent(key)); },
+  mark(id, kind, on) { return api('/api/marks', { method: 'POST', body: JSON.stringify({ id, kind, on }) }); },
+  action(b) { return api('/api/actions', { method: 'POST', body: JSON.stringify(b) }); },
+  stream(cb) {
+    let src;
+    try { src = new EventSource('/api/stream'); } catch (e) { return () => {}; }
+    src.addEventListener('log', m => { try { cb(JSON.parse(m.data)); } catch (e) {} });
+    return () => src.close();
+  }
+};
 
-function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2100);}
+let DS = Demo;
+let EVENTS = [];
+</script>
 
-/* ---------- filtrage ---------- */
-function windowStart(){return Date.now()-STATE.range*3600000;}
-function inWindow(e,from){return e.t>=from;}
-function filtered(){
-  const from=windowStart(), q=STATE.q.trim().toLowerCase();
-  return EVENTS.filter(e=>
-    inWindow(e,from) &&
-    (STATE.cat==='all'||e.cat===STATE.cat) &&
-    (STATE.sevs.size===0||STATE.sevs.has(e.sev)) &&
-    (!q||e.search.includes(q))
-  );
+<script>
+/* ============================================================
+   État et rendu
+   ============================================================ */
+const STATE = { view:'overview', cat:'all', range:24, q:'', sevs:new Set(),
+                limit:120, live:true, sel:null,
+                list:[], total:0, cursor:null, sevCounts:{}, stats:null, busy:false };
+
+const CHART_CFG = {
+  1:  { n:12, fmt:t => pad(new Date(t).getHours())+':'+pad(new Date(t).getMinutes()), every:3, title:'60 dernières minutes' },
+  6:  { n:12, fmt:t => pad(new Date(t).getHours())+'h'+pad(new Date(t).getMinutes()), every:3, title:'6 dernières heures' },
+  24: { n:24, fmt:t => pad(new Date(t).getHours())+'h',                               every:4, title:'24 dernières heures' },
+  168:{ n:14, fmt:t => DAYS[new Date(t).getDay()]+' '+pad(new Date(t).getHours())+'h', every:2, title:'7 derniers jours' }
+};
+const windowFrom = () => Date.now() - STATE.range * 3600000;
+const catsParam  = () => (STATE.cat === 'all' ? null : [STATE.cat]);
+
+/* ---------- rafraîchissement ---------- */
+let refreshToken = 0;
+async function refresh() {
+  const token = ++refreshToken;
+  const from = windowFrom(), to = Date.now();
+  try {
+    const jobs = [DS.stats(from, to, CHART_CFG[STATE.range].n)];
+    if (STATE.view === 'stream') jobs.push(DS.query({
+      cats: catsParam(), sevs: [...STATE.sevs], from, to, q: STATE.q, limit: STATE.limit
+    }));
+    const [stats, page] = await Promise.all(jobs);
+    if (token !== refreshToken) return;               // une frappe plus récente a gagné
+    STATE.stats = stats;
+    if (page) { STATE.list = page.events; STATE.total = page.total;
+                STATE.cursor = page.cursor; STATE.sevCounts = page.sevCounts || {}; }
+    render();
+  } catch (e) {
+    if (String(e.message) !== '401') toast(e.message || 'Impossible de charger les journaux.');
+  }
 }
-function scoped(){ // ignore la gravité : sert aux compteurs de gravité
-  const from=windowStart(), q=STATE.q.trim().toLowerCase();
-  return EVENTS.filter(e=>inWindow(e,from)&&(STATE.cat==='all'||e.cat===STATE.cat)&&(!q||e.search.includes(q)));
+function render() {
+  renderRail();
+  const ov = STATE.view === 'overview';
+  $('#viewOverview').hidden = !ov;
+  $('#viewStream').hidden = ov;
+  if (ov) renderOverview(); else renderStream();
+}
+
+/* ---------- rail ---------- */
+function buildRail() {
+  const host = $('#catList'); host.innerHTML = '';
+  const visibles = MODE === 'api' ? CATS.filter(c => ME.cats.includes(c.id)) : CATS;
+  visibles.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'cat'; b.dataset.cat = c.id;
+    b.innerHTML = `<span class="tag" style="--fam:${c.fam}">${c.code}</span>
+      <span class="cat-label">${esc(c.label)}</span><span class="cat-count" data-count="${c.id}">—</span>`;
+    host.appendChild(b);
+  });
+}
+function renderRail() {
+  const split = (STATE.stats && STATE.stats.split) || {};
+  let total = 0;
+  document.querySelectorAll('[data-count]').forEach(n => {
+    const v = split[n.dataset.count] || 0; total += v;
+    n.textContent = v ? v.toLocaleString('fr-FR') : '·';
+  });
+  $('#countAll').textContent = total.toLocaleString('fr-FR');
+  document.querySelectorAll('.cat').forEach(b => {
+    const on = (STATE.view === 'overview' && b.dataset.view === 'overview') ||
+               (STATE.view === 'stream' && b.dataset.cat === STATE.cat);
+    b.setAttribute('aria-current', on ? 'true' : 'false');
+  });
+}
+
+/* ---------- vue d'ensemble ---------- */
+function renderOverview() {
+  const s = STATE.stats; if (!s) return;
+  remember(s.alertList);
+  const delta = s.prev ? Math.round((s.total - s.prev) / s.prev * 100) : 0;
+  const tclass = delta > 4 ? 'up' : delta < -4 ? 'down' : 'flat';
+  const tlabel = s.prev ? (delta > 0 ? '+' : '') + delta + ' % vs période précédente' : 'aucun point de comparaison';
+
+  $('#overviewSub').innerHTML = `Fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b>` +
+    (MODE === 'api' ? ` · <b>${esc(ME.pseudo)}</b> voit <b>${ME.cats.length}</b> catégories` : ' · jeu de démonstration');
+
+  $('#tiles').innerHTML = `
+    <div class="tile"><div class="tile-k">Évènements</div><div class="tile-v">${s.total.toLocaleString('fr-FR')}</div><div class="tile-d"><span class="trend ${tclass}">${tlabel}</span></div></div>
+    <div class="tile"><div class="tile-k">Joueurs distincts</div><div class="tile-v">${s.uniques}</div><div class="tile-d">auteurs d’au moins un évènement</div></div>
+    <div class="tile ${s.alerts ? 'flag' : ''}"><div class="tile-k">À traiter</div><div class="tile-v">${s.alerts}</div><div class="tile-d">alertes et critiques non traitées</div></div>
+    <div class="tile ${s.anticheat ? 'warn' : ''}"><div class="tile-k">Anticheat</div><div class="tile-v">${s.anticheat}</div><div class="tile-d">${s.acCrit} détection(s) critiques</div></div>
+    <div class="tile"><div class="tile-k">Sanctions</div><div class="tile-v">${s.sanctions}</div><div class="tile-d">kick, warn, ban et levées</div></div>`;
+
+  drawChart(s);
+
+  const max = Math.max(1, ...Object.values(s.split || {}));
+  const visibles = MODE === 'api' ? CATS.filter(c => ME.cats.includes(c.id)) : CATS;
+  $('#split').innerHTML = visibles.map(c => {
+    const v = (s.split || {})[c.id] || 0;
+    return `<button class="split-row" data-cat="${c.id}" style="--fam:${c.fam}" title="${esc(c.label)}">
+      <span class="tag" style="--fam:${c.fam}">${c.code}</span>
+      <span class="split-track"><span class="split-fill" style="width:${Math.max(v ? 4 : 0, v / max * 100)}%"></span></span>
+      <span class="split-n">${v}</span></button>`;
+  }).join('');
+
+  $('#alerts').innerHTML = (s.alertList || []).map(e => `
+    <button class="mini-row" data-ev="${e.id}" data-cat-of="${e.cat}">
+      <span style="width:8px;height:8px;border-radius:2px;background:${SEV[e.sev] ? SEV[e.sev].c : 'var(--muted)'}"></span>
+      <span><span class="mini-title">${esc(strip(e.msg))}</span><br><span class="mini-meta">${CAT[e.cat] ? CAT[e.cat].code : e.cat} · ${ago(e.t)}</span></span>
+      <span class="mini-meta">${hhmmss(e.t)}</span>
+    </button>`).join('') ||
+    `<div class="empty"><b>Rien à traiter</b><span>Aucune alerte ouverte sur la période.</span></div>`;
+
+  $('#topPlayers').innerHTML = (s.top || []).map(p => `
+    <button class="mini-row" data-player="${esc(p.key)}">
+      <span class="avatar" style="${avatarStyle(p)}">${initials(p)}</span>
+      <span><span class="mini-title">${esc(p.name)}</span><br><span class="mini-meta">${p.sid != null ? '[' + p.sid + ']' : ''}</span></span>
+      <span class="mini-meta">${p.n} évts</span></button>`).join('') ||
+    `<div class="empty"><b>Aucun joueur</b><span>Élargissez la période.</span></div>`;
+}
+
+function drawChart(s) {
+  const cfg = CHART_CFG[STATE.range];
+  const series = s.series || [], size = s.bucketSize || 3600000, start = s.from;
+  const max = Math.max(1, ...series), peak = series.indexOf(max);
+  const W = 760, H = 190, L = 38, R = 8, Tp = 14, B = 28, pw = W - L - R, ph = H - Tp - B;
+  const bw = pw / Math.max(1, series.length), gap = Math.min(7, bw * .22);
+  let out = `<defs>
+    <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9D5CFF" stop-opacity=".85"/><stop offset="100%" stop-color="#6D2BD9" stop-opacity=".35"/></linearGradient>
+    <linearGradient id="barPeak" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#DCC2FF"/><stop offset="100%" stop-color="#9D5CFF" stop-opacity=".55"/></linearGradient></defs>`;
+  [0, .5, 1].forEach(f => { const y = Tp + ph - ph * f;
+    out += `<line class="grid-line" x1="${L}" y1="${y.toFixed(1)}" x2="${W - R}" y2="${y.toFixed(1)}"/>`;
+    out += `<text x="${L - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end">${Math.round(max * f)}</text>`; });
+  series.forEach((v, i) => {
+    const h = Math.max(v ? 2 : 0, ph * v / max), x = L + i * bw + gap / 2, y = Tp + ph - h, w = Math.max(2, bw - gap);
+    out += `<g><title>${cfg.fmt(start + i * size)} — ${v} évènement${v > 1 ? 's' : ''}</title>`;
+    out += `<rect class="bar-hit" x="${x.toFixed(1)}" y="${Tp}" width="${w.toFixed(1)}" height="${ph}"/>`;
+    out += `<rect class="bar${i === peak ? ' peak' : ''}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2"/></g>`;
+    if (i % cfg.every === 0)
+      out += `<text x="${(x + w / 2).toFixed(1)}" y="${H - 9}" text-anchor="middle">${cfg.fmt(start + i * size)}</text>`;
+  });
+  $('#chart').innerHTML = out;
+  $('#chartNote').textContent = `${cfg.title} · pic à ${max} évts`;
+}
+
+/* ---------- flux ---------- */
+function renderSevBar() {
+  const by = STATE.sevCounts || {};
+  $('#sevBar').innerHTML = SEVS.map(s => `
+    <button class="sev-chip" data-sev="${s.id}" style="--c:${s.c}" aria-pressed="${STATE.sevs.has(s.id)}">
+      <span class="sev-dot"></span>${esc(s.label)}<span class="sev-n">${by[s.id] || 0}</span></button>`).join('')
+    + (STATE.sevs.size ? `<button class="btn small" id="sevClear">Tout afficher</button>` : '');
+}
+function renderStream() {
+  remember(STATE.list);
+  const c = STATE.cat === 'all' ? null : CAT[STATE.cat];
+  $('#streamTitle').textContent = c ? c.label : 'Flux complet';
+  $('#streamDesc').textContent = c ? c.desc : 'Toutes les catégories auxquelles votre rôle donne accès.';
+  renderSevBar();
+  $('#streamCount').innerHTML = `<b>${STATE.total.toLocaleString('fr-FR')}</b> évènement(s) · ${CHART_CFG[STATE.range].title.toLowerCase()}`;
+
+  const tb = $('#rows');
+  if (!STATE.list.length) {
+    tb.innerHTML = `<tr><td colspan="5"><div class="empty"><b>Aucun évènement</b>
+      <span>Rien ne correspond à ces filtres sur la période choisie.</span>
+      <button class="btn small" id="resetFilters">Réinitialiser les filtres</button></div></td></tr>`;
+  } else {
+    let lastDay = '';
+    tb.innerHTML = STATE.list.map(e => {
+      const d = dayLabel(e.t), newDay = d !== lastDay; lastDay = d;
+      const cat = CAT[e.cat] || { code: e.cat.slice(0, 3).toUpperCase(), fam: 'var(--muted)' };
+      const sev = SEV[e.sev] || { c: 'var(--muted)' };
+      return `<tr data-ev="${e.id}" aria-selected="${STATE.sel === e.id}" style="--sev:${sev.c}">
+        <td class="c-time"><b>${hhmmss(e.t)}</b>${newDay ? d : '<span style="opacity:.45">' + ago(e.t) + '</span>'}</td>
+        <td class="c-tag"><span class="tag" style="--fam:${cat.fam}">${cat.code}</span></td>
+        <td class="c-actor"><span class="actor"><span class="avatar" style="${avatarStyle(e.actor)};width:22px;height:22px;border-radius:7px;font-size:9.5px">${initials(e.actor)}</span>
+          <span><span class="actor-name">${esc(e.actor.name)}</span><br><span class="actor-id">${e.actor.sid != null ? '[' + e.actor.sid + ']' : ''}${e.actor.staff ? ' · staff' : ''}</span></span></span></td>
+        <td class="c-msg">${fmtMsg(e)}<span class="row-flags">${e.pin ? '<span class="flag-pin" title="Épinglé">◆</span>' : ''}${e.done ? '<span class="flag-done" title="Traité">✓</span>' : ''}</span></td>
+        <td class="c-src">${esc(e.res || '')}</td></tr>`;
+    }).join('');
+  }
+  $('#foot').textContent = STATE.total ? `${STATE.list.length} sur ${STATE.total} affichés` : '0 résultat';
+  $('#moreBtn').hidden = !STATE.cursor;
 }
 </script>
 
 <script>
 /* ============================================================
-   Rendu
+   Inspecteur, dossier joueur, actions de modération
    ============================================================ */
-function baseList(){const from=windowStart(),q=STATE.q.trim().toLowerCase();
-  return EVENTS.filter(e=>e.t>=from&&(!q||e.search.includes(q)));}
+const SEEN = new Map();
+const remember = list => (list || []).forEach(e => SEEN.set(e.id, e));
 
-/* ---------- rail ---------- */
-function buildRail(){
-  const host=$('#catList');host.innerHTML='';
-  CATS.forEach(c=>{
-    const b=el('button','cat');b.dataset.cat=c.id;
-    b.innerHTML=`<span class="tag" style="--fam:${c.fam}">${c.code}</span>
-      <span class="cat-label">${c.label}</span><span class="cat-count" data-count="${c.id}">—</span>`;
-    host.appendChild(b);
-  });
-}
-function renderRailCounts(){
-  const list=baseList(),by={};list.forEach(e=>by[e.cat]=(by[e.cat]||0)+1);
-  document.querySelectorAll('[data-count]').forEach(n=>{const v=by[n.dataset.count]||0;n.textContent=v?v.toLocaleString('fr-FR'):'·';});
-  $('#countAll').textContent=list.length.toLocaleString('fr-FR');
-  document.querySelectorAll('.cat').forEach(b=>{
-    const on=(STATE.view==='overview'&&b.dataset.view==='overview')||(STATE.view==='stream'&&b.dataset.cat===STATE.cat);
-    b.setAttribute('aria-current',on?'true':'false');
-  });
-  const last=EVENTS[0];$('#lastTick').textContent=last?hhmmss(last.t):'—';
+function jsonHtml(obj) {
+  return esc(JSON.stringify(obj, null, 2))
+    .replace(/&quot;([^&]+?)&quot;:/g, '<span class="k">"$1"</span>:')
+    .replace(/: &quot;([^&]*?)&quot;/g, ': <span class="s">"$1"</span>')
+    .replace(/: (-?\d+(?:\.\d+)?)/g, ': <span class="n">$1</span>')
+    .replace(/: (true|false|null)/g, ': <span class="b">$1</span>');
 }
 
-/* ---------- vue d'ensemble ---------- */
-const CHART_CFG={
-  1:{n:12,ms:300000,fmt:t=>pad(new Date(t).getHours())+':'+pad(new Date(t).getMinutes()),every:3,title:'60 dernières minutes'},
-  6:{n:12,ms:1800000,fmt:t=>pad(new Date(t).getHours())+'h'+pad(new Date(t).getMinutes()),every:3,title:'6 dernières heures'},
-  24:{n:24,ms:3600000,fmt:t=>pad(new Date(t).getHours())+'h',every:4,title:'24 dernières heures'},
-  168:{n:14,ms:43200000,fmt:t=>DAYS[new Date(t).getDay()]+' '+pad(new Date(t).getHours())+'h',every:2,title:'7 derniers jours'}
-};
-function renderOverview(){
-  const list=baseList(),from=windowStart(),span=STATE.range*3600000;
-  const prev=EVENTS.filter(e=>e.t>=from-span&&e.t<from);
-  const uniq=new Set(list.map(e=>e.actor.name)).size;
-  const alerts=list.filter(e=>(e.sev==='critique'||e.sev==='alerte')&&!MARKS.done.has(e.id));
-  const ach=list.filter(e=>e.cat==='anticheat');
-  const snc=list.filter(e=>e.cat==='sanctions');
-  const delta=prev.length?Math.round((list.length-prev.length)/prev.length*100):0;
-  const tclass=delta>4?'up':delta<-4?'down':'flat';
-  const tlabel=prev.length?(delta>0?'+':'')+delta+' % vs période précédente':'aucun point de comparaison';
-
-  $('#overviewSub').innerHTML=`Fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b> · <b>${ONLINE}</b>/128 joueurs connectés`;
-  $('#tiles').innerHTML=`
-    <div class="tile"><div class="tile-k">Évènements</div><div class="tile-v">${list.length.toLocaleString('fr-FR')}</div><div class="tile-d"><span class="trend ${tclass}">${tlabel}</span></div></div>
-    <div class="tile"><div class="tile-k">Joueurs distincts</div><div class="tile-v">${uniq}</div><div class="tile-d">auteurs d’au moins un évènement</div></div>
-    <div class="tile ${alerts.length?'flag':''}"><div class="tile-k">À traiter</div><div class="tile-v">${alerts.length}</div><div class="tile-d">alertes et critiques non traitées</div></div>
-    <div class="tile ${ach.length?'warn':''}"><div class="tile-k">Anticheat</div><div class="tile-v">${ach.length}</div><div class="tile-d">${ach.filter(e=>e.sev==='critique').length} détection(s) critiques</div></div>
-    <div class="tile"><div class="tile-k">Sanctions</div><div class="tile-v">${snc.length}</div><div class="tile-d">kick, warn, ban et levées</div></div>`;
-
-  drawChart(list);
-
-  const by={};list.forEach(e=>by[e.cat]=(by[e.cat]||0)+1);
-  const max=Math.max(1,...Object.values(by));
-  $('#split').innerHTML=CATS.map(c=>{
-    const v=by[c.id]||0;
-    return `<button class="split-row" data-cat="${c.id}" style="--fam:${c.fam}">
-      <span class="tag" style="--fam:${c.fam}">${c.code}</span>
-      <span class="split-track"><span class="split-fill" style="width:${Math.max(v?4:0,v/max*100)}%"></span></span>
-      <span class="split-n">${v}</span></button>`;
-  }).join('');
-
-  $('#alerts').innerHTML=alerts.slice(0,7).map(e=>`
-    <button class="mini-row" data-ev="${e.id}">
-      <span class="sev-dot" style="--c:${SEV[e.sev].c};width:8px;height:8px;border-radius:2px;background:${SEV[e.sev].c}"></span>
-      <span><span class="mini-title">${strip(e.msg)}</span><br><span class="mini-meta">${CAT[e.cat].code} · ${ago(e.t)}</span></span>
-      <span class="mini-meta">${hhmmss(e.t)}</span>
-    </button>`).join('')||`<div class="empty"><b>Rien à traiter</b><span>Aucune alerte ouverte sur la période.</span></div>`;
-
-  const pc={};list.forEach(e=>{if(!e.actor.staff)pc[e.actor.name]=(pc[e.actor.name]||0)+1;});
-  $('#topPlayers').innerHTML=Object.entries(pc).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([n,v])=>{
-    const p=PLAYERS.find(x=>x.name===n);
-    return `<button class="mini-row" data-player="${n}">
-      <span class="avatar" style="${avatarStyle(p)}">${initials(p)}</span>
-      <span><span class="mini-title">${n}</span><br><span class="mini-meta">[${p.sid}] · ${p.job}</span></span>
-      <span class="mini-meta">${v} évts</span></button>`;
-  }).join('')||`<div class="empty"><b>Aucun joueur</b><span>Élargissez la période.</span></div>`;
+/* ---------- boutons d'action sur un joueur ---------- */
+function actionBar(key, name, banni) {
+  if (!key || key === '— masqué —') return '';
+  const b = [];
+  if (can('actions.warn')) b.push(`<button class="btn small" data-act="warn" data-key="${esc(key)}" data-name="${esc(name)}">Avertir</button>`);
+  if (can('actions.kick')) b.push(`<button class="btn small" data-act="kick" data-key="${esc(key)}" data-name="${esc(name)}">Expulser</button>`);
+  if (can('actions.ban') && !banni) b.push(`<button class="btn small danger" data-act="ban" data-key="${esc(key)}" data-name="${esc(name)}">Bannir</button>`);
+  if (can('actions.unban') && banni) b.push(`<button class="btn small" data-act="unban" data-key="${esc(key)}" data-name="${esc(name)}">Lever le bannissement</button>`);
+  if (can('actions.give')) b.push(`<button class="btn small" data-act="give" data-key="${esc(key)}" data-name="${esc(name)}">Rendre un bien</button>`);
+  return b.length ? `<div><h3 class="section-title" style="margin-bottom:8px">Modération</h3><div class="act-bar">${b.join('')}</div></div>` : '';
 }
 
-function drawChart(list){
-  const cfg=CHART_CFG[STATE.range],now=Date.now(),start=now-cfg.n*cfg.ms;
-  const buckets=new Array(cfg.n).fill(0);
-  list.forEach(e=>{const i=Math.floor((e.t-start)/cfg.ms);if(i>=0&&i<cfg.n)buckets[i]++;});
-  const max=Math.max(1,...buckets),peak=buckets.indexOf(max);
-  const W=760,H=190,L=38,R=8,Tp=14,B=28,pw=W-L-R,ph=H-Tp-B;
-  const bw=pw/cfg.n,gap=Math.min(7,bw*.22);
-  let s=`<defs>
-    <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#9D5CFF" stop-opacity=".85"/><stop offset="100%" stop-color="#6D2BD9" stop-opacity=".35"/></linearGradient>
-    <linearGradient id="barPeak" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#DCC2FF"/><stop offset="100%" stop-color="#9D5CFF" stop-opacity=".55"/></linearGradient>
-  </defs>`;
-  [0,.5,1].forEach(f=>{const y=Tp+ph-ph*f;
-    s+=`<line class="grid-line" x1="${L}" y1="${y.toFixed(1)}" x2="${W-R}" y2="${y.toFixed(1)}"/>`;
-    s+=`<text x="${L-8}" y="${(y+3.5).toFixed(1)}" text-anchor="end">${Math.round(max*f)}</text>`;});
-  buckets.forEach((v,i)=>{
-    const h=Math.max(v?2:0,ph*v/max),x=L+i*bw+gap/2,y=Tp+ph-h,w=Math.max(2,bw-gap);
-    s+=`<g><title>${cfg.fmt(start+i*cfg.ms)} — ${v} évènement${v>1?'s':''}</title>`;
-    s+=`<rect class="bar-hit" x="${x.toFixed(1)}" y="${Tp}" width="${w.toFixed(1)}" height="${ph}"/>`;
-    s+=`<rect class="bar${i===peak?' peak':''}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2"/></g>`;
-    if(i%cfg.every===0)s+=`<text x="${(x+w/2).toFixed(1)}" y="${H-9}" text-anchor="middle">${cfg.fmt(start+i*cfg.ms)}</text>`;
-  });
-  $('#chart').innerHTML=s;
-  $('#chartNote').textContent=`${cfg.title} · pic à ${max} évts`;
-}
+function openInspector(id) {
+  const e = SEEN.get(id); if (!e) return;
+  STATE.sel = id;
+  const cat = CAT[e.cat] || { code: e.cat, label: e.cat, fam: 'var(--muted)' };
+  const sev = SEV[e.sev] || { label: e.sev, c: 'var(--muted)' };
+  $('#inspTitle').innerHTML = fmtMsg(e);
+  $('#pinBtn').setAttribute('aria-pressed', !!e.pin);  $('#pinBtn').classList.toggle('on', !!e.pin);
+  $('#doneBtn').setAttribute('aria-pressed', !!e.done); $('#doneBtn').classList.toggle('on', !!e.done);
+  $('#pinBtn').hidden = !can('logs.mark'); $('#doneBtn').hidden = !can('logs.mark');
 
-/* ---------- flux ---------- */
-function renderSevBar(){
-  const sc=scoped(),by={};sc.forEach(e=>by[e.sev]=(by[e.sev]||0)+1);
-  $('#sevBar').innerHTML=SEVS.map(s=>`
-    <button class="sev-chip" data-sev="${s.id}" style="--c:${s.c}" aria-pressed="${STATE.sevs.has(s.id)}">
-      <span class="sev-dot"></span>${s.label}<span class="sev-n">${by[s.id]||0}</span></button>`).join('')
-    +(STATE.sevs.size?`<button class="btn small" id="sevClear">Tout afficher</button>`:'');
-}
-function renderStream(){
-  const c=STATE.cat==='all'?null:CAT[STATE.cat];
-  $('#streamTitle').textContent=c?c.label:'Tous les évènements';
-  $('#streamDesc').textContent=c?c.desc:'Flux complet, toutes catégories confondues.';
-  renderSevBar();
-  const list=filtered(),shown=list.slice(0,STATE.limit);
-  $('#streamCount').innerHTML=`<b>${list.length.toLocaleString('fr-FR')}</b> évènement(s) · ${CHART_CFG[STATE.range].title.toLowerCase()}`;
-  const tb=$('#rows');
-  if(!list.length){
-    tb.innerHTML=`<tr><td colspan="5"><div class="empty"><b>Aucun évènement</b>
-      <span>Rien ne correspond à ces filtres sur la période choisie.</span>
-      <button class="btn small" id="resetFilters">Réinitialiser les filtres</button></div></td></tr>`;
-  }else{
-    let lastDay='';
-    tb.innerHTML=shown.map(e=>{
-      const d=dayLabel(e.t),newDay=d!==lastDay;lastDay=d;
-      const cat=CAT[e.cat];
-      return `<tr data-ev="${e.id}" aria-selected="${STATE.sel===e.id}" style="--sev:${SEV[e.sev].c}">
-        <td class="c-time"><b>${hhmmss(e.t)}</b>${newDay?d:'<span style="opacity:.45">'+ago(e.t)+'</span>'}</td>
-        <td class="c-tag"><span class="tag" style="--fam:${cat.fam}">${cat.code}</span></td>
-        <td class="c-actor"><span class="actor"><span class="avatar" style="${avatarStyle(e.actor)};width:22px;height:22px;border-radius:7px;font-size:9.5px">${initials(e.actor)}</span>
-          <span><span class="actor-name">${e.actor.name}</span><br><span class="actor-id">[${e.actor.sid}]${e.actor.staff?' · staff':''}</span></span></span></td>
-        <td class="c-msg">${e.msg}<span class="row-flags">${MARKS.pin.has(e.id)?'<span class="flag-pin" title="Épinglé">◆</span>':''}${MARKS.done.has(e.id)?'<span class="flag-done" title="Traité">✓</span>':''}</span></td>
-        <td class="c-src">${e.res}</td></tr>`;
-    }).join('');
-  }
-  $('#foot').textContent=list.length?`${Math.min(STATE.limit,list.length)} sur ${list.length} affichés`:'0 résultat';
-  $('#moreBtn').hidden=list.length<=STATE.limit;
-}
-</script>
+  const d = new Date(e.t);
+  const around = [...SEEN.values()].filter(x => x.actor.name === e.actor.name && x.id !== e.id)
+    .sort((a, b) => b.t - a.t).slice(0, 6);
 
-<script>
-/* ---------- inspecteur ---------- */
-const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function jsonHtml(obj){
-  return esc(JSON.stringify(obj,null,2))
-    .replace(/"([^"]+)":/g,'<span class="k">"$1"</span>:')
-    .replace(/: "([^"]*)"/g,': <span class="s">"$1"</span>')
-    .replace(/: (-?\d+(?:\.\d+)?)/g,': <span class="n">$1</span>')
-    .replace(/: (true|false|null)/g,': <span class="b">$1</span>');
-}
-function openInspector(id){
-  const e=EVENTS.find(x=>x.id===id);if(!e)return;
-  STATE.sel=id;
-  const cat=CAT[e.cat],sev=SEV[e.sev];
-  $('#inspTitle').innerHTML=e.msg;
-  $('#pinBtn').setAttribute('aria-pressed',MARKS.pin.has(id));
-  $('#pinBtn').classList.toggle('on',MARKS.pin.has(id));
-  $('#doneBtn').setAttribute('aria-pressed',MARKS.done.has(id));
-  $('#doneBtn').classList.toggle('on',MARKS.done.has(id));
-
-  const around=EVENTS.filter(x=>x.actor.name===e.actor.name&&x.id!==e.id).slice(0,6);
-  const d=new Date(e.t);
-  $('#inspBody').innerHTML=`
+  $('#inspBody').innerHTML = `
     <dl class="kv">
-      <dt>Identifiant</dt><dd class="mono">${e.id}</dd>
+      <dt>Identifiant</dt><dd class="mono">${esc(String(e.id))}</dd>
       <dt>Horodatage</dt><dd class="mono">${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${hhmmss(e.t)} · ${ago(e.t)}</dd>
-      <dt>Catégorie</dt><dd><span class="tag" style="--fam:${cat.fam}">${cat.code}</span> ${cat.label}</dd>
-      <dt>Gravité</dt><dd><span class="sev-chip" style="--c:${sev.c}" aria-pressed="true"><span class="sev-dot"></span>${sev.label}</span></dd>
-      <dt>Ressource</dt><dd class="mono">${e.res}</dd>
-      <dt>Auteur</dt><dd><button class="btn small" data-player="${e.actor.name}">${e.actor.name} [${e.actor.sid}]</button></dd>
-      ${e.target?`<dt>Concerné</dt><dd><button class="btn small" data-player="${e.target.name}">${e.target.name} [${e.target.sid}]</button></dd>`:''}
-      <dt>Licence</dt><dd class="mono" style="font-size:10.5px">${e.actor.license}</dd>
+      <dt>Catégorie</dt><dd><span class="tag" style="--fam:${cat.fam}">${cat.code}</span> ${esc(cat.label)}</dd>
+      <dt>Gravité</dt><dd><span class="sev-chip" style="--c:${sev.c}" aria-pressed="true"><span class="sev-dot"></span>${esc(sev.label)}</span></dd>
+      <dt>Ressource</dt><dd class="mono">${esc(e.res || '—')}</dd>
+      <dt>Auteur</dt><dd>${e.actor.key
+        ? `<button class="btn small" data-player="${esc(e.actor.key)}">${esc(e.actor.name)}${e.actor.sid != null ? ' [' + e.actor.sid + ']' : ''}</button>`
+        : esc(e.actor.name)}</dd>
+      ${e.target && e.target.key ? `<dt>Concerné</dt><dd><button class="btn small" data-player="${esc(e.target.key)}">${esc(e.target.name)}</button></dd>` : ''}
+      ${e.actor.license ? `<dt>Licence</dt><dd class="mono" style="font-size:10.5px">${esc(e.actor.license)}</dd>` : ''}
+      ${e.done && e.doneBy ? `<dt>Traité par</dt><dd>${esc(e.doneBy)}</dd>` : ''}
     </dl>
     <div>
       <h3 class="section-title" style="margin-bottom:8px">Données brutes</h3>
-      <pre class="payload">${jsonHtml(e.d)}</pre>
+      <pre class="payload">${jsonHtml(e.d || {})}</pre>
     </div>
     <div class="insp-actions">
       <button class="btn small" data-copy="json">Copier le JSON</button>
       <button class="btn small" data-copy="line">Copier la ligne</button>
-      <button class="btn small" data-player="${e.actor.name}">Ouvrir le dossier joueur</button>
+      ${e.actor.key ? `<button class="btn small" data-player="${esc(e.actor.key)}">Ouvrir le dossier joueur</button>` : ''}
     </div>
+    ${(() => { const sujet = (!e.actor.staff && e.actor.key) ? e.actor
+        : (e.target && e.target.key ? e.target : null);
+      return sujet ? actionBar(sujet.key, sujet.name, false) : ''; })()}
     <div>
-      <h3 class="section-title" style="margin-bottom:8px">Contexte joueur — ${e.actor.name}</h3>
-      <div class="chain">${around.map(x=>`<button class="chain-row" data-ev="${x.id}">
-        <span class="chain-t">${hhmmss(x.t)}</span><span class="chain-m">${strip(x.msg)}</span></button>`).join('')
-        ||'<span class="mini-meta">Aucun autre évènement pour ce joueur.</span>'}</div>
+      <h3 class="section-title" style="margin-bottom:8px">Contexte joueur — ${esc(e.actor.name)}</h3>
+      <div class="chain">${around.map(x => `<button class="chain-row" data-ev="${x.id}">
+        <span class="chain-t">${hhmmss(x.t)}</span><span class="chain-m">${esc(strip(x.msg))}</span></button>`).join('')
+        || '<span class="mini-meta">Aucun autre évènement chargé pour ce joueur.</span>'}</div>
     </div>`;
-  document.querySelector('.app').classList.add('insp');
   $('#inspector').classList.add('open');
-  $('#inspector').setAttribute('aria-hidden','false');
-  document.querySelectorAll('.logs tbody tr').forEach(r=>r.setAttribute('aria-selected',r.dataset.ev===id));
+  $('#inspector').setAttribute('aria-hidden', 'false');
+  document.querySelector('.app').classList.add('insp');
+  document.querySelectorAll('.logs tbody tr').forEach(r => r.setAttribute('aria-selected', r.dataset.ev === String(id)));
 }
-function closeInspector(){document.querySelector('.app').classList.remove('insp');$('#inspector').classList.remove('open');$('#inspector').setAttribute('aria-hidden','true');STATE.sel=null;
-  document.querySelectorAll('.logs tbody tr').forEach(r=>r.setAttribute('aria-selected','false'));}
+function closeInspector() {
+  $('#inspector').classList.remove('open');
+  $('#inspector').setAttribute('aria-hidden', 'true');
+  document.querySelector('.app').classList.remove('insp');
+  STATE.sel = null;
+  document.querySelectorAll('.logs tbody tr').forEach(r => r.setAttribute('aria-selected', 'false'));
+}
 
 /* ---------- dossier joueur ---------- */
-function openDossier(name){
-  const p=PLAYERS.find(x=>x.name===name);if(!p)return;
-  const mine=EVENTS.filter(e=>e.actor.name===name||(e.target&&e.target.name===name)||(e.d&&e.d.cible===name));
-  const kills=EVENTS.filter(e=>e.cat==='combat'&&e.actor.name===name&&/a éliminé/.test(e.msg)).length;
-  const morts=EVENTS.filter(e=>e.cat==='combat'&&((e.target&&e.target.name===name&&/a éliminé/.test(e.msg))||(e.actor.name===name&&/est mort/.test(e.msg)))).length;
-  const sessions=EVENTS.filter(e=>e.cat==='connexions'&&e.actor.name===name&&/a rejoint/.test(e.msg)).length;
-  const sanctions=EVENTS.filter(e=>e.cat==='sanctions'&&e.d&&e.d.cible===name);
-  const flags=EVENTS.filter(e=>e.cat==='anticheat'&&e.actor.name===name);
+const moneyFr = n => Number(n || 0).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' $';
+function openSheet(title, meta, avatarSeed, body) {
+  $('#dosAvatar').style.cssText = avatarStyle(avatarSeed);
+  $('#dosAvatar').textContent = initials(avatarSeed);
+  $('#dosName').textContent = title;
+  $('#dosMeta').innerHTML = meta;
+  $('#dosBody').innerHTML = body;
+  $('#sheet').hidden = false; $('#scrim').hidden = false;
+  $('#dosClose').focus();
+}
+const closeSheet = () => { $('#sheet').hidden = true; $('#scrim').hidden = true; };
 
-  $('#dosAvatar').style.cssText=avatarStyle(p);
-  $('#dosAvatar').textContent=initials(p);
-  $('#dosName').textContent=p.name;
-  $('#dosMeta').innerHTML=`[${p.sid}] · ${p.job}${p.staff?'':' · grade '+p.grade} · ${p.hours} h de jeu · inscrit ${dayLabel(p.joined)}`;
-  $('#dosBody').innerHTML=`
+async function openDossier(key) {
+  let f;
+  try { f = await DS.player(key); }
+  catch (e) { return toast(e.message || 'Dossier indisponible.'); }
+  const p = f.player, s = f.stats;
+  remember(f.last);
+  const banni = !!f.ban;
+  openSheet(p.name,
+    `${p.sid != null ? '[' + p.sid + '] · ' : ''}${esc(p.job || 'sans emploi')}${p.grade != null ? ' · grade ' + p.grade : ''}` +
+    `${p.playtime ? ' · ' + Math.round(p.playtime / 60) + ' h de jeu' : ''}` +
+    `${p.firstSeen ? ' · vu depuis ' + dayLabel(p.firstSeen) : ''}`,
+    p,
+    `
+    ${banni ? `<div class="gate-err">Joueur banni — ${esc(f.ban.reason || 'sans motif')}${f.ban.expires_at ? ' · jusqu’au ' + new Date(f.ban.expires_at).toLocaleDateString('fr-FR') : ' · définitif'}</div>` : ''}
     <div class="stat-strip">
-      <div class="stat"><div class="stat-k">Évènements</div><div class="stat-v">${mine.length}</div></div>
-      <div class="stat"><div class="stat-k">Sessions</div><div class="stat-v">${sessions}</div></div>
-      <div class="stat"><div class="stat-k">Éliminations</div><div class="stat-v">${kills}</div></div>
-      <div class="stat"><div class="stat-k">Décès</div><div class="stat-v">${morts}</div></div>
-      <div class="stat"><div class="stat-k">Détections</div><div class="stat-v" style="${flags.length?'color:#FF8399':''}">${flags.length}</div></div>
+      <div class="stat"><div class="stat-k">Évènements</div><div class="stat-v">${s.events}</div></div>
+      <div class="stat"><div class="stat-k">Sessions</div><div class="stat-v">${s.sessions}</div></div>
+      <div class="stat"><div class="stat-k">Éliminations</div><div class="stat-v">${s.kills}</div></div>
+      <div class="stat"><div class="stat-k">Décès</div><div class="stat-v">${s.deaths}</div></div>
+      <div class="stat"><div class="stat-k">Détections</div><div class="stat-v" style="${s.flags ? 'color:#FF8399' : ''}">${s.flags}</div></div>
     </div>
-    ${p.staff?'':`<div class="card" style="background:rgba(30,20,50,.35)">
+    ${p.bank != null ? `<div class="card" style="background:rgba(30,20,50,.35)">
       <h3 class="section-title">Comptes</h3>
       <div class="stat-strip">
-        <div class="stat"><div class="stat-k">Liquide</div><div class="stat-v">${money(p.cash)}</div></div>
-        <div class="stat"><div class="stat-k">Banque</div><div class="stat-v">${money(p.bank)}</div></div>
-        <div class="stat"><div class="stat-k">Argent sale</div><div class="stat-v" style="${p.dirty?'color:#FFC55C':''}">${money(p.dirty)}</div></div>
-      </div></div>`}
+        <div class="stat"><div class="stat-k">Liquide</div><div class="stat-v">${moneyFr(p.cash)}</div></div>
+        <div class="stat"><div class="stat-k">Banque</div><div class="stat-v">${moneyFr(p.bank)}</div></div>
+        <div class="stat"><div class="stat-k">Argent sale</div><div class="stat-v" style="${p.dirty ? 'color:#FFC55C' : ''}">${moneyFr(p.dirty)}</div></div>
+      </div></div>` : ''}
+    ${actionBar(p.key, p.name, banni)}
     <div>
       <h3 class="section-title" style="margin-bottom:8px">Identifiants</h3>
-      <dl class="kv">
-        <dt>License</dt><dd class="mono" style="font-size:10.5px">${p.license}</dd>
-        <dt>Discord</dt><dd class="mono" style="font-size:10.5px">${p.discord}</dd>
-        <dt>Steam</dt><dd class="mono" style="font-size:10.5px">${p.steam}</dd>
-        <dt>FiveM</dt><dd class="mono" style="font-size:10.5px">${p.fivem}</dd>
-        <dt>Ping moyen</dt><dd class="mono">${p.ping} ms</dd>
-      </dl>
+      ${p.discord || p.steam || p.key !== '— masqué —' ? `<dl class="kv">
+        <dt>License</dt><dd class="mono" style="font-size:10.5px">${esc(p.key)}</dd>
+        ${p.discord ? `<dt>Discord</dt><dd class="mono" style="font-size:10.5px">${esc(p.discord)}</dd>` : ''}
+        ${p.steam ? `<dt>Steam</dt><dd class="mono" style="font-size:10.5px">${esc(p.steam)}</dd>` : ''}
+        ${p.fivem ? `<dt>FiveM</dt><dd class="mono" style="font-size:10.5px">${esc(p.fivem)}</dd>` : ''}
+      </dl>` : `<span class="mini-meta">Votre rôle ne donne pas accès aux identifiants.</span>`}
     </div>
     <div>
-      <h3 class="section-title" style="margin-bottom:8px">Sanctions (${sanctions.length})</h3>
-      <div class="mini" style="gap:6px">${sanctions.slice(0,6).map(e=>`
-        <div class="sanction"><span class="s-kind">${(e.d.type||'sanction').replace(/_/g,' ')}</span>
-        <span class="s-why">${e.d.motif||'—'} — par ${e.d.staff}</span>
-        <span class="s-when">${dayLabel(e.t)} ${hhmmss(e.t)}</span></div>`).join('')
-        ||'<span class="mini-meta">Aucune sanction enregistrée.</span>'}</div>
+      <h3 class="section-title" style="margin-bottom:8px">Sanctions (${f.sanctions.length})</h3>
+      <div class="mini" style="gap:6px">${f.sanctions.map(x => `
+        <div class="sanction"><span class="s-kind">${esc(String(x.type).replace(/_/g, ' '))}</span>
+        <span class="s-why">${esc(x.reason || '—')}${x.by_name ? ' — par ' + esc(x.by_name) : ''}</span>
+        <span class="s-when">${dayLabel(x.created_at)} ${hhmmss(x.created_at)}</span></div>`).join('')
+        || '<span class="mini-meta">Aucune sanction enregistrée.</span>'}</div>
     </div>
     <div>
       <h3 class="section-title" style="margin-bottom:8px">Derniers évènements</h3>
-      <div class="chain">${mine.slice(0,14).map(e=>`<button class="chain-row" data-ev="${e.id}">
-        <span class="chain-t">${hhmmss(e.t)}</span>
-        <span class="chain-m"><span class="tag" style="--fam:${CAT[e.cat].fam};margin-right:6px">${CAT[e.cat].code}</span>${strip(e.msg)}</span></button>`).join('')}</div>
-    </div>`;
-  $('#sheet').hidden=false;$('#scrim').hidden=false;
-  $('#dosClose').focus();
+      <div class="chain">${f.last.map(e => {
+        const c = CAT[e.cat] || { code: e.cat, fam: 'var(--muted)' };
+        return `<button class="chain-row" data-ev="${e.id}">
+          <span class="chain-t">${hhmmss(e.t)}</span>
+          <span class="chain-m"><span class="tag" style="--fam:${c.fam};margin-right:6px">${c.code}</span>${esc(strip(e.msg))}</span></button>`;
+      }).join('')}</div>
+    </div>`);
 }
-function closeDossier(){$('#sheet').hidden=true;$('#scrim').hidden=true;}
+
+/* ---------- boîte de dialogue d'action ---------- */
+let pendingAction = null;
+const DUREES = [[0,'Définitif'],[1,'1 jour'],[3,'3 jours'],[7,'7 jours'],[14,'14 jours'],[30,'30 jours']];
+const TITRES = { warn:'Avertir', kick:'Expulser', ban:'Bannir', unban:'Lever le bannissement', give:'Rendre un bien' };
+
+function askAction(type, key, name) {
+  pendingAction = { type, key, name };
+  $('#dlgTitle').textContent = `${TITRES[type]} — ${name}`;
+  $('#dlgOk').className = 'btn ' + (type === 'ban' ? 'danger' : 'primary');
+  $('#dlgOk').textContent = TITRES[type];
+  $('#dlgBody').innerHTML = `
+    ${type === 'ban' ? `<div class="warn">Le joueur sera déconnecté et sa reconnexion refusée. La sanction apparaîtra au journal avec votre pseudo.</div>` : ''}
+    ${type === 'unban' ? `<div class="warn">Le joueur pourra se reconnecter immédiatement.</div>` : ''}
+    ${type !== 'unban' ? `<div class="field" style="margin-top:10px">
+      <label for="dlgReason">Motif${type === 'give' ? ' (ticket, contexte)' : ''}</label>
+      <input class="input" id="dlgReason" placeholder="${type === 'give' ? 'Remboursement — ticket #412' : 'RDM sur Legion Square'}" maxlength="300">
+    </div>` : ''}
+    ${type === 'ban' ? `<div class="field" style="margin-top:10px">
+      <label for="dlgDays">Durée</label>
+      <select class="input" id="dlgDays">${DUREES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+    </div>` : ''}
+    ${type === 'give' ? `<div class="field" style="margin-top:10px">
+      <label for="dlgLabel">Ce qui est rendu</label>
+      <input class="input" id="dlgLabel" placeholder="120 000 $ / 1× Médikit / Sultan RS" maxlength="120">
+    </div>` : ''}`;
+  $('#dialog').hidden = false; $('#scrim').hidden = false;
+  const first = $('#dlgReason') || $('#dlgOk'); first.focus();
+}
+function closeDialog() { $('#dialog').hidden = true; pendingAction = null; if ($('#sheet').hidden) $('#scrim').hidden = true; }
+
+async function confirmAction() {
+  if (!pendingAction) return;
+  const { type, key, name } = pendingAction;
+  const reason = ($('#dlgReason') && $('#dlgReason').value.trim()) || '';
+  if (type !== 'unban' && reason.length < 3) { toast('Un motif d’au moins 3 caractères est obligatoire.'); return; }
+  const days = $('#dlgDays') ? Number($('#dlgDays').value) : 0;
+  const label = $('#dlgLabel') ? $('#dlgLabel').value.trim() : '';
+  $('#dlgOk').disabled = true;
+  try {
+    const r = await DS.action({ type, key, name, reason, days, payload: label ? { label } : {} });
+    closeDialog();
+    toast(r.message || 'Action enregistrée.');
+    refresh();
+  } catch (e) { toast(e.message || 'Action refusée.'); }
+  finally { $('#dlgOk').disabled = false; }
+}
+
+/* ---------- équipe et journal du panneau ---------- */
+async function openTeam() {
+  let d;
+  try { d = await api('/api/staff'); } catch (e) { return toast(e.message); }
+  const rows = d.staff.map(s => `
+    <div class="staff-row ${s.disabled ? 'off' : ''}">
+      <span class="avatar" style="${avatarStyle(s)}">${initials(s)}</span>
+      <span><span class="mini-title">${esc(s.pseudo)}</span><br>
+        <span class="mini-meta">${s.last_login ? 'vu ' + dayLabel(s.last_login) : 'jamais connecté'}</span></span>
+      <select class="select" data-staff-role="${s.id}">
+        ${d.roles.map(r => `<option value="${r.id}" ${r.id === s.role ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+      </select>
+      <button class="btn small" data-staff-toggle="${s.id}" data-off="${s.disabled ? 1 : 0}">${s.disabled ? 'Réactiver' : 'Suspendre'}</button>
+    </div>`).join('');
+  openSheet('Équipe staff', `${d.staff.length} compte(s) · un rôle donne des droits, jamais l’inverse`,
+    { name: 'Équipe', hue: 268 }, `
+    <div class="staff-list">${rows}</div>
+    <div class="card" style="background:rgba(30,20,50,.35)">
+      <h3 class="section-title">Ajouter un membre</h3>
+      <div class="field"><label for="nsPseudo">Pseudo</label><input class="input" id="nsPseudo" autocomplete="off"></div>
+      <div class="field"><label for="nsPass">Mot de passe (10 caractères minimum)</label><input class="input" id="nsPass" type="text" autocomplete="off"></div>
+      <div class="field"><label for="nsRole">Rôle</label>
+        <select class="input" id="nsRole">${d.roles.map(r => `<option value="${r.id}">${esc(r.label)}</option>`).join('')}</select></div>
+      <button class="btn primary" id="nsGo" style="justify-self:start">Créer le compte</button>
+    </div>`);
+}
+async function openAudit() {
+  let d;
+  try { d = await api('/api/audit'); } catch (e) { return toast(e.message); }
+  openSheet('Journal du panneau', 'Qui a consulté quoi, qui a sanctionné qui', { name: 'Audit', hue: 210 }, `
+    <div class="chain">${d.audit.map(a => `<div class="chain-row">
+      <span class="chain-t">${dayLabel(a.ts)} ${hhmmss(a.ts)}</span>
+      <span class="chain-m"><strong>${esc(a.pseudo || 'anonyme')}</strong> — ${esc(a.action)}${a.detail ? ' · ' + esc(a.detail) : ''}</span>
+    </div>`).join('') || '<span class="mini-meta">Rien à afficher.</span>'}</div>`);
+}
 </script>
 
 <script>
 /* ============================================================
-   Interactions
+   Interactions et démarrage
    ============================================================ */
-function render(){
-  renderRailCounts();
-  const ov=STATE.view==='overview';
-  $('#viewOverview').hidden=!ov;
-  $('#viewStream').hidden=ov;
-  ov?renderOverview():renderStream();
+function goStream(cat) {
+  STATE.view = 'stream'; STATE.cat = cat; STATE.limit = 120; STATE.list = [];
+  render(); refresh(); window.scrollTo({ top: 0 });
 }
-function goStream(cat){STATE.view='stream';STATE.cat=cat;STATE.limit=120;render();window.scrollTo({top:0,behavior:'instant'});}
-function goOverview(){STATE.view='overview';render();}
+function goOverview() { STATE.view = 'overview'; render(); refresh(); }
 
-document.addEventListener('click',ev=>{
-  const t=ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range]');
-  if(!t)return;
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-staff-toggle]');
+  if (!t) return;
 
-  if(t.dataset.view==='overview'){goOverview();return;}
-  if(t.dataset.player){closeInspector();openDossier(t.dataset.player);return;}
-  if(t.dataset.ev){
-    const e=EVENTS.find(x=>x.id===t.dataset.ev);
-    closeDossier();
-    if(e&&STATE.view==='overview')goStream(e.cat);
-    openInspector(t.dataset.ev);
+  if (t.dataset.view === 'overview') return goOverview();
+  if (t.dataset.act)    return askAction(t.dataset.act, t.dataset.key, t.dataset.name);
+  if (t.dataset.player) { closeInspector(); return openDossier(t.dataset.player); }
+  if (t.dataset.ev) {
+    const id = Number(t.dataset.ev) || t.dataset.ev;
+    closeSheet();
+    const known = SEEN.get(id);
+    if (STATE.view === 'overview' && known) { goStream(known.cat); }
+    return openInspector(id);
+  }
+  if (t.dataset.cat)  return goStream(t.dataset.cat);
+  if (t.dataset.sev) {
+    const s = t.dataset.sev;
+    STATE.sevs.has(s) ? STATE.sevs.delete(s) : STATE.sevs.add(s);
+    STATE.limit = 120; return refresh();
+  }
+  if (t.dataset.range) {
+    STATE.range = Number(t.dataset.range); STATE.limit = 120;
+    document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-pressed', b === t));
+    return refresh();
+  }
+  if (t.dataset.staffToggle) {
+    try { await api('/api/staff/' + t.dataset.staffToggle, { method: 'PATCH',
+            body: JSON.stringify({ disabled: t.dataset.off === '1' ? false : true }) });
+      toast('Compte mis à jour.'); openTeam();
+    } catch (e) { toast(e.message); }
     return;
   }
-  if(t.dataset.cat){goStream(t.dataset.cat);return;}
-  if(t.dataset.sev){
-    const s=t.dataset.sev;
-    STATE.sevs.has(s)?STATE.sevs.delete(s):STATE.sevs.add(s);
-    STATE.limit=120;render();return;
+  if (t.dataset.copy) {
+    const e = SEEN.get(STATE.sel); if (!e) return;
+    const txt = t.dataset.copy === 'json'
+      ? JSON.stringify({ id: e.id, horodatage: new Date(e.t).toISOString(), categorie: e.cat, gravite: e.sev,
+                         ressource: e.res, joueur: e.actor.name, serverId: e.actor.sid,
+                         evenement: strip(e.msg), donnees: e.d }, null, 2)
+      : `${new Date(e.t).toISOString()}\t${(CAT[e.cat]||{}).code||e.cat}\t${(SEV[e.sev]||{}).label||e.sev}\t${e.actor.name}\t${strip(e.msg)}\t${e.res}`;
+    copy(txt, t.dataset.copy === 'json' ? 'JSON copié' : 'Ligne copiée');
   }
-  if(t.dataset.range){
-    STATE.range=Number(t.dataset.range);STATE.limit=120;
-    document.querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',b===t));
-    render();return;
-  }
-  if(t.dataset.copy){
-    const e=EVENTS.find(x=>x.id===STATE.sel);if(!e)return;
-    const txt=t.dataset.copy==='json'
-      ? JSON.stringify({id:e.id,horodatage:new Date(e.t).toISOString(),categorie:e.cat,gravite:e.sev,ressource:e.res,joueur:e.actor.name,serverId:e.actor.sid,license:e.actor.license,evenement:strip(e.msg),donnees:e.d},null,2)
-      : `${new Date(e.t).toISOString()}\t${CAT[e.cat].code}\t${SEV[e.sev].label}\t${e.actor.name} [${e.actor.sid}]\t${strip(e.msg)}\t${e.res}`;
-    copy(txt,t.dataset.copy==='json'?'JSON copié':'Ligne copiée');
-  }
-});
-document.addEventListener('click',ev=>{
-  if(ev.target.id==='sevClear'){STATE.sevs.clear();render();}
-  if(ev.target.id==='resetFilters'){STATE.sevs.clear();STATE.q='';$('#q').value='';STATE.range=168;
-    document.querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.range==='168'));render();}
-  if(ev.target.id==='moreBtn'){STATE.limit+=100;renderStream();}
 });
 
-function copy(txt,msg){
-  const done=()=>toast(msg);
-  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(txt).then(done,()=>fallback());}
-  else fallback();
-  function fallback(){
-    const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
-    document.body.appendChild(ta);ta.select();
-    try{document.execCommand('copy');done();}catch(e){toast('Copie impossible dans ce contexte');}
-    document.body.removeChild(ta);
+document.addEventListener('change', async ev => {
+  const sel = ev.target.closest('[data-staff-role]'); if (!sel) return;
+  try { await api('/api/staff/' + sel.dataset.staffRole, { method: 'PATCH', body: JSON.stringify({ role: sel.value }) });
+        toast('Rôle modifié.'); openTeam(); }
+  catch (e) { toast(e.message); openTeam(); }
+});
+
+document.addEventListener('click', async ev => {
+  const id = ev.target.id;
+  if (id === 'sevClear')     { STATE.sevs.clear(); refresh(); }
+  if (id === 'resetFilters') { STATE.sevs.clear(); STATE.q = ''; $('#q').value = ''; STATE.range = 168;
+    document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-pressed', b.dataset.range === '168')); refresh(); }
+  if (id === 'moreBtn')      loadMore();
+  if (id === 'teamBtn')      openTeam();
+  if (id === 'auditBtn')     openAudit();
+  if (id === 'nsGo') {
+    const pseudo = $('#nsPseudo').value.trim(), password = $('#nsPass').value, role = $('#nsRole').value;
+    try { await api('/api/staff', { method: 'POST', body: JSON.stringify({ pseudo, password, role }) });
+          toast('Compte créé.'); openTeam(); }
+    catch (e) { toast(e.message); }
   }
+});
+
+async function loadMore() {
+  if (!STATE.cursor) return;
+  try {
+    const p = await DS.query({ cats: catsParam(), sevs: [...STATE.sevs], from: windowFrom(), to: Date.now(),
+                               q: STATE.q, limit: 100, cursorTs: STATE.cursor.ts, cursorId: STATE.cursor.id });
+    STATE.list = STATE.list.concat(p.events); STATE.cursor = p.cursor;
+    remember(p.events); renderStream();
+  } catch (e) { toast(e.message); }
 }
-$('#copyBtn').addEventListener('click',()=>{
-  const list=filtered();
-  if(!list.length){toast('Rien à exporter sur ces filtres');return;}
-  const head='horodatage;categorie;gravite;joueur;server_id;license;evenement;ressource';
-  const csv=[head].concat(list.slice(0,2000).map(e=>[
-    new Date(e.t).toISOString(),CAT[e.cat].code,e.sev,e.actor.name,e.actor.sid,e.actor.license,
-    '"'+strip(e.msg).replace(/"/g,'""')+'"',e.res].join(';'))).join('\n');
-  copy(csv,`${Math.min(2000,list.length)} lignes copiées en CSV`);
+
+function copy(txt, msg) {
+  const done = () => toast(msg);
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { toast('Copie impossible dans ce contexte'); }
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, fallback);
+  else fallback();
+}
+
+$('#copyBtn').addEventListener('click', () => {
+  if (!can('logs.export')) return toast('Votre rôle ne permet pas l’export.');
+  if (MODE === 'api') {
+    const p = { cat: catsParam(), sev: [...STATE.sevs], from: windowFrom(), to: Date.now(), q: STATE.q };
+    window.location.href = '/api/export?' + qs(p);
+    return toast('Export CSV en cours de téléchargement…');
+  }
+  if (!STATE.list.length) return toast('Rien à exporter sur ces filtres');
+  const head = 'horodatage;categorie;gravite;joueur;server_id;evenement;ressource';
+  const csv = [head].concat(STATE.list.map(e => [new Date(e.t).toISOString(), e.cat, e.sev, e.actor.name,
+      e.actor.sid == null ? '' : e.actor.sid, '"' + strip(e.msg).replace(/"/g, '""') + '"', e.res].join(';'))).join('\n');
+  copy(csv, `${STATE.list.length} lignes copiées en CSV`);
 });
 
 /* épingler / traiter */
-$('#pinBtn').addEventListener('click',()=>{
-  if(!STATE.sel)return;const id=STATE.sel;
-  MARKS.pin.has(id)?MARKS.pin.delete(id):MARKS.pin.add(id);saveMarks();
-  toast(MARKS.pin.has(id)?'Évènement épinglé':'Épingle retirée');openInspector(id);renderStream();
-});
-$('#doneBtn').addEventListener('click',()=>{
-  if(!STATE.sel)return;const id=STATE.sel;
-  MARKS.done.has(id)?MARKS.done.delete(id):MARKS.done.add(id);saveMarks();
-  toast(MARKS.done.has(id)?'Marqué comme traité':'Remis à traiter');openInspector(id);renderStream();
-});
-$('#inspClose').addEventListener('click',closeInspector);
-$('#dosClose').addEventListener('click',closeDossier);
-$('#scrim').addEventListener('click',closeDossier);
+async function toggleMark(kind) {
+  if (!STATE.sel) return;
+  if (!can('logs.mark')) return toast('Votre rôle ne permet pas cette marque.');
+  const e = SEEN.get(STATE.sel); if (!e) return;
+  const on = !e[kind === 'pin' ? 'pin' : 'done'];
+  try {
+    await DS.mark(e.id, kind, on);
+    e[kind === 'pin' ? 'pin' : 'done'] = on;
+    if (kind === 'done') e.doneBy = on ? (ME.pseudo || 'moi') : null;
+    toast(kind === 'pin' ? (on ? 'Évènement épinglé' : 'Épingle retirée')
+                         : (on ? 'Marqué comme traité' : 'Remis à traiter'));
+    openInspector(e.id);
+    if (STATE.view === 'stream') renderStream(); else refresh();
+  } catch (err) { toast(err.message); }
+}
+$('#pinBtn').addEventListener('click', () => toggleMark('pin'));
+$('#doneBtn').addEventListener('click', () => toggleMark('done'));
+$('#inspClose').addEventListener('click', closeInspector);
+$('#dosClose').addEventListener('click', closeSheet);
+$('#scrim').addEventListener('click', () => { if (!$('#dialog').hidden) closeDialog(); else closeSheet(); });
+$('#dlgCancel').addEventListener('click', closeDialog);
+$('#dlgOk').addEventListener('click', confirmAction);
 
 /* recherche */
 let qh;
-$('#q').addEventListener('input',e=>{clearTimeout(qh);qh=setTimeout(()=>{
-  STATE.q=e.target.value;STATE.limit=120;
-  if(STATE.view==='overview'&&STATE.q)goStream(STATE.cat);else render();},140);});
+$('#q').addEventListener('input', e => {
+  clearTimeout(qh);
+  qh = setTimeout(() => {
+    STATE.q = e.target.value; STATE.limit = 120;
+    if (STATE.view === 'overview' && STATE.q) goStream(STATE.cat); else refresh();
+  }, 220);
+});
 
 /* direct */
-$('#liveBtn').addEventListener('click',()=>{
-  STATE.live=!STATE.live;
-  $('#liveBtn').classList.toggle('on',STATE.live);
-  $('#liveBtn').setAttribute('aria-pressed',String(STATE.live));
-  $('#liveState').textContent=STATE.live?'en direct':'en pause';
-  $('#liveDot').classList.toggle('off',!STATE.live);
-  toast(STATE.live?'Flux repris':'Flux en pause — la liste ne bouge plus');
+let stopStream = null, softTimer = null;
+function matchesFilters(e) {
+  if (STATE.cat !== 'all' && e.cat !== STATE.cat) return false;
+  if (STATE.sevs.size && !STATE.sevs.has(e.sev)) return false;
+  if (STATE.q) {
+    const hay = (strip(e.msg) + ' ' + e.actor.name + ' ' + JSON.stringify(e.d || {})).toLowerCase();
+    if (!hay.includes(STATE.q.trim().toLowerCase())) return false;
+  }
+  return true;
+}
+function onLive(e) {
+  if (!STATE.live) return;
+  SEEN.set(e.id, e);
+  $('#lastTick').textContent = hhmmss(e.t);
+  if (STATE.view === 'stream' && matchesFilters(e) && window.scrollY < 200) {
+    STATE.list.unshift(e); STATE.total++;
+    STATE.sevCounts[e.sev] = (STATE.sevCounts[e.sev] || 0) + 1;
+    if (STATE.list.length > STATE.limit) STATE.list.pop();
+    renderStream();
+  }
+  if (!softTimer) softTimer = setTimeout(() => { softTimer = null; if (STATE.live) refresh(); }, 15000);
+}
+function startStream() { if (stopStream) stopStream(); stopStream = DS.stream(onLive); }
+
+$('#liveBtn').addEventListener('click', () => {
+  STATE.live = !STATE.live;
+  $('#liveBtn').classList.toggle('on', STATE.live);
+  $('#liveBtn').setAttribute('aria-pressed', String(STATE.live));
+  $('#liveState').textContent = STATE.live ? 'en direct' : 'en pause';
+  $('#liveDot').classList.toggle('off', !STATE.live);
+  toast(STATE.live ? 'Flux repris' : 'Flux en pause — la liste ne bouge plus');
+  if (STATE.live) refresh();
 });
 
 /* clavier */
-document.addEventListener('keydown',e=>{
-  if(e.key==='/'&&document.activeElement!==$('#q')){e.preventDefault();$('#q').focus();$('#q').select();return;}
-  if(e.key==='Escape'){
-    if(!$('#sheet').hidden){closeDossier();return;}
-    if($('#inspector').classList.contains('open')){closeInspector();return;}
-    if(document.activeElement===$('#q')){$('#q').value='';STATE.q='';render();}
+document.addEventListener('keydown', e => {
+  if (!$('#gate').hidden) return;
+  if (e.key === '/' && document.activeElement !== $('#q')) { e.preventDefault(); $('#q').focus(); $('#q').select(); return; }
+  if (e.key === 'Escape') {
+    if (!$('#dialog').hidden) return closeDialog();
+    if (!$('#sheet').hidden) return closeSheet();
+    if ($('#inspector').classList.contains('open')) return closeInspector();
+    if (document.activeElement === $('#q')) { $('#q').value = ''; STATE.q = ''; refresh(); }
     return;
   }
-  if((e.key==='ArrowDown'||e.key==='ArrowUp')&&STATE.view==='stream'&&document.activeElement!==$('#q')){
-    const rows=[...document.querySelectorAll('.logs tbody tr[data-ev]')];
-    if(!rows.length)return;e.preventDefault();
-    const i=rows.findIndex(r=>r.dataset.ev===STATE.sel);
-    const n=e.key==='ArrowDown'?Math.min(rows.length-1,i+1):Math.max(0,i<0?0:i-1);
-    openInspector(rows[n].dataset.ev);
-    rows[n].scrollIntoView({block:'nearest'});
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && STATE.view === 'stream' && document.activeElement !== $('#q')) {
+    const rows = [...document.querySelectorAll('.logs tbody tr[data-ev]')];
+    if (!rows.length) return;
+    e.preventDefault();
+    const i = rows.findIndex(r => r.dataset.ev === String(STATE.sel));
+    const n = e.key === 'ArrowDown' ? Math.min(rows.length - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
+    openInspector(Number(rows[n].dataset.ev) || rows[n].dataset.ev);
+    rows[n].scrollIntoView({ block: 'nearest' });
   }
 });
 
-/* ---------- démarrage ---------- */
-buildRail();
-DataSource.fetch().then(list=>{
-  EVENTS=list;
-  render();
-  DataSource.subscribe(e=>{
-    EVENTS.unshift(e);
-    if(EVENTS.length>4000)EVENTS.length=4000;
-    $('#lastTick').textContent=hhmmss(e.t);
-    if(!$('#inspector').classList.contains('open')&&$('#sheet').hidden&&window.scrollY<160)render();
-    else renderRailCounts();
-  });
+/* ============================================================
+   Connexion et démarrage
+   ============================================================ */
+function showGate(msg) {
+  $('#app').hidden = true; $('#inspector').classList.remove('open');
+  $('#gate').hidden = false;
+  $('#gateErr').hidden = !msg; if (msg) $('#gateErr').textContent = msg;
+  $('#gatePseudo').focus();
+}
+function applyMe(d) {
+  ME.pseudo = d.staff.pseudo; ME.role = d.staff.role; ME.roleLabel = d.staff.roleLabel;
+  ME.perms = d.perms || []; ME.cats = d.cats || [];
+}
+$('#gateForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const btn = $('#gateGo'); btn.disabled = true; btn.textContent = 'Connexion…';
+  try {
+    const d = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({
+      pseudo: $('#gatePseudo').value.trim(), password: $('#gatePass').value }) });
+    applyMe(d);
+    $('#gate').hidden = true;
+    await startPanel();
+  } catch (e) {
+    $('#gateErr').hidden = false; $('#gateErr').textContent = e.message || 'Connexion impossible.';
+    $('#gatePass').value = ''; $('#gatePass').focus();
+  } finally { btn.disabled = false; btn.textContent = 'Se connecter'; }
 });
+$('#logoutBtn').addEventListener('click', async () => {
+  try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+  location.reload();
+});
+
+async function startPanel() {
+  $('#gate').hidden = true;
+  $('#app').hidden = false;
+
+  if (MODE === 'api') {
+    try {
+      const cat = await api('/api/catalogue');
+      setCatalogue(cat.cats, cat.sevs);
+      $('#retention').textContent = (cat.retention || 30) + ' jours';
+    } catch (e) {}
+    $('#modeTag').className = 'mode-tag live';
+    $('#modeTag').textContent = 'en production';
+    $('#demoNote').hidden = true;
+    $('#meBox').hidden = false;
+    $('#meName').textContent = ME.pseudo;
+    $('#meRole').textContent = ME.roleLabel || ME.role;
+    $('#meAvatar').style.cssText = avatarStyle({ name: ME.pseudo, hue: 268 });
+    $('#meAvatar').textContent = initials({ name: ME.pseudo });
+    $('#teamBtn').hidden = !can('accounts.manage');
+    $('#auditBtn').hidden = !can('audit.view');
+    document.title = `Origin Roleplay — Journal serveur (${ME.pseudo})`;
+  }
+  buildRail();
+  await refresh();
+  startStream();
+}
+
+(async function boot() {
+  let etat = 'demo';
+  // Ouverte en fichier local, la page n'a aucune API à interroger : la
+  // sonder produirait une erreur CORS dans la console pour rien.
+  if (location.protocol === 'file:') { MODE = 'demo'; DS = Demo; return startPanel(); }
+  try {
+    const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('json')) throw new Error('pas une API');
+    if (r.status === 200) { applyMe(await r.json()); etat = 'ouvert'; }
+    else if (r.status === 401) etat = 'ferme';
+    else throw new Error('réponse inattendue');
+  } catch (e) { etat = 'demo'; }
+
+  if (etat === 'demo') { MODE = 'demo'; DS = Demo; await startPanel(); }
+  else { MODE = 'api'; DS = Api; if (etat === 'ouvert') await startPanel(); else showGate(); }
+})();
 </script>
 </body>
 </html>
