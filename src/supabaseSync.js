@@ -1,9 +1,10 @@
 // ---------------------------------------------------------------------------
 //  Couche de synchronisation Supabase (optionnelle).
-//  Tout est inerte tant que supabaseConfig n'est pas renseigné : aucune
-//  dépendance n'est chargée et aucun appel réseau n'est fait.
-//  Le client @supabase/supabase-js est importé dynamiquement depuis un CDN
-//  (esm.sh) pour ne pas alourdir le bundle/déploiement mono-fichier.
+//  Tout est inerte tant que supabaseConfig n'est pas renseigné : aucun client
+//  n'est créé et aucun appel réseau n'est fait.
+//  Le client @supabase/supabase-js est EMBARQUÉ dans le build (voir
+//  supabaseClient.js) : il n'est plus téléchargé depuis un CDN tiers, qui était
+//  le seul intermédiaire dans le chemin critique de la connexion.
 // ---------------------------------------------------------------------------
 import { isSupabaseConfigured } from './supabaseConfig.js'
 import { getClient } from './supabaseClient.js'

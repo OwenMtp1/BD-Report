@@ -25,6 +25,12 @@
  *   GEMINI_API_KEY   requis — clé Google AI Studio (offre gratuite suffisante)
  *   ALLOWED_ORIGINS  origines autorisées, séparées par des virgules
  *                    ex : "https://bdreport.js.org,http://localhost:5173"
+ *                    ⚠️ FORTEMENT RECOMMANDÉ. Tant qu'il est vide, TOUT passe :
+ *                    l'URL du relais est publiée dans l'état de l'application,
+ *                    donc quiconque la relève peut consommer le quota Gemini.
+ *                    Renseigné, une requête d'ailleurs est REFUSÉE (403) avant
+ *                    le moindre appel sortant — et un `curl` de diagnostic doit
+ *                    alors porter l'en-tête : -H "Origin: https://bdreport.js.org".
  *   GEMINI_MODELS    (optionnel) modèles à essayer DANS L'ORDRE, séparés par des virgules.
  *                    Défaut : « gemini-3.6-flash,gemini-flash-lite-latest ». Chaque modèle a
  *                    son propre quota : quand l'un refuse (429), le suivant répond souvent.
@@ -55,6 +61,56 @@ const json = (data, request, env, status = 200) =>
     status,
     headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders(request, env) },
   })
+
+// ---------------------------------------------------------------- Accès
+// ⚠️ CORS N'EST PAS UNE PROTECTION DU RELAIS, et c'était le malentendu.
+// `ALLOWED_ORIGINS` ne servait qu'à composer un en-tête de réponse : le travail
+// était fait, l'appel à Gemini lancé et facturé, puis on posait poliment
+// `Access-Control-Allow-Origin: null`. Or cet en-tête n'est lu que par un
+// NAVIGATEUR ; un `curl` reçoit la réponse entière et s'en moque. N'importe qui
+// connaissant l'URL — publiée dans l'état de l'application — pouvait donc
+// consommer le quota, et demain la facture.
+//
+// On REFUSE maintenant la requête. Ce n'est pas de l'authentification pour
+// autant : l'en-tête Origin se falsifie en une ligne. Une vraie authentification
+// suppose un secret par utilisateur, impossible dans une application 100 % front
+// (toute clé du bundle est publique) — elle viendra avec les comptes Supabase,
+// dont le jeton de session pourra être vérifié ici.
+// Tant que ALLOWED_ORIGINS n'est pas renseigné, rien ne change : tout passe.
+function originRefusal(request, env) {
+  const allowed = String(env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)
+  if (!allowed.length) return null
+  const origin = request.headers.get('Origin') || ''
+  if (allowed.includes(origin)) return null
+  return json({ error: 'Origine non autorisée.', code: 403 }, request, env, 403)
+}
+
+// ⚠️ Plafond par adresse IP — il BORNE LA CASSE, il n'empêche pas l'abus.
+// Le compteur vit dans la mémoire de l'isolat Cloudflare : il se réinitialise au
+// recyclage et ne se partage pas entre isolats, donc un attaquant distribué
+// passe au travers. Il arrête ce qui arrive vraiment — un script qui martèle
+// depuis une machine — et ne demande AUCUNE configuration, là où un vrai
+// compteur partagé imposerait de créer et brancher un espace KV.
+// Seules les routes qui COÛTENT sont comptées : la collecte et la santé sont
+// gratuites, les brider n'économiserait rien et gênerait un diagnostic.
+const HITS = new Map()
+const RATE_MAX = 60          // appels payants...
+const RATE_WINDOW = 600_000  // ...par tranche de 10 minutes et par IP
+function rateRefusal(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || ''
+  if (!ip) return null
+  const now = Date.now()
+  const seen = (HITS.get(ip) || []).filter(t => now - t < RATE_WINDOW)
+  if (seen.length >= RATE_MAX) {
+    HITS.set(ip, seen)
+    const retryAfter = Math.ceil((RATE_WINDOW - (now - seen[0])) / 1000)
+    return json({ error: 'Trop de demandes depuis cette adresse. Réessayez plus tard.', code: 429, retryAfter }, request, env, 429)
+  }
+  seen.push(now)
+  HITS.set(ip, seen)
+  if (HITS.size > 5000) for (const [k, v] of HITS) { if (!v.length || now - v[v.length - 1] > RATE_WINDOW) HITS.delete(k) }
+  return null
+}
 
 // ---------------------------------------------------------------- Google News
 const decodeEntities = (s) => String(s || '')
@@ -1161,6 +1217,15 @@ export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(request, env) })
     const url = new URL(request.url)
+
+    const refused = originRefusal(request, env)
+    if (refused) return refused
+    // `/health` reste joignable sans compter : c'est ce qu'on interroge quand
+    // plus rien ne marche, et un plafond y transformerait une panne en énigme.
+    if (url.pathname !== '/health' && url.pathname !== '/' && url.pathname !== '') {
+      const throttled = rateRefusal(request, env)
+      if (throttled) return throttled
+    }
 
     try {
       if (url.pathname === '/news' && request.method === 'GET') {

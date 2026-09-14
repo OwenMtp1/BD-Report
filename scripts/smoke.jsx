@@ -2234,7 +2234,15 @@ async function main() {
   const afterReload = dbNow()
   if (afterReload.projects.some(p => p.sourceEnvId === 'env-peoplespheres')) throw new Error('Deleted auto-project resurrected after reload')
 
-  const realErrors = errors.filter(e => !e.includes('act(') && !e.includes('width(0) and height(0)') && !e.includes('Not implemented') && !e.includes('test-utils'))
+  // ⚠️ Un avertissement émis par NODE n'est pas une erreur de l'application, et
+  // le confondre rend le filet inutilisable. `@supabase/supabase-js`, désormais
+  // embarqué, entraîne une dépendance qui utilise le module `punycode` déprécié :
+  // Node imprime « (node:1234) [DEP0040] DeprecationWarning », le banc le comptait
+  // comme une erreur de rendu, et le smoke tombait sur un message VIDE — l'app,
+  // elle, n'avait rien signalé. Filtre volontairement étroit : la forme exacte des
+  // avertissements du runtime, pas les avertissements en général.
+  const nodeWarning = (e) => /^\(node:\d+\)\s+\[[A-Z0-9]+\]/.test(String(e).trim())
+  const realErrors = errors.filter(e => !e.includes('act(') && !e.includes('width(0) and height(0)') && !e.includes('Not implemented') && !e.includes('test-utils') && !nodeWarning(e))
   if (realErrors.length) throw new Error('Console errors:\n' + realErrors.join('\n---\n'))
   // Modèles d'environnement : la CONFIGURATION se reprend, jamais les données du client
   // d'origine — ouvrir un espace ne doit recopier ni rendez-vous, ni contacts, ni notes.

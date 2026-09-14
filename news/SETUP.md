@@ -36,6 +36,25 @@ Ouvrez `wrangler.toml` et vérifiez `ALLOWED_ORIGINS` : ce sont les seules origi
 à appeler le relais. Mettez-y l'URL réelle de l'application (et `http://localhost:5173` si
 vous développez en local).
 
+> ⚠️ **Si vous collez le code dans l'éditeur du tableau de bord Cloudflare** plutôt que de
+> déployer avec `wrangler`, les valeurs de `wrangler.toml` **ne sont pas appliquées**. Il faut
+> alors créer la variable à la main : Workers & Pages → votre worker → **Settings** →
+> **Variables and Secrets** → *Add variable* → nom `ALLOWED_ORIGINS`, valeur
+> `https://bdreport.js.org,https://owenmtp1.github.io`.
+>
+> **Tant que cette variable est vide, le relais accepte tout le monde.** Son URL est publiée
+> dans l'état de l'application : quiconque la relève peut consommer votre quota Gemini — et
+> votre facture le jour où l'offre gratuite ne suffit plus. Une fois renseignée, une requête
+> venue d'ailleurs est refusée (403) **avant** le moindre appel sortant.
+>
+> Ce n'est pas de l'authentification pour autant : l'en-tête `Origin` se falsifie. C'est un
+> plafond contre l'abus opportuniste, en attendant les comptes Supabase — leur jeton de session
+> pourra, lui, être vérifié ici. Un plafond par adresse IP (60 appels / 10 min) complète le
+> dispositif et ne demande aucune configuration.
+>
+> Conséquence pratique : pour interroger le relais en ligne de commande une fois la variable
+> posée, ajoutez l'en-tête — `curl -H "Origin: https://bdreport.js.org" .../diag`.
+
 ## 3. Déposer la clé, puis publier
 
 ```bash

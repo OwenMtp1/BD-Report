@@ -689,5 +689,60 @@ console.log('Diagnostic — le relais dit lui-même ce qui bloque')
   ok(/GEMINI_API_KEY/.test(b.verdict || ''), 'sans clé, le verdict doit nommer le secret à créer')
 }
 
+// ---------------------------------------------------------------------------
+console.log("Accès — l'origine est REFUSÉE, pas seulement privée de son en-tête")
+{
+  // Le cas qui a motivé le correctif : la requête était traitée jusqu'au bout,
+  // Gemini appelé et facturé, puis on répondait `Access-Control-Allow-Origin: null`.
+  // Un en-tête que seul un navigateur lit — un script s'en moque et garde les données.
+  const ENV = { GEMINI_API_KEY: 'test-key', ALLOWED_ORIGINS: 'https://bdreport.js.org' }
+  const hit = stubFetch([[/./, () => ({ body: {} })]])
+  const req = (origin) => new Request('https://relay.test/signals/collect', {
+    method: 'POST', body: JSON.stringify({ company: 'Acme' }),
+    headers: origin ? { 'Content-Type': 'application/json', Origin: origin } : { 'Content-Type': 'application/json' },
+  })
+
+  const bad = await worker.fetch(req('https://pirate.example'), ENV)
+  ok(bad.status === 403, 'origine inconnue → 403')
+  ok(hit.length === 0, 'origine inconnue → AUCUN appel sortant (rien n\'est consommé)')
+
+  const none = await worker.fetch(req(''), ENV)
+  ok(none.status === 403, 'sans en-tête Origin (curl) → 403 quand une liste est configurée')
+
+  const good = await worker.fetch(req('https://bdreport.js.org'), ENV)
+  ok(good.status !== 403, 'origine autorisée → la requête passe')
+
+  // ⚠️ Sans ALLOWED_ORIGINS, rien ne change : un relais déjà en service ne doit
+  // pas se fermer tout seul parce qu'on a déployé une nouvelle version.
+  const open = await worker.fetch(req(''), { GEMINI_API_KEY: 'test-key' })
+  ok(open.status !== 403, 'ALLOWED_ORIGINS non renseigné → comportement inchangé')
+}
+
+// ---------------------------------------------------------------------------
+console.log('Accès — plafond par adresse IP')
+{
+  stubFetch([[/./, () => ({ body: {} })]])
+  const ENV = { GEMINI_API_KEY: 'test-key' }
+  const from = (ip, path = '/signals/collect') => worker.fetch(new Request('https://relay.test' + path, {
+    method: 'POST', body: JSON.stringify({ company: 'Acme' }),
+    headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip },
+  }), ENV)
+
+  let last
+  for (let i = 0; i < 70; i++) last = await from('9.9.9.9')
+  ok(last.status === 429, 'une IP qui martèle finit par être refusée (429)')
+  const b = await last.json()
+  ok(typeof b.retryAfter === 'number' && b.retryAfter > 0, 'le refus indique COMBIEN DE TEMPS attendre')
+
+  const autre = await from('8.8.8.8')
+  ok(autre.status !== 429, 'le plafond est par IP : un autre appelant n\'est pas puni')
+
+  // Diagnostiquer une panne ne doit pas être ce qui déclenche le plafond.
+  const sante = await worker.fetch(new Request('https://relay.test/health', {
+    headers: { 'CF-Connecting-IP': '9.9.9.9' },
+  }), ENV)
+  ok(sante.status === 200, '/health reste joignable même une fois le plafond atteint')
+}
+
 if (failures) { console.error(`\nRELAIS : ${failures} vérification(s) en échec`); process.exit(1) }
-console.log('relais OK ✓ — routes, replis, quotas et garde-fous')
+console.log('relais OK ✓ — routes, replis, quotas, accès et garde-fous')

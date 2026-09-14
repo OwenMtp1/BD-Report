@@ -31,6 +31,13 @@ jobs:
           npm install
           npm run build
 
+      # Garde-fou DUR : l'étape suivante n'inline qu'une seule balise <script> et
+      # ne publie que le fichier produit. Un second morceau JS ne serait copié
+      # nulle part — 404 à l'exécution, écran blanc, et un build pourtant vert.
+      # On refuse de déployer plutôt que de livrer une app cassée.
+      - name: Check the build is a single JS chunk
+        run: node scripts/check-single-bundle.mjs
+
       - name: Inline app into a single file
         run: |
           node -e '
