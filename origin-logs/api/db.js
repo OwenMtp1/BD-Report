@@ -39,6 +39,29 @@ CREATE TABLE IF NOT EXISTS spaces(
   closed_reason TEXT
 );
 
+-- FORMULES commerciales. Un espace de logs se vend : la formule borne ce
+-- qu'il peut faire, et c'est la seule chose qui distingue un client d'un
+-- autre. Elles vivent en base — pas dans le code — parce qu'on ajuste un
+-- tarif ou un plafond bien plus souvent qu'on ne redéploie.
+-- ⚠️ « max_* » à NULL veut dire « sans limite », pas « zéro » : une formule
+-- sans plafond est un cas courant (l'offre haute), et le confondre avec
+-- un plafond à zéro bloquerait tout.
+CREATE TABLE IF NOT EXISTS plans(
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  key           TEXT    NOT NULL UNIQUE,
+  label         TEXT    NOT NULL,
+  rang          INTEGER NOT NULL DEFAULT 0,      -- ordre d'affichage
+  prix          TEXT,                            -- libellé libre : « 9 €/mois »
+  max_staff     INTEGER,                         -- NULL = sans limite
+  max_retention INTEGER,                         -- jours, NULL = sans limite
+  screens       INTEGER NOT NULL DEFAULT 1,      -- captures d'écran autorisées
+  screen_quota  INTEGER,                         -- Mo, NULL = plafond du serveur
+  max_ingest    INTEGER,                         -- lots/minute, NULL = plafond du serveur
+  notes         TEXT,
+  builtin       INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER
+);
+
 -- Les rôles vivent en base, pas dans le code : un fondateur doit pouvoir
 -- en créer, renommer, changer les droits ET les rubriques accessibles.
 -- Le catalogue ne fournit plus que les valeurs de DÉPART.
@@ -320,6 +343,11 @@ function open(file) {
       console.log('[migration] comptes staff désormais propres à chaque espace');
     } catch (e) { db.exec('ROLLBACK'); throw e; }
   }
+  // Un espace porte sa formule et son échéance. `plan_key` plutôt qu'un
+  // identifiant numérique : on lit l'état d'un espace sans jointure, et
+  // supprimer une formule ne casse pas la ligne de l'espace.
+  ensureColumn(db, 'spaces', 'plan_key', 'TEXT');
+  ensureColumn(db, 'spaces', 'plan_until', 'INTEGER');   // échéance, NULL = sans fin
   db.exec('CREATE INDEX IF NOT EXISTS idx_st_space ON staff(space_id)');
   // COLLATE NOCASE : « Nyx » et « nyx » sont le même compte pour qui se
   // connecte, donc le même compte pour l'index.

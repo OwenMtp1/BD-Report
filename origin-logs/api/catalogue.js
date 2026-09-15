@@ -66,6 +66,7 @@ const PERMS = [
   { id:'actions.unban',        label:'Lever un bannissement' },
   { id:'actions.give',         label:'Rendre un item ou de l’argent' },
   { id:'screens.request',      label:'Demander une capture de l’écran d’un joueur' },
+  { id:'players.gdpr',         label:'Exporter et effacer les données d’un joueur (RGPD)' },
   { id:'audit.view',           label:'Consulter le journal du panneau' },
   { id:'accounts.manage',      label:'Gérer les comptes staff' },
   { id:'settings.discord',     label:'Configurer la liaison Discord et les rôles' },

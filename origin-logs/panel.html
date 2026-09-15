@@ -775,6 +775,13 @@ select.input{height:36px}
 .pnum b{display:block;font-variation-settings:'wdth' 84;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums;line-height:1.1}
 .pnum span{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .pnum.crit b{color:var(--crit)}
+.pact{display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--edge);padding-top:10px;margin-top:-2px}
+
+/* ---------- sauvegardes ---------- */
+.sauv-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.sauv-actions .sub{font-size:11.5px}
+#sauvRows code{font-family:var(--mono);font-size:11px}
+#sauvPoids b{font-variation-settings:'wdth' 86}
 
 /* ---------- résultat de vérification ---------- */
 .chk-group{border:1px solid var(--edge);border-radius:10px;background:var(--panel);overflow:hidden}
@@ -1141,6 +1148,38 @@ select.input{height:36px}
         </div>
       </div>
       <div class="grid"><div class="pgrid" id="platSpaces"></div></div>
+
+      <!-- ============ SAUVEGARDES ============
+           Une sauvegarde qu'il faut penser à prendre n'est pas prise : celle
+           du haut part toute seule. Ce panneau sert surtout le jour d'après —
+           retrouver celle d'hier, la télécharger, repartir de là. -->
+      <div class="grid">
+        <div class="panel">
+          <div class="panel-head">
+            <h2 class="eyebrow">Sauvegardes &amp; place occupée</h2>
+            <span class="count" id="sauvNote"></span>
+          </div>
+          <div class="panel-body">
+            <div class="sauv-actions">
+              <button class="btn primary" id="sauvNow">Sauvegarder maintenant</button>
+              <button class="btn" id="sauvRestore">Restaurer un espace…</button>
+              <input type="file" id="sauvFile" accept="application/json,.json" hidden>
+              <span class="sub" id="sauvHint"></span>
+            </div>
+            <div class="status" id="sauvStatus"></div>
+            <div class="reg-scroll" style="margin-top:12px">
+              <table class="reg">
+                <thead><tr>
+                  <th scope="col">Sauvegarde</th><th scope="col">Prise</th>
+                  <th scope="col">Taille</th><th scope="col" style="text-align:right">Action</th>
+                </tr></thead>
+                <tbody id="sauvRows"></tbody>
+              </table>
+            </div>
+            <div class="sub" style="margin-top:10px" id="sauvPoids"></div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ JOURNAL D'ADMINISTRATION ============ -->
@@ -1622,6 +1661,15 @@ const ago = t => { const s = Math.max(0, (Date.now() - t) / 1000);
   if (s < 3600) return 'il y a ' + Math.floor(s / 60) + ' min';
   if (s < 86400) return 'il y a ' + Math.floor(s / 3600) + ' h';
   return 'il y a ' + Math.floor(s / 86400) + ' j'; };
+// Une taille se lit en Go quand c'en est, en Ko quand c'en est : un
+// chiffre en octets bruts ne se compare pas d'un coup d'œil.
+const octets = o => {
+  const n = Number(o) || 0;
+  if (n < 1024) return n + ' o';
+  if (n < 1048576) return (n / 1024).toFixed(0) + ' Ko';
+  if (n < 1073741824) return (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' Mo';
+  return (n / 1073741824).toFixed(2) + ' Go';
+};
 const esc = s => String(s == null ? '' : s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const strip = h => String(h || '').replace(/<[^>]+>/g, '');
@@ -2346,7 +2394,21 @@ function actionBar(key, name, banni) {
   // Regarder l'écran de quelqu'un est une action de modération comme une
   // autre : elle porte un motif et s'inscrit au journal.
   if (can('screens.request')) b.push(`<button class="btn sm" data-act="screenshot" data-key="${esc(key)}" data-name="${esc(name)}">Demander une capture</button>`);
-  return b.length ? `<div class="block"><h3 class="eyebrow">Modération</h3><div class="tools">${b.join('')}</div></div>` : '';
+  const mod = b.length ? `<div class="block"><h3 class="eyebrow">Modération</h3><div class="tools">${b.join('')}</div></div>` : '';
+  // ⚠️ Séparé de la modération, et pour de bon : répondre à « donnez-moi
+  // ce que vous avez sur moi » ou « effacez-le » n'est pas une sanction,
+  // c'est une obligation. Les mélanger ferait chercher l'un dans l'autre.
+  if (!can('players.gdpr')) return mod;
+  return mod + `<div class="block">
+    <h3 class="eyebrow">Données personnelles</h3>
+    <div class="tools">
+      <button class="btn sm" data-rgpd="export" data-key="${esc(key)}" data-name="${esc(name)}">Exporter ses données</button>
+      <button class="btn sm danger" data-rgpd="effacer" data-key="${esc(key)}" data-name="${esc(name)}">Effacer ses données</button>
+    </div>
+    <span class="lite-m">L’export rend un fichier remettable au joueur. L’effacement retire
+    ses évènements, son dossier et ses captures ; un bannissement en cours est conservé
+    sans son nom — sinon l’effacement servirait à lever une sanction.</span>
+  </div>`;
 }
 
 /* ---------- inspecteur ---------- */
@@ -3115,6 +3177,7 @@ async function demoApi(path, opts) {
       return { members: DEMO_EQUIPE.map(m => Object.assign({ spaceId:1, platform:m.id === 1 }, m)) };
     if (path.startsWith('/api/platform/overview')) return demoOverview();
     if (path.startsWith('/api/platform/check'))    return demoCheck();
+    if (path.startsWith('/api/platform/sauvegardes')) return demoSauvegardes();
     if (path.startsWith('/api/platform/journal'))  return demoJournal();
     return { spaces: DEMO_ESPACES, monEspace: 1, discordGlobal: true };
   }
@@ -3151,13 +3214,13 @@ function demoOverview() {
   const esp = [
     { id:1, nom:'Origin Roleplay', etat:'actif', evenements24:18422, evenements:1840233, membres:24,
       suspendus:2, bannis:37, alertes:11, actionsEnAttente:0, dernierEvenement:Date.now()-2*60000,
-      rolesRelies:12, proprietaire:'Owen', discordPret:true, retention:30 },
+      rolesRelies:12, proprietaire:'Owen', discordPret:true, retention:30, poids:1.31e9 },
     { id:2, nom:'Origin RP — serveur test', etat:'actif', evenements24:0, evenements:9120, membres:6,
       suspendus:0, bannis:2, alertes:0, actionsEnAttente:3, dernierEvenement:Date.now()-31*h,
-      rolesRelies:0, proprietaire:'Vortex', discordPret:false, retention:7 },
+      rolesRelies:0, proprietaire:'Vortex', discordPret:false, retention:7, poids:7.4e6 },
     { id:3, nom:'Origin RP — ancienne saison', etat:'ferme', evenements24:0, evenements:441027, membres:0,
       suspendus:0, bannis:0, alertes:0, actionsEnAttente:0, dernierEvenement:Date.now()-62*24*h,
-      rolesRelies:14, proprietaire:null, discordPret:true, retention:90 }
+      rolesRelies:14, proprietaire:null, discordPret:true, retention:90, poids:3.02e8 }
   ];
   const poids = [.55,.40,.25,.15,.10,.08,.10,.15,.22,.30,.38,.45,.50,.50,.55,.60,.68,.78,.90,1,1,.95,.85,.70];
   const debut = Date.now() - 24 * h;
@@ -3166,7 +3229,29 @@ function demoOverview() {
     total: { espaces:3, actifs:2, fermes:1, evenements24:18422, evenements:2290380,
              membres:30, bannis:39, alertes:11 },
     serie: { debut, taille:h, valeurs: poids.map((_, i) => Math.round(poids[(dec + i + 1) % 24] * 1180)) },
-    discordGlobal: true };
+    discordGlobal: true,
+    stockage: demoStockage(esp),
+    sauvegarde: { active:true, derniere: Date.now() - 5 * h, erreur:null } };
+}
+function demoStockage(esp) {
+  const e = (esp || []).map(x => ({ id:x.id, nom:x.nom, journaux: Math.round(x.poids * .82),
+                                    captures: Math.round(x.poids * .18), evenements:x.evenements,
+                                    fichiers: Math.round(x.evenements / 900), total:x.poids }))
+    .sort((a, b) => b.total - a.total);
+  const base = e.reduce((a, x) => a + x.journaux, 0);
+  const capt = e.reduce((a, x) => a + x.captures, 0);
+  const sauv = Math.round(base * 6.2);
+  return { base, captures:capt, sauvegardes:sauv, total: base + capt + sauv,
+           espaces:e, seuil: 8 * 1073741824 };
+}
+function demoSauvegardes() {
+  const j = 86400000, t = Date.now();
+  const l = [0, 1, 2, 3, 4, 5, 6].map(i => ({
+    fichier: 'origin-logs-' + new Date(t - i * j).toISOString().slice(0, 10) + '-0300.db',
+    octets: Math.round(1.28e9 * (1 - i * .01)), le: t - i * j - 5 * 3600000 }));
+  return { sauvegardes:l, garde:14, toutesLesHeures:24,
+           octets: l.reduce((a, x) => a + x.octets, 0), derniere: l[0].le, erreur:null,
+           dossier: 'api/data/backups', stockage: demoStockage(demoOverview().espaces) };
 }
 function demoCheck() {
   const C = (n, t, d, r) => ({ niveau:n, titre:t, detail:d, remede:r });
@@ -3346,6 +3431,13 @@ async function openPlatform() {
         <input class="input" id="nsStaff" placeholder="ID du rôle staff" inputmode="numeric">
       </div>
       <div class="map-row" style="border:none">
+        <select class="input" id="nsPlan" title="Formule vendue à ce client">
+          <option value="">— sans formule —</option>
+          ${(d.formules || []).map(f => `<option value="${esc(f.key)}">${esc(f.label)}${f.prix ? ' · ' + esc(f.prix) : ''}</option>`).join('')}
+        </select>
+        <input class="input" id="nsEch" type="date" title="Échéance — vide = sans fin">
+      </div>
+      <div class="map-row" style="border:none">
         <input class="input" id="nsRet" type="number" min="1" max="3650" value="30" title="Rétention en jours">
         <button class="btn primary" id="nsSpaceGo">Créer l’espace</button>
       </div>
@@ -3379,6 +3471,22 @@ function carteEspace(sp, d) {
       <input class="input" data-sp="${sp.id}" data-spfield="guildId" value="${esc(sp.guildId)}" placeholder="ID du serveur Discord" inputmode="numeric">
       <input class="input" data-sp="${sp.id}" data-spfield="staffRoleId" value="${esc(sp.staffRoleId)}" placeholder="ID du rôle staff" inputmode="numeric">
     </div>
+    <!-- La formule et l'échéance : ce qui fait qu'un espace se vend. -->
+    <div class="map-row" style="border:none">
+      <span><span class="map-name">Formule</span>
+        <span class="map-desc">${plafondsTexte(sp.plafonds)}</span></span>
+      <select class="input" data-sp="${sp.id}" data-spfield="formule">
+        <option value="">— sans formule —</option>
+        ${(d.formules || []).map(f => `<option value="${esc(f.key)}" ${f.key === sp.formule ? 'selected' : ''}>${esc(f.label)}${f.prix ? ' · ' + esc(f.prix) : ''}</option>`).join('')}
+      </select>
+    </div>
+    <div class="map-row" style="border:none">
+      <span><span class="map-name">Échéance</span>
+        <span class="map-desc">${echeanceTexte(sp.echeanceEtat)}</span></span>
+      <input class="input" type="date" data-sp="${sp.id}" data-spfield="echeance"
+             value="${sp.echeance ? new Date(sp.echeance).toISOString().slice(0,10) : ''}"
+             title="Vide = sans fin. À la date, l’espace se ferme tout seul.">
+    </div>
     <div class="keybox">
       <code>${esc(sp.cle)}</code>
       <button class="btn sm" data-copykey="${esc(sp.cle)}">Copier la clé</button>
@@ -3391,6 +3499,51 @@ function carteEspace(sp, d) {
       <button class="btn sm danger" data-spdel="${sp.id}" data-spname="${esc(sp.nom)}">Supprimer l’espace</button>
     </div>
   </div>`;
+}
+
+/* ---------- répondre à une demande d'un joueur ---------- */
+async function rgpd(quoi, key, nom) {
+  if (MODE === 'demo') return toast('Mode démonstration : aucune donnée réelle.');
+  if (quoi === 'export') {
+    // Le fichier part par le navigateur : c'est lui qu'on remet au joueur.
+    window.open('/api/rgpd/' + encodeURIComponent(key), '_blank', 'noopener');
+    return toast('Export lancé — le fichier est remettable au joueur.');
+  }
+  if (!confirm(`Effacer toutes les données de ${nom} ?\n\n` +
+               `Ses évènements, son dossier et ses captures d’écran partent définitivement.\n` +
+               `Un bannissement en cours est conservé, sans son nom.`)) return;
+  try {
+    let r = await api('/api/rgpd/' + encodeURIComponent(key), { method:'DELETE', body: JSON.stringify({}) });
+    toast(r.message || 'Données effacées.');
+  } catch (e) {
+    // Le refus « bannissement en cours » attend une confirmation explicite.
+    if (/bannissement\(s\) en cours/.test(e.message || '')) {
+      if (!confirm(e.message + '\n\nConfirmer ?')) return;
+      try {
+        const r = await api('/api/rgpd/' + encodeURIComponent(key),
+          { method:'DELETE', body: JSON.stringify({ confirmeBanActif: true }) });
+        toast(r.message || 'Données effacées.');
+      } catch (e2) { return toast(e2.message); }
+    } else return toast(e.message);
+  }
+  closeSheet(); refresh();
+}
+
+/* ---------- ce que dit une formule, en une ligne ---------- */
+function plafondsTexte(p) {
+  if (!p || !p.key) return 'Aucun plafond : ni comptes, ni rétention maximale.';
+  const b = [];
+  b.push((p.maxStaff == null ? 'comptes illimités' : p.maxStaff + ' comptes'));
+  b.push((p.maxRetention == null ? 'rétention libre' : p.maxRetention + ' j max'));
+  b.push(p.screens ? 'captures' : 'sans capture');
+  return b.join(' · ');
+}
+function echeanceTexte(e) {
+  if (!e || !e.fin) return 'Sans fin — l’espace reste ouvert.';
+  const j = Math.ceil(e.reste / 86400000);
+  if (e.expire) return 'Dépassée — l’espace a été fermé.';
+  if (e.bientot) return `Dans ${j} jour(s) : l’espace se fermera tout seul.`;
+  return `Le ${new Date(e.fin).toLocaleDateString('fr-FR')} — fermeture automatique.`;
 }
 
 /* ---------- fiche d'installation d'un client ----------
@@ -3577,7 +3730,8 @@ async function openTeam() {
    ============================================================ */
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
-    + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],'
+    + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],[data-rgpd],'
+    + '[data-export],[data-sauvdl],[data-sauvrm],'
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
@@ -3585,6 +3739,8 @@ document.addEventListener('click', async ev => {
     if (id === 'platformBtn') openPlatform();
     if (id === 'nrGo')        creerRole();
     if (id === 'nsSpaceGo')   creerEspace();
+    if (id === 'sauvNow')     sauvegarderMaintenant();
+    if (id === 'sauvRestore') $('#sauvFile').click();
     return;
   }
   ev.preventDefault(); ev.stopImmediatePropagation();
@@ -3639,18 +3795,20 @@ document.addEventListener('click', async ev => {
   if (D.spsave) {
     const val = f => { const n = document.querySelector(`[data-sp="${D.spsave}"][data-spfield="${f}"]`); return n ? n.value.trim() : undefined; };
     try { await api('/api/platform/spaces/' + D.spsave, { method:'PATCH',
-            body: JSON.stringify({ guildId: val('guildId'), staffRoleId: val('staffRoleId') }) });
+            body: JSON.stringify({ guildId: val('guildId'), staffRoleId: val('staffRoleId'),
+                                   formule: val('formule'), echeance: val('echeance') }) });
           toast('Espace enregistré.'); openPlatform(); } catch (e) { toast(e.message); }
     return;
   }
   if (D.regen) {
-    if (!confirm('Régénérer la clé ? Le serveur de jeu cessera d’écrire tant que vous n’aurez pas collé la nouvelle dans config.lua.')) return;
+    if (!confirm('Régénérer la clé ? Le serveur de jeu cessera d’écrire tant que le client n’aura pas collé la nouvelle dans son server.cfg.')) return;
     try { const r = await api('/api/platform/spaces/' + D.regen, { method:'PATCH', body: JSON.stringify({ regenererCle:true }) });
-          toast('Nouvelle clé générée — collez-la dans config.lua.'); openPlatform(); } catch (e) { toast(e.message); }
+          toast('Nouvelle clé générée — renvoyez la fiche d’installation au client.'); openPlatform(); } catch (e) { toast(e.message); }
     return;
   }
   if (D.copykey) return copy(D.copykey, 'Clé d’ingestion copiée');
   if (D.fiche) return ficheInstallation(D.fiche);
+  if (D.rgpd) return rgpd(D.rgpd, D.key, D.name);
   if (D.copyfiche) return copy(D.copyfiche, 'Configuration copiée — à coller dans server.cfg');
   if (D.spdel) {
     const nom = prompt(`Supprimer « ${D.spname} » efface TOUS ses journaux, définitivement.\nRecopiez son nom pour confirmer :`, '');
@@ -3660,6 +3818,22 @@ document.addEventListener('click', async ev => {
     return;
   }
   if (D.owner) return choisirProprietaire(D.owner);
+  // L'export part par le navigateur, avec le cookie de session : c'est le
+  // serveur qui nomme le fichier et qui journalise la sortie.
+  if (D.export)  return telecharger('/api/platform/spaces/' + D.export + '/export');
+  if (D.sauvdl)  return telecharger('/api/platform/sauvegardes/' + encodeURIComponent(D.sauvdl));
+  if (D.sauvrm) {
+    if (!confirm(`Supprimer la sauvegarde « ${D.sauvrm} » ? Elle ne sera plus disponible pour restaurer.`)) return;
+    try { SAUV = await api('/api/platform/sauvegardes/' + encodeURIComponent(D.sauvrm), { method:'DELETE' });
+          rendreSauvegardes(); toast('Sauvegarde supprimée.'); } catch (e) { toast(e.message); }
+    return;
+  }
+});
+document.addEventListener('change', ev => {
+  if (ev.target.id !== 'sauvFile') return;
+  const f = ev.target.files && ev.target.files[0];
+  ev.target.value = '';                    // rejouable deux fois de suite
+  if (f) restaurerEspace(f);
 });
 
 async function creerRole() {
@@ -3680,8 +3854,9 @@ async function creerEspace() {
   try {
     const r = await api('/api/platform/spaces', { method:'POST', body: JSON.stringify({
       nom, guildId: $('#nsGuild').value.trim(), staffRoleId: $('#nsStaff').value.trim(),
-      retention: Number($('#nsRet').value) }) });
-    toast('Espace créé — sa clé d’ingestion est prête.');
+      retention: Number($('#nsRet').value),
+      formule: $('#nsPlan').value, echeance: $('#nsEch').value }) });
+    toast('Espace créé — ouvrez sa fiche d’installation pour la transmettre.');
     openPlatform();
   } catch (e) { toast(e.message); }
 }
@@ -3700,6 +3875,7 @@ const JRN_FILTRES = { space:'', action:'', q:'' };
 async function chargerPlateforme() {
   try { PLAT = await api('/api/platform/overview'); } catch (e) { return toast(e.message); }
   rendrePlateforme();
+  chargerSauvegardes(true);
 }
 function sante(e) {
   // Un espace « en bonne santé » n'est pas un espace silencieux : c'est
@@ -3733,7 +3909,13 @@ function rendrePlateforme() {
     <div class="status-cell ${d.espaces.some(e => sante(e).c === 'var(--crit)') ? 'crit' : ''}">
       <span class="status-k">Espaces en défaut</span>
       <span class="status-v">${d.espaces.filter(e => sante(e).c === 'var(--crit)').length}</span>
-      <span class="status-d">à regarder en priorité</span></div>`;
+      <span class="status-d">à regarder en priorité</span></div>
+    ${d.stockage ? `<div class="status-cell ${d.stockage.total > d.stockage.seuil ? 'crit' : ''}">
+      <span class="status-k">Place occupée</span>
+      <span class="status-v">${octets(d.stockage.total)}</span>
+      <span class="status-d">${d.sauvegarde && d.sauvegarde.derniere
+        ? 'sauvegardé ' + ago(d.sauvegarde.derniere)
+        : (d.sauvegarde && d.sauvegarde.active ? 'jamais sauvegardé' : 'sauvegardes désactivées')}</span></div>` : ''}`;
 
   dessinerPlatChart(d.serie);
 
@@ -3755,10 +3937,103 @@ function rendrePlateforme() {
         <span class="pnum"><b>${e.bannis}</b><span>bannis</span></span>
       </div>
       <div class="psub">${e.dernierEvenement ? 'dernier journal ' + ago(e.dernierEvenement) : 'aucun journal reçu'}
-        · ${e.rolesRelies} rôle(s) relié(s) · rétention ${e.retention} j</div>
+        · ${e.rolesRelies} rôle(s) relié(s) · rétention ${e.retention} j${
+        e.poids ? ' · environ ' + octets(e.poids) : ''}</div>
+      <div class="pact"><button class="btn sm" data-export="${e.id}"
+        title="Télécharger les journaux, les comptes et les rôles de cet espace">Exporter cet espace</button></div>
     </div>`;
   }).join('');
 }
+/* ---------- sauvegardes ----------
+   ⚠️ Le bouton « Sauvegarder maintenant » ne remplace PAS la sauvegarde
+   automatique, il la double : celle qu'on prend avant une manœuvre. Le
+   panneau le dit, sinon on croit que cliquer est la procédure. */
+let SAUV = null;
+async function chargerSauvegardes(silence) {
+  try { SAUV = await api('/api/platform/sauvegardes'); }
+  catch (e) { if (!silence) toast(e.message); return; }
+  rendreSauvegardes();
+}
+function rendreSauvegardes() {
+  const d = SAUV; if (!d || !$('#sauvRows')) return;
+  const st = d.stockage || {};
+  $('#sauvNote').textContent = d.toutesLesHeures > 0
+    ? `automatique toutes les ${d.toutesLesHeures} h · ${d.garde} gardées`
+    : 'automatique désactivée';
+  $('#sauvHint').textContent = d.toutesLesHeures > 0
+    ? 'Prise toute seule. Ce bouton sert avant une manœuvre.'
+    : 'Aucune sauvegarde automatique : BACKUP_EVERY_HOURS vaut 0 dans api/.env.';
+
+  $('#sauvStatus').innerHTML = `
+    <div class="status-cell ${!d.derniere ? 'crit' : ''}"><span class="status-k">Dernière</span>
+      <span class="status-v">${d.derniere ? ago(d.derniere).replace('il y a ', '') : '—'}</span>
+      <span class="status-d">${d.sauvegardes.length} sauvegarde(s) gardée(s)</span></div>
+    <div class="status-cell"><span class="status-k">Base</span>
+      <span class="status-v">${octets(st.base || 0)}</span>
+      <span class="status-d">journaux, comptes, rôles</span></div>
+    <div class="status-cell"><span class="status-k">Captures</span>
+      <span class="status-v">${octets(st.captures || 0)}</span>
+      <span class="status-d">images sur le disque</span></div>
+    <div class="status-cell"><span class="status-k">Sauvegardes</span>
+      <span class="status-v">${octets(d.octets || 0)}</span>
+      <span class="status-d">${esc(d.dossier || '')}</span></div>
+    <div class="status-cell ${st.total > st.seuil ? 'crit' : ''}"><span class="status-k">En tout</span>
+      <span class="status-v">${octets(st.total || 0)}</span>
+      <span class="status-d">alerte au-delà de ${octets(st.seuil || 0)}</span></div>`;
+
+  $('#sauvRows').innerHTML = d.sauvegardes.length ? d.sauvegardes.map(x => `
+    <tr>
+      <td><code>${esc(x.fichier)}</code></td>
+      <td>${dayLabel(x.le)} ${hhmmss(x.le)}<span class="psub"> · ${ago(x.le)}</span></td>
+      <td>${octets(x.octets)}</td>
+      <td style="text-align:right">
+        <button class="btn sm" data-sauvdl="${esc(x.fichier)}">Télécharger</button>
+        <button class="btn sm danger" data-sauvrm="${esc(x.fichier)}">Supprimer</button>
+      </td>
+    </tr>`).join('')
+    : `<tr><td colspan="4" class="sub">Aucune sauvegarde pour l’instant.
+        ${d.toutesLesHeures > 0 ? 'La première partira d’elle-même.' : ''}</td></tr>`;
+
+  const esp = (st.espaces || []).filter(x => x.total > 0);
+  $('#sauvPoids').innerHTML = esp.length
+    ? 'Poids par espace (approximatif — SQLite n’attribue pas ses pages à un client) : '
+      + esp.map(x => `<b>${esc(x.nom)}</b> ${octets(x.total)}`).join(' · ')
+    : '';
+}
+async function sauvegarderMaintenant() {
+  const b = $('#sauvNow'); b.disabled = true; b.textContent = 'Sauvegarde…';
+  try {
+    const r = await api('/api/platform/sauvegardes', { method:'POST' });
+    SAUV = r; rendreSauvegardes();
+    toast(`Sauvegarde prise — ${octets(r.octets)}`
+      + (r.jetees && r.jetees.length ? ` (${r.jetees.length} ancienne(s) jetée(s))` : ''));
+  } catch (e) { toast(e.message); }
+  finally { b.disabled = false; b.textContent = 'Sauvegarder maintenant'; }
+}
+// Télécharger passe par le cookie de session : une balise <a download>
+// suffit, et c'est le serveur qui décide du nom.
+function telecharger(url) {
+  const a = document.createElement('a');
+  a.href = url; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
+}
+async function restaurerEspace(f) {
+  let doc;
+  try { doc = JSON.parse(await f.text()); }
+  catch (e) { return toast('Ce fichier n’est pas un export de panneau.'); }
+  const nom = prompt('Nom de l’espace restauré :',
+    (doc.espace && doc.espace.nom ? doc.espace.nom : 'Espace') + ' (restauré)');
+  if (nom === null) return;
+  toast('Restauration en cours…');
+  try {
+    const r = await api('/api/platform/restaurer', { method:'POST',
+      body: JSON.stringify({ fichier: doc, nom }) });
+    toast(`« ${r.nom} » restauré — ${r.compte.events || 0} évènement(s)`
+      + (r.comptesSuspendus ? `, ${r.comptesSuspendus} compte(s) rendus SUSPENDUS` : '')
+      + (r.capturesOrphelines ? `, ${r.capturesOrphelines} capture(s) sans image` : ''));
+    await chargerPlateforme(); await chargerSauvegardes(true);
+  } catch (e) { toast(e.message); }
+}
+
 function dessinerPlatChart(serie) {
   if (!serie) return;
   const v = serie.valeurs || [], n = v.length || 24;

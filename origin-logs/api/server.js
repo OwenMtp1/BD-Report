@@ -18,6 +18,9 @@ const AUTH = require('./auth.js');
 const CAT = require('./catalogue.js');
 const DISCORD = require('./discord.js');
 const ROLESVC = require('./roles.js');
+const PLANS = require('./plans.js');
+const SAUV = require('./sauvegarde.js');
+const TRANSF = require('./transfert.js');
 
 /* ---------- configuration ---------- */
 // setup.js écrit un .env ; sans cette lecture, `npm start` réclamerait
@@ -198,12 +201,13 @@ function debit(cle, max, fenetreMs) {
   if (seaux.size > 5000) for (const [k, v] of seaux) if (t - v.debut > fenetreMs) seaux.delete(k);
   return e.n <= max ? 0 : Math.ceil((e.debut + fenetreMs - t) / 1000);
 }
-function readBody(req) {
+function readBody(req, plafond) {
+  const max = plafond || CFG.maxBody;
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
     req.on('data', c => {
       size += c.length;
-      if (size > CFG.maxBody) { reject(new Error('corps trop volumineux')); req.destroy(); return; }
+      if (size > max) { reject(new Error('corps trop volumineux')); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => {
@@ -382,6 +386,72 @@ async function verdictEspace(c, esp, userId) {
    qu'ils se connectent ou non.
    ============================================================ */
 const SWEEP = { enCours: false, dernier: 0, verifies: 0, retires: 0, erreurs: 0, duree: 0, prochain: 0 };
+
+/* ---------- sauvegardes automatiques ----------
+   ⚠️ « Copier le .db de temps en temps » ne tient pas passé quelques
+   clients : personne ne le fait, et on ne s'en aperçoit que le jour où il
+   faudrait restaurer. La sauvegarde part donc d'elle-même, garde une
+   rotation bornée, et le contrôle de santé dit son âge — une sauvegarde
+   vieille de trois semaines est presque aussi inutile qu'aucune. */
+const SAUVE = { derniere: 0, erreur: null, enCours: false };
+
+function etatSauvegardes() {
+  const l = SAUV.liste(CFG.dbFile);
+  const total = l.reduce((a, x) => a + x.octets, 0);
+  return {
+    sauvegardes: l, garde: SAUV.KEEP, toutesLesHeures: SAUV.EVERY_H,
+    octets: total, derniere: l[0] ? l[0].le : 0, erreur: SAUVE.erreur,
+    dossier: SAUV.dossier(CFG.dbFile), stockage: stockage()
+  };
+}
+
+/* Ce que pèse la plateforme, et où. Sans ce chiffre, un disque se remplit
+   sans prévenir et l'API s'arrête d'un coup — le seul incident qui ne
+   laisse aucune trace, puisqu'écrire la trace demande justement du disque. */
+function stockage() {
+  const espaces = db.prepare('SELECT id, name FROM spaces').all().map(sp => {
+    const w = SAUV.poids(db, sp.id, CFG.screenDir);
+    return { id: sp.id, nom: sp.name, journaux: w.journaux, captures: w.captures,
+             evenements: w.evenements, fichiers: w.fichiers, total: w.total };
+  }).sort((a, b) => b.total - a.total);
+  const base = SAUV.tailleBase(CFG.dbFile);
+  const sauv = SAUV.liste(CFG.dbFile).reduce((a, x) => a + x.octets, 0);
+  const capt = espaces.reduce((a, x) => a + x.captures, 0);
+  return {
+    base, sauvegardes: sauv, captures: capt, total: base + sauv + capt,
+    espaces,
+    // Seuil d'alerte : au-delà, le contrôle de santé passe en « attention ».
+    seuil: Number(process.env.STORAGE_WARN_GB || 8) * 1073741824
+  };
+}
+
+function planifierSauvegardes() {
+  if (!(SAUV.EVERY_H > 0)) {
+    console.log('  Sauvegardes automatiques DÉSACTIVÉES (BACKUP_EVERY_HOURS=0).');
+    return;
+  }
+  const derniere = SAUV.derniere(CFG.dbFile);
+  SAUVE.derniere = derniere ? derniere.le : 0;
+  const tour = () => {
+    if (SAUVE.enCours) return;
+    const age = now() - (SAUVE.derniere || 0);
+    if (age < SAUV.EVERY_H * 3600000) return;
+    SAUVE.enCours = true;
+    try {
+      const r = SAUV.faire(db, CFG.dbFile);
+      SAUVE.derniere = r.le; SAUVE.erreur = null;
+      console.log(`  Sauvegarde ${r.fichier} — ${(r.octets / 1048576).toFixed(1)} Mo` +
+                  (r.jetees.length ? ` (${r.jetees.length} ancienne(s) jetée(s))` : ''));
+    } catch (e) {
+      SAUVE.erreur = e.message;
+      console.error('  Sauvegarde impossible :', e.message);
+    } finally { SAUVE.enCours = false; }
+  };
+  // Au démarrage on ne sauvegarde PAS tout de suite : redémarrer dix fois
+  // pour une mise au point produirait dix sauvegardes et jetterait les
+  // vraies. On attend la première heure ronde du minuteur.
+  setInterval(tour, 15 * 60 * 1000).unref();
+}
 
 async function balayerAcces(raison) {
   if (SWEEP.enCours) return SWEEP;
@@ -819,19 +889,39 @@ function doAction(me, b, ip) {
 }
 
 /* ---------- entretien ---------- */
+/* ---------- échéances ----------
+   ⚠️ Un client qui cesse de payer ne doit pas dépendre de votre vigilance :
+   l'espace se ferme tout seul au passage de la date. Fermé, pas supprimé —
+   ses journaux restent, et rouvrir est un clic le jour où il repaie. */
+function appliquerEcheances() {
+  const faits = PLANS.fermerExpires(db);
+  for (const f of faits) {
+    audit(null, 'plateforme.espace.echeance', `${f.nom} — échéance du ${new Date(f.fin).toLocaleDateString('fr-FR')}`, null, f.id);
+    console.log(`[formule] « ${f.nom} » fermé : échéance dépassée`);
+  }
+  return faits;
+}
+
 function purge() {
   // Chaque espace garde ses journaux aussi longtemps qu'il l'a décidé.
   let total = 0;
-  for (const sp of db.prepare('SELECT id, retention FROM spaces').all()) {
-    const jours = Number(sp.retention) || CFG.retention;
+  for (const sp of db.prepare('SELECT * FROM spaces').all().map(DB.row)) {
+    // ⚠️ La formule BORNE la rétention, elle ne la fixe pas : un client
+    // qui choisit 7 jours en formule Illimité garde 7 jours. C'est le
+    // plafond qui descend, jamais la demande qui monte.
+    const max = PLANS.forSpace(db, sp).maxRetention;
+    let jours = Number(sp.retention) || CFG.retention;
+    if (max != null) jours = Math.min(jours, max);
     total += DB.num(db.prepare('DELETE FROM events WHERE space_id = ? AND ts < ?')
                       .run(sp.id, now() - jours * 86400000).changes);
   }
   // Les captures suivent la même rétention, et leur FICHIER part avec la
   // ligne : effacer l'une sans l'autre laisserait soit des images que rien
   // ne référence, soit des vignettes qui ne s'ouvrent plus.
-  for (const sp of db.prepare('SELECT id, retention FROM spaces').all()) {
-    const jours = CFG.screenDays || Number(sp.retention) || CFG.retention;
+  for (const sp of db.prepare('SELECT * FROM spaces').all().map(DB.row)) {
+    const maxPlan = PLANS.forSpace(db, sp).maxRetention;
+    let jours = CFG.screenDays || Number(sp.retention) || CFG.retention;
+    if (maxPlan != null) jours = Math.min(jours, maxPlan);
     const vieilles = db.prepare('SELECT id, file FROM screens WHERE space_id = ? AND taken_at < ?')
       .all(sp.id, now() - jours * 86400000).map(DB.row);
     for (const sc of vieilles) {
@@ -908,7 +998,9 @@ async function route(req, res) {
     }
     // ⚠️ AVANT de lire le corps : refuser après l'avoir absorbé aurait
     // quand même fait passer deux mégaoctets par la machine à chaque coup.
-    const attente = debit('ingest:' + esp.id, CFG.maxIngestMin, 60000);
+    const plafond = PLANS.forSpace(db, esp).maxIngest;
+    const attente = debit('ingest:' + esp.id,
+      plafond == null ? CFG.maxIngestMin : Math.min(plafond, CFG.maxIngestMin), 60000);
     if (attente) {
       res.setHeader('retry-after', String(attente));
       return fail(res, 429, `Trop de dépôts pour cet espace. Réessayez dans ${attente} s.`);
@@ -939,6 +1031,9 @@ async function route(req, res) {
       if (debit('cle:' + ip, 30, 60000)) return fail(res, 429, 'Trop de tentatives.');
       return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
     }
+    const planEsp = PLANS.forSpace(db, esp);
+    if (!planEsp.screens)
+      return fail(res, 402, `La formule « ${planEsp.label} » n’inclut pas les captures d’écran.`);
     const att = debit('screens:' + esp.id, CFG.maxScreenMin, 60000);
     if (att) {
       res.setHeader('retry-after', String(att));
@@ -949,9 +1044,12 @@ async function route(req, res) {
     // lui, borne le TOTAL — et il REFUSE plutôt que d'effacer d'anciennes
     // captures, qui sont peut-être justement celles d'une enquête.
     const occupe = DB.row(db.prepare('SELECT COALESCE(SUM(bytes),0) n FROM screens WHERE space_id = ?').get(esp.id)).n;
-    if (occupe >= CFG.screenQuotaMb * 1048576)
-      return fail(res, 507, `Quota de captures atteint pour cet espace (${CFG.screenQuotaMb} Mo). ` +
-                            `Baissez la rétention ou augmentez SCREEN_QUOTA_MB.`);
+    // Le plafond le plus BAS s'applique : celui de la formule, ou celui
+    // du serveur. Une formule ne peut pas promettre plus que la machine.
+    const quotaMo = planEsp.screenQuota == null ? CFG.screenQuotaMb
+                                                : Math.min(planEsp.screenQuota, CFG.screenQuotaMb);
+    if (occupe >= quotaMo * 1048576)
+      return fail(res, 507, `Quota de captures atteint pour cet espace (${quotaMo} Mo, formule « ${planEsp.label} »).`);
     let buf;
     try { buf = await readBinary(req, CFG.maxScreen); }
     catch (e) { return fail(res, 413, 'Capture trop volumineuse (plafond ' + Math.round(CFG.maxScreen / 1048576) + ' Mo).'); }
@@ -1423,6 +1521,79 @@ async function route(req, res) {
       }
     }
 
+    /* ============================================================
+       DONNÉES PERSONNELLES D'UN JOUEUR (RGPD)
+       Un panneau de logs conserve des identifiants, des positions et
+       parfois des captures de l'écran de quelqu'un. Deux demandes
+       peuvent arriver, et il faut pouvoir y répondre sans ouvrir la
+       base à la main : « donnez-moi ce que vous avez sur moi » et
+       « effacez-le ».
+       ============================================================ */
+    if (p.startsWith('/api/rgpd/')) {
+      if (!need('players.gdpr')) return;
+      const brut = decodeURIComponent(p.slice('/api/rgpd/'.length));
+      const cle = resolveKey(brut, me.spaceId);
+      if (!cle) return fail(res, 404, 'Joueur inconnu dans cet espace.');
+
+      if (method === 'GET') {
+        const un = (sql, ...a) => db.prepare(sql).all(me.spaceId, ...a).map(DB.row);
+        const dossier = {
+          espace: { id: me.space.id, nom: me.space.name },
+          extraitLe: now(), extraitPar: me.pseudo,
+          joueur: DB.row(db.prepare('SELECT * FROM players WHERE space_id = ? AND key = ?').get(me.spaceId, cle)),
+          evenements: un(`SELECT id,ts,cat,sev,msg,data,res FROM events
+                          WHERE space_id = ? AND (actor_key = ? OR target_key = ?) ORDER BY ts`, cle, cle),
+          sanctions: un('SELECT * FROM sanctions WHERE space_id = ? AND player_key = ? ORDER BY created_at', cle),
+          captures: un(`SELECT id,taken_at,asked_by,reason,bytes,width,height FROM screens
+                        WHERE space_id = ? AND player_key = ? ORDER BY taken_at`, cle)
+        };
+        audit(me, 'rgpd.export', `${dossier.joueur ? dossier.joueur.name : brut} — ${dossier.evenements.length} évènement(s)`, ip);
+        res.writeHead(200, Object.assign({}, SEC_HEADERS, {
+          'content-type': 'application/json; charset=utf-8',
+          'content-disposition': `attachment; filename="donnees-joueur-${me.spaceId}-${Date.now()}.json"`,
+          'cache-control': 'no-store' }));
+        return res.end(JSON.stringify(dossier, null, 2));
+      }
+
+      if (method === 'DELETE') {
+        const b = await readBody(req).catch(() => ({}));
+        const j = DB.row(db.prepare('SELECT * FROM players WHERE space_id = ? AND key = ?').get(me.spaceId, cle));
+        const nom = j ? j.name : brut;
+        // ⚠️ LES BANNISSEMENTS EN COURS NE S'EFFACENT PAS, ILS SE
+        // PSEUDONYMISENT. Effacer un bannissement actif parce que
+        // l'intéressé le demande reviendrait à lui rendre l'accès en
+        // invoquant le droit à l'effacement — le registre garde donc la
+        // décision, sans plus porter son nom ni ses identifiants.
+        const actifs = DB.row(db.prepare(`SELECT COUNT(*) n FROM sanctions
+          WHERE space_id=? AND player_key=? AND type='ban' AND active=1
+            AND (expires_at IS NULL OR expires_at > ?)`).get(me.spaceId, cle, now())).n;
+        if (actifs && !b.confirmeBanActif)
+          return fail(res, 409, `Ce joueur porte ${actifs} bannissement(s) en cours. ` +
+            `L’effacement conserve la sanction mais retire le nom et les identifiants : ` +
+            `renvoyez « confirmeBanActif » pour le confirmer.`);
+
+        const anonyme = 'effacé-' + crypto.randomBytes(4).toString('hex');
+        let n = 0;
+        n += DB.num(db.prepare('DELETE FROM events WHERE space_id = ? AND (actor_key = ? OR target_key = ?)')
+                      .run(me.spaceId, cle, cle).changes);
+        for (const sc of db.prepare('SELECT id,file FROM screens WHERE space_id = ? AND player_key = ?')
+                           .all(me.spaceId, cle).map(DB.row)) {
+          try { fs.unlinkSync(screenPath(me.spaceId, sc.file)); } catch (e) {}
+          db.prepare('DELETE FROM screens WHERE id = ?').run(sc.id);
+        }
+        db.prepare('DELETE FROM players WHERE space_id = ? AND key = ?').run(me.spaceId, cle);
+        db.prepare(`UPDATE sanctions SET name = ?, player_key = ? WHERE space_id = ? AND player_key = ?`)
+          .run(anonyme, anonyme, me.spaceId, cle);
+        db.prepare('DELETE FROM actions WHERE space_id = ? AND target_key = ?').run(me.spaceId, cle);
+        db.exec(`INSERT INTO events_fts(events_fts) VALUES('optimize')`);
+        // La trace de l'effacement LUI-MÊME reste : c'est ce qui prouve
+        // qu'on a répondu à la demande, et elle ne contient plus le nom.
+        audit(me, 'rgpd.effacement', `${n} évènement(s) · sanctions pseudonymisées en ${anonyme}`, ip);
+        return ok(res, { ok: true, evenements: n, pseudonyme: anonyme,
+          message: `Données effacées. ${actifs ? 'Les bannissements en cours restent au registre, sans nom.' : ''}` });
+      }
+    }
+
     /* ---- captures d'écran ---- */
     if (p === '/api/screens' && method === 'GET') {
       if (!need('logs.view')) return;
@@ -1582,6 +1753,16 @@ async function route(req, res) {
         if (DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE AND space_id = ?')
               .get(pseudo, me.spaceId)))
           return fail(res, 409, 'Ce pseudo existe déjà dans cet espace.');
+        // Plafond de la formule. Le message NOMME la formule et son
+        // plafond : « limite atteinte » sans dire laquelle envoie le
+        // client se plaindre au lieu de choisir.
+        const plan = PLANS.forSpace(db, me.space);
+        if (plan.maxStaff != null) {
+          const actuels = DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE space_id = ?').get(me.spaceId)).n;
+          if (actuels >= plan.maxStaff)
+            return fail(res, 402, `La formule « ${plan.label} » est limitée à ${plan.maxStaff} comptes staff ` +
+                                  `(${actuels} utilisés). Désactivez un compte ou passez à la formule supérieure.`);
+        }
         db.prepare(`INSERT INTO staff(pseudo,pass,role,roles,created_at,space_id,source)
                     VALUES(?,?,?,?,?,?, 'local')`)
           .run(pseudo, AUTH.hash(pass), role, JSON.stringify([role]), now(), me.spaceId);
@@ -1679,9 +1860,16 @@ async function route(req, res) {
               .get(sp.id, d24)).n,
             actionsEnAttente: un(`SELECT COUNT(*) n FROM actions WHERE space_id = ? AND status IN ('pending','sent')`),
             dernierEvenement: dernier ? dernier.t : null,
+            formule: PLANS.forSpace(db, sp).label, formuleKey: sp.plan_key || '',
+            echeance: PLANS.echeance(sp),
             rolesRelies: relies, proprietaire: sp.owner_id
               ? (DB.row(db.prepare('SELECT pseudo FROM staff WHERE id = ?').get(sp.owner_id)) || {}).pseudo : null,
-            discordPret: !!(sp.guild_id && sp.staff_role_id), retention: sp.retention || CFG.retention
+            discordPret: !!(sp.guild_id && sp.staff_role_id), retention: sp.retention || CFG.retention,
+            // Approximatif, et l'écran le dit : SQLite ne sait pas
+            // attribuer ses pages à un locataire. Ce qu'on mesure — la
+            // longueur des textes journalisés et la taille réelle des
+            // images — est l'essentiel du volume et évolue juste.
+            poids: SAUV.poids(db, sp.id, CFG.screenDir).total
           };
         });
         const somme = k => parEspace.reduce((a, x) => a + (x[k] || 0), 0);
@@ -1704,7 +1892,10 @@ async function route(req, res) {
             }
             return { debut, taille, valeurs: t };
           })(),
-          discordGlobal: discordGlobalOk()
+          discordGlobal: discordGlobalOk(),
+          stockage: stockage(),
+          sauvegarde: (() => { const d = SAUV.derniere(CFG.dbFile);
+            return { active: SAUV.EVERY_H > 0, derniere: d ? d.le : 0, erreur: SAUVE.erreur }; })()
         });
       }
 
@@ -1773,6 +1964,38 @@ async function route(req, res) {
             (t / 1048576).toFixed(0) + ' Mo.',
             t > 4e9 ? 'Réduisez la rétention des espaces les plus bavards, ou archivez.' : null));
         } catch (e) {}
+
+        // ⚠️ Une sauvegarde vieille de trois semaines n'est pas une
+        // sauvegarde : elle donne la tranquillité sans donner le moyen de
+        // repartir. Son ÂGE compte autant que son existence.
+        try {
+          const st = stockage();
+          const d = SAUV.derniere(CFG.dbFile);
+          const go = o => (o / 1073741824).toFixed(2) + ' Go';
+          if (!(SAUV.EVERY_H > 0))
+            plat.push(C('probleme', 'Sauvegardes désactivées',
+              'BACKUP_EVERY_HOURS vaut 0 : rien n’est sauvegardé automatiquement.',
+              'Remettez une valeur en heures dans api/.env (24 par défaut), puis relancez l’API.'));
+          else if (!d)
+            plat.push(C('probleme', 'Aucune sauvegarde',
+              'La plateforme n’a encore jamais été sauvegardée.',
+              'Cliquez « Sauvegarder maintenant » dans Supervision → Sauvegardes.'));
+          else {
+            const h = Math.round((now() - d.le) / 3600000);
+            const trop = h > SAUV.EVERY_H * 2 + 2;
+            plat.push(C(trop ? 'attention' : 'ok', 'Dernière sauvegarde',
+              `${d.fichier} — il y a ${h} h, ${(d.octets / 1048576).toFixed(0)} Mo` +
+              ` (${SAUV.liste(CFG.dbFile).length} gardée(s)).`,
+              trop ? 'Prenez-en une maintenant et vérifiez le disque : la rotation a peut-être échoué.' : null));
+          }
+          if (SAUVE.erreur)
+            plat.push(C('probleme', 'La dernière sauvegarde a échoué', SAUVE.erreur,
+              'Vérifiez l’espace disque et les droits d’écriture sur ' + SAUV.dossier(CFG.dbFile) + '.'));
+          const gros = st.total > st.seuil;
+          plat.push(C(gros ? 'attention' : 'ok', 'Place occupée',
+            `${go(st.total)} en tout — base ${go(st.base)}, captures ${go(st.captures)}, sauvegardes ${go(st.sauvegardes)}.`,
+            gros ? 'Réduisez la rétention des espaces les plus lourds, ou baissez BACKUP_KEEP.' : null));
+        } catch (e) { plat.push(C('attention', 'Sauvegardes', e.message, null)); }
 
         if (!discordGlobalOk())
           plat.push(C('attention', 'Revérification des accès à l’arrêt',
@@ -1849,6 +2072,27 @@ async function route(req, res) {
             'Reliez au moins un rôle dans « Liaison Discord ».'));
           else l.push(C('ok', 'Rôles reliés', relies.length + ' rôle(s) sur ' + roles.length + '.', null));
 
+          // La formule et son échéance : c'est ce qui décide si le client
+          // a encore le droit d'être là, et ça se voit avant la panne.
+          const ech = PLANS.echeance(sp);
+          if (ech.expire) l.push(C('probleme', 'Échéance dépassée',
+            'La formule a pris fin le ' + new Date(ech.fin).toLocaleDateString('fr-FR') + '.',
+            'Repoussez la date après paiement, ou laissez l’espace fermé.'));
+          else if (ech.bientot) l.push(C('attention', 'Échéance dans ' + Math.ceil(ech.reste / 86400000) + ' jour(s)',
+            'Le ' + new Date(ech.fin).toLocaleDateString('fr-FR') + ', cet espace se fermera tout seul.',
+            'Relancez le client, ou repoussez la date.'));
+          if (actif && !sp.plan_key) l.push(C('attention', 'Aucune formule',
+            'Cet espace n’est borné par rien : ni plafond de comptes, ni rétention maximale.',
+            'Attribuez-lui une formule depuis « Espaces de logs ».'));
+          else if (sp.plan_key) {
+            const pl = PLANS.forSpace(db, sp);
+            const membresPlan = DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE space_id = ?').get(sp.id)).n;
+            if (pl.maxStaff != null && membresPlan >= pl.maxStaff)
+              l.push(C('attention', 'Plafond de comptes atteint',
+                `${membresPlan} sur ${pl.maxStaff} (formule « ${pl.label} »).`,
+                'Le client ne peut plus ajouter personne : proposez la formule supérieure.'));
+          }
+
           if (!sp.owner_id) l.push(C('attention', 'Aucun propriétaire',
             'Personne ne peut nommer un second fondateur dans cet espace.',
             'Désignez-en un depuis « Espaces de logs » → Changer le propriétaire.'));
@@ -1889,6 +2133,147 @@ async function route(req, res) {
         });
       }
 
+      /* ---- sauvegardes ----
+         Une sauvegarde qu'il faut penser à prendre n'est pas prise. Celle-ci
+         part toute seule, tourne sur elle-même, et se télécharge d'un clic
+         le jour où il faut repartir d'hier. */
+      if (p === '/api/platform/sauvegardes' && method === 'GET') {
+        return ok(res, etatSauvegardes());
+      }
+      if (p === '/api/platform/sauvegardes' && method === 'POST') {
+        try {
+          const r = SAUV.faire(db, CFG.dbFile);
+          SAUVE.derniere = r.le; SAUVE.erreur = null;
+          audit(me, 'plateforme.sauvegarde', `${r.fichier} — ${(r.octets / 1048576).toFixed(1)} Mo`, ip);
+          return ok(res, Object.assign({ ok: true }, r, etatSauvegardes()));
+        } catch (e) {
+          SAUVE.erreur = e.message;
+          return fail(res, 500, 'La sauvegarde a échoué : ' + e.message);
+        }
+      }
+      if (p.startsWith('/api/platform/sauvegardes/')) {
+        const f = decodeURIComponent(p.slice('/api/platform/sauvegardes/'.length));
+        const c = SAUV.chemin(CFG.dbFile, f);
+        if (!c || !fs.existsSync(c)) return fail(res, 404, 'Sauvegarde introuvable.');
+        if (method === 'GET') {
+          audit(me, 'plateforme.sauvegarde.telechargement', f, ip);
+          const buf = fs.readFileSync(c);
+          res.writeHead(200, Object.assign({
+            'content-type': 'application/octet-stream',
+            'content-length': buf.length,
+            'cache-control': 'no-store',
+            'content-disposition': `attachment; filename="${f}"`
+          }, SEC_HEADERS));
+          return res.end(buf);
+        }
+        if (method === 'DELETE') {
+          SAUV.supprimer(CFG.dbFile, f);
+          audit(me, 'plateforme.sauvegarde.suppression', f, ip);
+          return ok(res, etatSauvegardes());
+        }
+        return fail(res, 405, 'Méthode non permise.');
+      }
+
+      /* ---- export d'UN espace ----
+         ⚠️ Le fichier vaut un accès : empreintes de mots de passe et clé
+         d'ingestion. Il ne sort que pour un administrateur de plateforme,
+         et la sortie est journalisée. */
+      if (/^\/api\/platform\/spaces\/\d+\/export$/.test(p) && method === 'GET') {
+        const sid = Number(p.split('/')[4]);
+        const sp = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(sid));
+        if (!sp) return fail(res, 404, 'Espace inconnu.');
+        const doc = TRANSF.exporter(db, sp);
+        doc.exportePar = me.pseudo;
+        audit(me, 'plateforme.espace.export',
+              `${sp.name} — ${(doc.tables.events || []).length} évènement(s)`, ip, sid);
+        const nomF = sp.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'espace';
+        return send(res, 200, doc, {
+          'content-disposition': `attachment; filename="espace-${nomF}-${new Date().toISOString().slice(0, 10)}.json"`
+        });
+      }
+
+      /* ---- restauration ----
+         Toujours dans un espace NEUF : écraser un espace en service sur la
+         foi d'un fichier est le geste le plus destructeur du panneau, et
+         aucune confirmation ne le rendrait sûr. Le doublon se supprime. */
+      if (p === '/api/platform/restaurer' && method === 'POST') {
+        const b = await readBody(req, 64 * 1024 * 1024);
+        const doc = b && b.fichier ? b.fichier : b;
+        const mauvais = TRANSF.verifier(doc);
+        if (mauvais) return fail(res, 400, mauvais);
+        let r;
+        try {
+          r = TRANSF.restaurer(db, doc, { nom: b.nom, par: me.pseudo, screenDir: CFG.screenDir });
+        } catch (e) { return fail(res, 500, 'La restauration a échoué : ' + e.message); }
+        ROLESVC.seed(db, r.id);
+        audit(me, 'plateforme.espace.restauration',
+              `${r.nom} (#${r.id}) — ${r.compte.events || 0} évènement(s)`, ip, r.id);
+        return ok(res, Object.assign({ ok: true }, r));
+      }
+
+      if (p === '/api/platform/plans' && method === 'GET') {
+        const usage = {};
+        for (const r of db.prepare('SELECT plan_key, COUNT(*) n FROM spaces GROUP BY plan_key').all())
+          usage[r.plan_key || ''] = Number(r.n);
+        return ok(res, { plans: PLANS.list(db).map(x => Object.assign({}, x, { espaces: usage[x.key] || 0 })),
+                         sansFormule: usage[''] || 0 });
+      }
+      if (p === '/api/platform/plans' && method === 'POST') {
+        const b = await readBody(req);
+        const label = String(b.label || '').trim().slice(0, 40);
+        if (label.length < 2) return fail(res, 400, 'Donnez un nom à la formule.');
+        const key = String(b.key || label).toLowerCase().normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '').slice(0, 24) || 'formule';
+        if (PLANS.byKey(db, key)) return fail(res, 409, 'Une formule porte déjà ce nom.');
+        const N0 = v => (v === '' || v == null) ? null : Math.max(0, Number(v) || 0);
+        db.prepare(`INSERT INTO plans(key,label,rang,prix,max_staff,max_retention,
+                      screens,screen_quota,max_ingest,notes,builtin,created_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,0,?)`)
+          .run(key, label, Number(b.rang) || 0, String(b.prix || '').slice(0, 40),
+               N0(b.maxStaff), N0(b.maxRetention), b.screens === false ? 0 : 1,
+               N0(b.screenQuota), N0(b.maxIngest), String(b.notes || '').slice(0, 400), now());
+        PLANS.invalidate();
+        audit(me, 'plateforme.formule.creation', label, ip);
+        return ok(res, { ok: true, key });
+      }
+      if (p.startsWith('/api/platform/plans/')) {
+        const key = decodeURIComponent(p.slice('/api/platform/plans/'.length));
+        const plan = PLANS.byKey(db, key);
+        if (!plan) return fail(res, 404, 'Formule inconnue.');
+        if (method === 'PATCH') {
+          const b = await readBody(req);
+          const N0 = v => (v === '' || v == null) ? null : Math.max(0, Number(v) || 0);
+          const sets = [], args = [];
+          const poser = (col, val) => { sets.push(col + ' = ?'); args.push(val); };
+          if (b.label !== undefined) poser('label', String(b.label).trim().slice(0, 40));
+          if (b.prix !== undefined) poser('prix', String(b.prix).slice(0, 40));
+          if (b.rang !== undefined) poser('rang', Number(b.rang) || 0);
+          if (b.maxStaff !== undefined) poser('max_staff', N0(b.maxStaff));
+          if (b.maxRetention !== undefined) poser('max_retention', N0(b.maxRetention));
+          if (b.screens !== undefined) poser('screens', b.screens ? 1 : 0);
+          if (b.screenQuota !== undefined) poser('screen_quota', N0(b.screenQuota));
+          if (b.maxIngest !== undefined) poser('max_ingest', N0(b.maxIngest));
+          if (b.notes !== undefined) poser('notes', String(b.notes).slice(0, 400));
+          if (!sets.length) return ok(res, { ok: true });
+          db.prepare(`UPDATE plans SET ${sets.join(', ')} WHERE key = ?`).run(...args, key);
+          PLANS.invalidate();
+          audit(me, 'plateforme.formule.modification', plan.label, ip);
+          return ok(res, { ok: true });
+        }
+        if (method === 'DELETE') {
+          // ⚠️ On ne supprime pas une formule que des espaces portent :
+          // ils se retrouveraient sans plafond du jour au lendemain, ce
+          // qui est exactement l'inverse de ce qu'on veut en vendant.
+          const pris = DB.row(db.prepare('SELECT COUNT(*) n FROM spaces WHERE plan_key = ?').get(key)).n;
+          if (pris) return fail(res, 409, `${pris} espace(s) utilisent cette formule : changez-les d’abord.`);
+          db.prepare('DELETE FROM plans WHERE key = ?').run(key);
+          PLANS.invalidate();
+          audit(me, 'plateforme.formule.suppression', plan.label, ip);
+          return ok(res, { ok: true });
+        }
+      }
       if (p === '/api/platform/spaces' && method === 'GET') {
         const rows = db.prepare('SELECT * FROM spaces ORDER BY state, name').all().map(DB.row);
         const compte = (t, id) => DB.row(db.prepare(`SELECT COUNT(*) n FROM ${t} WHERE space_id = ?`).get(id)).n;
@@ -1897,6 +2282,9 @@ async function route(req, res) {
             id: sp.id, nom: sp.name, etat: sp.state,
             guildId: sp.guild_id || '', staffRoleId: sp.staff_role_id || '',
             retention: sp.retention || CFG.retention,
+            formule: sp.plan_key || '', formuleLabel: PLANS.forSpace(db, sp).label,
+            echeance: sp.plan_until || null, echeanceEtat: PLANS.echeance(sp),
+            plafonds: PLANS.forSpace(db, sp),
             cle: sp.server_key, creeLe: sp.created_at, creePar: sp.created_by,
             fermeLe: sp.closed_at, motifFermeture: sp.closed_reason,
             proprietaire: sp.owner_id
@@ -1905,6 +2293,7 @@ async function route(req, res) {
             bannis: DB.row(db.prepare(`SELECT COUNT(*) n FROM sanctions WHERE space_id=? AND type='ban' AND active=1`).get(sp.id)).n
           })),
           monEspace: me.spaceId, discordGlobal: discordGlobalOk(),
+          formules: PLANS.list(db),
           // L'adresse que le SERVEUR DE JEU du client devra viser. Le
           // panneau s'en sert pour composer la fiche d'installation : sans
           // elle, on livrerait une clé sans dire où l'envoyer.
@@ -1921,13 +2310,20 @@ async function route(req, res) {
         // Une clé d'ingestion par espace : celle d'un serveur de jeu
         // n'ouvre jamais les journaux d'un autre.
         const cle = crypto.randomBytes(24).toString('hex');
+        const formule = b.formule && PLANS.byKey(db, String(b.formule)) ? String(b.formule) : null;
         const r = db.prepare(`INSERT INTO spaces(name,guild_id,staff_role_id,server_key,state,retention,created_at,created_by)
                               VALUES(?,?,?,?, 'actif', ?,?,?)`)
           .run(nom, S(b.guildId), S(b.staffRoleId), cle,
                Math.max(1, Math.min(3650, Number(b.retention) || CFG.retention)), now(), me.pseudo);
         const sid = DB.num(r.lastInsertRowid);
+        if (formule || b.echeance) {
+          const t = b.echeance ? Date.parse(b.echeance) : null;
+          db.prepare('UPDATE spaces SET plan_key = ?, plan_until = ? WHERE id = ?')
+            .run(formule, Number.isFinite(t) ? t : null, sid);
+        }
         ROLESVC.seed(db, sid);
-        audit(me, 'plateforme.espace.creation', `${nom} (#${sid})`, ip, sid);
+        audit(me, 'plateforme.espace.creation',
+              `${nom} (#${sid})` + (formule ? ` — formule ${PLANS.byKey(db, formule).label}` : ''), ip, sid);
         return ok(res, { ok: true, id: sid, cle });
       }
       if (p.startsWith('/api/platform/spaces/')) {
@@ -1947,6 +2343,20 @@ async function route(req, res) {
             sets.push('staff_role_id = ?'); args.push(String(b.staffRoleId || '')); }
           if (b.retention !== undefined) { sets.push('retention = ?');
             args.push(Math.max(1, Math.min(3650, Number(b.retention) || CFG.retention))); }
+          if (b.formule !== undefined) {
+            const k = String(b.formule || '');
+            if (k && !PLANS.byKey(db, k)) return fail(res, 404, 'Formule inconnue.');
+            sets.push('plan_key = ?'); args.push(k || null);
+            audit(me, 'plateforme.espace.formule',
+                  `${sp.name} → ${k ? PLANS.byKey(db, k).label : 'sans formule'}`, ip, sid);
+          }
+          if (b.echeance !== undefined) {
+            const t = b.echeance ? Date.parse(b.echeance) : null;
+            if (b.echeance && !Number.isFinite(t)) return fail(res, 400, 'Date d’échéance illisible.');
+            sets.push('plan_until = ?'); args.push(Number.isFinite(t) ? t : null);
+            audit(me, 'plateforme.espace.echeance',
+                  `${sp.name} → ${Number.isFinite(t) ? new Date(t).toLocaleDateString('fr-FR') : 'sans fin'}`, ip, sid);
+          }
           if (b.proprietaire !== undefined) {
             const cand = b.proprietaire ? DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(Number(b.proprietaire))) : null;
             if (b.proprietaire && !cand) return fail(res, 404, 'Ce compte n’existe pas.');
@@ -1972,6 +2382,9 @@ async function route(req, res) {
           }
           if (!sets.length) return ok(res, { ok: true });
           db.prepare(`UPDATE spaces SET ${sets.join(', ')} WHERE id = ?`).run(...args, sid);
+          // Une échéance déjà passée ferme l'espace sur-le-champ : c'est
+          // ainsi qu'on coupe un client sans avoir à faire un second geste.
+          appliquerEcheances();
           const apres = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(sid));
           return ok(res, { ok: true, cle: apres.server_key });
         }
@@ -2126,16 +2539,25 @@ server.listen(CFG.port, CFG.host, () => {
   console.log(`  ├─ rétention     ${CFG.retention} jours`);
   console.log(`  ├─ espaces       ${espaces}`);
   console.log(`  ├─ comptes staff ${staffCount}`);
-  console.log(`  └─ accès         revérifiés toutes les ${CFG.sweepMin} min` +
+  console.log(`  ├─ accès         revérifiés toutes les ${CFG.sweepMin} min` +
               (discordGlobalOk() ? '' : ' (en attente de la liaison Discord)'));
+  console.log(`  └─ sauvegardes   ` + (SAUV.EVERY_H > 0
+    ? `toutes les ${SAUV.EVERY_H} h, ${SAUV.KEEP} gardées — ${SAUV.dossier(CFG.dbFile)}`
+    : 'désactivées (BACKUP_EVERY_HOURS=0)'));
   if (!staffCount) console.log(`\n  Aucun compte : créez le vôtre avec  node staff.js add <pseudo> fondateur\n`);
   else console.log('');
   purge();
+  PLANS.seed(db);
+  appliquerEcheances();
+  planifierSauvegardes();
   // Un premier balayage peu après le démarrage : un redémarrage est
   // justement le moment où l'on ignore ce qui s'est passé pendant l'arrêt.
   setTimeout(() => balayerAcces('démarrage').catch(e => console.error('[acces]', e.message)), 20000).unref();
 });
 setInterval(purge, 6 * 3600 * 1000).unref();
+// Toutes les heures : une échéance qui tombe la nuit ne doit pas attendre
+// le prochain redémarrage.
+setInterval(appliquerEcheances, 3600 * 1000).unref();
 if (CFG.sweepMin > 0)
   setInterval(() => balayerAcces('périodique').catch(e => console.error('[acces]', e.message)),
               CFG.sweepMin * 60000).unref();
