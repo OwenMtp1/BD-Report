@@ -61,7 +61,9 @@ const ckAdmin=await (async()=>{const x=await fetch(B+'/api/auth/login',{method:'
   body:JSON.stringify({pseudo:'Fondat2',password:'motdepassefond456'})});return (x.headers.get('set-cookie')||'').split(';')[0];})();
 const rr=await J('/api/roles');
 t('14 rôles d’origine semés', rr.body.roles.length===14, rr.body.roles.map(x=>x.label).slice(0,3).join(', ')+'…');
-t('rangs et rubriques présents', rr.body.roles[0].rank===100 && rr.body.roles[0].cats.length===17);
+const TOUTES = (await J('/api/catalogue')).body.cats.map(c => c.id);
+t('rangs et rubriques présents', rr.body.roles[0].rank===100
+  && TOUTES.every(c => rr.body.roles[0].cats.includes(c)), rr.body.roles[0].cats.length+'/'+TOUTES.length);
 const cree=await J('/api/roles',{method:'POST',body:JSON.stringify({label:'Responsable Boutique',rank:55,discordRoleId:'900055',perms:['logs.view','players.view'],cats:['boutique_caisse','boutique_produits']})});
 t('rôle personnalisé créé', cree.body.ok===true, cree.body.key);
 const trop=await J('/api/roles',{method:'POST',body:JSON.stringify({label:'Au-dessus',rank:200})},ckAdmin);
@@ -114,7 +116,7 @@ await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:ID2})}
 const fondLocal=await J('/api/staff',{method:'POST',body:JSON.stringify({pseudo:'FondLocal',password:'motdepasselocal789',role:'fondateur'})});
 t('fondateur créé dans l’espace visité', fondLocal.body.ok===true || !!fondLocal.body.staff, fondLocal.body.error||'');
 const moiIci=await J('/api/auth/me');
-t('toutes les rubriques, même en visite', moiIci.body.cats.length===17, moiIci.body.cats.length+' rubriques');
+t('toutes les rubriques, même en visite', TOUTES.every(c => moiIci.body.cats.includes(c)), moiIci.body.cats.length+'/'+TOUTES.length+' rubriques');
 t('tous les droits, même en visite', moiIci.body.perms.length>=14, moiIci.body.perms.length+' droits');
 const eqIci=await J('/api/staff');
 const cible=eqIci.body.staff.find(x=>x.pseudo==='FondLocal');

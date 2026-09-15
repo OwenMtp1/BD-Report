@@ -31,7 +31,13 @@ t('mot de passe refusé', (await call('/api/auth/login',{method:'POST',body:JSON
 let r=await call('/api/auth/login',{method:'POST',body:JSON.stringify({pseudo:'Nyx',password:'motdepassetest123'})});
 cookie=(r.headers.get('set-cookie')||'').split(';')[0];
 const meF=await r.json();
-t('connexion fondateur', r.status===200 && meF.staff.role==='fondateur' && meF.cats.length===17, meF.cats?.length+' catégories');
+// ⚠️ On compare au CATALOGUE, jamais à un nombre écrit à la main : ce que
+// l'assertion veut dire, c'est « le fondateur voit tout », et une rubrique
+// ajoutée demain ne doit pas faire tomber quatre suites pour rien.
+const TOUTES = (await (await call('/api/catalogue')).json()).cats.map(c => c.id);
+t('connexion fondateur', r.status===200 && meF.staff.role==='fondateur'
+  && TOUTES.every(c => meF.cats.includes(c)) && meF.cats.length===TOUTES.length,
+  meF.cats?.length+' catégories sur '+TOUTES.length);
 
 // 6. requêtes
 let ev=(await(await call('/api/events?limit=50')).json());
@@ -84,7 +90,11 @@ const cookieF=cookie;
 r=await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pseudo:'Kaleb',password:'motdepassetest456'})});
 cookie=(r.headers.get('set-cookie')||'').split(';')[0];
 const meM=await r.json();
-t('connexion modérateur', meM.staff.role==='moderateur' && meM.cats.length===13);
+// Le modérateur en voit moins que tout le monde, et c'est LA propriété
+// qui compte — pas son compte exact, qui bouge avec le catalogue.
+t('connexion modérateur', meM.staff.role==='moderateur'
+  && meM.cats.length < TOUTES.length && meM.cats.includes('bans') && !meM.cats.includes('admin'),
+  meM.cats.length+' rubriques sur '+TOUTES.length);
 const evM=await(await call('/api/events?limit=50')).json();
 t('le modérateur ne voit pas les logs admin', !evM.events.some(e=>e.cat==='admin'), evM.total+' évènements sur 6');
 const forced=await(await call('/api/events?cat=admin')).json();

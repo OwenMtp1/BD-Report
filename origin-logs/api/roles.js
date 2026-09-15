@@ -41,6 +41,64 @@ function list(db, spaceId) {
 }
 const byKey = (db, spaceId, key) => list(db, spaceId).find(r => r.key === key) || null;
 
+/* ============================================================
+   RATTRAPAGE D'UNE RUBRIQUE AJOUTÉE APRÈS COUP
+   ⚠️ `seed` ne tourne que pour un espace VIERGE — c'est ce qui permet à un
+   fondateur de recomposer ses rôles sans qu'un redémarrage les remette
+   comme au premier jour. Conséquence : une rubrique ajoutée au catalogue
+   n'apparaît chez AUCUN espace déjà livré, pas même pour son fondateur,
+   dont le « tous les accès » a été écrit en LISTE au moment du semis. La
+   rubrique existerait alors dans le code et pour personne à l'écran.
+
+   On ne l'accorde pas pour autant à tout le monde : les rubriques d'un
+   rôle sont un CHOIX, et en ajouter une d'autorité, c'est élargir un accès
+   sans que personne l'ait décidé. Deux cas, et deux seulement :
+
+   · le rôle porte TOUTES les autres rubriques du catalogue — il disait
+     « tout », il continue de dire « tout » ;
+   · le rôle est un rôle INTÉGRÉ que personne n'a retouché (sa liste est
+     exactement celle du catalogue, à la nouvelle rubrique près) ET le
+     catalogue la lui donne aujourd'hui. On applique alors la valeur de
+     départ, comme l'aurait fait une installation neuve.
+
+   ⚠️ Le second cas remplace une règle plus large — « le rôle porte tout le
+   groupe » — qui se trompait : la Brigade Anti-Cheat porte bans, sanctions
+   et anticheat, donc TOUTE la modération, et recevait les tickets alors
+   qu'une installation neuve les lui refuse. Un rattrapage qui accorde plus
+   que le catalogue ne rattrape pas, il dérive.
+
+   ⚠️ Un rôle RETOUCHÉ n'est jamais élargi, même intégré : sa liste est une
+   décision, et une décision ne se complète pas toute seule.
+
+   ⚠️ Le repère se pose UNE FOIS, côté appelant. Sans lui, un fondateur qui
+   retire la rubrique la verrait revenir au redémarrage suivant — il n'y a
+   rien de pire qu'un réglage qui se défait tout seul. */
+function backfillCat(db, catId, dejaFait, marquer) {
+  const cat = CAT.CATS.find(c => c.id === catId);
+  if (!cat || dejaFait) return { fait: false, touches: 0 };
+  const ordre = CAT.CATS.map(c => c.id);
+  const autres = ordre.filter(c => c !== catId);
+  const memeJeu = (a, b) => a.length === b.length && a.every(x => b.includes(x));
+  const maj = db.prepare('UPDATE roles SET cats = ? WHERE space_id = ? AND key = ?');
+  let touches = 0;
+  for (const r of db.prepare('SELECT space_id, key, cats, builtin FROM roles').all()) {
+    const cats = parse(r.cats, []);
+    if (cats.includes(catId)) continue;
+    const disaitTout = autres.every(c => cats.includes(c));
+    let intact = false;
+    if (!disaitTout && r.builtin && CAT.ROLES[r.key]) {
+      const defaut = CAT.catsOf(r.key);
+      intact = defaut.includes(catId) && memeJeu(cats, defaut.filter(c => c !== catId));
+    }
+    if (!disaitTout && !intact) continue;
+    maj.run(JSON.stringify(ordre.filter(c => cats.includes(c) || c === catId)), r.space_id, r.key);
+    touches++;
+  }
+  if (typeof marquer === 'function') marquer();
+  invalidate();
+  return { fait: true, touches };
+}
+
 /* ⚠️ Le rôle de repli d'un espace est LE SIEN — le plus bas de sa
    hiérarchie — et jamais « moderateur » codé en dur. Un espace qui a
    renommé ou supprimé ce rôle se serait retrouvé avec des comptes
@@ -88,4 +146,4 @@ function makeKey(db, spaceId, label) {
   return base + '_' + Date.now().toString(36);
 }
 
-module.exports = { seed, list, byKey, basRole, resolve, fromDiscord, makeKey, invalidate };
+module.exports = { seed, list, byKey, basRole, backfillCat, resolve, fromDiscord, makeKey, invalidate };

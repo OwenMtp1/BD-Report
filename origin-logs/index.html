@@ -1335,6 +1335,7 @@ let CATS = [
   { id:'bans',              code:'BAN', label:'Bannissement',              group:'moderation', desc:'Bannissements prononcés, levés et refus de connexion.' },
   { id:'sanctions',         code:'AVT', label:'Avertissement',             group:'moderation', desc:'Avertissements, expulsions et rappels à l’ordre.' },
   { id:'anticheat',         code:'ACH', label:'Anticheat',                 group:'moderation', desc:'Détections automatiques et évènements réseau suspects.' },
+  { id:'reports',           code:'RPT', label:'Logs des Reports',          group:'moderation', desc:'Tickets ouverts par les joueurs : qui a signalé quoi, quel staff a pris, qui a refusé.' },
 
   { id:'connexions',        code:'CNX', label:'Connexion',                 group:'joueurs',    desc:'Arrivées sur le serveur, file d’attente et refus.' },
   { id:'deconnexion',       code:'DCX', label:'Déconnexion',               group:'joueurs',    desc:'Départs, crashs et coupures de connexion.' },
@@ -1446,7 +1447,7 @@ const DROGUES=[['coca','Feuilles de coca'],['weed','Pousses de weed'],['meth','M
 const LABOS=['le labo de Grapeseed','la planque de Cypress Flats','le hangar de Paleto','la cave de Mirror Park'];
 const ORGAS=['Ballas','Vagos','Families','Cartel del Norte','Triades','Lost MC'];
 const ETABLIS=['l’établi de Cypress Flats','la remise de Sandy Shores','l’atelier du port'];
-const RESSOURCES={bans:'origin_admin',sanctions:'origin_admin',anticheat:'origin_guard',connexions:'origin_core',deconnexion:'origin_core',ecran_joueur:'origin_hud',combat:'origin_medical',inventaire:'ox_inventory',items_sol:'ox_inventory',proprietes:'origin_housing',boutique_caisse:'origin_shop',boutique_monnaie:'origin_shop',boutique_produits:'origin_shop',jobs:'origin_jobs',casino:'origin_casino',facture_ems:'origin_medical',admin:'txAdmin'};
+const RESSOURCES={bans:'origin_admin',sanctions:'origin_admin',reports:'origin_reports',anticheat:'origin_guard',connexions:'origin_core',deconnexion:'origin_core',ecran_joueur:'origin_hud',combat:'origin_medical',inventaire:'ox_inventory',items_sol:'ox_inventory',proprietes:'origin_housing',boutique_caisse:'origin_shop',boutique_monnaie:'origin_shop',boutique_produits:'origin_shop',jobs:'origin_jobs',casino:'origin_casino',facture_ems:'origin_medical',admin:'txAdmin'};
 
 const plate=()=>hex(2).toUpperCase()+int(10,99)+String.fromCharCode(65+int(0,25))+String.fromCharCode(65+int(0,25))+int(100,999);
 const coords=()=>`vector3(${(rnd()*6000-3500).toFixed(2)}, ${(rnd()*7000-3500).toFixed(2)}, ${(rnd()*70+2).toFixed(2)})`;
@@ -1468,8 +1469,38 @@ const DOS=['Le moteur fume légèrement ?','La radio grésille en fond ?','Des t
 const RAISONS_DECO=['Exited','Timed out','Client crashed','Kicked: AFK 30 min','Disconnected by user'];
 const MORTS=['chute depuis un toit','collision frontale','noyade','explosion de véhicule','overdose'];
 const MOTIFS_SANCTION=['RDM sur Legion Square','VDM répété','Fail RP en braquage','Metagaming Discord','Insultes HRP en vocal','Cheat détecté — menu illégal','Combat log en cours de scène','Powergaming en interpellation'];
+// Ce qu'un joueur écrit vraiment dans un /report : le motif qu'il DÉCLARE,
+// qui n'est pas celui que le staff retiendra. Les deux doivent se lire.
+const MOTIFS_REPORT=['RDM — tué sans raison à Legion','VDM — écrasé volontairement','Joueur bloqué dans le décor',
+  'Item disparu de mon coffre','Véhicule introuvable au garage','Suspicion de triche','Insultes HRP en vocal',
+  'Argent non reçu après une vente','PNJ bloquant l’entrée du commerce','Question sur une règle du serveur'];
+const REFUS_REPORT=['Signalement en double — déjà pris en charge','Aucun élément à l’appui','Hors du champ du staff — à régler en RP',
+  'Le joueur s’est déconnecté avant la prise en charge','Demande déjà traitée sur le Discord'];
 
 const T={
+// ⚠️ Les reports se lisent à TROIS voix, et c'est tout l'intérêt de la
+// rubrique : le joueur qui ouvre, le staff qui prend, le staff qui refuse.
+// Un journal qui ne garderait que la réponse du staff ne dirait jamais
+// combien de demandes sont restées sans réponse, ni pourquoi.
+reports:[
+ {s:'notice',w:9,f:(a)=>{const m=pick(MOTIFS_REPORT);return{msg:`${who(a)} a ouvert un report — ${it(m)}`,
+   d:{kind:'ouverture',ticket:'#'+int(100,999),motif:m,zone:pick(ZONES),position:coords(),
+      joueurVise:chance(.55)?pick(RP).name:null,attente:'en file'}};}},
+ {s:'info',w:7,sf:1,f:(a,b,st)=>({t:a,msg:`${who(st)} a pris le report de ${who(a)}`,
+   d:{kind:'prise',ticket:'#'+int(100,999),motif:pick(MOTIFS_REPORT),
+      attenteAvantPrise:int(1,24)+' min',teleportation:chance(.7)}})},
+ {s:'info',w:5,sf:1,f:(a,b,st)=>({t:a,msg:`${who(st)} a clos le report de ${who(a)} — ${it(pick(['résolu','joueur dédommagé','avertissement posé','explication donnée']))}`,
+   d:{kind:'cloture',ticket:'#'+int(100,999),duree:int(2,40)+' min',
+      suite:pick(['aucune','avertissement','remboursement','bannissement demandé'])}})},
+ {s:'alerte',w:4,sf:1,f:(a,b,st)=>{const m=pick(REFUS_REPORT);return{t:a,msg:`${who(st)} a refusé le report de ${who(a)} — ${it(m)}`,
+   d:{kind:'refus',ticket:'#'+int(100,999),motifRefus:m,motifInitial:pick(MOTIFS_REPORT),
+      attenteAvantRefus:int(1,35)+' min'}};}},
+ {s:'alerte',w:3,f:(a)=>({msg:`Report de ${who(a)} sans réponse depuis ${int(25,90)} min`,
+   d:{kind:'sans_reponse',ticket:'#'+int(100,999),motif:pick(MOTIFS_REPORT),
+      staffEnLigne:int(0,4),relances:int(1,3)}})},
+ {s:'notice',w:2,sf:1,f:(a,b,st)=>({t:a,msg:`${who(st)} a repris le report de ${who(a)} — laissé par ${pick(STAFF).name}`,
+   d:{kind:'reprise',ticket:'#'+int(100,999),motif:pick(MOTIFS_REPORT),raison:'staff déconnecté'}})}
+],
 connexions:[
  {s:'info',w:9,f:(a)=>({msg:`${who(a)} a rejoint le serveur`,d:{serverId:a.sid,slot:`${int(60,128)}/128`,ping:a.ping+' ms',endpoint:'92.184.'+int(10,250)+'.***',identifiants:{license:a.license,discord:a.discord,steam:a.steam},onesync:'infinity'}})},
  {s:'info',w:4,f:(a)=>({msg:`${who(a)} est entré en file d’attente`,d:{position:int(2,34),priorite:chance(.3)?'VIP':'aucune',attente:`${int(1,26)} min`}})},
@@ -1607,7 +1638,7 @@ sanctions:[
    un graphique d'activité que personne ne reconnaîtrait. */
 const HOUR_W=[.55,.40,.25,.15,.10,.08,.10,.15,.22,.30,.38,.45,.50,.50,.55,.60,.68,.78,.90,1,1,.95,.85,.70];
 const CAT_W={inventaire:14,ecran_joueur:12,connexions:9,deconnexion:8,items_sol:8,combat:8,
-             casino:6,jobs:5,boutique_monnaie:4.5,boutique_produits:4,proprietes:3.5,facture_ems:3.5,
+             casino:6,reports:5.5,jobs:5,boutique_monnaie:4.5,boutique_produits:4,proprietes:3.5,facture_ems:3.5,
              admin:3.5,boutique_caisse:3,sanctions:2.5,bans:2,anticheat:2};
 const CAT_PICK=[];
 Object.entries(CAT_W).forEach(([k,w])=>{ for(let i=0;i<Math.round(w*2);i++) CAT_PICK.push(k); });

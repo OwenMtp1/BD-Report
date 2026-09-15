@@ -362,14 +362,16 @@ La ressource couvre seule ce que le serveur de jeu publie : connexions,
 déconnexions, morts, anticheat, bannissements, actions staff, et — quand le
 framework est reconnu — l'argent, les métiers et les coffres.
 
-**Sept rubriques ne peuvent venir que de vos scripts**, parce que rien de
-standard ne les émet : la boutique (caisse, monnaie, produits), le casino,
-les factures EMS, l'immobilier et les objets au sol. Elles appartiennent à
-des ressources que chaque serveur choisit, écrit ou achète.
+**Huit rubriques ne peuvent venir que de vos scripts**, parce que rien de
+standard ne les émet : les **reports** (les tickets ouverts en jeu), la
+boutique (caisse, monnaie, produits), le casino, les factures EMS,
+l'immobilier et les objets au sol. Elles appartiennent à des ressources que
+chaque serveur choisit, écrit ou achète — un système de reports, notamment,
+vit dans le panel staff et jamais ailleurs.
 
 ```lua
 exports['origin_logs']:Log({
-  cat   = 'casino',             -- voir le tableau des 17 rubriques
+  cat   = 'casino',             -- voir le tableau des 18 rubriques
   sev   = 'alerte',             -- critique | alerte | notice | info
   actor = source,               -- un id de joueur, ou une table
   target = autreSource,         -- facultatif

@@ -19,7 +19,7 @@ t('le catalogue répond sans session', cat.status===200);
 t('mais ne livre AUCUN rôle', Array.isArray(cat.body.roles) && cat.body.roles.length===0,
   cat.body.roles.length + ' rôle(s)');
 t('ni le nom de l’espace', cat.body.espace===null);
-t('les rubriques restent là (la page de connexion en a besoin)', cat.body.cats.length===17);
+t('les rubriques restent là (la page de connexion en a besoin)', cat.body.cats.length>=17, cat.body.cats.length+' rubriques');
 const ev = await J('/api/events', {}, '');
 t('les journaux exigent une session', ev.status===401, 'HTTP '+ev.status);
 

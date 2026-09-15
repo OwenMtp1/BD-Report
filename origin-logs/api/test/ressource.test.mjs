@@ -49,7 +49,7 @@ t('⚠️ aucune rubrique sans émetteur ni exemple', orphelines.length === 0,
   orphelines.length ? orphelines.join(', ') : cats.length + ' rubriques couvertes');
 t('la ressource en émet une part elle-même', vraimentEmises.size >= 8,
   [...vraimentEmises].sort().join(', '));
-t('et les autres ont leur exemple à copier', documentees.size >= 7,
+t('et les autres ont leur exemple à copier', documentees.size >= 8,
   [...documentees].sort().join(', '));
 
 sect('Le tableau de la documentation dit vrai');
@@ -72,7 +72,7 @@ for (const [nom, f] of DOCS) {
 }
 t('⚠️ aucun document n’enseigne une rubrique périmée', perimes.length === 0,
   perimes.length ? perimes.join(' · ') : DOCS.length + ' documents relus');
-for (const id of ['boutique_caisse', 'casino', 'facture_ems', 'proprietes', 'items_sol', 'ecran_joueur'])
+for (const id of ['boutique_caisse', 'casino', 'facture_ems', 'proprietes', 'items_sol', 'ecran_joueur', 'reports'])
   t(`« ${id} » figure au tableau récapitulatif`, DOC.includes('`' + id + '`'));
 
 sect('Et l’API accepte chacune, sans la reclasser');
@@ -81,7 +81,7 @@ const envoi = cats.map((c, i) => ({ cat: c.id, sev: 'info',
 const r = await fetch(B + '/api/ingest', { method:'POST',
   headers:{'content-type':'application/json','x-origin-key':KEY}, body: JSON.stringify({ events: envoi }) });
 const j = await r.json();
-t('les 17 rubriques sont déposées', j.recus === cats.length, j.recus + ' reçus');
+t(`les ${cats.length} rubriques sont déposées`, j.recus === cats.length, j.recus + ' reçus');
 
 const r0 = await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},
   body:JSON.stringify({pseudo:'Nyx',password:'motdepassetest123'})});

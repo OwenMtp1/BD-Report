@@ -432,6 +432,27 @@ function stockage() {
   };
 }
 
+/* ---------- rubriques ajoutées après la livraison ----------
+   Le catalogue peut gagner une rubrique ; les rôles d'un espace déjà
+   livré, eux, sont figés en base. Sans ce rattrapage, « Logs des Reports »
+   n'apparaîtrait chez personne — pas même chez le fondateur, dont le
+   « tous les accès » a été écrit en liste au moment du semis.
+   Le repère se pose UNE FOIS par rubrique : la retirer ensuite est un
+   choix, jamais un oubli que le démarrage suivant corrigerait. */
+const RUBRIQUES_RATTRAPEES = ['reports'];
+
+function rattraperRubriques() {
+  for (const id of RUBRIQUES_RATTRAPEES) {
+    const cle = 'backfill.cat.' + id;
+    if (getSetting(cle)) continue;
+    try {
+      const r = ROLESVC.backfillCat(db, id, false, () => setSetting(cle, String(now()), 'migration'));
+      const cat = CAT.CATS.find(c => c.id === id);
+      if (r.touches) console.log(`  Rubrique « ${cat ? cat.label : id} » ouverte à ${r.touches} rôle(s) existants.`);
+    } catch (e) { console.error('[rubriques]', e.message); }
+  }
+}
+
 function planifierSauvegardes() {
   if (!(SAUV.EVERY_H > 0)) {
     console.log('  Sauvegardes automatiques DÉSACTIVÉES (BACKUP_EVERY_HOURS=0).');
@@ -587,6 +608,25 @@ const uPlayer = db.prepare(`INSERT INTO players(key,name,sid,discord,steam,fivem
     fivem=COALESCE(excluded.fivem,players.fivem), job=COALESCE(excluded.job,players.job),
     grade=COALESCE(excluded.grade,players.grade), last_seen=excluded.last_seen,
     events=players.events+1`);
+/* ⚠️ DÉFAUT : SEUL L'ACTEUR ÉTAIT ENREGISTRÉ COMME JOUEUR.
+   Le dossier compte pourtant, depuis toujours, les évènements où la
+   personne est acteur OU cible (`playerFile`) — mais il refusait de
+   s'ouvrir tant qu'elle n'avait pas AGI au moins une fois : « Joueur
+   inconnu » pour quelqu'un dont le panneau détenait déjà l'historique.
+   Cela ne se voyait pas tant que tout le monde émettait une connexion,
+   donc tant qu'un serveur branchait TOUT. Depuis qu'on assume qu'un
+   client ne branche que ce qui l'intéresse — son système de reports, par
+   exemple — la victime d'un RDM et le joueur dont le ticket a été refusé
+   n'existent que comme CIBLES, et leur dossier n'était pas atteignable.
+   ⚠️ Le compteur `events` n'est PAS incrémenté ici : il compte ce que la
+   personne a fait, et le faire enfler d'actions subies changerait le sens
+   d'un chiffre déjà affiché. Les statistiques du dossier, elles, sont
+   recalculées à la lecture et comptent bien les deux. */
+const uTarget = db.prepare(`INSERT INTO players(key,name,sid,first_seen,last_seen,events,space_id)
+  VALUES(?,?,?,?,?,0,?)
+  ON CONFLICT(space_id, key) DO UPDATE SET
+    name=COALESCE(excluded.name,players.name), sid=COALESCE(excluded.sid,players.sid),
+    last_seen=MAX(players.last_seen, excluded.last_seen)`);
 const iSanction = db.prepare(`INSERT INTO sanctions(player_key,name,type,reason,by_name,created_at,expires_at,active,space_id)
   VALUES(?,?,?,?,?,?,?,1,?)`);
 const uLift = db.prepare(`UPDATE sanctions SET active=0, lifted_at=?, lifted_by=? WHERE player_key=? AND type='ban' AND active=1 AND space_id=?`);
@@ -631,6 +671,10 @@ function ingest(list, server, spaceId) {
         uPlayer.run(e.actor_key, e.actor_name, e.actor_sid, S(a.discord), S(a.steam), S(a.fivem),
                     S(a.job), N(a.grade), e.ts, e.ts, sp);
       }
+      // La cible existe comme joueur, sans quoi son dossier serait
+      // inatteignable alors même qu'il contient déjà quelque chose.
+      if (e.target_key && e.target_key !== e.actor_key)
+        uTarget.run(e.target_key, e.target_name, null, e.ts, e.ts, sp);
       // Une sanction reçue du jeu doit exister comme sanction, pas seulement
       // comme ligne de log : c'est elle qui décide d'un refus de connexion.
       if ((e.cat === 'sanctions' || e.cat === 'bans') && e._data && e._data.type) {
@@ -2557,6 +2601,7 @@ server.listen(CFG.port, CFG.host, () => {
   PLANS.seed(db);
   appliquerEcheances();
   planifierSauvegardes();
+  rattraperRubriques();
   // Un premier balayage peu après le démarrage : un redémarrage est
   // justement le moment où l'on ignore ce qui s'est passé pendant l'arrêt.
   setTimeout(() => balayerAcces('démarrage').catch(e => console.error('[acces]', e.message)), 20000).unref();

@@ -22,6 +22,7 @@ const CATS = [
   { id:'bans',              code:'BAN', label:'Bannissement',              group:'moderation', desc:'Bannissements prononcés, levés et refus de connexion.' },
   { id:'sanctions',         code:'AVT', label:'Avertissement',             group:'moderation', desc:'Avertissements, expulsions et rappels à l’ordre.' },
   { id:'anticheat',         code:'ACH', label:'Anticheat',                 group:'moderation', desc:'Détections automatiques et évènements réseau suspects.' },
+  { id:'reports',           code:'RPT', label:'Logs des Reports',          group:'moderation', desc:'Tickets ouverts par les joueurs : qui a signalé quoi, quel staff a pris, qui a refusé.' },
 
   { id:'connexions',        code:'CNX', label:'Connexion',                 group:'joueurs',    desc:'Arrivées sur le serveur, file d’attente et refus.' },
   { id:'deconnexion',       code:'DCX', label:'Déconnexion',               group:'joueurs',    desc:'Départs, crashs et coupures de connexion.' },
@@ -166,8 +167,11 @@ const ROLES = {
   helper: {
     label:'Helper', rank:30,
     perms: u(['logs.view', 'players.view'], ['actions.warn']),
-    cats: u(G.joueurs),
-    desc:'Accompagne les joueurs et remonte ce qui dépasse.'
+    // Le helper est celui qui PREND les tickets : lui refuser la rubrique
+    // des reports reviendrait à lui cacher son propre travail. Il n'a pour
+    // autant rien à voir du reste de la modération.
+    cats: u(G.joueurs, ['reports']),
+    desc:'Accompagne les joueurs, prend les reports et remonte ce qui dépasse.'
   },
   animateur: {
     label:'Animateur', rank:25,
@@ -201,10 +205,19 @@ const canon = r => (ROLES[r] ? r : (ALIAS[r] || 'moderateur'));
    faute de frappe dans un script, et elle doit se VOIR quelque part. */
 const CAT_ALIAS = {
   economie:  'inventaire',      // virements, salaires, factures
-  staff:     'admin',           // reports et tickets : ce que fait le staff
+  staff:     'admin',           // actions du staff en jeu
   systeme:   'admin',
   whitelist: 'connexions',
-  chat:      'ecran_joueur'
+  chat:      'ecran_joueur',
+  // Les tickets n'avaient pas de rubrique à eux et tombaient dans « Action
+  // staff » : on y lisait la réponse du staff, jamais la demande du joueur
+  // ni le refus. Les noms qu'emploient les ressources existantes y mènent
+  // maintenant, sans quoi un serveur déjà branché aurait continué d'écrire
+  // au mauvais endroit sans rien voir changer.
+  report:    'reports',
+  ticket:    'reports',
+  tickets:   'reports',
+  signalement: 'reports'
 };
 const CAT_FALLBACK = 'admin';
 const canonCat = c => (CAT_IDS.includes(c) ? c : (CAT_ALIAS[c] || CAT_FALLBACK));

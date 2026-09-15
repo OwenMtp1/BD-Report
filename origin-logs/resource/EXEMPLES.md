@@ -3,10 +3,10 @@
 La ressource `origin_logs` journalise toute seule ce que le serveur de jeu
 publie lui-même : connexions, déconnexions, morts, anticheat, bannissements,
 actions staff, et — quand le framework est reconnu — l'argent, les métiers et
-les coffres. **Sept rubriques ne peuvent venir que de VOS scripts**, parce
-que rien de standard ne les émet : la boutique, le casino, les factures EMS,
-l'immobilier et les objets au sol appartiennent à des ressources que chaque
-serveur choisit, écrit ou achète.
+les coffres. **Huit rubriques ne peuvent venir que de VOS scripts**, parce
+que rien de standard ne les émet : les reports, la boutique, le casino, les
+factures EMS, l'immobilier et les objets au sol appartiennent à des
+ressources que chaque serveur choisit, écrit ou achète.
 
 Ce fichier donne **une ligne à copier pour chacune**. Elles fonctionnent
 quel que soit votre framework — ESX, QBCore, QBox, ox, ou un socle maison :
@@ -277,6 +277,102 @@ exports['origin_logs']:Log({
 })
 ```
 
+## Logs des Reports — `reports`
+
+Les tickets ouverts en jeu (`/report`, menu d'aide, `/staff`). La ressource
+ne peut pas les émettre : le système de reports appartient à votre panel
+staff, et chaque serveur a le sien.
+
+⚠️ **Journalisez les QUATRE moments, pas seulement la réponse.** C'est
+l'erreur qu'on fait toujours : on enregistre ce que le staff a fait, jamais
+ce que le joueur a demandé. Le journal dit alors que tout a été traité, et
+ne montre ni les tickets refusés, ni ceux que personne n'a pris — c'est-à-dire
+exactement ce qu'on cherche quand un joueur dit « j'ai fait un report et
+personne n'est venu ».
+
+```lua
+-- 1. Le joueur OUVRE. L'acteur est le joueur, et le motif est le SIEN —
+--    celui qu'il a tapé, pas celui que le staff retiendra à la fin.
+exports['origin_logs']:Log({
+  cat = 'reports', sev = 'notice', actor = source,
+  msg = ('%s a ouvert un report — %s'):format(nomJoueur, motif),
+  data = { kind = 'ouverture', ticket = idTicket, motif = motif,
+           zone = zone, joueurVise = nomVise },
+  res = 'mon_panel_staff'
+})
+
+-- 2. Un staff PREND le ticket. ⚠️ `actor` devient le staff et `target` le
+--    joueur : c'est ce qui range l'évènement dans les DEUX dossiers, et
+--    qui permet de répondre à « qui a pris le ticket de qui ».
+exports['origin_logs']:Log({
+  cat = 'reports', sev = 'info', actor = staffSource, target = source,
+  msg = ('%s a pris le report de %s'):format(nomStaff, nomJoueur),
+  data = { kind = 'prise', ticket = idTicket, motif = motif,
+           attenteAvantPrise = minutesAttendues },
+  res = 'mon_panel_staff'
+})
+
+-- 3. Un staff REFUSE. En `alerte`, parce qu'un refus se relit : c'est là
+--    que se voient les tickets écartés un peu vite. Le motif du refus
+--    n'est pas celui du ticket — gardez les deux.
+exports['origin_logs']:Log({
+  cat = 'reports', sev = 'alerte', actor = staffSource, target = source,
+  msg = ('%s a refusé le report de %s — %s'):format(nomStaff, nomJoueur, motifRefus),
+  data = { kind = 'refus', ticket = idTicket, motifRefus = motifRefus,
+           motifInitial = motif, attenteAvantRefus = minutesAttendues },
+  res = 'mon_panel_staff'
+})
+
+-- 4. La CLÔTURE, avec ce qu'elle a produit.
+exports['origin_logs']:Log({
+  cat = 'reports', sev = 'info', actor = staffSource, target = source,
+  msg = ('%s a clos le report de %s — %s'):format(nomStaff, nomJoueur, issue),
+  data = { kind = 'cloture', ticket = idTicket, duree = dureeMinutes,
+           suite = 'avertissement' },   -- aucune | avertissement | remboursement | ban
+  res = 'mon_panel_staff'
+})
+```
+
+**Le ticket que personne n'a pris.** Aucun de ces quatre appels ne se
+déclenche, par définition — c'est une absence, et une absence ne s'émet pas
+toute seule. Un minuteur côté serveur la rend visible :
+
+```lua
+-- À l'ouverture, on note l'heure ; si rien n'a été pris au bout de N minutes,
+-- on le dit. C'est le seul évènement de la rubrique que le joueur ne
+-- provoque pas et que le staff ne provoque pas non plus.
+CreateThread(function()
+  while true do
+    Wait(60000)
+    for id, tk in pairs(TicketsOuverts) do
+      if not tk.pris and not tk.alerte and (os.time() - tk.ouvertA) > 15 * 60 then
+        tk.alerte = true
+        exports['origin_logs']:Log({
+          cat = 'reports', sev = 'alerte', actor = tk.source,
+          msg = ('Report de %s sans réponse depuis %d min'):format(tk.nom, 15),
+          data = { kind = 'sans_reponse', ticket = id, motif = tk.motif,
+                   staffEnLigne = tk.staffEnLigne },
+          res = 'mon_panel_staff'
+        })
+      end
+    end
+  end
+end)
+```
+
+⚠️ **Le joueur peut s'être déconnecté** quand le minuteur se déclenche :
+passez `actor = tk.source` seulement s'il est encore là, sinon une table
+`{ key = tk.license, name = tk.nom }` — un identifiant de session libéré
+désigne quelqu'un d'autre une minute plus tard.
+
+**Si votre système de reports emploie déjà un autre nom de rubrique**
+(`report`, `ticket`, `tickets`, `signalement`), il n'y a rien à changer :
+ces noms mènent à `reports`. C'est le sens même des passerelles — un serveur
+déjà branché ne doit pas continuer d'écrire au mauvais endroit sans rien
+voir changer.
+
+---
+
 ## Écran du joueur — `ecran_joueur`
 
 Cette rubrique a **deux moitiés**, et une seule est déjà branchée. Les
@@ -318,6 +414,7 @@ qui donne de l'argent, un achat, une interaction refusée.
 | Rubrique | `cat` | Qui l'émet |
 |---|---|---|
 | Bannissement | `bans` | `origin_logs` |
+| **Logs des Reports** | `reports` | **vos scripts** (votre panel staff) |
 | Avertissement | `sanctions` | `origin_logs` |
 | Anticheat | `anticheat` | `origin_logs` |
 | Connexion | `connexions` | `origin_logs` |

@@ -20,12 +20,12 @@ Installation pas à pas : **[DEPLOIEMENT.md](DEPLOIEMENT.md)**.
 
 ## Ce que le panneau couvre
 
-**17 rubriques**, rangées par métier — le groupe porte la couleur, la
+**18 rubriques**, rangées par métier — le groupe porte la couleur, la
 rubrique porte le nom :
 
 | Groupe | Rubriques |
 |---|---|
-| **Modération** | `BAN` Bannissement · `AVT` Avertissement · `ACH` Anticheat |
+| **Modération** | `BAN` Bannissement · `AVT` Avertissement · `ACH` Anticheat · `RPT` Logs des Reports |
 | **Joueurs** | `CNX` Connexion · `DCX` Déconnexion · `ECR` Écran du joueur · `MRT` Mort joueur |
 | **Argent & biens** | `TRX` Transactions et coffres · `SOL` Items au sol · `IMM` Immobilier |
 | **Boutique** | `BQC` Boutique : caisse · `BQM` Boutique : monnaie et grades · `BQP` Boutique : produits |
@@ -37,6 +37,37 @@ pas n'est plus journalisé du tout (le chat de proximité, les véhicules, le
 craft, la drogue, les braquages, les organisations, la whitelist). Couper une
 rubrique à la source coûte moins cher que de la masquer dans le panneau —
 `Config.Categories` dans `resource/config.lua` le fait serveur par serveur.
+
+### Logs des Reports
+
+Les tickets ouverts en jeu, et **les quatre moments** qui les font : le
+joueur qui ouvre (avec le motif qu'il a tapé, pas celui que le staff
+retiendra), le staff qui prend, le staff qui refuse, et le ticket que
+personne n'a pris.
+
+⚠️ **C'est la quatrième qui justifie la rubrique.** On journalise toujours
+ce que le staff a fait, jamais ce que le joueur a demandé : le journal dit
+alors que tout a été traité, et ne montre ni les refus, ni les tickets
+restés en attente — c'est-à-dire exactement ce qu'on cherche quand un joueur
+écrit « j'ai fait un report et personne n'est venu ».
+
+La prise et le refus portent **deux personnes** : le staff en auteur, le
+joueur en cible. C'est ce qui range l'évènement dans les deux dossiers et
+qui permet de répondre à « qui a pris le ticket de qui ».
+
+Aucune ressource standard ne les émet — le système de reports appartient au
+panel staff de chaque serveur. Le code à copier est dans
+**[resource/EXEMPLES.md](resource/EXEMPLES.md)**, et les noms employés
+ailleurs (`report`, `ticket`, `tickets`, `signalement`) y mènent déjà.
+
+⚠️ **Une rubrique ajoutée au catalogue n'existe pour personne tant que les
+rôles en base ne la portent pas** — et les rôles ne se ré-ensemencent
+jamais, précisément pour qu'un redémarrage ne défasse pas le travail d'un
+fondateur. Un rattrapage l'accorde donc une fois, et seulement à deux
+sortes de rôles : ceux qui portaient déjà **toutes** les autres rubriques
+(ils disaient « tout »), et les rôles **intégrés que personne n'a
+retouchés**, auxquels on applique la valeur de départ du catalogue. Un rôle
+recomposé par le client n'est jamais élargi : sa liste est une décision.
 
 ⚠️ **La rubrique est la clé du reste.** Elle décide de ce qu'un rôle voit
 (chaque rôle porte sa liste), de ce que la recherche peut atteindre et de ce
@@ -517,7 +548,7 @@ accès**, en crée de nouveaux, et relie chacun à un rôle Discord (écran
 
 | Rang | Rôle | Fait | Voit |
 |---|---|---|---|
-| 100 | **Fondateur** | tout, y compris la liaison Discord, les rôles, les comptes et **l'export** | 17 rubriques |
+| 100 | **Fondateur** | tout, y compris la liaison Discord, les rôles, les comptes et **l'export** | 18 rubriques |
 | 90 | **Administrateur** | tout sauf la liaison Discord, la composition des rôles et l'export | 17 |
 | 80 | **Développeur** | lecture et journal du panneau | 17 |
 | 70 | **Gérant Brigade Anti-Cheat** | avertir, expulser, bannir, lever, identifiants | 10 |

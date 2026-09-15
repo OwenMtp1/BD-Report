@@ -30,6 +30,13 @@ const VEHS = ['sultanrs','blista','sandking','police3','ambulance','t20','domina
 const ARMES = ['WEAPON_PISTOL','WEAPON_SMG','WEAPON_PUMPSHOTGUN','WEAPON_KNIFE','WEAPON_CARBINERIFLE'];
 const BANQUES = ['la Fleeca de Legion Square','le Pacific Standard','la bijouterie Vangelico'];
 const MOTIFS = ['RDM sur Legion Square','VDM répété','Fail RP en braquage','Metagaming Discord','Cheat détecté — menu illégal'];
+// Le motif qu'un joueur DÉCLARE en ouvrant son ticket n'est pas celui que
+// le staff retiendra à la fin : les deux doivent pouvoir se lire.
+const MOTIFS_REPORT = ['RDM — tué sans raison à Legion','VDM — écrasé volontairement','Item disparu de mon coffre',
+  'Véhicule introuvable au garage','Suspicion de triche','Joueur bloqué dans le décor','Insultes HRP en vocal',
+  'Argent non reçu après une vente'];
+const REFUS_REPORT = ['Signalement en double — déjà pris en charge','Aucun élément à l’appui',
+  'Hors du champ du staff — à régler en RP','Le joueur s’est déconnecté avant la prise en charge'];
 
 const joueurs = Array.from({length:22}, () => {
   const nom = R(PRENOMS) + ' ' + R(NOMS);
@@ -63,7 +70,15 @@ const M = [
   [3, 'sanctions','notice',  (a,b,s)=>[`${s.name} a averti ${a.name} — ${R(MOTIFS)}`,{kind:'warn',type:'warn',cible:a.name,cibleKey:a.key,motif:R(MOTIFS),staff:s.name},'origin_admin',a,s]],
   [2, 'bans','alerte',       (a,b,s)=>{const j=I(2,30);return [`${s.name} a banni ${a.name} pour ${j} jours`,{kind:'ban',type:'ban',cible:a.name,cibleKey:a.key,motif:R(MOTIFS),duree:j+' jour(s)',expireAt:Date.now()+j*86400000,staff:s.name},'origin_admin',a,s];}],
   [1, 'bans','critique',     (a,b,s)=>[`${s.name} a banni ${a.name} définitivement`,{kind:'ban',type:'ban',cible:a.name,cibleKey:a.key,motif:'Cheat détecté — menu illégal',duree:'permanent',expireAt:null,staff:s.name},'origin_admin',a,s]],
-  [1, 'bans','info',         (a,b,s)=>[`${s.name} a levé le bannissement de ${a.name}`,{kind:'unban',type:'unban',cible:a.name,cibleKey:a.key,motif:'appel accepté',staff:s.name},'origin_admin',a,s]]
+  [1, 'bans','info',         (a,b,s)=>[`${s.name} a levé le bannissement de ${a.name}`,{kind:'unban',type:'unban',cible:a.name,cibleKey:a.key,motif:'appel accepté',staff:s.name},'origin_admin',a,s]],
+  // Les reports se lisent à trois voix : le joueur qui ouvre, le staff qui
+  // prend, le staff qui refuse. Sans les trois, on ne saurait jamais
+  // combien de demandes sont restées sans réponse.
+  [7, 'reports','notice',    (a)=>{const m=R(MOTIFS_REPORT);return [`${a.name} a ouvert un report — ${m}`,{kind:'ouverture',ticket:'#'+I(100,999),motif:m,zone:R(ZONES)},'origin_reports'];}],
+  [5, 'reports','info',      (a,b,s)=>[`${s.name} a pris le report de ${a.name}`,{kind:'prise',ticket:'#'+I(100,999),motif:R(MOTIFS_REPORT),cible:a.name,cibleKey:a.key,staff:s.name,attenteAvantPrise:I(1,24)+' min'},'origin_reports',a,s]],
+  [4, 'reports','info',      (a,b,s)=>[`${s.name} a clos le report de ${a.name} — ${R(['résolu','joueur dédommagé','avertissement posé','explication donnée'])}`,{kind:'cloture',ticket:'#'+I(100,999),cible:a.name,cibleKey:a.key,staff:s.name,duree:I(2,40)+' min'},'origin_reports',a,s]],
+  [3, 'reports','alerte',    (a,b,s)=>{const m=R(REFUS_REPORT);return [`${s.name} a refusé le report de ${a.name} — ${m}`,{kind:'refus',ticket:'#'+I(100,999),motifRefus:m,motifInitial:R(MOTIFS_REPORT),cible:a.name,cibleKey:a.key,staff:s.name},'origin_reports',a,s];}],
+  [2, 'reports','alerte',    (a)=>[`Report de ${a.name} sans réponse depuis ${I(25,90)} min`,{kind:'sans_reponse',ticket:'#'+I(100,999),motif:R(MOTIFS_REPORT),relances:I(1,3)},'origin_reports']]
 ];
 const SAC = []; M.forEach((m, i) => { for (let k = 0; k < m[0]; k++) SAC.push(i); });
 const POIDS_H = [.55,.40,.25,.15,.10,.08,.10,.15,.22,.30,.38,.45,.50,.50,.55,.60,.68,.78,.90,1,1,.95,.85,.70];
@@ -94,5 +109,5 @@ while (events.length < N && garde++ < N * 40) {
     envoyes += (await r.json()).recus || 0;
   }
   console.log(`\n  ${envoyes} évènements déposés sur ${URL_API}`);
-  console.log('  Ouvrez le panneau : les 17 rubriques doivent se remplir.\n');
+  console.log('  Ouvrez le panneau : les 18 rubriques doivent se remplir.\n');
 })().catch(e => { console.error('\n  ' + e.message + '\n'); process.exit(1); });
