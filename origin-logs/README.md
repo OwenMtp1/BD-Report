@@ -89,9 +89,12 @@ Le staff ne retient pas un mot de passe de plus : il clique sur **Continuer
 avec Discord**. À chaque connexion, l'API vérifie deux choses avec le jeton du
 bot — donc côté serveur, sans rien croire du navigateur :
 
-1. la personne est bien **membre du serveur Discord** ;
+1. la personne est bien **membre du serveur Discord** de l'espace ;
 2. elle y porte bien le **rôle staff** dont l'identifiant a été renseigné par
    un fondateur.
+
+Une même application Discord peut servir plusieurs espaces : à la connexion,
+l'API cherche celui (ou ceux) où la personne est staff.
 
 Ses **rôles Discord** sont ensuite traduits en rôles du panneau, et c'est ce
 qui lui donne ses droits. Quelqu'un qui cumule Modérateur et Animateur obtient
@@ -112,15 +115,46 @@ La connexion par mot de passe reste disponible pour le premier fondateur —
 c'est elle qui permet d'aller configurer la liaison, et de rentrer si Discord
 est en panne.
 
+## Espaces de logs
+
+Un **espace** = un serveur de jeu + son serveur Discord + son équipe. Le
+panneau en héberge autant que nécessaire, et ils ne se voient pas : chaque
+espace a sa **clé d'ingestion** (celle d'un serveur n'ouvre jamais les
+journaux d'un autre), ses rôles, ses membres et sa durée de rétention.
+
+L'**administration de la plateforme** (bouton *Espaces de logs*) est un cran
+au-dessus des fondateurs. Elle peut :
+
+- **créer un espace** en renseignant son serveur Discord et son rôle staff —
+  les 14 rôles d'origine y sont créés automatiquement ;
+- **fermer** un espace avec un motif : les journaux restent, mais plus
+  personne n'entre et le serveur de jeu cesse d'écrire ;
+- **changer le propriétaire**, **révoquer un accès**, **retirer un membre** ;
+- **régénérer la clé d'ingestion** d'un serveur compromis ;
+- **entrer** dans n'importe quel espace pour le configurer — la barre affiche
+  alors « visite », pour qu'on ne modère jamais un autre serveur en croyant
+  être chez soi ;
+- **supprimer** un espace, en recopiant son nom : l'effacement des journaux
+  est définitif.
+
+Ce droit ne s'accorde pas depuis un espace — sinon un fondateur se hisserait
+au-dessus de tous les autres. Il se pose en console :
+
+```bash
+node staff.js platform <pseudo> on
+```
+
 ## Rôles et permissions
 
-**14 rôles**, chacun portant ce qu'il a le droit de **faire** et ce qu'il a le
-droit de **voir**. Le rang décide qui peut gérer qui.
+**14 rôles de départ**, et rien n'est figé : un fondateur les renomme, change
+leur rang, coche leurs droits **et les rubriques auxquelles ils donnent
+accès**, en crée de nouveaux, et relie chacun à un rôle Discord (écran
+*Rôles & accès*, droit `roles.manage`).
 
 | Rang | Rôle | Fait | Voit |
 |---|---|---|---|
-| 100 | **Fondateur** | tout, y compris la liaison Discord et les comptes | 19 catégories |
-| 90 | **Administrateur** | tout sauf la liaison Discord | 19 |
+| 100 | **Fondateur** | tout, y compris la liaison Discord, les rôles et les comptes | 19 rubriques |
+| 90 | **Administrateur** | tout sauf la liaison Discord et la composition des rôles | 19 |
 | 80 | **Développeur** | lecture et journal du panneau | 19 |
 | 70 | **Gérant Brigade Anti-Cheat** | avertir, expulser, bannir, lever, identifiants | 12 |
 | 65 | **Responsable Remboursement** | rendre un bien, avertir, identifiants | 10 |
@@ -134,10 +168,24 @@ droit de **voir**. Le rang décide qui peut gérer qui.
 | 25 | **Animateur** | lecture | 8 |
 | 25 | **Communication** | lecture | 5 |
 
-Un rôle ne se contente pas de masquer des boutons : il **restreint les
-catégories**. Un Gérant Animation n'a rien à faire dans les journaux
-d'anticheat, et un Brigade Anti-Cheat n'a pas à lire les coffres
-d'organisations.
+### Le rang, et qui peut quoi
+
+Le rang décide qui peut gérer qui : on n'attribue, ne crée ni ne modifie
+jamais un rôle **au-dessus du sien** — ce serait se donner par un détour des
+droits qu'on n'a pas. Deux exceptions volontaires :
+
+- le **propriétaire** de l'espace peut attribuer jusqu'à son propre rang.
+  Sans cela, un fondateur ne pourrait jamais en nommer un second, et l'espace
+  resterait suspendu à une seule personne ;
+- l'**administration de la plateforme** n'est pas bornée.
+
+### Attribution manuelle
+
+Les rôles viennent de Discord, mais un fondateur garde le dernier mot :
+cocher des rôles dans *Gérer l'équipe* les attribue **à la main**. Ils
+l'emportent sur Discord et **survivent aux resynchronisations** — sinon la
+décision serait défaite en quinze minutes. Tout décocher rend la main à
+Discord.
 
 ⚠️ **Les restrictions sont appliquées par l'API, pas par l'interface.** Un
 modérateur qui demanderait explicitement la catégorie `admin` ne l'obtient
@@ -149,8 +197,9 @@ dossier ou viser une sanction demande un identifiant : sans le droit
 `players.identifiers`, l'API renvoie un **alias** dérivé de la clé serveur
 (`k:…`), utilisable pour agir mais impossible à remonter jusqu'à la licence.
 
-Les 13 droits atomiques (`logs.view`, `actions.ban`, `settings.discord`…)
-sont définis dans `api/catalogue.js`, avec la composition de chaque rôle.
+Les 14 droits atomiques (`logs.view`, `actions.ban`, `roles.manage`…) sont
+définis dans `api/catalogue.js`, qui ne fournit plus que les **valeurs de
+départ** : la base fait foi.
 
 ## Les trois étages
 

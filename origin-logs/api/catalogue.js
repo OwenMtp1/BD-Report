@@ -65,7 +65,8 @@ const PERMS = [
   { id:'actions.give',         label:'Rendre un item ou de l’argent' },
   { id:'audit.view',           label:'Consulter le journal du panneau' },
   { id:'accounts.manage',      label:'Gérer les comptes staff' },
-  { id:'settings.discord',     label:'Configurer la liaison Discord et les rôles' }
+  { id:'settings.discord',     label:'Configurer la liaison Discord et les rôles' },
+  { id:'roles.manage',         label:'Créer les rôles et régler leurs accès' }
 ];
 const PERM_IDS = PERMS.map(p => p.id);
 
@@ -101,8 +102,8 @@ const ROLES = {
   },
   administrateur: {
     label:'Administrateur', rank:90,
-    perms: PERM_IDS.filter(x => x !== 'settings.discord'), cats:'*',
-    desc:'Tout sauf la configuration de la liaison Discord.'
+    perms: PERM_IDS.filter(x => !['settings.discord', 'roles.manage'].includes(x)), cats:'*',
+    desc:'Tout sauf la liaison Discord et la composition des rôles.'
   },
   developpeur: {
     label:'Développeur', rank:80,

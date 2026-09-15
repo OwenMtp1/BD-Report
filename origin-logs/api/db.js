@@ -21,6 +21,42 @@ PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 PRAGMA foreign_keys = ON;
 
+-- Un ESPACE DE LOGS = un serveur de jeu + son serveur Discord + son
+-- équipe. Tout ce qui suit lui appartient : un espace ne voit jamais
+-- les journaux d'un autre, et sa clé d'ingestion n'ouvre que le sien.
+CREATE TABLE IF NOT EXISTS spaces(
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT    NOT NULL,
+  guild_id      TEXT,
+  staff_role_id TEXT,
+  server_key    TEXT    NOT NULL UNIQUE,
+  owner_id      INTEGER,
+  state         TEXT    NOT NULL DEFAULT 'actif',   -- actif | ferme
+  retention     INTEGER,
+  created_at    INTEGER NOT NULL,
+  created_by    TEXT,
+  closed_at     INTEGER,
+  closed_reason TEXT
+);
+
+-- Les rôles vivent en base, pas dans le code : un fondateur doit pouvoir
+-- en créer, renommer, changer les droits ET les rubriques accessibles.
+-- Le catalogue ne fournit plus que les valeurs de DÉPART.
+CREATE TABLE IF NOT EXISTS roles(
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  space_id        INTEGER NOT NULL,
+  key             TEXT    NOT NULL,
+  label           TEXT    NOT NULL,
+  rank            INTEGER NOT NULL DEFAULT 10,
+  perms           TEXT    NOT NULL DEFAULT '[]',
+  cats            TEXT    NOT NULL DEFAULT '[]',
+  discord_role_id TEXT,
+  builtin         INTEGER NOT NULL DEFAULT 0,
+  created_at      INTEGER,
+  UNIQUE(space_id, key)
+);
+CREATE INDEX IF NOT EXISTS idx_roles_space ON roles(space_id, rank DESC);
+
 CREATE TABLE IF NOT EXISTS events(
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   ts          INTEGER NOT NULL,
@@ -36,7 +72,8 @@ CREATE TABLE IF NOT EXISTS events(
   msg         TEXT    NOT NULL,
   data        TEXT,
   res         TEXT,
-  search      TEXT    NOT NULL
+  search      TEXT    NOT NULL,
+  space_id    INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_ev_ts        ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ev_cat_ts    ON events(cat, ts DESC);
@@ -176,6 +213,46 @@ function open(file) {
   ensureColumn(db, 'staff', 'roles',            'TEXT');      // JSON : plusieurs rôles cumulés
   ensureColumn(db, 'staff', 'source',           "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, 'staff', 'roles_checked_at', 'INTEGER');
+  // Multi-espaces : tout ce qui est daté appartient à un espace.
+  for (const t of ['events', 'players', 'sanctions', 'actions', 'staff', 'audit'])
+    ensureColumn(db, t, 'space_id', 'INTEGER NOT NULL DEFAULT 1');
+  // Un fondateur peut figer les rôles d'un membre à la main : la
+  // resynchronisation Discord ne doit pas défaire sa décision.
+  ensureColumn(db, 'staff', 'manual_roles', 'TEXT');
+  ensureColumn(db, 'staff', 'platform_admin', 'INTEGER NOT NULL DEFAULT 0');
+  // Un administrateur de plateforme visite un espace sans changer le
+  // sien : la visite vit sur la SESSION, pas sur le compte.
+  ensureColumn(db, 'sessions', 'space_id', 'INTEGER');
+  // DÉFAUT TROUVÉ À L'AUDIT : la clé d'un joueur était unique GLOBALEMENT.
+  // Deux espaces partageant un même joueur (même licence) se seraient
+  // écrasés l'un l'autre à l'ingestion. La clé primaire devient
+  // (space_id, key) ; SQLite ne sait pas la changer en place, on
+  // reconstruit la table en conservant les lignes.
+  const pk = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='players'").get();
+  if (pk && !/PRIMARY KEY\s*\(\s*space_id/i.test(String(pk.sql))) {
+    db.exec('BEGIN');
+    try {
+      db.exec(`CREATE TABLE players_v2(
+        key TEXT NOT NULL, space_id INTEGER NOT NULL DEFAULT 1, name TEXT, sid INTEGER,
+        discord TEXT, steam TEXT, fivem TEXT, ip_hash TEXT, job TEXT, grade INTEGER,
+        first_seen INTEGER, last_seen INTEGER, playtime INTEGER NOT NULL DEFAULT 0,
+        events INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(space_id, key))`);
+      db.exec(`INSERT INTO players_v2(key,space_id,name,sid,discord,steam,fivem,ip_hash,job,grade,first_seen,last_seen,playtime,events)
+               SELECT key,COALESCE(space_id,1),name,sid,discord,steam,fivem,ip_hash,job,grade,first_seen,last_seen,playtime,events FROM players`);
+      db.exec('DROP TABLE players');
+      db.exec('ALTER TABLE players_v2 RENAME TO players');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_pl_name ON players(name)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_pl_seen ON players(last_seen DESC)');
+      db.exec('COMMIT');
+      console.log('[migration] clé des joueurs désormais propre à chaque espace');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_ev_space_ts ON events(space_id, ts DESC)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pl_space ON players(space_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sa_space ON sanctions(space_id, created_at DESC)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_ac_space ON actions(space_id, status)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_st_space ON staff(space_id)');
+
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_discord ON staff(discord_id) WHERE discord_id IS NOT NULL');
   return db;
 }

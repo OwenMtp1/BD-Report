@@ -511,6 +511,54 @@ select.input{height:36px}
 .linked{color:var(--ok)}
 .unlinked{color:var(--muted)}
 
+/* ---------- éditeur de rôles ---------- */
+.role-card{border:1px solid var(--edge);border-radius:10px;background:var(--panel-2);overflow:hidden}
+.role-card + .role-card{margin-top:9px}
+.role-head{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:12px;align-items:center;
+  padding:11px 14px;width:100%;text-align:left;
+}
+.role-head:hover{background:var(--vio-wash)}
+.role-head > *{min-width:0}
+.role-badge{
+  font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 7px;border-radius:5px;
+  background:var(--raise);color:var(--vio-hi);white-space:nowrap;
+}
+.role-title{font-size:13.5px;font-weight:600;color:var(--ink);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.role-sub{font-size:11.5px;color:var(--muted)}
+.role-body{padding:4px 14px 16px;display:grid;gap:14px;border-top:1px solid var(--edge-soft)}
+.role-body[hidden]{display:none}
+.checks{display:flex;flex-wrap:wrap;gap:6px}
+.check{
+  display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;
+  border:1px solid var(--edge);background:var(--panel);font-size:11.5px;color:var(--muted);cursor:pointer;
+}
+.check:hover{border-color:var(--vio);color:var(--ink-2)}
+.check input{appearance:none;width:11px;height:11px;border-radius:3px;border:1px solid var(--edge);margin:0;flex:none}
+.check input:checked{background:var(--vio);border-color:var(--vio-hi)}
+.check:has(input:checked){background:var(--vio-wash);border-color:var(--vio);color:var(--ink)}
+.check.fam:has(input:checked){background:color-mix(in srgb,var(--fam) 15%,transparent);border-color:color-mix(in srgb,var(--fam) 50%,transparent)}
+.grp-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fam,var(--muted));margin-bottom:5px}
+
+/* ---------- espaces de logs ---------- */
+.space-card{
+  border:1px solid var(--edge);border-radius:10px;background:var(--panel-2);padding:14px;
+  display:grid;gap:10px;
+}
+.space-card + .space-card{margin-top:10px}
+.space-card.ferme{opacity:.62;border-style:dashed}
+.space-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start}
+.space-name{font-size:15px;font-weight:700;font-variation-settings:'wdth' 88;line-height:1.2}
+.space-meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px}
+.space-nums{display:flex;gap:16px;flex-wrap:wrap}
+.space-num b{font-variation-settings:'wdth' 84;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums;display:block}
+.space-num span{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.keybox{
+  display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:7px;
+  background:var(--ground);border:1px solid var(--edge);
+}
+.keybox code{font-family:var(--mono);font-size:11px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+
 /* ---------- note de démonstration ---------- */
 .demo{
   display:flex;align-items:flex-start;gap:10px;margin-top:16px;
@@ -688,7 +736,9 @@ select.input{height:36px}
       <div class="foot-line">Dernier évènement <b id="lastTick">—</b></div>
       <div class="foot-line">Rétention <b id="retention">30 jours</b></div>
       <button class="btn sm" id="teamBtn" hidden>Gérer l'équipe</button>
+      <button class="btn sm" id="rolesBtn" hidden>Rôles &amp; accès</button>
       <button class="btn sm" id="discordBtn" hidden>Liaison Discord</button>
+      <button class="btn sm" id="platformBtn" hidden>Espaces de logs</button>
       <button class="btn sm" id="auditBtn" hidden>Journal du panneau</button>
     </div>
   </nav>
@@ -1276,6 +1326,7 @@ const ME = { pseudo: null, role: null, roleLabel: null, perms: [], cats: [] };
 const can = p => MODE !== 'api' || ME.perms.includes(p);
 
 async function api(path, opts = {}) {
+  if (MODE === 'demo') return demoApi(path, opts);
   const r = await fetch(path, Object.assign({
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' }
@@ -2006,6 +2057,15 @@ function closeDialog() {
 }
 async function confirmAction() {
   if (!pendingAction) return;
+  if (pendingAction.type === 'owner') {
+    const id = Number($('#dlgOwner').value);
+    try {
+      await api('/api/platform/spaces/' + pendingAction.spaceId, { method:'PATCH',
+        body: JSON.stringify({ proprietaire: id }) });
+      closeDialog(); toast('Propriétaire changé.'); openPlatform();
+    } catch (e) { toast(e.message); }
+    return;
+  }
   const { type, key, name } = pendingAction;
   const reason = ($('#dlgReason') && $('#dlgReason').value.trim()) || '';
   if (type !== 'unban' && reason.length < 3) return toast('Un motif d’au moins 3 caractères est obligatoire.');
@@ -2021,124 +2081,7 @@ async function confirmAction() {
   finally { $('#dlgOk').disabled = false; }
 }
 
-/* ---------- équipe et audit ---------- */
-async function openTeam() {
-  let d;
-  try { d = await api('/api/staff'); } catch (e) { return toast(e.message); }
-  openSheet('Équipe staff', `${d.staff.length} compte(s) · un rôle donne des droits, jamais l’inverse`,
-    { name:'Équipe', hue:268 }, `
-    <div class="team">${d.staff.map(s => `
-      <div class="team-row ${s.disabled ? 'off' : ''}">
-        <span class="av sm" style="${avatarStyle(s)}">${initials(s)}</span>
-        <span><span class="lite-t">${esc(s.pseudo)}</span>
-          <span class="lite-m">${(s.roles || []).map(r => esc(r.label)).join(' + ') || '—'}
-            · ${s.source === 'discord' ? 'Discord' : 'mot de passe'}
-            · ${s.last_login ? 'vu ' + dayLabel(s.last_login) : 'jamais connecté'}</span></span>
-        ${s.source === 'discord'
-          ? `<span class="lite-m" title="Ces rôles viennent du serveur Discord">rôles gérés sur Discord</span>`
-          : `<select class="input" style="height:30px;width:auto" data-staff-role="${s.id}">
-              ${d.roles.map(r => `<option value="${r.id}" ${r.id === s.role ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
-            </select>`}
-        <button class="btn sm" data-staff-toggle="${s.id}" data-off="${s.disabled ? 1 : 0}">${s.disabled ? 'Réactiver' : 'Suspendre'}</button>
-      </div>`).join('')}</div>
-    <div class="block">
-      <h3 class="eyebrow">Ajouter un membre</h3>
-      <div class="field"><label for="nsPseudo">Pseudo</label><input class="input" id="nsPseudo" autocomplete="off"></div>
-      <div class="field"><label for="nsPass">Mot de passe (10 caractères minimum)</label><input class="input" id="nsPass" type="text" autocomplete="off"></div>
-      <div class="field"><label for="nsRole">Rôle</label>
-        <select class="input" id="nsRole">${d.roles.map(r => `<option value="${r.id}">${esc(r.label)}</option>`).join('')}</select></div>
-      <button class="btn primary" id="nsGo" style="justify-self:start">Créer le compte</button>
-    </div>`);
-}
-/* ============================================================
-   Liaison Discord
-   L'identité vient de Discord, et ce sont les RÔLES DISCORD qui
-   accordent les droits. Tout se règle ici : aucun identifiant de rôle
-   ne vit dans le code, un serveur qui réorganise ses rôles n'a rien à
-   redéployer.
-   ============================================================ */
-let DROLES = null;     // rôles du serveur Discord, une fois chargés
-
-function champRole(id, valeur) {
-  if (DROLES) {
-    return `<select class="input" data-map="${esc(id)}">
-      <option value="">— non relié —</option>
-      ${DROLES.map(r => `<option value="${esc(r.id)}" ${r.id === valeur ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
-    </select>`;
-  }
-  return `<input class="input" data-map="${esc(id)}" value="${esc(valeur || '')}" placeholder="ID du rôle Discord" inputmode="numeric">`;
-}
-
-async function openDiscordSettings() {
-  let d;
-  try { d = await api('/api/discord/config'); } catch (e) { return toast(e.message); }
-  const etat = d.pret
-    ? `<div class="banner" style="--c:var(--ok)"><b>Liaison active.</b> Le staff se connecte avec Discord ; l’appartenance au serveur et le rôle staff sont vérifiés à chaque connexion, puis revérifiés toutes les 15 minutes.</div>`
-    : `<div class="banner" style="--c:var(--warn)"><b>Liaison incomplète.</b> Renseignez le serveur et le rôle staff ci-dessous. Les deux secrets se posent dans <code>.env</code> : <code>DISCORD_CLIENT_SECRET</code> ${d.secrets.clientSecret ? '<span class="linked">✓ en place</span>' : '<span class="unlinked">manquant</span>'}, <code>DISCORD_BOT_TOKEN</code> ${d.secrets.botToken ? '<span class="linked">✓ en place</span>' : '<span class="unlinked">manquant</span>'}.</div>`;
-
-  openSheet('Liaison Discord', 'Un rôle Discord = les droits correspondants dans le panneau',
-    { name:'Discord', hue:235 }, `
-    ${etat}
-    <div class="block">
-      <h3 class="eyebrow">Serveur et accès</h3>
-      <div class="field"><label for="dcClient">Identifiant de l’application Discord</label>
-        <input class="input" id="dcClient" value="${esc(d.clientId)}" inputmode="numeric" placeholder="Client ID"></div>
-      <div class="field"><label for="dcGuild">Identifiant du serveur Discord</label>
-        <input class="input" id="dcGuild" value="${esc(d.guildId)}" inputmode="numeric" placeholder="Guild ID"></div>
-      <div class="field"><label for="dcStaff">Rôle staff — obligatoire pour entrer</label>
-        ${DROLES ? `<select class="input" id="dcStaff">
-            <option value="">— non relié —</option>
-            ${DROLES.map(r => `<option value="${esc(r.id)}" ${r.id === d.staffRoleId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
-          </select>`
-          : `<input class="input" id="dcStaff" value="${esc(d.staffRoleId)}" inputmode="numeric" placeholder="ID du rôle staff">`}</div>
-      <div class="field"><label for="dcRedirect">URL de redirection (à déclarer dans l’application Discord)</label>
-        <input class="input" id="dcRedirect" value="${esc(d.redirectUri)}" placeholder="${esc(d.redirectUriParDefaut)}"></div>
-      <div class="tools" style="margin-top:10px">
-        <button class="btn sm" id="dcLoad">${DROLES ? 'Recharger les rôles du serveur' : 'Charger les rôles du serveur'}</button>
-        <button class="btn sm primary" id="dcSave">Enregistrer</button>
-      </div>
-    </div>
-    <div class="block">
-      <h3 class="eyebrow">Rôles du panneau — ${d.roles.length} au total</h3>
-      <span class="lite-m">Reliez chaque rôle du panneau à un rôle Discord. Une personne qui en cumule plusieurs obtient l’union de leurs droits.</span>
-      <div style="margin-top:6px">${d.roles.map(r => `
-        <div class="map-row">
-          <span><span class="map-name">${esc(r.label)} <span class="map-rank">rang ${r.rank}</span></span>
-            <span class="map-desc">${esc(r.desc || '')}</span></span>
-          ${champRole(r.id, d.roleMap[r.id] || '')}
-        </div>`).join('')}</div>
-    </div>`);
-}
-
-async function chargerRolesDiscord() {
-  const b = $('#dcLoad'); if (b) { b.disabled = true; b.textContent = 'Lecture du serveur…'; }
-  try {
-    // On enregistre d'abord : sans l'identifiant du serveur, le bot ne
-    // sait pas où regarder.
-    await enregistrerDiscord({ silencieux: true });
-    const d = await api('/api/discord/roles');
-    DROLES = d.roles;
-    toast(`${d.roles.length} rôles lus sur le serveur Discord`);
-    openDiscordSettings();
-  } catch (e) { toast(e.message); if (b) { b.disabled = false; b.textContent = 'Charger les rôles du serveur'; } }
-}
-
-async function enregistrerDiscord(o) {
-  const roleMap = {};
-  document.querySelectorAll('[data-map]').forEach(n => roleMap[n.dataset.map] = n.value.trim());
-  const corps = {
-    clientId: $('#dcClient').value.trim(), guildId: $('#dcGuild').value.trim(),
-    staffRoleId: $('#dcStaff').value.trim(), redirectUri: $('#dcRedirect').value.trim(), roleMap
-  };
-  const r = await api('/api/discord/config', { method:'POST', body: JSON.stringify(corps) });
-  if (!(o && o.silencieux)) {
-    toast(r.pret ? 'Liaison enregistrée — le staff peut se connecter avec Discord.'
-                 : 'Enregistré. La liaison reste incomplète.');
-    openDiscordSettings();
-  }
-  return r;
-}
-
+/* ---------- audit ---------- */
 async function openAudit() {
   let d;
   try { d = await api('/api/audit'); } catch (e) { return toast(e.message); }
@@ -2394,6 +2337,476 @@ $('#q').addEventListener('focus', e => { if (e.target.value.trim().length >= 2) 
 </script>
 <script>
 /* ============================================================
+   Rôles, équipe et espaces de logs
+   Ces trois écrans partagent une règle : on ne montre jamais un
+   réglage qu'on n'a pas le droit de changer, et l'API refuse de
+   toute façon ce que l'écran laisserait passer.
+   ============================================================ */
+
+/* ---------- mode démonstration ----------
+   L'aperçu se présente en Fondateur : c'est le rôle qui voit tout, et
+   c'est ce qu'on veut montrer. Les écrans d'administration répondent
+   donc avec un jeu d'exemple plutôt que de rester vides. */
+const DEMO_ESPACES = [
+  { id:1, nom:'Origin Roleplay', etat:'actif', guildId:'938271640518273024', staffRoleId:'938271640518273100',
+    retention:30, cle:'demo-cle-1', creeLe:Date.now()-320*86400000, creePar:'Owen',
+    proprietaire:{ id:1, pseudo:'Owen' }, membres:24, evenements:184203, bannis:37 },
+  { id:2, nom:'Origin RP — serveur test', etat:'actif', guildId:'938271640518273024', staffRoleId:'938271640518273101',
+    retention:7, cle:'demo-cle-2', creeLe:Date.now()-40*86400000, creePar:'Owen',
+    proprietaire:{ id:3, pseudo:'Vortex' }, membres:6, evenements:9120, bannis:2 },
+  { id:3, nom:'Origin RP — ancienne saison', etat:'ferme', guildId:'', staffRoleId:'',
+    retention:90, cle:'demo-cle-3', creeLe:Date.now()-700*86400000, creePar:'Owen',
+    fermeLe:Date.now()-60*86400000, motifFermeture:'Fin de saison 3 — journaux conservés',
+    proprietaire:null, membres:0, evenements:441027, bannis:0 }
+];
+const DEMO_EQUIPE = [
+  { id:1, pseudo:'Owen',   source:'local',   roles:[{id:'fondateur',label:'Fondateur'}], rank:100, estMoi:true },
+  { id:2, pseudo:'Nyx',    source:'discord', roles:[{id:'administrateur',label:'Administrateur'}], rank:90 },
+  { id:3, pseudo:'Vortex', source:'discord', roles:[{id:'gerant_anticheat',label:'Gérant Brigade Anti-Cheat'},
+                                                    {id:'moderateur',label:'Modérateur'}], rank:70, manual:true },
+  { id:4, pseudo:'Kaleb',  source:'discord', roles:[{id:'moderateur',label:'Modérateur'}], rank:50 },
+  { id:5, pseudo:'Sasha',  source:'discord', roles:[{id:'helper',label:'Helper'}], rank:30 },
+  { id:6, pseudo:'Orion',  source:'discord', roles:[{id:'animateur',label:'Animateur'}], rank:25, disabled:1 }
+].map(x => Object.assign({ disabled:0, manual:false, last_login:Date.now()-Math.random()*6*86400000 }, x));
+
+function demoRolesCatalogue() {
+  // Les rôles de démonstration viennent du même catalogue que la
+  // production : ce qu'on montre est ce qui sera livré.
+  return DEMO_ROLES.map(r => Object.assign({}, r));
+}
+let DEMO_ROLES = [];
+
+async function demoApi(path, opts) {
+  const corps = opts && opts.body ? JSON.parse(opts.body) : null;
+  const ecrit = opts && opts.method && opts.method !== 'GET';
+  if (path.startsWith('/api/roles')) {
+    if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true }; }
+    return { roles: demoRolesCatalogue(), perms: DEMO_PERMS, cats: CATS, groups: GROUPS,
+             monRang: 100, effectifs: { fondateur:1, administrateur:1, moderateur:2, helper:1, animateur:1, gerant_anticheat:1 } };
+  }
+  if (path.startsWith('/api/staff')) {
+    if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true }; }
+    return { staff: DEMO_EQUIPE, monRang: 100,
+             roles: demoRolesCatalogue().map(r => ({ id:r.key, label:r.label, rank:r.rank })) };
+  }
+  if (path.startsWith('/api/platform')) {
+    if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true }; }
+    if (path.startsWith('/api/platform/members'))
+      return { members: DEMO_EQUIPE.map(m => Object.assign({ spaceId:1, platform:m.id === 1 }, m)) };
+    return { spaces: DEMO_ESPACES, monEspace: 1, discordGlobal: true };
+  }
+  if (path.startsWith('/api/discord/config')) {
+    if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true, pret:true }; }
+    return { pret:true, secrets:{ clientSecret:true, botToken:true },
+             clientId:'1183920145927383040', guildId:'938271640518273024',
+             staffRoleId:'938271640518273100', redirectUri:'',
+             redirectUriParDefaut:'https://logs.origin-rp.fr/api/auth/discord/callback',
+             espace:{ id:1, nom:'Origin Roleplay' },
+             roleMap: Object.fromEntries(demoRolesCatalogue().filter(r => r.discordRoleId).map(r => [r.key, r.discordRoleId])),
+             roles: demoRolesCatalogue().map(r => ({ id:r.key, label:r.label, rank:r.rank, desc:r.desc })) };
+  }
+  if (path.startsWith('/api/discord/roles'))
+    return { roles: DEMO_ROLES.map((r, i) => ({ id: r.discordRoleId || ('93827164051827' + (3200 + i)),
+                                                name: r.label, position: 100 - i })) };
+  if (path.startsWith('/api/audit'))
+    return { audit: [
+      { ts:Date.now()-3600e3, pseudo:'Nyx', action:'action.ban', detail:'Rayan Reyes — Cheat détecté' },
+      { ts:Date.now()-7200e3, pseudo:'Owen', action:'roles.modification', detail:'Brigade Anti-Cheat' },
+      { ts:Date.now()-9000e3, pseudo:'Kaleb', action:'dossier.ouvert', detail:'license:06d6…' },
+      { ts:Date.now()-16000e3, pseudo:'Owen', action:'discord.config', detail:'liaison mise à jour' }
+    ] };
+  return { ok:true };
+}
+let DEMO_PERMS = [];
+
+/* ============================================================
+   RÔLES & ACCÈS
+   ============================================================ */
+let ROLES_DATA = null, ROLE_OUVERT = null;
+
+async function openRoles() {
+  try { ROLES_DATA = await api('/api/roles'); } catch (e) { return toast(e.message); }
+  rendreRoles();
+}
+function rendreRoles() {
+  const d = ROLES_DATA;
+  const eff = d.effectifs || {};
+  openSheet('Rôles & accès', `${d.roles.length} rôles · un rôle donne des droits ET des rubriques`,
+    { name:'Rôles', hue:280 }, `
+    <div class="banner" style="--c:var(--vio)">Un rôle relié à un ID Discord est attribué automatiquement à la connexion.
+      Vous pouvez aussi l’attribuer à la main depuis <b>Gérer l’équipe</b> — une attribution manuelle l’emporte sur Discord.</div>
+    <div id="roleList">${d.roles.map(r => carteRole(r, eff[r.key] || 0, d)).join('')}</div>
+    <div class="block">
+      <h3 class="eyebrow">Créer un rôle</h3>
+      <div class="map-row" style="border:none">
+        <input class="input" id="nrLabel" placeholder="Nom du rôle (ex. Responsable Whitelist)" maxlength="40">
+        <input class="input" id="nrRank" type="number" min="1" max="999" value="20" title="Rang">
+      </div>
+      <div class="map-row" style="border:none">
+        <input class="input" id="nrDiscord" placeholder="ID du rôle Discord (facultatif)" inputmode="numeric">
+        <button class="btn primary" id="nrGo">Créer le rôle</button>
+      </div>
+      <span class="lite-m">Le rang décide qui peut gérer qui. Vous ne pouvez pas créer un rôle à votre niveau (${d.monRang}) ou au-dessus.</span>
+    </div>`);
+  if (ROLE_OUVERT) {
+    const el = document.querySelector(`[data-rolebody="${ROLE_OUVERT}"]`);
+    if (el) el.hidden = false;
+  }
+}
+function carteRole(r, effectif, d) {
+  const grp = (d.groups || GROUPS).map(g => {
+    const dans = (d.cats || CATS).filter(c => c.group === g.id);
+    if (!dans.length) return '';
+    return `<div style="--fam:${g.fam}">
+      <div class="grp-label">${esc(g.label)}</div>
+      <div class="checks">${dans.map(c => `<label class="check fam" style="--fam:${g.fam}">
+        <input type="checkbox" data-cat="${esc(c.id)}" data-role="${esc(r.key)}" ${r.cats.includes(c.id) ? 'checked' : ''}>
+        ${esc(c.label)}</label>`).join('')}</div></div>`;
+  }).join('');
+  return `<div class="role-card">
+    <button class="role-head" data-roletoggle="${esc(r.key)}">
+      <span class="role-badge">rang ${r.rank}</span>
+      <span><span class="role-title">${esc(r.label)}</span>
+        <span class="role-sub">${esc(r.desc || 'rôle personnalisé')}</span></span>
+      <span class="lite-m">${r.perms.length} droits · ${r.cats.length} rubriques</span>
+      <span class="lite-m">${effectif ? effectif + ' membre(s)' : '—'}</span>
+    </button>
+    <div class="role-body" data-rolebody="${esc(r.key)}" hidden>
+      <div class="map-row" style="border:none">
+        <input class="input" data-field="label" data-role="${esc(r.key)}" value="${esc(r.label)}" maxlength="40">
+        <input class="input" data-field="rank" data-role="${esc(r.key)}" type="number" min="1" max="999" value="${r.rank}">
+      </div>
+      <div class="field">
+        <label>Rôle Discord qui accorde ce rôle</label>
+        <input class="input" data-field="discordRoleId" data-role="${esc(r.key)}" value="${esc(r.discordRoleId || '')}"
+               placeholder="ID du rôle Discord — vide : attribution manuelle uniquement" inputmode="numeric">
+      </div>
+      <div>
+        <div class="grp-label" style="--fam:var(--vio-hi)">Droits</div>
+        <div class="checks">${(d.perms || DEMO_PERMS).map(pm => `<label class="check">
+          <input type="checkbox" data-perm="${esc(pm.id)}" data-role="${esc(r.key)}" ${r.perms.includes(pm.id) ? 'checked' : ''}>
+          ${esc(pm.label)}</label>`).join('')}</div>
+      </div>
+      <div class="block">
+        <div class="grp-label" style="--fam:var(--ink-2)">Rubriques accessibles</div>
+        ${grp}
+      </div>
+      <div class="tools">
+        <button class="btn sm primary" data-rolesave="${esc(r.key)}">Enregistrer</button>
+        ${r.builtin ? '<span class="lite-m">Rôle d’origine : il ne se supprime pas.</span>'
+                    : `<button class="btn sm danger" data-roledel="${esc(r.key)}">Supprimer</button>`}
+      </div>
+    </div>
+  </div>`;
+}
+async function enregistrerRole(key) {
+  const lire = f => { const n = document.querySelector(`[data-field="${f}"][data-role="${CSS.escape(key)}"]`); return n ? n.value.trim() : undefined; };
+  const coches = attr => [...document.querySelectorAll(`[data-${attr}][data-role="${CSS.escape(key)}"]`)]
+    .filter(n => n.checked).map(n => n.dataset[attr]);
+  try {
+    await api('/api/roles/' + encodeURIComponent(key), { method:'PATCH', body: JSON.stringify({
+      label: lire('label'), rank: Number(lire('rank')), discordRoleId: lire('discordRoleId'),
+      perms: coches('perm'), cats: coches('cat') }) });
+    toast('Rôle enregistré.');
+    ROLE_OUVERT = key; openRoles();
+  } catch (e) { toast(e.message); }
+}
+
+/* ============================================================
+   ESPACES DE LOGS (administration de la plateforme)
+   ============================================================ */
+async function openPlatform() {
+  let d;
+  try { d = await api('/api/platform/spaces'); } catch (e) { return toast(e.message); }
+  openSheet('Espaces de logs', `${d.spaces.length} espace(s) · chacun a son serveur Discord et sa clé d’ingestion`,
+    { name:'Plateforme', hue:200 }, `
+    ${d.discordGlobal ? '' : `<div class="banner" style="--c:var(--warn)">L’application Discord n’est pas configurée (<code>DISCORD_CLIENT_SECRET</code>, <code>DISCORD_BOT_TOKEN</code>) : les espaces ne pourront pas ouvrir de connexion Discord.</div>`}
+    <div>${d.spaces.map(sp => carteEspace(sp, d)).join('')}</div>
+    <div class="block">
+      <h3 class="eyebrow">Créer un espace</h3>
+      <div class="field"><label for="nsNom">Nom de l’espace</label>
+        <input class="input" id="nsNom" placeholder="Origin RP — serveur 2" maxlength="60"></div>
+      <div class="map-row" style="border:none">
+        <input class="input" id="nsGuild" placeholder="ID du serveur Discord" inputmode="numeric">
+        <input class="input" id="nsStaff" placeholder="ID du rôle staff" inputmode="numeric">
+      </div>
+      <div class="map-row" style="border:none">
+        <input class="input" id="nsRet" type="number" min="1" max="3650" value="30" title="Rétention en jours">
+        <button class="btn primary" id="nsSpaceGo">Créer l’espace</button>
+      </div>
+      <span class="lite-m">L’espace reçoit sa propre clé d’ingestion : elle n’ouvre que ses journaux. Les 14 rôles d’origine y sont créés automatiquement.</span>
+    </div>`);
+}
+function carteEspace(sp, d) {
+  const actif = sp.etat === 'actif';
+  return `<div class="space-card ${actif ? '' : 'ferme'}">
+    <div class="space-top">
+      <div>
+        <div class="space-name">${esc(sp.nom)} ${sp.id === d.monEspace ? '<span class="state" style="--c:var(--vio)">ici</span>' : ''}</div>
+        <div class="space-meta">#${sp.id} · ${actif ? 'actif' : 'fermé ' + (sp.fermeLe ? dayLabel(sp.fermeLe) : '')}
+          · propriétaire ${esc(sp.proprietaire ? sp.proprietaire.pseudo : '—')}
+          · rétention ${sp.retention} j</div>
+        ${sp.motifFermeture ? `<div class="lite-m">${esc(sp.motifFermeture)}</div>` : ''}
+      </div>
+      <div class="tools">
+        ${sp.id !== d.monEspace ? `<button class="btn sm" data-enter="${sp.id}">Entrer</button>` : ''}
+        <button class="btn sm" data-spacetoggle="${sp.id}" data-etat="${sp.etat}">${actif ? 'Fermer' : 'Rouvrir'}</button>
+      </div>
+    </div>
+    <div class="space-nums">
+      <span class="space-num"><b>${(sp.evenements || 0).toLocaleString('fr-FR')}</b><span>évènements</span></span>
+      <span class="space-num"><b>${sp.membres || 0}</b><span>membres</span></span>
+      <span class="space-num"><b>${sp.bannis || 0}</b><span>bannis</span></span>
+    </div>
+    <div class="map-row" style="border:none">
+      <input class="input" data-sp="${sp.id}" data-spfield="guildId" value="${esc(sp.guildId)}" placeholder="ID du serveur Discord" inputmode="numeric">
+      <input class="input" data-sp="${sp.id}" data-spfield="staffRoleId" value="${esc(sp.staffRoleId)}" placeholder="ID du rôle staff" inputmode="numeric">
+    </div>
+    <div class="keybox">
+      <code>${esc(sp.cle)}</code>
+      <button class="btn sm" data-copykey="${esc(sp.cle)}">Copier la clé</button>
+      <button class="btn sm" data-regen="${sp.id}" title="L’ancienne clé cesse immédiatement de fonctionner">Régénérer</button>
+    </div>
+    <div class="tools">
+      <button class="btn sm primary" data-spsave="${sp.id}">Enregistrer</button>
+      <button class="btn sm" data-owner="${sp.id}">Changer le propriétaire</button>
+      <button class="btn sm danger" data-spdel="${sp.id}" data-spname="${esc(sp.nom)}">Supprimer l’espace</button>
+    </div>
+  </div>`;
+}
+
+/* ---------- propriétaire : on choisit parmi les membres de l'espace ---------- */
+async function choisirProprietaire(spaceId) {
+  let d;
+  try { d = await api('/api/platform/members?space=' + spaceId); } catch (e) { return toast(e.message); }
+  if (!d.members.length) return toast('Cet espace n’a aucun membre à qui confier la propriété.');
+  $('#dlgTitle').textContent = 'Propriétaire de l’espace';
+  $('#dlgOk').className = 'btn primary'; $('#dlgOk').textContent = 'Confirmer';
+  $('#dlgBody').innerHTML = `
+    <div class="field"><label for="dlgOwner">Nouveau propriétaire</label>
+      <select class="input" id="dlgOwner">
+        ${d.members.map(m => `<option value="${m.id}">${esc(m.pseudo)} — ${esc((m.roles[0] || {}).label || '')}</option>`).join('')}
+      </select></div>`;
+  pendingAction = { type:'owner', spaceId };
+  $('#dialog').hidden = false; $('#scrim').hidden = false;
+}
+</script>
+
+<script>
+/* ============================================================
+   Catalogue de démonstration
+   Miroir de api/catalogue.js : l'aperçu doit montrer EXACTEMENT les
+   rôles qui seront livrés, pas une approximation.
+   ============================================================ */
+(function () {
+  DEMO_PERMS = [
+    { id:'logs.view',           label:'Lire les journaux' },
+    { id:'logs.mark',           label:'Épingler et marquer traité' },
+    { id:'logs.export',         label:'Exporter en CSV' },
+    { id:'players.view',        label:'Ouvrir un dossier joueur' },
+    { id:'players.identifiers', label:'Voir les identifiants' },
+    { id:'actions.warn',        label:'Avertir un joueur' },
+    { id:'actions.kick',        label:'Expulser un joueur' },
+    { id:'actions.ban',         label:'Bannir un joueur' },
+    { id:'actions.unban',       label:'Lever un bannissement' },
+    { id:'actions.give',        label:'Rendre un item ou de l’argent' },
+    { id:'audit.view',          label:'Consulter le journal du panneau' },
+    { id:'accounts.manage',     label:'Gérer les comptes staff' },
+    { id:'settings.discord',    label:'Configurer la liaison Discord' },
+    { id:'roles.manage',        label:'Créer les rôles et régler leurs accès' }
+  ];
+  const TOUT = DEMO_PERMS.map(p => p.id);
+  const g = id => CATS.filter(c => c.group === id).map(c => c.id);
+  const G = { moderation:g('moderation'), joueurs:g('joueurs'), biens:g('biens'), rp:g('rp'), serveur:g('serveur') };
+  const lire = ['logs.view','logs.mark','logs.export','players.view'];
+  const moderer = ['actions.warn','actions.kick'];
+  const bannir = ['actions.ban','actions.unban'];
+  const u = (...l) => [...new Set([].concat(...l))];
+  const tousCats = CATS.map(c => c.id);
+  const D = '9382716405182731';
+  DEMO_ROLES = [
+    ['fondateur','Fondateur',100,TOUT,tousCats,'Tous les droits, y compris la liaison Discord et les comptes.',D+'00'],
+    ['administrateur','Administrateur',90,TOUT.filter(x=>!['settings.discord','roles.manage'].includes(x)),tousCats,'Tout sauf la liaison Discord et la composition des rôles.',D+'01'],
+    ['developpeur','Développeur',80,u(lire,['audit.view']),tousCats,'Lecture complète, y compris les journaux techniques.',''],
+    ['gerant_anticheat','Gérant Brigade Anti-Cheat',70,u(lire,moderer,bannir,['players.identifiers','audit.view']),u(G.moderation,G.joueurs,G.rp),'Pilote la lutte contre la triche : détections, bannissements, appels.',D+'02'],
+    ['responsable_remboursement','Responsable Remboursement',65,u(lire,['players.identifiers','actions.give','actions.warn']),u(G.biens,G.joueurs,['staff','bans','sanctions']),'Instruit les demandes de remboursement et rend les biens perdus.',D+'03'],
+    ['gerant_legal','Gérant Légal',60,u(lire,['actions.warn']),u(G.biens,G.rp,G.joueurs,['staff']),'Suit les entreprises, les emplois et les propriétés.',D+'04'],
+    ['gerant_illegal','Gérant Illégal',60,u(lire,['actions.warn']),u(G.rp,G.biens,G.joueurs,['staff']),'Suit les organisations, les braquages et les trafics.',D+'05'],
+    ['gerant_animation','Gérant Animation',60,u(lire,['actions.give']),u(G.joueurs,G.rp,['systeme','staff']),'Prépare les events et dédommage les participants.',D+'06'],
+    ['gerant_communication','Gérant Communication',60,lire,u(G.joueurs,['staff','whitelist']),'Suit les annonces, les candidatures et les retours joueurs.',D+'07'],
+    ['moderateur','Modérateur',50,u(lire,moderer),u(G.moderation,G.joueurs,G.rp,G.biens),'Traite les signalements du quotidien : avertir, expulser.',D+'08'],
+    ['anticheat','Brigade Anti-Cheat',45,u(lire,moderer,['actions.ban']),u(['anticheat','bans','sanctions'],G.joueurs),'Traite les détections et bannit les tricheurs (sans lever).',D+'09'],
+    ['helper','Helper',30,['logs.view','players.view','actions.warn'],u(G.joueurs,['staff']),'Accompagne les joueurs et remonte ce qui dépasse.',D+'10'],
+    ['animateur','Animateur',25,['logs.view','players.view'],u(G.joueurs,G.rp),'Anime les events, en lecture seule sur les journaux.',D+'11'],
+    ['communication','Communication',25,['logs.view'],u(G.joueurs,['staff','whitelist']),'Rédige et relaie, sans pouvoir de modération.','']
+  ].map(([key,label,rank,perms,cats,desc,dc]) => ({
+    key, label, rank, perms, cats: tousCats.filter(c => cats.includes(c)),
+    desc, discordRoleId: dc, builtin: true
+  }));
+})();
+
+/* ============================================================
+   Équipe : rôles cumulables, attribution manuelle
+   ============================================================ */
+async function openTeam() {
+  let d;
+  try { d = await api('/api/staff'); } catch (e) { return toast(e.message); }
+  const attribuables = (d.roles || []).filter(r => r.rank < (d.monRang || 1000));
+  openSheet('Gérer l’équipe', `${d.staff.length} compte(s) · les rôles viennent de Discord, vous gardez le dernier mot`,
+    { name:'Équipe', hue:268 }, `
+    <div class="banner" style="--c:var(--vio)">Cocher un rôle ici l’attribue <b>à la main</b> : il l’emporte sur Discord et
+      survit aux resynchronisations. Tout décocher rend la main à Discord.</div>
+    <div class="team">${d.staff.map(m => `
+      <div class="role-card ${m.disabled ? 'ferme' : ''}">
+        <button class="role-head" data-memtoggle="${m.id}">
+          <span class="av sm" style="${avatarStyle(m)}">${initials(m)}</span>
+          <span><span class="role-title">${esc(m.pseudo)}${m.estMoi ? ' <span class="lite-m">(vous)</span>' : ''}</span>
+            <span class="role-sub">${(m.roles || []).map(r => esc(r.label)).join(' + ') || 'aucun rôle'}
+              · ${m.source === 'discord' ? 'Discord' : 'mot de passe'}${m.manual ? ' · <b>manuel</b>' : ''}</span></span>
+          <span class="lite-m">${m.last_login ? 'vu ' + dayLabel(m.last_login) : 'jamais'}</span>
+          <span class="lite-m">${m.disabled ? 'suspendu' : 'actif'}</span>
+        </button>
+        <div class="role-body" data-membody="${m.id}" hidden>
+          <div>
+            <div class="grp-label" style="--fam:var(--vio-hi)">Rôles attribués</div>
+            <div class="checks">${attribuables.map(r => `<label class="check">
+              <input type="checkbox" data-memrole="${esc(r.id)}" data-mem="${m.id}"
+                     ${(m.roleKeys || (m.roles || []).map(x => x.id)).includes(r.id) ? 'checked' : ''}>
+              ${esc(r.label)}</label>`).join('')}</div>
+          </div>
+          <div class="tools">
+            <button class="btn sm primary" data-memsave="${m.id}">Enregistrer les rôles</button>
+            ${m.estMoi ? '' : `
+              <button class="btn sm" data-memoff="${m.id}" data-off="${m.disabled ? 1 : 0}">${m.disabled ? 'Réactiver' : 'Suspendre'}</button>
+              <button class="btn sm danger" data-memdel="${m.id}" data-memname="${esc(m.pseudo)}">Retirer du staff</button>`}
+          </div>
+        </div>
+      </div>`).join('')}</div>
+    <div class="block">
+      <h3 class="eyebrow">Ajouter un compte par mot de passe</h3>
+      <span class="lite-m">Réservé aux cas où Discord ne convient pas : un compte de secours, un prestataire.</span>
+      <div class="field"><label for="nsPseudo">Pseudo</label><input class="input" id="nsPseudo" autocomplete="off"></div>
+      <div class="field"><label for="nsPass">Mot de passe (10 caractères minimum)</label><input class="input" id="nsPass" type="text" autocomplete="off"></div>
+      <div class="field"><label for="nsRole">Rôle</label>
+        <select class="input" id="nsRole">${attribuables.map(r => `<option value="${r.id}">${esc(r.label)}</option>`).join('')}</select></div>
+      <button class="btn primary" id="nsGo" style="justify-self:start">Créer le compte</button>
+    </div>`);
+}
+
+/* ============================================================
+   Commandes des écrans d'administration
+   ============================================================ */
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
+    + '[data-memoff],[data-memdel],[data-enter],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],'
+    + '[data-spdel],[data-owner]');
+  if (!t) {
+    const id = ev.target.id;
+    if (id === 'rolesBtn')    { ROLE_OUVERT = null; openRoles(); }
+    if (id === 'platformBtn') openPlatform();
+    if (id === 'nrGo')        creerRole();
+    if (id === 'nsSpaceGo')   creerEspace();
+    return;
+  }
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  const D = t.dataset;
+
+  if (D.roletoggle) { const b = document.querySelector(`[data-rolebody="${CSS.escape(D.roletoggle)}"]`);
+                      if (b) { b.hidden = !b.hidden; ROLE_OUVERT = b.hidden ? null : D.roletoggle; } return; }
+  if (D.memtoggle)  { const b = document.querySelector(`[data-membody="${D.memtoggle}"]`);
+                      if (b) b.hidden = !b.hidden; return; }
+  if (D.rolesave)   return enregistrerRole(D.rolesave);
+  if (D.roledel) {
+    if (!confirm('Supprimer ce rôle ? Les comptes qui le portent doivent en être retirés d’abord.')) return;
+    try { await api('/api/roles/' + encodeURIComponent(D.roledel), { method:'DELETE' });
+          toast('Rôle supprimé.'); openRoles(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.memsave) {
+    const roles = [...document.querySelectorAll(`[data-memrole][data-mem="${D.memsave}"]`)]
+      .filter(n => n.checked).map(n => n.dataset.memrole);
+    try { await api('/api/staff/' + D.memsave, { method:'PATCH', body: JSON.stringify({ roles }) });
+          toast(roles.length ? 'Rôles attribués à la main.' : 'Rôles rendus à Discord.'); openTeam(); }
+    catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.memoff) {
+    try { await api('/api/staff/' + D.memoff, { method:'PATCH', body: JSON.stringify({ disabled: D.off !== '1' }) });
+          toast('Compte mis à jour.'); openTeam(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.memdel) {
+    if (!confirm(`Retirer ${D.memname} du staff ? Son accès au panneau est fermé immédiatement.`)) return;
+    try { await api('/api/staff/' + D.memdel, { method:'DELETE' }); toast('Compte retiré.'); openTeam(); }
+    catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.enter) {
+    try { const r = await api('/api/platform/enter', { method:'POST', body: JSON.stringify({ spaceId: Number(D.enter) }) });
+          toast('Vous êtes dans « ' + r.espace + ' ».'); location.reload(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.spacetoggle) {
+    const fermer = D.etat === 'actif';
+    const motif = fermer ? prompt('Motif de fermeture (visible dans la liste) :', '') : null;
+    if (fermer && motif === null) return;
+    try { await api('/api/platform/spaces/' + D.spacetoggle, { method:'PATCH',
+            body: JSON.stringify({ etat: fermer ? 'ferme' : 'actif', motif }) });
+          toast(fermer ? 'Espace fermé : plus personne n’y entre.' : 'Espace rouvert.'); openPlatform(); }
+    catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.spsave) {
+    const val = f => { const n = document.querySelector(`[data-sp="${D.spsave}"][data-spfield="${f}"]`); return n ? n.value.trim() : undefined; };
+    try { await api('/api/platform/spaces/' + D.spsave, { method:'PATCH',
+            body: JSON.stringify({ guildId: val('guildId'), staffRoleId: val('staffRoleId') }) });
+          toast('Espace enregistré.'); openPlatform(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.regen) {
+    if (!confirm('Régénérer la clé ? Le serveur de jeu cessera d’écrire tant que vous n’aurez pas collé la nouvelle dans config.lua.')) return;
+    try { const r = await api('/api/platform/spaces/' + D.regen, { method:'PATCH', body: JSON.stringify({ regenererCle:true }) });
+          toast('Nouvelle clé générée — collez-la dans config.lua.'); openPlatform(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.copykey) return copy(D.copykey, 'Clé d’ingestion copiée');
+  if (D.spdel) {
+    const nom = prompt(`Supprimer « ${D.spname} » efface TOUS ses journaux, définitivement.\nRecopiez son nom pour confirmer :`, '');
+    if (nom !== D.spname) return toast(nom === null ? '' : 'Nom incorrect — rien n’a été supprimé.');
+    try { await api('/api/platform/spaces/' + D.spdel + '?confirme=' + encodeURIComponent(nom), { method:'DELETE' });
+          toast('Espace supprimé.'); openPlatform(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.owner) return choisirProprietaire(D.owner);
+});
+
+async function creerRole() {
+  const label = $('#nrLabel').value.trim();
+  const rank = Number($('#nrRank').value);
+  const discordRoleId = $('#nrDiscord').value.trim();
+  if (label.length < 2) return toast('Donnez un nom au rôle.');
+  try {
+    await api('/api/roles', { method:'POST', body: JSON.stringify({
+      label, rank, discordRoleId, perms:['logs.view','players.view'], cats:[] }) });
+    toast('Rôle créé — réglez ses droits et ses rubriques.');
+    openRoles();
+  } catch (e) { toast(e.message); }
+}
+async function creerEspace() {
+  const nom = $('#nsNom').value.trim();
+  if (nom.length < 2) return toast('Donnez un nom à l’espace.');
+  try {
+    const r = await api('/api/platform/spaces', { method:'POST', body: JSON.stringify({
+      nom, guildId: $('#nsGuild').value.trim(), staffRoleId: $('#nsStaff').value.trim(),
+      retention: Number($('#nsRet').value) }) });
+    toast('Espace créé — sa clé d’ingestion est prête.');
+    openPlatform();
+  } catch (e) { toast(e.message); }
+}
+</script>
+
+<script>
+/* ============================================================
    Interactions et démarrage
    ============================================================ */
 function goStream(cat) {
@@ -2630,6 +3043,8 @@ function applyMe(d) {
   ME.perms = d.perms || []; ME.cats = d.cats || [];
   ME.roles = d.staff.roles || [{ id: d.staff.role, label: d.staff.roleLabel }];
   ME.source = d.staff.source || 'local';
+  ME.plateforme = !!d.staff.plateforme;
+  ME.espace = d.espace || null;
 }
 $('#gateForm').addEventListener('submit', async ev => {
   ev.preventDefault();
@@ -2674,9 +3089,35 @@ async function startPanel() {
     $('#whoAv').style.cssText = avatarStyle({ name: ME.pseudo, hue: 268 });
     $('#whoAv').textContent = initials({ name: ME.pseudo });
     $('#teamBtn').hidden = !can('accounts.manage');
+    $('#rolesBtn').hidden = !can('roles.manage');
     $('#discordBtn').hidden = !can('settings.discord');
+    $('#platformBtn').hidden = !ME.plateforme;
+    if (ME.espace && ME.espace.visite) {
+      // Une visite d'administration doit se voir : on ne modère pas un
+      // autre serveur en croyant être chez soi.
+      $('#modeTag').className = 'tag-mode demo';
+      $('#modeTag').textContent = 'visite — ' + ME.espace.nom;
+    } else if (ME.espace) {
+      $('#modeTag').textContent = ME.espace.nom;
+    }
     $('#auditBtn').hidden = !can('audit.view');
     document.title = `Origin Roleplay — Journal serveur (${ME.pseudo})`;
+  }
+  if (MODE === 'demo') {
+    // L'aperçu montre le panneau tel que le voit un FONDATEUR : c'est le
+    // rôle qui a tout, et c'est ce qu'on veut donner à voir.
+    ME.pseudo = 'Owen'; ME.role = 'fondateur'; ME.roleLabel = 'Fondateur';
+    ME.roles = [{ id:'fondateur', label:'Fondateur' }];
+    ME.source = 'local'; ME.plateforme = true;
+    ME.perms = DEMO_PERMS.map(p => p.id); ME.cats = CATS.map(c => c.id);
+    $('#whoBox').hidden = false;
+    $('#whoName').textContent = ME.pseudo;
+    $('#whoRole').textContent = 'Fondateur';
+    $('#whoAv').style.cssText = avatarStyle({ name:'Owen', hue:272 });
+    $('#whoAv').textContent = 'OW';
+    $('#logoutBtn').hidden = true;
+    for (const b of ['#teamBtn', '#rolesBtn', '#discordBtn', '#platformBtn', '#auditBtn'])
+      $(b).hidden = false;
   }
   buildNav();
   if (!applyHash()) syncHash(true);   // l'adresse fait foi au chargement
@@ -2696,6 +3137,13 @@ async function startPanel() {
     if (!ct.includes('json')) throw new Error('pas une API');
     if (r.status === 200) { applyMe(await r.json()); etat = 'ouvert'; }
     else if (r.status === 401) etat = 'ferme';
+    else if (r.status === 423) {
+      // L'espace de logs est fermé : le dire, plutôt que de basculer en
+      // démonstration comme si l'API n'existait pas.
+      const b = await r.json().catch(() => ({}));
+      MODE = 'api'; DS = Api;
+      return showGate(b.error || 'Cet espace de logs est fermé.');
+    }
     else throw new Error('réponse inattendue');
   } catch (e) { etat = 'demo'; }
 

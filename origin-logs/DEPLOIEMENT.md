@@ -74,6 +74,39 @@ journalctl -u origin-logs -f
 
 ---
 
+## 1 ter. L'administration de la plateforme
+
+Un cran au-dessus des fondateurs : c'est elle qui crée les espaces de logs,
+les ferme, change leur propriétaire et révoque des accès. Ce droit ne
+s'accorde pas depuis le panneau — sinon un fondateur se hisserait au-dessus
+des autres :
+
+```bash
+node staff.js platform VotrePseudo on
+node staff.js spaces      # liste les espaces et leur clé d'ingestion
+```
+
+Le bouton **Espaces de logs** apparaît alors dans la colonne de gauche.
+
+### Ajouter un second serveur de jeu
+
+1. **Espaces de logs** → *Créer un espace* : un nom, l'ID de son serveur
+   Discord, l'ID de son rôle staff, sa rétention.
+2. L'espace reçoit **sa propre clé d'ingestion**. Copiez-la dans le
+   `config.lua` du second serveur de jeu — celle du premier n'ouvre pas ses
+   journaux, et réciproquement.
+3. Ses 14 rôles d'origine sont créés automatiquement. Reliez-les à ses rôles
+   Discord depuis *Liaison Discord*, après y être **entré**.
+
+⚠️ La barre affiche **« visite — nom de l'espace »** quand vous en visitez un
+autre : on ne modère pas un serveur en croyant être chez soi.
+
+⚠️ **Fermer** un espace conserve ses journaux mais coupe l'entrée et
+l'ingestion. **Supprimer** efface tout, définitivement, et demande de
+recopier le nom de l'espace.
+
+---
+
 ## 1 bis. La connexion Discord (recommandé)
 
 Sans elle, le panneau fonctionne avec des mots de passe. Avec elle, le staff
