@@ -3340,6 +3340,7 @@ async function enregistrerRole(key) {
 async function openPlatform() {
   let d;
   try { d = await api('/api/platform/spaces'); } catch (e) { return toast(e.message); }
+  SPACES = d;   // gardé pour composer la fiche d'installation d'un client
   openSheet('Espaces de logs', `${d.spaces.length} espace(s) · chacun a son serveur Discord et sa clé d’ingestion`,
     { name:'Plateforme', hue:200 }, `
     ${d.discordGlobal ? '' : `<div class="banner" style="--c:var(--warn)">L’application Discord n’est pas configurée (<code>DISCORD_CLIENT_SECRET</code>, <code>DISCORD_BOT_TOKEN</code>) : les espaces ne pourront pas ouvrir de connexion Discord.</div>`}
@@ -3389,6 +3390,7 @@ function carteEspace(sp, d) {
     <div class="keybox">
       <code>${esc(sp.cle)}</code>
       <button class="btn sm" data-copykey="${esc(sp.cle)}">Copier la clé</button>
+      <button class="btn sm primary" data-fiche="${sp.id}">Fiche d’installation</button>
       <button class="btn sm" data-regen="${sp.id}" title="L’ancienne clé cesse immédiatement de fonctionner">Régénérer</button>
     </div>
     <div class="tools">
@@ -3397,6 +3399,64 @@ function carteEspace(sp, d) {
       <button class="btn sm danger" data-spdel="${sp.id}" data-spname="${esc(sp.nom)}">Supprimer l’espace</button>
     </div>
   </div>`;
+}
+
+/* ---------- fiche d'installation d'un client ----------
+   ⚠️ « Copier la clé » ne suffit pas quand on livre à quelqu'un d'autre :
+   la clé seule ne dit ni où l'envoyer, ni dans quel fichier la mettre, ni
+   ce qu'il ne faut SURTOUT pas en faire. On livre donc le bloc complet,
+   prêt à coller dans `server.cfg`, avec l'adresse de CE panneau. */
+let SPACES = null;   // dernière liste chargée, pour composer la fiche
+
+function ficheInstallation(id) {
+  if (!SPACES) return toast('Rechargez la liste des espaces.');
+  const sp = (SPACES.spaces || []).find(x => x.id === Number(id));
+  if (!sp) return toast('Espace introuvable.');
+  const url = SPACES.adresse || location.origin;
+  const bloc = [
+    '## origin_logs — ' + sp.nom,
+    '## À coller dans server.cfg (ou un secrets.cfg non versionné).',
+    '## « set », PAS « setr » : setr enverrait la clé à tous les joueurs.',
+    'set origin_logs_url  "' + url + '"',
+    'set origin_logs_key  "' + sp.cle + '"',
+    'set origin_logs_name "' + sp.nom.replace(/"/g, '') + '"',
+    '',
+    'ensure baseevents          # sinon pas de morts journalisées',
+    'ensure screenshot-basic    # facultatif : captures d\'écran',
+    'ensure origin_logs'
+  ].join('\n');
+
+  openSheet('Fiche d’installation', esc(sp.nom) + ' · à transmettre au serveur client',
+    { name: sp.nom, hue: 268 }, `
+    ${!SPACES.adressePublique ? `<div class="banner" style="--c:var(--warn)">
+      <b>Adresse déduite de votre navigateur</b> (${esc(url)}). Posez <code>PUBLIC_URL</code>
+      dans <code>api/.env</code> pour que cette fiche porte toujours la bonne adresse,
+      quelle que soit la machine depuis laquelle vous l’ouvrez.</div>` : ''}
+    <div class="block">
+      <h3 class="eyebrow">1. Le dossier</h3>
+      <span class="lite-m">Copiez le dossier <code>resource</code> du panneau dans les
+      ressources du serveur de jeu, sous le nom <code>origin_logs</code>. Il ne modifie
+      aucune autre ressource et n’a besoin d’aucun framework particulier.</span>
+    </div>
+    <div class="block">
+      <h3 class="eyebrow">2. Les réglages</h3>
+      <pre class="payload">${esc(bloc)}</pre>
+      <div class="tools" style="margin-top:8px">
+        <button class="btn sm primary" data-copyfiche="${esc(bloc)}">Copier ce bloc</button>
+      </div>
+      <span class="lite-m">⚠️ La clé va dans <code>server.cfg</code>, jamais dans
+      <code>config.lua</code> : ce fichier est « shared », donc téléchargé par chaque
+      joueur. Une clé posée là est une clé publique.</span>
+    </div>
+    <div class="block">
+      <h3 class="eyebrow">3. Vérifier</h3>
+      <span class="lite-m">Dans la console du serveur de jeu : <code>origin_logs_test</code>.
+      Un évènement doit apparaître dans « Action staff » de cet espace. Côté panneau,
+      <b>Supervision → Vérifier</b> dit si cet espace reçoit bien quelque chose.</span>
+    </div>
+    ${!sp.guildId || !sp.staffRoleId ? `<div class="banner" style="--c:var(--check)">
+      Pensez à renseigner le <b>serveur Discord</b> et le <b>rôle staff</b> de ce client :
+      sans eux, son équipe ne pourra pas se connecter avec Discord.</div>` : ''}`);
 }
 
 /* ---------- propriétaire : on choisit parmi les membres de l'espace ---------- */
@@ -3525,7 +3585,7 @@ async function openTeam() {
    ============================================================ */
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
-    + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],'
+    + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],'
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
@@ -3598,6 +3658,8 @@ document.addEventListener('click', async ev => {
     return;
   }
   if (D.copykey) return copy(D.copykey, 'Clé d’ingestion copiée');
+  if (D.fiche) return ficheInstallation(D.fiche);
+  if (D.copyfiche) return copy(D.copyfiche, 'Configuration copiée — à coller dans server.cfg');
   if (D.spdel) {
     const nom = prompt(`Supprimer « ${D.spname} » efface TOUS ses journaux, définitivement.\nRecopiez son nom pour confirmer :`, '');
     if (nom !== D.spname) return toast(nom === null ? '' : 'Nom incorrect — rien n’a été supprimé.');

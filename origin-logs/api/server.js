@@ -1217,8 +1217,16 @@ async function route(req, res) {
     // elle ne peut pas être forgée par un script tiers.
     if (method !== 'GET' && method !== 'HEAD') {
       const o = req.headers.origin;
-      const attendu = originOf(req);
-      if (o && o !== attendu) {
+      // ⚠️ On refuse ce qui vient d'AILLEURS, pas ce qui n'emprunte pas
+      // l'adresse canonique. `PUBLIC_URL` sert à composer des liens ; s'en
+      // servir seule ici couperait toute écriture faite depuis
+      // « http://127.0.0.1:8080 » ou depuis l'IP de la machine — c'est-à-dire
+      // pendant l'installation, et à chaque fois qu'on ouvre le panneau
+      // autrement que par le domaine.
+      const hote = (CFG.secure ? 'https://' : 'http://') + (req.headers.host || '');
+      const admis = [CFG.publicUrl, hote, 'http://' + (req.headers.host || ''),
+                     'https://' + (req.headers.host || '')].filter(Boolean);
+      if (o && !admis.includes(o)) {
         audit(me, 'securite.origine', `${method} ${p} depuis ${o}`, ip);
         return fail(res, 403, 'Origine refusée.');
       }
@@ -1896,7 +1904,11 @@ async function route(req, res) {
             membres: compte('staff', sp.id), evenements: compte('events', sp.id),
             bannis: DB.row(db.prepare(`SELECT COUNT(*) n FROM sanctions WHERE space_id=? AND type='ban' AND active=1`).get(sp.id)).n
           })),
-          monEspace: me.spaceId, discordGlobal: discordGlobalOk()
+          monEspace: me.spaceId, discordGlobal: discordGlobalOk(),
+          // L'adresse que le SERVEUR DE JEU du client devra viser. Le
+          // panneau s'en sert pour composer la fiche d'installation : sans
+          // elle, on livrerait une clé sans dire où l'envoyer.
+          adresse: originOf(req), adressePublique: !!CFG.publicUrl
         });
       }
       if (p === '/api/platform/spaces' && method === 'POST') {

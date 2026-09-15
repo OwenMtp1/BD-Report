@@ -351,6 +351,28 @@ rouge : sans lui, un staff qui perd son rôle garde son accès.
 
 ---
 
+## Livrer un espace à un serveur client
+
+Un espace = un serveur de jeu client. Depuis **Espaces de logs**, chaque
+carte porte un bouton **Fiche d'installation** : il compose le bloc exact à
+transmettre à ce client — l'adresse de VOTRE panneau, SA clé d'ingestion,
+son nom de serveur, et les trois `ensure`.
+
+⚠️ « Copier la clé » ne suffit pas quand on livre à quelqu'un d'autre : la
+clé seule ne dit ni où l'envoyer, ni dans quel fichier la mettre, ni ce
+qu'il ne faut surtout pas en faire. La fiche dit les trois.
+
+⚠️ **Posez `PUBLIC_URL`** dans `api/.env` : sans elle, la fiche porte
+l'adresse par laquelle vous avez ouvert le panneau — `localhost` si vous
+l'administrez depuis la machine, ce qui ne mènerait nulle part chez le
+client. La fiche le signale quand le cas se présente.
+
+Le client, lui, n'installe que le dossier `resource` et colle le bloc. Il ne
+voit rien des autres espaces : journaux, rôles, staff et captures sont
+cloisonnés en SQL, et sa clé n'ouvre que le sien.
+
+---
+
 ## Cloisonnement : chaque espace est à lui
 
 Les rôles vivent en base **par espace** : les renommer, les recomposer ou en
@@ -616,7 +638,7 @@ Deux niveaux, et ils ne répondent pas à la même question.
 le bot est-il encore sur ce serveur Discord, le serveur de jeu écrit-il
 toujours, les sanctions partent-elles. C'est le contrôle du jour.
 
-**`npm test`** teste **le code** : 166 contrôles HTTP sur l'API — ingestion,
+**`npm test`** teste **le code** : 167 contrôles HTTP sur l'API — ingestion,
 cloisonnement des espaces, rôles et rangs, permissions refusées, parcours
 Discord complet, captures d'écran de bout en bout et **retrait automatique
 d'un accès** (avec un faux Discord local, aucun réseau).

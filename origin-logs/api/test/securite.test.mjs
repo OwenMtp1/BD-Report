@@ -40,6 +40,14 @@ t('une écriture sans en-tête Origin passe (client hors navigateur)', bonneOrig
 const mauvaise = await J('/api/marks',{method:'POST',
   headers:{origin:'https://site-mechant.example'},body:JSON.stringify({id:1,kind:'done',on:true})});
 t('une écriture venue d’un AUTRE site est refusée', mauvaise.status===403, mauvaise.body?.error);
+// ⚠️ L'adresse canonique (PUBLIC_URL) ne doit pas être la SEULE admise :
+// une écriture depuis l'hôte réellement utilisé — localhost pendant
+// l'installation, l'IP de la machine, un domaine de secours — reste la
+// nôtre. Sinon le panneau devient inutilisable dès qu'on l'ouvre
+// autrement que par le domaine.
+const parHote = await J('/api/marks',{method:'POST',
+  headers:{origin:B},body:JSON.stringify({id:1,kind:'done',on:true})});
+t('une écriture depuis l’hôte utilisé passe', parHote.status!==403, 'HTTP '+parHote.status);
 const lecture = await J('/api/events?limit=1',{headers:{origin:'https://site-mechant.example'}});
 t('une simple lecture n’est pas bloquée pour autant', lecture.status===200, 'HTTP '+lecture.status);
 
