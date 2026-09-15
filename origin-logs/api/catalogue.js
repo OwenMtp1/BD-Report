@@ -57,7 +57,7 @@ const SEVS = [
 const PERMS = [
   { id:'logs.view',            label:'Lire les journaux' },
   { id:'logs.mark',            label:'Épingler et marquer traité' },
-  { id:'logs.export',          label:'Exporter en CSV' },
+  { id:'logs.export',          label:'Exporter en CSV (réservé au Fondateur)' },
   { id:'players.view',         label:'Ouvrir un dossier joueur' },
   { id:'players.identifiers',  label:'Voir les identifiants (license, Discord, Steam)' },
   { id:'actions.warn',         label:'Avertir un joueur' },
@@ -65,6 +65,7 @@ const PERMS = [
   { id:'actions.ban',          label:'Bannir un joueur' },
   { id:'actions.unban',        label:'Lever un bannissement' },
   { id:'actions.give',         label:'Rendre un item ou de l’argent' },
+  { id:'screens.request',      label:'Demander une capture de l’écran d’un joueur' },
   { id:'audit.view',           label:'Consulter le journal du panneau' },
   { id:'accounts.manage',      label:'Gérer les comptes staff' },
   { id:'settings.discord',     label:'Configurer la liaison Discord et les rôles' },
@@ -77,7 +78,13 @@ const PERM_IDS = PERMS.map(p => p.id);
 const G = Object.fromEntries(GROUPS.map(g =>
   [g.id, CATS.filter(c => c.group === g.id).map(c => c.id)]));
 const P = {
-  lire:    ['logs.view', 'logs.mark', 'logs.export', 'players.view'],
+  // ⚠️ `logs.export` NE FAIT PLUS PARTIE DU SOCLE DE LECTURE.
+  // Lire un journal à l'écran et en sortir une copie qui vit ensuite hors
+  // du panneau sont deux gestes différents : le second emporte des
+  // identifiants, des adresses et des montants dans un fichier que plus
+  // personne ne trace. Seul le Fondateur l'a — et c'est un droit comme un
+  // autre, donc il peut l'accorder à un rôle depuis « Rôles & accès ».
+  lire:    ['logs.view', 'logs.mark', 'players.view'],
   moderer: ['actions.warn', 'actions.kick'],
   bannir:  ['actions.ban', 'actions.unban']
 };
@@ -99,8 +106,8 @@ const ROLES = {
   },
   administrateur: {
     label:'Administrateur', rank:90,
-    perms: PERM_IDS.filter(x => !['settings.discord', 'roles.manage'].includes(x)), cats:'*',
-    desc:'Tout sauf la liaison Discord et la composition des rôles.'
+    perms: PERM_IDS.filter(x => !['settings.discord', 'roles.manage', 'logs.export'].includes(x)), cats:'*',
+    desc:'Tout sauf la liaison Discord, la composition des rôles et l’export.'
   },
   developpeur: {
     label:'Développeur', rank:80,
@@ -109,7 +116,7 @@ const ROLES = {
   },
   gerant_anticheat: {
     label:'Gérant Brigade Anti-Cheat', rank:70,
-    perms: u(P.lire, P.moderer, P.bannir, ['players.identifiers', 'audit.view']),
+    perms: u(P.lire, P.moderer, P.bannir, ['players.identifiers', 'audit.view', 'screens.request']),
     cats: u(G.moderation, G.joueurs, G.rp),
     desc:'Pilote la lutte contre la triche : détections, bannissements, appels.'
   },
@@ -151,7 +158,7 @@ const ROLES = {
   },
   anticheat: {
     label:'Brigade Anti-Cheat', rank:45,
-    perms: u(P.lire, P.moderer, ['actions.ban']),
+    perms: u(P.lire, P.moderer, ['actions.ban', 'screens.request']),
     cats: u(['anticheat', 'bans', 'sanctions'], G.joueurs),
     desc:'Traite les détections et bannit les tricheurs (sans lever).'
   },

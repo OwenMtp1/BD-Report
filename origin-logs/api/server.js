@@ -36,7 +36,14 @@ const CFG = {
   secure:     process.env.SECURE_COOKIE === '1',
   sessionDays:Number(process.env.SESSION_DAYS || 7),
   panelDir:   path.resolve(__dirname, process.env.PANEL_DIR || '..'),
-  maxBody:    2 * 1024 * 1024
+  maxBody:    2 * 1024 * 1024,
+  // Les captures d'écran sont plus lourdes que tout le reste : elles ont
+  // leur propre plafond, et leur propre dossier.
+  screenDir:  process.env.SCREEN_DIR || path.join(__dirname, 'data', 'screens'),
+  maxScreen:  Number(process.env.MAX_SCREEN_MB || 6) * 1024 * 1024,
+  screenDays: Number(process.env.SCREEN_DAYS || 0),   // 0 = même rétention que les journaux
+  // Revérification automatique des accès Discord, en tâche de fond.
+  sweepMin:   Number(process.env.ACCESS_SWEEP_MIN || 30)
 };
 if (!CFG.serverKey) {
   console.error('\n  SERVER_KEY est vide : la ressource FiveM ne pourrait pas déposer de logs.');
@@ -145,6 +152,40 @@ function readBody(req) {
     });
     req.on('error', reject);
   });
+}
+
+/* ============================================================
+   CAPTURES D'ÉCRAN
+   Le panneau ne commande jamais le serveur de jeu : il dépose une
+   tâche, la ressource vient la chercher, prend la capture et la
+   RENVOIE ici. L'image finit sur le disque, jamais dans la base —
+   une image en base64 dans SQLite gonfle chaque sauvegarde et
+   chaque requête qui la survole.
+   ============================================================ */
+function screenPath(spaceId, nom) { return path.join(CFG.screenDir, String(spaceId), nom); }
+
+// Corps binaire : la capture arrive telle quelle, sans enveloppe JSON
+// (un JPEG encodé en base64 dans du JSON pèse un tiers de plus, pour rien).
+function readBinary(req, max) {
+  return new Promise((resolve, reject) => {
+    let size = 0; const chunks = [];
+    req.on('data', c => {
+      size += c.length;
+      if (size > max) { reject(new Error('capture trop volumineuse')); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+// Le type se lit dans les premiers octets, pas dans l'en-tête annoncé :
+// un client peut se tromper, et on ne sert que ce qu'on a reconnu.
+function typeImage(buf) {
+  if (buf.length > 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+  if (buf.length > 8 && buf.slice(0, 8).equals(Buffer.from([0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A]))) return 'image/png';
+  if (buf.length > 12 && buf.slice(0,4).toString() === 'RIFF' && buf.slice(8,12).toString() === 'WEBP') return 'image/webp';
+  return null;
 }
 
 /* ---------- session staff ---------- */
@@ -266,6 +307,76 @@ async function verdictEspace(c, esp, userId) {
     return { ok:false, raison:'aucun_role',
              message:'Vous avez le rôle staff, mais aucun rôle du panneau ne vous est encore attribué. Prévenez un fondateur.' };
   return { ok:true, membre:m, rolesDiscord, roles };
+}
+
+/* ============================================================
+   REVÉRIFICATION AUTOMATIQUE DES ACCÈS
+   ⚠️ LA REVÉRIFICATION À LA DEMANDE NE SUFFIT PAS. `refreshRolesSoon`
+   ne part que lorsque la personne fait une requête : quelqu'un qui a
+   perdu son rôle staff sur Discord et qui n'ouvre plus le panneau
+   gardait un compte actif indéfiniment — et une session valide sept
+   jours durant, prête à servir. C'est exactement le cas qu'on veut
+   fermer : celui de la personne qui part.
+   Ce balayage passe donc en revue TOUS les comptes venus de Discord,
+   qu'ils se connectent ou non.
+   ============================================================ */
+const SWEEP = { enCours: false, dernier: 0, verifies: 0, retires: 0, erreurs: 0, duree: 0, prochain: 0 };
+
+async function balayerAcces(raison) {
+  if (SWEEP.enCours) return SWEEP;
+  if (!discordGlobalOk()) { SWEEP.dernier = now(); SWEEP.erreurs = 0; return SWEEP; }
+  SWEEP.enCours = true;
+  const debut = now();
+  let verifies = 0, retires = 0, erreurs = 0;
+  try {
+    for (const sp of db.prepare("SELECT * FROM spaces WHERE state = 'actif'").all().map(DB.row)) {
+      const c = dconfFor(sp);
+      // Sans serveur Discord ni rôle staff, il n'y a rien à vérifier —
+      // et surtout rien à conclure : on ne retire l'accès de personne
+      // au prétexte qu'un espace n'est pas encore relié.
+      if (!c.guildId || !c.staffRoleId || !c.botToken) continue;
+      const comptes = db.prepare(`SELECT * FROM staff WHERE space_id = ? AND source = 'discord'
+                                  AND disabled = 0 AND discord_id IS NOT NULL`).all(sp.id).map(DB.row);
+      for (const r of comptes) {
+        try {
+          const v = await verdictEspace(c, sp, r.discord_id);
+          verifies++;
+          if (!v.ok) {
+            db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(r.id);
+            db.prepare('UPDATE staff SET disabled = 1, roles_checked_at = ? WHERE id = ?').run(now(), r.id);
+            audit(null, 'discord.revocation', `${r.pseudo} — ${v.raison} (balayage ${raison})`, null, sp.id);
+            console.log(`[acces] ${r.pseudo} a perdu son accès (${v.raison}) — sessions fermées`);
+            retires++;
+            continue;
+          }
+          // Toujours là, mais peut-être plus avec les mêmes rôles : on
+          // reporte le changement au lieu de le découvrir à sa prochaine
+          // connexion. Les rôles posés À LA MAIN sont une décision, et le
+          // balayage ne les défait pas.
+          const manuels = parseRoles(r.manual_roles);
+          const apres = JSON.stringify(v.roles);
+          if (!manuels.length && (r.roles || '[]') !== apres) {
+            db.prepare('UPDATE staff SET roles = ?, role = ? WHERE id = ?').run(apres, v.roles[0], r.id);
+            audit(null, 'discord.roles', `${r.pseudo} → ${v.roles.join(', ')} (balayage)`, null, sp.id);
+          }
+          db.prepare('UPDATE staff SET roles_checked_at = ? WHERE id = ?').run(now(), r.id);
+        } catch (e) {
+          // Discord injoignable : on NE RETIRE RIEN. Confondre « le bot
+          // n'a pas répondu » avec « cette personne n'est plus staff »
+          // couperait toute l'équipe à la première panne réseau.
+          erreurs++;
+          console.error(`[acces] ${r.pseudo} : vérification impossible — ${e.message}`);
+        }
+        await new Promise(r2 => setTimeout(r2, 120));   // on ménage l'API Discord
+      }
+    }
+  } finally {
+    Object.assign(SWEEP, { enCours: false, dernier: now(), verifies, retires, erreurs,
+                           duree: now() - debut, prochain: now() + CFG.sweepMin * 60000 });
+  }
+  if (verifies) console.log(`[acces] balayage ${raison} : ${verifies} compte(s) vérifié(s), ${retires} retiré(s)` +
+                            (erreurs ? `, ${erreurs} non vérifiable(s)` : ''));
+  return SWEEP;
 }
 
 /* ---------- comptes issus de Discord ----------
@@ -596,7 +707,11 @@ function playerFile(me, key) {
    pas au journal est une sanction que personne ne peut contester.
    ============================================================ */
 const ACTION_PERM = { warn:'actions.warn', kick:'actions.kick', ban:'actions.ban',
-                      unban:'actions.unban', give:'actions.give' };
+                      unban:'actions.unban', give:'actions.give',
+                      // Regarder l'écran de quelqu'un est une action de
+                      // modération comme une autre : elle porte un motif,
+                      // elle s'inscrit au journal, et elle est traçable.
+                      screenshot:'screens.request' };
 const iAction = db.prepare(`INSERT INTO actions(type,target_key,target_name,target_sid,payload,reason,by_id,by_name,created_at,space_id)
                             VALUES(?,?,?,?,?,?,?,?,?,?)`);
 
@@ -614,6 +729,7 @@ function doAction(me, b, ip) {
   const payload = b.payload && typeof b.payload === 'object' ? b.payload : {};
 
   const msg =
+    type === 'screenshot' ? `${me.pseudo} a demandé une capture de l’écran de ${name} — ${reason}` :
     type === 'warn'  ? `${me.pseudo} a averti ${name} — ${reason}` :
     type === 'kick'  ? `${me.pseudo} a expulsé ${name} — ${reason}` :
     type === 'ban'   ? `${me.pseudo} a banni ${name} ${days ? 'pour ' + days + ' jour(s)' : 'définitivement'} — ${reason}` :
@@ -622,7 +738,8 @@ function doAction(me, b, ip) {
 
   ingest([{
     ts: now(),
-    cat: type === 'give' ? 'admin' : (type === 'ban' || type === 'unban') ? 'bans' : 'sanctions',
+    cat: type === 'screenshot' ? 'ecran_joueur' : type === 'give' ? 'admin'
+       : (type === 'ban' || type === 'unban') ? 'bans' : 'sanctions',
     sev: type === 'ban' ? (days ? 'alerte' : 'critique') : type === 'unban' ? 'info' : 'notice',
     actor: { name: me.pseudo, staff: true },
     target: { name, key },
@@ -646,6 +763,19 @@ function purge() {
     const jours = Number(sp.retention) || CFG.retention;
     total += DB.num(db.prepare('DELETE FROM events WHERE space_id = ? AND ts < ?')
                       .run(sp.id, now() - jours * 86400000).changes);
+  }
+  // Les captures suivent la même rétention, et leur FICHIER part avec la
+  // ligne : effacer l'une sans l'autre laisserait soit des images que rien
+  // ne référence, soit des vignettes qui ne s'ouvrent plus.
+  for (const sp of db.prepare('SELECT id, retention FROM spaces').all()) {
+    const jours = CFG.screenDays || Number(sp.retention) || CFG.retention;
+    const vieilles = db.prepare('SELECT id, file FROM screens WHERE space_id = ? AND taken_at < ?')
+      .all(sp.id, now() - jours * 86400000).map(DB.row);
+    for (const sc of vieilles) {
+      try { fs.unlinkSync(screenPath(sp.id, sc.file)); } catch (e) {}
+      db.prepare('DELETE FROM screens WHERE id = ?').run(sc.id);
+    }
+    if (vieilles.length) console.log(`[purge] ${vieilles.length} capture(s) d'écran supprimée(s) — espace ${sp.id}`);
   }
   const n = { changes: total };
   db.prepare('DELETE FROM marks WHERE event_id NOT IN (SELECT id FROM events)').run();
@@ -734,6 +864,63 @@ async function route(req, res) {
     return ok(res, { actions: rows.map(r => ({ id: r.id, type: r.type, key: r.target_key,
       name: r.target_name, sid: r.target_sid, reason: r.reason, by: r.by_name,
       payload: r.payload ? JSON.parse(r.payload) : {} })) });
+  }
+  /* ---- dépôt d'une capture par la ressource FiveM ---- */
+  if (p === '/api/screens' && method === 'POST') {
+    const esp = spaceFromKey(req);
+    if (!esp) return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
+    let buf;
+    try { buf = await readBinary(req, CFG.maxScreen); }
+    catch (e) { return fail(res, 413, 'Capture trop volumineuse (plafond ' + Math.round(CFG.maxScreen / 1048576) + ' Mo).'); }
+    // La ressource envoie du base64 : c'est ce que screenshot-basic rend
+    // (une data-uri), et le décoder ici évite d'écrire un analyseur de
+    // multipart pour transporter un seul fichier.
+    if (String(req.headers['x-screen-encoding'] || '').toLowerCase() === 'base64') {
+      const txt = buf.toString('ascii').replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+      buf = Buffer.from(txt, 'base64');
+    }
+    const mime = typeImage(buf);
+    if (!mime) return fail(res, 415, 'Ce n’est pas une image JPEG, PNG ou WebP.');
+
+    // Le contexte voyage en en-têtes : le corps, lui, n'est que l'image.
+    const H = n => S(req.headers[n]);
+    const actionId = Number(H('x-screen-action')) || null;
+    const a = actionId ? DB.row(db.prepare('SELECT * FROM actions WHERE id=? AND space_id=?').get(actionId, esp.id)) : null;
+    const key  = a ? a.target_key  : S(H('x-screen-key'));
+    const nom  = a ? a.target_name : (S(H('x-screen-name')) || 'Joueur inconnu');
+    const sid  = a ? a.target_sid  : (Number(H('x-screen-sid')) || null);
+    const par  = a ? a.by_name     : 'serveur de jeu';
+    const motif= a ? a.reason      : S(H('x-screen-reason'));
+
+    const dossier = path.join(CFG.screenDir, String(esp.id));
+    try { fs.mkdirSync(dossier, { recursive: true }); } catch (e) {}
+    const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+    const nomFichier = now() + '-' + crypto.randomBytes(6).toString('hex') + '.' + ext;
+    try { fs.writeFileSync(path.join(dossier, nomFichier), buf); }
+    catch (e) { return fail(res, 500, 'Écriture impossible : ' + e.message); }
+
+    const r = db.prepare(`INSERT INTO screens(space_id,action_id,player_key,player_name,player_sid,
+                            asked_by,reason,asked_at,taken_at,mime,bytes,width,height,file)
+                          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(esp.id, actionId, key || null, nom, sid, par, motif || null,
+           a ? a.created_at : null, now(), mime, buf.length,
+           Number(H('x-screen-width')) || null, Number(H('x-screen-height')) || null, nomFichier);
+    const id = DB.num(r.lastInsertRowid);
+
+    // La capture devient un ÉVÈNEMENT : sans cela elle n'existerait que
+    // dans une table que personne ne regarde.
+    ingest([{
+      ts: now(), cat: 'ecran_joueur', sev: 'notice',
+      actor: { name: nom, key: key || undefined, sid },
+      msg: `Capture de l’écran de ${nom}` + (par ? ` — demandée par ${par}` : ''),
+      res: 'screenshot-basic',
+      data: { kind: 'screenshot', capture: id, demandePar: par || null, motif: motif || null,
+              poids: Math.round(buf.length / 1024) + ' Ko', format: mime,
+              dimensions: (Number(H('x-screen-width')) || '?') + '×' + (Number(H('x-screen-height')) || '?') }
+    }], 'panel', esp.id);
+    if (actionId) db.prepare(`UPDATE actions SET status='done', result=?, done_at=? WHERE id=? AND space_id=?`)
+      .run('capture #' + id, now(), actionId, esp.id);
+    return ok(res, { ok: true, id });
   }
   if (p === '/api/actions/ack' && method === 'POST') {
     const esp = spaceFromKey(req);
@@ -1103,6 +1290,45 @@ async function route(req, res) {
       }
     }
 
+    /* ---- captures d'écran ---- */
+    if (p === '/api/screens' && method === 'GET') {
+      if (!need('logs.view')) return;
+      // Une capture appartient à la rubrique « Écran du joueur » : un rôle
+      // qui ne la voit pas dans le flux ne la verra pas non plus ici.
+      if (!me.cats.includes('ecran_joueur')) return fail(res, 403, 'Votre rôle ne donne pas accès à « Écran du joueur ».');
+      const w = ['space_id = ?'], a = [me.spaceId];
+      if (Q.key)  { w.push('player_key = ?'); a.push(resolveKey(S(Q.key), me.spaceId)); }
+      if (Q.q)    { w.push('(player_name LIKE ? OR asked_by LIKE ? OR reason LIKE ?)');
+                    const t = '%' + S(Q.q) + '%'; a.push(t, t, t); }
+      const limite = Math.min(200, Math.max(1, N(Q.limit) || 60));
+      const rows = db.prepare(`SELECT * FROM screens WHERE ${w.join(' AND ')}
+                               ORDER BY taken_at DESC LIMIT ?`).all(...a, limite).map(DB.row);
+      const ids = me.perms.includes('players.identifiers');
+      return ok(res, {
+        captures: rows.map(r => ({ id: r.id, joueur: r.player_name, sid: r.player_sid,
+          cle: r.player_key ? (ids ? r.player_key : aliasOf(r.player_key)) : null,
+          par: r.asked_by, motif: r.reason, demandeeA: r.asked_at, priseA: r.taken_at,
+          poids: r.bytes, largeur: r.width, hauteur: r.height,
+          delai: r.asked_at ? r.taken_at - r.asked_at : null })),
+        total: DB.row(db.prepare(`SELECT COUNT(*) n FROM screens WHERE ${w.join(' AND ')}`).get(...a)).n
+      });
+    }
+    if (p.startsWith('/api/screens/') && method === 'GET') {
+      if (!need('logs.view')) return;
+      if (!me.cats.includes('ecran_joueur')) return fail(res, 403, 'Votre rôle ne donne pas accès à « Écran du joueur ».');
+      const id = Number(p.slice('/api/screens/'.length)) || 0;
+      const r = DB.row(db.prepare('SELECT * FROM screens WHERE id=? AND space_id=?').get(id, me.spaceId));
+      if (!r) return fail(res, 404, 'Capture introuvable.');
+      let buf;
+      try { buf = fs.readFileSync(screenPath(r.space_id, r.file)); }
+      catch (e) { return fail(res, 410, 'Le fichier de cette capture n’est plus sur le disque.'); }
+      // Consulter l'écran de quelqu'un se trace, même en lecture : c'est
+      // le seul moyen de répondre à « qui a regardé, et quand ? ».
+      audit(me, 'screen.vue', `capture #${id} — ${r.player_name}`, ip);
+      res.writeHead(200, { 'content-type': r.mime, 'content-length': buf.length,
+                           'cache-control': 'private, max-age=600' });
+      return res.end(buf);
+    }
     if (p === '/api/bans' && method === 'GET') {
       if (!need('logs.view')) return;
       // Le registre n'est pas une relecture du flux : il dit qui est
@@ -1394,6 +1620,26 @@ async function route(req, res) {
             t > 4e9 ? 'Réduisez la rétention des espaces les plus bavards, ou archivez.' : null));
         } catch (e) {}
 
+        if (!discordGlobalOk())
+          plat.push(C('attention', 'Revérification des accès à l’arrêt',
+            'Sans liaison Discord, personne ne peut être vérifié ni retiré automatiquement.',
+            'Renseignez l’application Discord et le jeton du bot, puis relancez l’API.'));
+        else if (CFG.sweepMin <= 0)
+          plat.push(C('probleme', 'Revérification des accès désactivée',
+            'ACCESS_SWEEP_MIN vaut 0 : un staff qui perd son rôle Discord garde son accès.',
+            'Remettez une valeur en minutes dans api/.env (30 par défaut), puis relancez l’API.'));
+        else if (!SWEEP.dernier)
+          plat.push(C('attention', 'Accès jamais revérifiés depuis ce démarrage',
+            'Le premier balayage part 20 s après le lancement.', null));
+        else if (SWEEP.erreurs)
+          plat.push(C('attention', SWEEP.erreurs + ' compte(s) non vérifiable(s)',
+            'Discord n’a pas répondu pour eux au dernier balayage — aucun accès n’a été retiré à tort.',
+            'Vérifiez que le bot est toujours sur le serveur et que son jeton est valide.'));
+        else
+          plat.push(C('ok', 'Revérification des accès',
+            `${SWEEP.verifies} compte(s) vérifié(s) il y a ${Math.round((now() - SWEEP.dernier) / 60000)} min` +
+            (SWEEP.retires ? `, ${SWEEP.retires} retiré(s)` : '') + `, toutes les ${CFG.sweepMin} min.`, null));
+
         const admins = DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE platform_admin = 1 AND disabled = 0').get()).n;
         plat.push(admins >= 2 ? C('ok', 'Administration de la plateforme', admins + ' administrateurs.', null)
           : C('attention', 'Un seul administrateur de plateforme',
@@ -1650,6 +1896,21 @@ async function route(req, res) {
       }
 
       // Visiter un espace : la session change, pas le compte.
+      if (p === '/api/platform/acces' && (method === 'GET' || method === 'POST')) {
+        if (method === 'POST') { await balayerAcces('manuel'); audit(me, 'acces.balayage', null, ip); }
+        return ok(res, {
+          actif: CFG.sweepMin > 0, intervalleMin: CFG.sweepMin, discordPret: discordGlobalOk(),
+          enCours: SWEEP.enCours, dernier: SWEEP.dernier || null, prochain: SWEEP.prochain || null,
+          verifies: SWEEP.verifies, retires: SWEEP.retires, erreurs: SWEEP.erreurs, duree: SWEEP.duree,
+          // Les comptes déjà retirés : c'est la preuve que le balayage sert
+          // à quelque chose, et la liste qu'on relit quand quelqu'un dit
+          // « je n'arrive plus à me connecter ».
+          retraits: db.prepare(`SELECT a.ts, a.detail, s.name AS espace FROM audit a
+                                LEFT JOIN spaces s ON s.id = a.space_id
+                                WHERE a.action = 'discord.revocation'
+                                ORDER BY a.ts DESC LIMIT 30`).all().map(DB.row)
+        });
+      }
       if (p === '/api/platform/enter' && method === 'POST') {
         const b = await readBody(req);
         const sid = Number(b.spaceId) || 0;
@@ -1706,12 +1967,20 @@ server.listen(CFG.port, CFG.host, () => {
   console.log(`  ├─ panneau       ${CFG.panelDir}`);
   console.log(`  ├─ rétention     ${CFG.retention} jours`);
   console.log(`  ├─ espaces       ${espaces}`);
-  console.log(`  └─ comptes staff ${staffCount}`);
+  console.log(`  ├─ comptes staff ${staffCount}`);
+  console.log(`  └─ accès         revérifiés toutes les ${CFG.sweepMin} min` +
+              (discordGlobalOk() ? '' : ' (en attente de la liaison Discord)'));
   if (!staffCount) console.log(`\n  Aucun compte : créez le vôtre avec  node staff.js add <pseudo> fondateur\n`);
   else console.log('');
   purge();
+  // Un premier balayage peu après le démarrage : un redémarrage est
+  // justement le moment où l'on ignore ce qui s'est passé pendant l'arrêt.
+  setTimeout(() => balayerAcces('démarrage').catch(e => console.error('[acces]', e.message)), 20000).unref();
 });
 setInterval(purge, 6 * 3600 * 1000).unref();
+if (CFG.sweepMin > 0)
+  setInterval(() => balayerAcces('périodique').catch(e => console.error('[acces]', e.message)),
+              CFG.sweepMin * 60000).unref();
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => {
   console.log('\n  Arrêt propre…'); server.close(); try { db.close(); } catch {} process.exit(0);
 });

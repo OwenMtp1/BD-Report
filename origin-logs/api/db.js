@@ -143,6 +143,31 @@ CREATE TABLE IF NOT EXISTS actions(
 );
 CREATE INDEX IF NOT EXISTS idx_ac_status ON actions(status, created_at);
 
+-- Captures de l'écran d'un joueur, prises EN JEU sur demande du staff.
+-- Le fichier vit sur le disque (data/screens/), pas dans la base : une
+-- image en base64 dans SQLite gonfle chaque sauvegarde et chaque requête
+-- qui la survole. La ligne, elle, porte tout ce qui rend la capture
+-- opposable — qui l'a demandée, quand, pour quel motif, et sur qui.
+CREATE TABLE IF NOT EXISTS screens(
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  space_id    INTEGER NOT NULL,
+  action_id   INTEGER,
+  player_key  TEXT,
+  player_name TEXT,
+  player_sid  INTEGER,
+  asked_by    TEXT,
+  reason      TEXT,
+  asked_at    INTEGER,
+  taken_at    INTEGER NOT NULL,
+  mime        TEXT NOT NULL DEFAULT 'image/jpeg',
+  bytes       INTEGER NOT NULL DEFAULT 0,
+  width       INTEGER,
+  height      INTEGER,
+  file        TEXT NOT NULL,
+  event_id    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_sc_space ON screens(space_id, taken_at DESC);
+
 CREATE TABLE IF NOT EXISTS marks(
   event_id INTEGER NOT NULL,
   kind     TEXT    NOT NULL,          -- pin | done

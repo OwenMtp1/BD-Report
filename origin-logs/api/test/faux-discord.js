@@ -19,10 +19,27 @@ const MEMBRES = {
   '44': { roles: [R.moderateur] }
 };
 
+// Les tests doivent pouvoir RETIRER un rôle en cours de route : c'est tout
+// l'objet du balayage automatique, et on ne peut pas le vérifier avec un
+// serveur figé. POST /__membre {id, roles} ou {id, partir:true}.
+function piloter(u, req, j) {
+  if (u.pathname !== '/__membre') return false;
+  let b = '';
+  req.on('data', c => b += c).on('end', () => {
+    let o = {}; try { o = JSON.parse(b || '{}'); } catch (e) {}
+    const id = String(o.id || '');
+    if (o.partir) delete MEMBRES[id];
+    else MEMBRES[id] = { roles: o.roles || [], nick: o.nick };
+    j(200, { ok: true, membre: MEMBRES[id] || null });
+  });
+  return true;
+}
+
 function creer() {
   return http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     const j = (code, o) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
+    if (piloter(u, req, j)) return;
 
     // Écran d'autorisation : on accepte et on renvoie aussitôt.
     if (u.pathname === '/oauth2/authorize') {

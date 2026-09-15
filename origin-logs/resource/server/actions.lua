@@ -43,6 +43,11 @@ local function executer(a)
     TriggerClientEvent('origin_logs:avertissement', src, a.reason, a.by)
     return accuser(a.id, true, 'averti en jeu')
 
+  elseif a.type == 'screenshot' then
+    -- Le résultat n'arrive pas tout de suite : c'est le client qui
+    -- dessine, puis l'API qui accuse en enregistrant la capture.
+    return DemanderCapture(a, accuser)
+
   elseif a.type == 'give' then
     if not src then return accuser(a.id, false, 'joueur hors ligne') end
     -- Rendre un item ou de l'argent dépend de votre framework : on

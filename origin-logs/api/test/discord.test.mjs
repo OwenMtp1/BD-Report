@@ -79,5 +79,48 @@ t('compte Discord inaccessible par mot de passe', parMdp.status===401);
 const faux=await fetch(B+'/api/auth/discord/callback?code=code-42&state=bidon',{redirect:'manual'});
 t('état forgé rejeté', (faux.headers.get('location')||'').includes('expir'), decodeURIComponent(faux.headers.get('location')||''));
 
+// ============================================================
+// Le balayage automatique des accès
+// ⚠️ C'est LE test qui compte pour cette fonctionnalité : vérifier que
+// la route répond ne prouve rien. Ici on retire pour de vrai le rôle
+// staff sur Discord, sans que la personne se reconnecte, et on exige
+// que son accès tombe.
+// ============================================================
+console.log('\n── Retrait automatique des accès ' + '─'.repeat(22));
+// Le balayage relève de l'administration de plateforme : on passe sur
+// « Sup », et on entre dans l'espace pour pouvoir relire l'équipe.
+const rSup = await call('/api/auth/login', {method:'POST', body: JSON.stringify({pseudo:'Sup', password:'motdepassesup12345'})});
+cookie = (rSup.headers.get('set-cookie')||'').split(';')[0];
+await J('/api/platform/enter', {method:'POST', body: JSON.stringify({spaceId:1})});
+const FAUX = process.env.FAUX_DISCORD || 'http://127.0.0.1:8911';
+const piloter = o => fetch(FAUX + '/__membre', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(o)});
+
+const equipeAvant = await J('/api/staff');
+const dc = (equipeAvant.body.staff || []).find(x => /^Nyx#42/.test(x.pseudo));
+t('le compte Discord est actif', !!dc && !dc.disabled, dc ? dc.pseudo : 'introuvable');
+
+// On lui retire le rôle staff sur Discord. Il ne se reconnecte PAS.
+await piloter({ id: '42', roles: [R.moderateur] });
+let sweep = await J('/api/platform/acces', { method: 'POST' });
+t('le balayage a tourné', sweep.body.dernier > 0, sweep.body.verifies + ' compte(s) vérifié(s)');
+t('il a retiré un accès', sweep.body.retires >= 1, sweep.body.retires + ' retrait(s)');
+
+const equipeApres = await J('/api/staff');
+const dc2 = (equipeApres.body.staff || []).find(x => x.id === (dc || {}).id);
+t('le compte est désactivé sans qu’il se soit reconnecté', !!dc2 && !!dc2.disabled,
+  dc2 ? ('disabled=' + dc2.disabled) : 'introuvable');
+
+// Rendre le rôle ne RÉACTIVE PAS : rendre un accès est une décision,
+// pas une conséquence — sinon un rôle repris par erreur rouvrirait la
+// porte sans que personne ne l'ait voulu.
+await piloter({ id: '42', roles: [STAFF, R.moderateur, R.animateur], nick: 'Nyx' });
+await J('/api/platform/acces', { method: 'POST' });
+const dc3 = ((await J('/api/staff')).body.staff || []).find(x => x.id === (dc || {}).id);
+t('le rôle rendu ne réactive pas le compte tout seul', !!dc3 && !!dc3.disabled,
+  'disabled=' + (dc3 || {}).disabled);
+
+const bord = await J('/api/platform/acces');
+t('le balayage dit ce qu’il n’a pas pu vérifier', typeof bord.body.erreurs === 'number', bord.body.erreurs + ' erreur(s)');
+
 console.log('\n  '+T.filter(Boolean).length+'/'+T.length+' contrôles passés');
 process.exit(T.every(Boolean)?0:1);

@@ -47,6 +47,21 @@ Config.BanMessage = 'Vous êtes banni de Origin Roleplay.\nMotif : %s\n%s\nConte
 -- Exécution des sanctions décidées depuis le panneau.
 Config.ActionPollMs = 5000
 
+-- Captures de l'écran d'un joueur, prises sur demande du staff depuis
+-- la rubrique « Écran du joueur ». Nécessite la ressource officielle
+-- screenshot-basic (ensure screenshot-basic AVANT origin_logs).
+Config.Screenshots = {
+  enabled        = true,
+  format         = 'jpg',   -- jpg (léger) ou png (fidèle, 5 à 10× plus lourd)
+  quality        = 0.7,     -- 0.1 à 1.0 — au-delà de 0.8 le gain se voit peu
+  maxKo          = 4096,    -- refus au-delà, avant même d'appeler l'API
+  -- ⚠️ Prévenir le joueur ou non est un choix de SERVEUR, pas un défaut
+  -- technique : certains règlements l'imposent, et d'autres perdraient
+  -- tout intérêt à la capture en prévenant. À vous de trancher, et de
+  -- l'écrire dans votre règlement.
+  notifierJoueur = false
+}
+
 Config.Anticheat = {
   enabled        = true,
   heartbeatMs    = 2000,     -- rythme d'envoi client (position, santé)

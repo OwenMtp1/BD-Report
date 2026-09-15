@@ -1,3 +1,4 @@
-# La clé serveur et la base de journaux ne quittent jamais la machine.
+# La clé serveur, la base de journaux et les captures d'écran ne quittent
+# jamais la machine (api/data/ contient aussi api/data/screens/).
 api/.env
 api/data/

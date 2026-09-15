@@ -167,6 +167,54 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .icon-btn.on{color:var(--vio-hi);border-color:var(--vio);background:var(--vio-wash)}
 .icon-btn.done.on{color:var(--ok);border-color:rgba(52,211,153,.5);background:rgba(52,211,153,.1)}
 
+/* captures d'écran */
+.ev-shot{
+  display:inline-flex;align-items:center;gap:4px;flex:none;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+  padding:2px 6px;border-radius:999px;
+  color:#D9B8FF;background:rgba(185,140,255,.13);border:1px solid rgba(185,140,255,.32);
+}
+.shot-full{display:block;margin:2px 0 8px;border-radius:9px;overflow:hidden;border:1px solid var(--edge);background:#000}
+.shot-full img{display:block;width:100%;height:auto}
+.shot-full:hover{border-color:var(--vio)}
+.shot-demo{
+  display:block;width:100%;aspect-ratio:16/9;
+  background:
+    radial-gradient(120% 80% at 30% 20%, rgba(185,140,255,.35), transparent 60%),
+    radial-gradient(100% 70% at 80% 80%, rgba(55,196,180,.28), transparent 60%),
+    linear-gradient(160deg,#1a1030,#0b0716);
+  position:relative;
+}
+.shot-demo span{
+  position:absolute;left:0;right:0;bottom:0;padding:8px 10px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);background:linear-gradient(transparent,rgba(0,0,0,.72));
+}
+.shot-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));margin-top:4px}
+.shot-card{
+  display:block;text-align:left;padding:0;overflow:hidden;cursor:pointer;
+  border:1px solid var(--edge);border-radius:10px;background:var(--card);color:inherit;
+}
+.shot-card:hover{border-color:var(--vio)}
+.shot-card img,.shot-card .shot-demo{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}
+.shot-card b{display:block;padding:7px 9px 1px;font-size:12.5px;font-weight:600}
+.shot-card em{display:block;padding:0 9px 8px;font-style:normal;font-size:11px;color:var(--muted)}
+
+/* recherche propre à la rubrique ouverte */
+.cat-find{
+  display:flex;align-items:center;gap:8px;margin:0 0 12px;
+  padding:0 12px;height:38px;border-radius:9px;
+  background:var(--card);border:1px solid var(--edge);color:var(--muted);
+}
+.cat-find:focus-within{border-color:var(--vio);box-shadow:0 0 0 3px color-mix(in srgb,var(--vio) 22%,transparent)}
+.cat-find svg{flex:none}
+.cat-find input{
+  flex:1;min-width:0;height:100%;border:0;background:none;outline:none;
+  color:var(--ink);font:inherit;font-size:13px;
+}
+.cat-find input::placeholder{color:var(--muted)}
+.cat-find input::-webkit-search-cancel-button{display:none}
+
 .tag-mode{
   font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
   padding:4px 9px;border-radius:999px;white-space:nowrap;
@@ -883,7 +931,25 @@ select.input{height:36px}
         </div>
         <div class="sub" id="streamCount"></div>
       </div>
+      <!-- La recherche de la barre du haut cherche dans la rubrique
+           ouverte, mais rien ne le disait : on la redonne ICI, à côté du
+           titre, avec le nom de la rubrique dans l'invite. -->
+      <div class="cat-find">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10.6 10.6 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input id="catQ" type="search" autocomplete="off" placeholder="Rechercher…" aria-label="Rechercher dans cette rubrique">
+        <button class="btn sm" id="catQClear" hidden>Effacer</button>
+      </div>
       <div class="filters" id="sevBar" role="group" aria-label="Filtrer par gravité"></div>
+      <!-- Les captures ne se lisent pas : elles se REGARDENT. Les laisser
+           dans le flux, en une ligne de texte chacune, aurait demandé
+           d'ouvrir chaque évènement pour savoir laquelle on cherche. -->
+      <div class="block" id="shotStrip" hidden>
+        <h3 class="eyebrow" id="shotHead">Captures d’écran</h3>
+        <div class="shot-grid" id="shotGrid"></div>
+      </div>
       <div class="feed">
         <div class="feed-scroll" id="feedScroll"><div id="rows"></div></div>
         <div class="feed-foot">
@@ -1202,7 +1268,16 @@ ecran_joueur:[
  {s:'info',w:6,f:(a)=>({msg:`${who(a)} a interagi avec ${it(pick(['un distributeur','une porte de commerce','un PNJ vendeur','un point de service','un coffre-fort']))}`,d:{cible:pick(['vending_1','shop_door_3','npc_seller','job_point','safe_2']),resultat:'ouvert',position:coords()}})},
  {s:'info',w:5,f:(a)=>({msg:`${who(a)} a changé de tenue — ${it(pick(['civile','de service','de soirée','de sport']))}`,d:{ecran:'clothing',vestiaire:pick(['domicile','entreprise','magasin']),piecesModifiees:int(1,6)}})},
  {s:'notice',w:3,f:(a)=>({msg:`${who(a)} est resté ${int(6,25)} min sur le même écran`,d:{ecran:pick(['inventory','shop','crafting']),soupcon:'AFK menu ouvert',relances:int(1,3)}})},
- {s:'alerte',w:2,f:(a)=>({msg:`Menu ouvert sans y avoir accès — ${who(a)}`,d:{ecran:pick(['admin_menu','job_boss','vehicle_spawner']),jobAttendu:pick(['police','mechanic','patron']),jobReel:a.jobKey,refus:true}})}
+ {s:'alerte',w:2,f:(a)=>({msg:`Menu ouvert sans y avoir accès — ${who(a)}`,d:{ecran:pick(['admin_menu','job_boss','vehicle_spawner']),jobAttendu:pick(['police','mechanic','patron']),jobReel:a.jobKey,refus:true}})},
+ // Captures demandées par le staff : elles portent `capture`, et c'est ce
+ // champ qui les fait apparaître en vignette et dans le bandeau.
+ // L'ACTEUR est le joueur capturé, pas le staff : c'est son écran, c'est
+ // son dossier qu'on veut ouvrir depuis la ligne, et c'est ainsi que l'API
+ // construit l'évènement réel. Le demandeur vit dans `demandePar`.
+ {s:'notice',w:4,f:(a,b,st)=>({msg:`Capture de l’écran de ${who(a)} — demandée par ${who(st)}`,
+   d:{kind:'screenshot',capture:int(1000,9999),demandePar:st.name,
+      motif:pick(['Soupçon de menu de triche — report #218','Vérification d’un signalement RDM','Contrôle anticheat après détection','Litige sur un échange d’items']),
+      poids:int(180,900)+' Ko',format:'image/jpeg',dimensions:'1920×1080',delai:int(800,4200)+' ms'}})}
 ],
 combat:[
  {s:'notice',w:8,f:(a,b)=>{const w=pick(ARMES);return{t:b,msg:`${who(b)} est mort — tué par ${who(a)} avec ${it(w[1])}`,d:{arme:w[0],distance:int(2,140)+' m',headshot:chance(.25),zone:pick(ZONES),position:coords(),scene:chance(.6)?'braquage en cours':'non renseignée'}};}},
@@ -1556,6 +1631,20 @@ const Demo = {
   async mark(id, kind, on) {
     const set = MARKS[kind]; on ? set.add(id) : set.delete(id); saveMarks();
   },
+  // Les captures de la démonstration sont FABRIQUÉES à partir des
+  // évènements « Écran du joueur » qui en portent une : aucune image
+  // n'est inventée, et le bandeau montre exactement ce que le flux dit.
+  async screens(q) {
+    await this.init();
+    const t = String(q || '').toLowerCase();
+    const l = EVENTS.filter(e => e.cat === 'ecran_joueur' && e.d && e.d.capture)
+      .filter(e => !t || (e.actor.name + ' ' + (e.d.demandePar || '') + ' ' + (e.d.motif || '')).toLowerCase().includes(t))
+      .sort((a, b) => b.t - a.t);
+    return { total: l.length, captures: l.slice(0, 24).map(e => ({
+      id: e.d.capture, joueur: e.actor.name, sid: e.actor.sid, cle: e.actor.key,
+      par: e.d.demandePar, motif: e.d.motif, priseA: e.t, demandeeA: e.t - 2400,
+      poids: 0, largeur: 1920, hauteur: 1080, delai: 2400 })) };
+  },
   async action() { throw new Error('Mode démonstration : aucune sanction n’est envoyée à un serveur.'); },
   stream(cb) {
     const h = setInterval(() => {
@@ -1581,6 +1670,7 @@ const Api = {
   stats(from, to, buckets) { return api('/api/stats?' + qs({ from, to, buckets })); },
   player(key) { return api('/api/players/' + encodeURIComponent(key)); },
   bans(state) { return api('/api/bans?state=' + encodeURIComponent(state || 'actifs')); },
+  screens(q) { return api('/api/screens?' + qs({ q, limit: 24 })); },
   mark(id, kind, on) { return api('/api/marks', { method: 'POST', body: JSON.stringify({ id, kind, on }) }); },
   action(b) { return api('/api/actions', { method: 'POST', body: JSON.stringify(b) }); },
   stream(cb) {
@@ -1650,7 +1740,7 @@ function render() {
   $('#viewPlatform').hidden    = STATE.view !== 'platform';
   $('#viewPlatformLog').hidden = STATE.view !== 'platformlog';
   if (STATE.view === 'overview') renderOverview();
-  else if (STATE.view === 'stream') renderStream();
+  else if (STATE.view === 'stream') { renderStream(); chargerCaptures(); }
   else if (STATE.view === 'bans') renderBans();
   else if (STATE.view === 'platform') rendrePlateforme();
   else rendreJournal();
@@ -1886,6 +1976,14 @@ function renderStream() {
   const c = STATE.cat === 'all' ? null : CAT[STATE.cat];
   $('#streamTitle').textContent = c ? c.label : 'Flux complet';
   $('#streamDesc').textContent = c ? c.desc : 'Toutes les catégories auxquelles votre rôle donne accès.';
+  // L'invite NOMME la rubrique : « Rechercher… » ne disait pas où.
+  const champ = $('#catQ');
+  if (champ) {
+    champ.placeholder = c ? `Rechercher dans « ${c.label} » — nom, licence, plaque, item, montant…`
+                          : 'Rechercher dans toutes les rubriques — nom, licence, plaque, item, montant…';
+    if (document.activeElement !== champ) champ.value = STATE.q;
+    $('#catQClear').hidden = !STATE.q;
+  }
   renderSevBar();
   $('#streamCount').innerHTML = `<b>${STATE.total.toLocaleString('fr-FR')}</b> évènement(s) · ${CHART_CFG[STATE.range].title.toLowerCase()}`;
 
@@ -1922,6 +2020,11 @@ function renderStream() {
             <span class="ev-sid">${e.actor.sid != null ? '[' + e.actor.sid + ']' : ''}${e.actor.staff ? ' staff' : ''}</span>
           ${e.actor.key && can('players.view') ? '</button>' : '</span>'}
           <span class="ev-res">${esc(e.res || '')}</span>
+          ${e.d && e.d.capture ? `<span class="ev-shot" title="Cette ligne porte une capture d’écran">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.6" y="3.4" width="12.8" height="9.2" rx="1.8" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="8" cy="8" r="2.4" stroke="currentColor" stroke-width="1.5"/>
+            </svg>capture</span>` : ''}
           ${can('logs.mark') ? `<button class="ev-quick${e.done ? ' on' : ''}" data-mark="${e.id}" title="${e.done ? 'Remettre à traiter' : 'Marquer comme traité'}" aria-pressed="${!!e.done}">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4 6.4 12 13 4.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>` : ''}
@@ -1999,6 +2102,9 @@ function actionBar(key, name, banni) {
   if (can('actions.ban') && !banni) b.push(`<button class="btn sm danger" data-act="ban" data-key="${esc(key)}" data-name="${esc(name)}">Bannir</button>`);
   if (can('actions.unban') && banni) b.push(`<button class="btn sm" data-act="unban" data-key="${esc(key)}" data-name="${esc(name)}">Lever le bannissement</button>`);
   if (can('actions.give')) b.push(`<button class="btn sm" data-act="give" data-key="${esc(key)}" data-name="${esc(name)}">Rendre un bien</button>`);
+  // Regarder l'écran de quelqu'un est une action de modération comme une
+  // autre : elle porte un motif et s'inscrit au journal.
+  if (can('screens.request')) b.push(`<button class="btn sm" data-act="screenshot" data-key="${esc(key)}" data-name="${esc(name)}">Demander une capture</button>`);
   return b.length ? `<div class="block"><h3 class="eyebrow">Modération</h3><div class="tools">${b.join('')}</div></div>` : '';
 }
 
@@ -2034,6 +2140,16 @@ function openInspector(id) {
       ${e.actor.license ? `<dt>Licence</dt><dd class="mono">${esc(e.actor.license)}</dd>` : ''}
       ${e.done && e.doneBy ? `<dt>Traité par</dt><dd>${esc(e.doneBy)}</dd>` : ''}
     </dl>
+    ${e.d && e.d.capture ? `<div class="block">
+      <h3 class="eyebrow">Capture de l’écran</h3>
+      <a class="shot-full" href="${MODE === 'demo' ? '#' : '/api/screens/' + Number(e.d.capture)}"
+         target="_blank" rel="noopener" title="Ouvrir la capture en grand">
+        ${MODE === 'demo'
+          ? demoShot(e, 'large')
+          : `<img src="/api/screens/${Number(e.d.capture)}" alt="Capture de l’écran de ${esc(e.actor.name)}" loading="lazy">`}
+      </a>
+      <span class="lite-m">Capture #${Number(e.d.capture)}${e.d.dimensions ? ' · ' + esc(e.d.dimensions) : ''}${e.d.poids ? ' · ' + esc(e.d.poids) : ''}${e.d.demandePar ? ' · demandée par ' + esc(e.d.demandePar) : ''}. Chaque consultation est inscrite au journal du panneau.</span>
+    </div>` : ''}
     <div class="block">
       <h3 class="eyebrow">Données brutes</h3>
       <pre class="payload">${jsonHtml(e.d || {})}</pre>
@@ -2136,7 +2252,8 @@ async function openDossier(key) {
 /* ---------- dialogue d'action ---------- */
 let pendingAction = null;
 const DUREES = [[0,'Définitif'],[1,'1 jour'],[3,'3 jours'],[7,'7 jours'],[14,'14 jours'],[30,'30 jours']];
-const TITRES = { warn:'Avertir', kick:'Expulser', ban:'Bannir', unban:'Lever le bannissement', give:'Rendre un bien' };
+const TITRES = { warn:'Avertir', kick:'Expulser', ban:'Bannir', unban:'Lever le bannissement',
+                 give:'Rendre un bien', screenshot:'Demander une capture' };
 
 function askAction(type, key, name) {
   pendingAction = { type, key, name };
@@ -2146,9 +2263,10 @@ function askAction(type, key, name) {
   $('#dlgBody').innerHTML = `
     ${type === 'ban' ? `<div class="banner" style="--c:var(--warn)">Le joueur sera déconnecté et sa reconnexion refusée. La sanction entre au registre avec votre pseudo.</div>` : ''}
     ${type === 'unban' ? `<div class="banner" style="--c:var(--ok)">Le joueur pourra se reconnecter immédiatement.</div>` : ''}
+    ${type === 'screenshot' ? `<div class="banner" style="--c:var(--check)">L’image de son écran sera prise <b>telle qu’elle est maintenant</b> et déposée dans « Écran du joueur ». Le joueur doit être <b>en ligne</b>. Votre pseudo, la date et le motif restent attachés à la capture, et chaque consultation ultérieure est inscrite au journal du panneau.</div>` : ''}
     ${type !== 'unban' ? `<div class="field" style="margin-top:12px">
       <label for="dlgReason">Motif${type === 'give' ? ' (ticket, contexte)' : ''}</label>
-      <input class="input" id="dlgReason" placeholder="${type === 'give' ? 'Remboursement — ticket #412' : 'RDM sur Legion Square'}" maxlength="300">
+      <input class="input" id="dlgReason" placeholder="${type === 'give' ? 'Remboursement — ticket #412' : type === 'screenshot' ? 'Soupçon de menu de triche — report #218' : 'RDM sur Legion Square'}" maxlength="300">
     </div>` : ''}
     ${type === 'ban' ? `<div class="field" style="margin-top:10px">
       <label for="dlgDays">Durée</label>
@@ -2350,6 +2468,7 @@ function applyHash() {
   STATE.sevs = new Set((p.get('s') || '').split(',').filter(Boolean));
   STATE.limit = 120; STATE.list = [];
   const champ = $('#q'); if (champ) champ.value = STATE.q;
+  const champCat = $('#catQ'); if (champCat) champCat.value = STATE.q;
   document.querySelectorAll('[data-range]').forEach(b =>
     b.setAttribute('aria-pressed', String(Number(b.dataset.range) === STATE.range)));
   return true;
@@ -2374,9 +2493,9 @@ function renderActiveFilters() {
 }
 function clearFilter(quoi) {
   if (quoi === 'cat')   { STATE.cat = 'all'; STATE.view = 'stream'; }
-  else if (quoi === 'q'){ STATE.q = ''; $('#q').value = ''; }
+  else if (quoi === 'q'){ STATE.q = ''; $('#q').value = ''; $('#catQ').value = ''; }
   else if (quoi === 'range') STATE.range = 24;
-  else if (quoi === 'tout') { STATE.q = ''; $('#q').value = ''; STATE.sevs.clear(); STATE.range = 24; STATE.cat = 'all'; }
+  else if (quoi === 'tout') { STATE.q = ''; $('#q').value = ''; $('#catQ').value = ''; STATE.sevs.clear(); STATE.range = 24; STATE.cat = 'all'; }
   else if (quoi.startsWith('sev:')) STATE.sevs.delete(quoi.slice(4));
   STATE.limit = 120;
   document.querySelectorAll('[data-range]').forEach(b =>
@@ -2450,6 +2569,85 @@ function lancerRecherche(t) {
   if (STATE.view !== 'stream') { STATE.view = 'stream'; if (STATE.cat === 'bans') STATE.cat = 'all'; }
   syncHash(); render(); refresh();
   $('#q').blur();
+}
+
+/* ---------- captures d'écran ----------
+   Elles vivent dans la rubrique « Écran du joueur » : c'est là qu'on les
+   cherche, et c'est la seule rubrique où elles ont un sens. Le bandeau
+   suit la RECHERCHE de la rubrique — sinon on filtrerait les lignes en
+   laissant les vignettes d'à côté. */
+let SHOTS = { charge: 0, liste: [], q: null };
+
+function demoShot(e, taille) {
+  const t = e && e.t ? new Date(e.t) : new Date();
+  const qui = e && e.actor ? e.actor.name : 'Joueur';
+  return `<span class="shot-demo"><span>démonstration · écran de ${esc(qui)} · ${pad(t.getHours())}h${pad(t.getMinutes())}</span></span>`;
+}
+
+async function chargerCaptures() {
+  const bande = $('#shotStrip'); if (!bande) return;
+  // Le bandeau n'existe que dans « Écran du joueur » : ailleurs, des
+  // captures en tête d'un flux d'économie n'auraient aucun rapport.
+  if (STATE.view !== 'stream' || STATE.cat !== 'ecran_joueur') { bande.hidden = true; return; }
+  const clef = STATE.q || '';
+  if (SHOTS.q === clef && Date.now() - SHOTS.charge < 20000) return rendreCaptures();
+  SHOTS.q = clef;
+  try {
+    const d = await DS.screens(clef);
+    SHOTS.liste = d.captures || []; SHOTS.total = d.total || 0; SHOTS.charge = Date.now();
+  } catch (e) { SHOTS.liste = []; SHOTS.total = 0; }
+  rendreCaptures();
+}
+
+function rendreCaptures() {
+  const bande = $('#shotStrip'); if (!bande) return;
+  if (STATE.view !== 'stream' || STATE.cat !== 'ecran_joueur') { bande.hidden = true; return; }
+  bande.hidden = false;
+  const l = SHOTS.liste || [];
+  $('#shotHead').textContent = l.length
+    ? `Captures d’écran — ${SHOTS.total > l.length ? l.length + ' sur ' + SHOTS.total : l.length}`
+    : 'Captures d’écran';
+  if (!l.length) {
+    $('#shotGrid').innerHTML = `<span class="lite-m">${STATE.q
+      ? `Aucune capture pour « ${esc(STATE.q)} ». Ici la recherche porte sur le joueur, le demandeur et le motif — les lignes ci-dessous, elles, sont cherchées dans tout leur contenu.`
+      : (can('screens.request')
+          ? 'Aucune capture pour l’instant. Ouvrez le dossier d’un joueur en ligne, puis « Demander une capture ».'
+          : 'Aucune capture pour l’instant.')}</span>`;
+    return;
+  }
+  $('#shotGrid').innerHTML = l.map(c => `
+    <button class="shot-card" data-shot="${c.id}" data-shotname="${esc(c.joueur || '')}">
+      ${MODE === 'demo' ? demoShot({ t: c.priseA, actor: { name: c.joueur } })
+        : `<img src="/api/screens/${c.id}" alt="Capture de l’écran de ${esc(c.joueur || 'joueur')}" loading="lazy">`}
+      <b>${esc(c.joueur || 'Joueur inconnu')}${c.sid != null ? ' [' + c.sid + ']' : ''}</b>
+      <em>${hhmmss(c.priseA)} · ${ago(c.priseA)}${c.par ? ' · ' + esc(c.par) : ''}${c.motif ? ' — ' + esc(c.motif) : ''}</em>
+    </button>`).join('');
+}
+
+// Une vignette ouvre l'ÉVÈNEMENT quand il est sous la main : c'est là que
+// vivent le motif, le demandeur et les actions de modération. L'image
+// seule ne dirait pas pourquoi elle a été prise.
+function ouvrirCapture(id, nom) {
+  for (const e of SEEN.values())
+    if (e.d && Number(e.d.capture) === Number(id)) return openInspector(e.id);
+  if (MODE === 'demo') return toast('Mode démonstration : cette capture n’a pas d’image réelle.');
+  window.open('/api/screens/' + Number(id), '_blank', 'noopener');
+}
+
+/* ---------- recherche dans la rubrique ouverte ----------
+   ⚠️ Elle ne passe PAS par `lancerRecherche` : celle-là bascule sur le
+   flux et peut changer de rubrique (c'est ce qu'on veut depuis la barre
+   du haut, qui cherche partout). Ici on est DÉJÀ dans une rubrique, et
+   en sortir à la première lettre tapée serait exactement le contraire
+   de ce qu'on demande. */
+let _catQTimer = null;
+function chercherDansRubrique(t) {
+  const v = String(t || '').trim();
+  if (v === STATE.q) return;
+  STATE.q = v; STATE.limit = 120;
+  $('#q').value = v;
+  $('#catQClear').hidden = !v;
+  syncHash(); refresh();
 }
 
 /* ---------- solder une alerte sans rien ouvrir ---------- */
@@ -2552,6 +2750,23 @@ $('#q').addEventListener('input', e => {
   $('#q')._h = setTimeout(() => buildSuggest(e.target.value), 140);
 });
 $('#q').addEventListener('focus', e => { if (e.target.value.trim().length >= 2) buildSuggest(e.target.value); });
+
+// Recherche de rubrique : au fil de la frappe, mais pas à chaque touche —
+// une requête par lettre chargerait l'API pour des résultats que personne
+// n'a le temps de lire.
+$('#catQ').addEventListener('input', e => {
+  clearTimeout(_catQTimer);
+  const v = e.target.value;
+  $('#catQClear').hidden = !v.trim();
+  _catQTimer = setTimeout(() => chercherDansRubrique(v), 260);
+});
+$('#catQ').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { clearTimeout(_catQTimer); chercherDansRubrique(e.target.value); }
+  if (e.key === 'Escape') { e.target.value = ''; clearTimeout(_catQTimer); chercherDansRubrique(''); }
+});
+$('#catQClear').addEventListener('click', () => {
+  $('#catQ').value = ''; clearTimeout(_catQTimer); chercherDansRubrique(''); $('#catQ').focus();
+});
 </script>
 <script>
 /* ============================================================
@@ -2916,7 +3131,7 @@ async function choisirProprietaire(spaceId) {
   DEMO_PERMS = [
     { id:'logs.view',           label:'Lire les journaux' },
     { id:'logs.mark',           label:'Épingler et marquer traité' },
-    { id:'logs.export',         label:'Exporter en CSV' },
+    { id:'logs.export',         label:'Exporter en CSV (réservé au Fondateur)' },
     { id:'players.view',        label:'Ouvrir un dossier joueur' },
     { id:'players.identifiers', label:'Voir les identifiants' },
     { id:'actions.warn',        label:'Avertir un joueur' },
@@ -2924,6 +3139,7 @@ async function choisirProprietaire(spaceId) {
     { id:'actions.ban',         label:'Bannir un joueur' },
     { id:'actions.unban',       label:'Lever un bannissement' },
     { id:'actions.give',        label:'Rendre un item ou de l’argent' },
+    { id:'screens.request',     label:'Demander une capture de l’écran d’un joueur' },
     { id:'audit.view',          label:'Consulter le journal du panneau' },
     { id:'accounts.manage',     label:'Gérer les comptes staff' },
     { id:'settings.discord',    label:'Configurer la liaison Discord' },
@@ -2933,7 +3149,8 @@ async function choisirProprietaire(spaceId) {
   const g = id => CATS.filter(c => c.group === id).map(c => c.id);
   // Dérivé des GROUPES : ajouter un groupe au catalogue suffit.
   const G = Object.fromEntries(GROUPS.map(gr => [gr.id, g(gr.id)]));
-  const lire = ['logs.view','logs.mark','logs.export','players.view'];
+  // L'export a quitté le socle de lecture : seul le Fondateur l'a.
+  const lire = ['logs.view','logs.mark','players.view'];
   const moderer = ['actions.warn','actions.kick'];
   const bannir = ['actions.ban','actions.unban'];
   const u = (...l) => [...new Set([].concat(...l))];
@@ -2941,16 +3158,16 @@ async function choisirProprietaire(spaceId) {
   const D = '9382716405182731';
   DEMO_ROLES = [
     ['fondateur','Fondateur',100,TOUT,tousCats,'Tous les droits, y compris la liaison Discord et les comptes.',D+'00'],
-    ['administrateur','Administrateur',90,TOUT.filter(x=>!['settings.discord','roles.manage'].includes(x)),tousCats,'Tout sauf la liaison Discord et la composition des rôles.',D+'01'],
+    ['administrateur','Administrateur',90,TOUT.filter(x=>!['settings.discord','roles.manage','logs.export'].includes(x)),tousCats,'Tout sauf la liaison Discord et la composition des rôles.',D+'01'],
     ['developpeur','Développeur',80,u(lire,['audit.view']),tousCats,'Lecture complète, y compris les journaux techniques.',''],
-    ['gerant_anticheat','Gérant Brigade Anti-Cheat',70,u(lire,moderer,bannir,['players.identifiers','audit.view']),u(G.moderation,G.joueurs,G.rp),'Pilote la lutte contre la triche : détections, bannissements, appels.',D+'02'],
+    ['gerant_anticheat','Gérant Brigade Anti-Cheat',70,u(lire,moderer,bannir,['players.identifiers','audit.view','screens.request']),u(G.moderation,G.joueurs,G.rp),'Pilote la lutte contre la triche : détections, bannissements, appels.',D+'02'],
     ['responsable_remboursement','Responsable Remboursement',65,u(lire,['players.identifiers','actions.give','actions.warn']),u(G.biens,G.boutique,G.joueurs,['bans','sanctions']),'Instruit les demandes de remboursement et rend les biens perdus.',D+'03'],
     ['gerant_legal','Gérant Légal',60,u(lire,['actions.warn']),u(G.biens,G.rp,G.joueurs),'Suit les entreprises, les emplois et les propriétés.',D+'04'],
     ['gerant_illegal','Gérant Illégal',60,u(lire,['actions.warn']),u(G.rp,G.biens,G.joueurs),'Suit les organisations, les braquages et les trafics.',D+'05'],
     ['gerant_animation','Gérant Animation',60,u(lire,['actions.give']),u(G.joueurs,G.rp,G.boutique),'Prépare les events et dédommage les participants.',D+'06'],
     ['gerant_communication','Gérant Communication',60,lire,u(G.joueurs),'Suit les annonces, les candidatures et les retours joueurs.',D+'07'],
     ['moderateur','Modérateur',50,u(lire,moderer),u(G.moderation,G.joueurs,G.rp,G.biens),'Traite les signalements du quotidien : avertir, expulser.',D+'08'],
-    ['anticheat','Brigade Anti-Cheat',45,u(lire,moderer,['actions.ban']),u(['anticheat','bans','sanctions'],G.joueurs),'Traite les détections et bannit les tricheurs (sans lever).',D+'09'],
+    ['anticheat','Brigade Anti-Cheat',45,u(lire,moderer,['actions.ban','screens.request']),u(['anticheat','bans','sanctions'],G.joueurs),'Traite les détections et bannit les tricheurs (sans lever).',D+'09'],
     ['helper','Helper',30,['logs.view','players.view','actions.warn'],u(G.joueurs),'Accompagne les joueurs et remonte ce qui dépasse.',D+'10'],
     ['animateur','Animateur',25,['logs.view','players.view'],u(G.joueurs,G.rp),'Anime les events, en lecture seule sur les journaux.',D+'11'],
     ['communication','Communication',25,['logs.view'],u(G.joueurs),'Rédige et relaie, sans pouvoir de modération.','']
@@ -3329,12 +3546,13 @@ function goOverview() { STATE.view = 'overview'; syncHash(); render(); refresh()
 function goVue(v) { STATE.view = v; syncHash(); render(); refresh(); window.scrollTo({ top: 0 }); }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-staff-toggle],[data-banstate]');
+  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate]');
   if (!t) return;
 
   if (t.dataset.view === 'platform')    return goVue('platform');
   if (t.dataset.view === 'platformlog')  return goVue('platformlog');
   if (t.dataset.view === 'overview') return goOverview();
+  if (t.dataset.shot)   return ouvrirCapture(t.dataset.shot, t.dataset.shotname);
   if (t.dataset.act)    return askAction(t.dataset.act, t.dataset.key, t.dataset.name);
   if (t.dataset.player) { closeInspector(); return openDossier(t.dataset.player); }
   if (t.dataset.banstate) { STATE.banState = t.dataset.banstate; syncHash(); return refresh(); }
@@ -3646,8 +3864,11 @@ async function startPanel() {
     $('#auditBtn').hidden = !can('audit.view') || !dansUnEspace;
     // La recherche, la période, le direct et l'export portent tous sur les
     // journaux d'un espace : hors espace, ils ne cherchent rien.
-    for (const sel of ['#findBox', '#rangeSeg', '#liveBtn', '#exportBtn', '#railLive'])
+    for (const sel of ['#findBox', '#rangeSeg', '#liveBtn', '#railLive'])
       { const n = $(sel); if (n) n.hidden = !dansUnEspace; }
+    // L'export sort des données du panneau : bouton absent, pas inerte,
+    // quand le rôle ne l'a pas — un bouton qui refuse n'apprend rien.
+    $('#exportBtn').hidden = !dansUnEspace || !can('logs.export');
     document.title = `Origin Roleplay — Journal serveur (${ME.pseudo})`;
   }
   if (MODE === 'demo') {
@@ -3666,7 +3887,7 @@ async function startPanel() {
     $('#whoAv').style.cssText = avatarStyle({ name:'Owen', hue:272 });
     $('#whoAv').textContent = 'OW';
     $('#logoutBtn').hidden = true;
-    for (const b of ['#teamBtn', '#rolesBtn', '#discordBtn', '#platformBtn', '#auditBtn'])
+    for (const b of ['#teamBtn', '#rolesBtn', '#discordBtn', '#platformBtn', '#auditBtn', '#exportBtn'])
       $(b).hidden = false;
   }
   buildNav();

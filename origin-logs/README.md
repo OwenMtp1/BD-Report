@@ -65,13 +65,25 @@ d'œil à la strie de couleur en début de ligne.
   de catégorie, auteur et message. Recherche plein texte (nom, licence,
   plaque, item, montant, ID serveur), filtres par catégorie, gravité et
   période (1 h / 6 h / 24 h / 7 j), pagination, export CSV.
+- **Recherche par rubrique** — chaque rubrique porte sa propre barre, et
+  l'invite NOMME la rubrique (« Rechercher dans « Casino »… »). La
+  recherche du haut cherchait déjà dans la rubrique ouverte, mais rien ne
+  le disait : on la redonne là où la question se pose. Elle ne fait jamais
+  sortir de la rubrique — en sortir à la première lettre tapée serait le
+  contraire de ce qu'on demande — et l'adresse la porte, donc un lien collé
+  rouvre la même recherche.
 - **Inspecteur** — payload brut de l'évènement, identifiants, ressource
   émettrice, contexte des évènements voisins du même joueur, épingle et
   marquage « traité » **partagés entre le staff**.
 - **Dossier joueur** — identifiants FiveM, sessions, éliminations, décès,
   détections, sanctions, historique.
+- **Écran du joueur** — la rubrique montre en tête un **bandeau de captures**
+  (vignettes), et les lignes qui en portent une le signalent. Une vignette
+  ouvre l'évènement, pas seulement l'image : c'est là que vivent le motif,
+  le demandeur et les actions de modération.
 - **Modération** — avertir, expulser, bannir, lever un bannissement, rendre un
-  bien. Chaque action s'inscrit au journal avec le pseudo de son auteur.
+  bien, **demander une capture d'écran**. Chaque action s'inscrit au journal
+  avec le pseudo de son auteur.
 - **Équipe** — création de comptes staff et changement de rôle depuis le
   panneau (réservé aux fondateurs).
 - **Journal du panneau** — qui a consulté quel dossier, qui a exporté, qui a
@@ -241,6 +253,96 @@ au-dessus de tous les autres. Il se pose en console :
 node staff.js platform <pseudo> on
 ```
 
+## Captures de l'écran d'un joueur
+
+Depuis le dossier d'un joueur ou l'inspecteur d'un évènement, **Demander une
+capture** prend l'image de son écran **telle qu'elle est à cet instant** et la
+dépose dans « Écran du joueur ».
+
+Le chemin est celui de toutes les actions : le panneau ne parle jamais au
+serveur de jeu, il dépose une tâche ; la ressource vient la chercher, prend la
+capture avec **screenshot-basic**, et la renvoie à l'API. Aucun port de jeu à
+ouvrir, aucune commande à distance.
+
+```
+panneau ──tâche──▶ API ──poll──▶ ressource ──screenshot-basic──▶ client
+                    ◀──────── image ─────────┘
+```
+
+**Prérequis** : la ressource officielle
+[screenshot-basic](https://github.com/citizenfx/screenshot-basic), et
+`ensure screenshot-basic` **avant** `ensure origin_logs`. Sans elle, la demande
+échoue avec un message qui dit quoi installer, au lieu de rester sans réponse.
+
+⚠️ **Une capture est une action de modération, pas une consultation.** Elle
+exige un **motif** d'au moins trois caractères, comme un avertissement ou un
+bannissement, et elle s'inscrit au journal avec le pseudo de son auteur.
+
+⚠️ **Chaque ouverture de l'image est journalisée** (`screen.vue`), pas
+seulement la demande. C'est le seul moyen de répondre à « qui a regardé, et
+quand ? » — la question qui se pose le jour où une capture circule.
+
+⚠️ **Le droit `screens.request` est distinct de la modération** : par défaut
+Fondateur, Administrateur, Gérant Brigade Anti-Cheat et Brigade Anti-Cheat.
+Un modérateur peut expulser sans pouvoir regarder un écran, et c'est voulu —
+ce sont deux gestes d'intrusion différents. Le droit s'accorde à un rôle
+depuis « Rôles & accès » comme n'importe quel autre.
+
+⚠️ **Voir la rubrique, c'est voir les captures** : la lecture d'une image est
+refusée à qui n'a pas « Écran du joueur » dans ses rubriques, et la garde est
+en SQL, pas dans l'interface.
+
+**Prévenir le joueur ou non** est un choix de serveur, pas un défaut
+technique : `Config.Screenshots.notifierJoueur` dans `resource/config.lua`.
+Certains règlements l'imposent ; d'autres perdraient tout intérêt à la capture
+en prévenant. À vous de trancher, et de l'écrire dans votre règlement.
+
+Les images vivent sur le **disque** (`api/data/screens/`), pas dans la base :
+une image en base64 dans SQLite gonfle chaque sauvegarde et chaque requête qui
+la survole. Elles suivent la **rétention** de leur espace, et le fichier part
+avec la ligne — sinon on garderait soit des images que rien ne référence, soit
+des vignettes qui ne s'ouvrent plus. `SCREEN_DAYS` fixe une rétention à part,
+`MAX_SCREEN_MB` le plafond par image (6 Mo par défaut).
+
+---
+
+## Revérification automatique des accès
+
+Un membre du staff qui perd son rôle Discord perd son accès au panneau, **sans
+que personne n'ait à y penser**.
+
+⚠️ **La vérification à la connexion ne suffisait pas.** Elle ne part que
+lorsque la personne fait une requête : quelqu'un qui perd son rôle et n'ouvre
+plus le panneau gardait un compte actif indéfiniment — et une session valide
+sept jours durant, prête à servir. C'est exactement le cas qu'on veut fermer :
+celui de la personne qui part.
+
+Un **balayage** passe donc en revue tous les comptes venus de Discord, qu'ils
+se connectent ou non, toutes les `ACCESS_SWEEP_MIN` minutes (30 par défaut),
+plus une fois au démarrage. Pour chacun il redemande à Discord : es-tu encore
+sur le serveur, as-tu encore le rôle staff, quels rôles du panneau te
+reviennent ? Un compte qui échoue est **désactivé et ses sessions fermées**.
+
+⚠️ **Discord injoignable ne retire rien.** Confondre « le bot n'a pas
+répondu » avec « cette personne n'est plus staff » couperait toute l'équipe à
+la première panne réseau. Ces comptes sont comptés à part, et la supervision
+les signale.
+
+⚠️ **Rendre le rôle ne réactive pas le compte.** Rendre un accès est une
+décision, pas une conséquence : sinon un rôle repris par erreur rouvrirait la
+porte sans que personne ne l'ait voulu. La réactivation se fait à la main,
+depuis « Gérer l'équipe ».
+
+⚠️ **Les rôles posés à la main ne sont pas défaits** par le balayage : ce sont
+des décisions de fondateur, et elles tiennent.
+
+L'état se lit dans la **supervision** — dernier passage, comptes vérifiés,
+accès retirés, comptes invérifiables — et « Vérifier » signale un balayage à
+l'arrêt. `ACCESS_SWEEP_MIN=0` le désactive, et le contrôle le dit alors en
+rouge : sans lui, un staff qui perd son rôle garde son accès.
+
+---
+
 ## Rôles et permissions
 
 **14 rôles de départ**, et rien n'est figé : un fondateur les renomme, change
@@ -250,8 +352,8 @@ accès**, en crée de nouveaux, et relie chacun à un rôle Discord (écran
 
 | Rang | Rôle | Fait | Voit |
 |---|---|---|---|
-| 100 | **Fondateur** | tout, y compris la liaison Discord, les rôles et les comptes | 17 rubriques |
-| 90 | **Administrateur** | tout sauf la liaison Discord et la composition des rôles | 17 |
+| 100 | **Fondateur** | tout, y compris la liaison Discord, les rôles, les comptes et **l'export** | 17 rubriques |
+| 90 | **Administrateur** | tout sauf la liaison Discord, la composition des rôles et l'export | 17 |
 | 80 | **Développeur** | lecture et journal du panneau | 17 |
 | 70 | **Gérant Brigade Anti-Cheat** | avertir, expulser, bannir, lever, identifiants | 10 |
 | 65 | **Responsable Remboursement** | rendre un bien, avertir, identifiants | 12 |
@@ -264,6 +366,14 @@ accès**, en crée de nouveaux, et relie chacun à un rôle Discord (écran
 | 30 | **Helper** | avertir | 4 |
 | 25 | **Animateur** | lecture | 7 |
 | 25 | **Communication** | lecture | 4 |
+
+⚠️ **L'export CSV est réservé au Fondateur.** Lire un journal à l'écran et en
+sortir une copie qui vit ensuite hors du panneau sont deux gestes différents :
+le second emporte des identifiants, des adresses et des montants dans un
+fichier que plus personne ne trace. Le droit `logs.export` a donc quitté le
+socle de lecture — il reste un droit comme un autre, que le Fondateur peut
+accorder à un rôle depuis « Rôles & accès ». Le bouton **Exporter** est
+absent, pas inerte, pour qui ne l'a pas : un bouton qui refuse n'apprend rien.
 
 ### Le rang, et qui peut quoi
 
@@ -403,13 +513,18 @@ Deux niveaux, et ils ne répondent pas à la même question.
 le bot est-il encore sur ce serveur Discord, le serveur de jeu écrit-il
 toujours, les sanctions partent-elles. C'est le contrôle du jour.
 
-**`npm test`** teste **le code** : 82 contrôles HTTP sur l'API — ingestion,
+**`npm test`** teste **le code** : 124 contrôles HTTP sur l'API — ingestion,
 cloisonnement des espaces, rôles et rangs, permissions refusées, parcours
-Discord complet (avec un faux Discord local, aucun réseau).
+Discord complet, captures d'écran de bout en bout et **retrait automatique
+d'un accès** (avec un faux Discord local, aucun réseau).
+
+Ce dernier est celui qui compte : le faux Discord retire pour de vrai le rôle
+staff d'un compte, sans qu'il se reconnecte, et la suite exige que son accès
+tombe. Vérifier que la route répond n'aurait rien prouvé.
 
 ```bash
 cd api
-npm test              # les trois suites
+npm test              # les quatre suites
 npm test discord      # une seule
 ```
 

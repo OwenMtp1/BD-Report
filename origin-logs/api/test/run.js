@@ -33,8 +33,14 @@ const SUITES = [
     comptes: [['Nyx', 'fondateur', 'motdepassetest123'], ['Kaleb', 'moderateur', 'motdepassetest456']] },
   { nom: 'espaces', fichier: 'espaces.test.mjs', port: 8902, discord: true,
     comptes: [['Owen', 'fondateur', 'motdepasseowen123', { plateforme: true }]] },
+  // « Sup » administre la plateforme : c'est lui qui déclenche le balayage
+  // des accès à la fin de la suite. Nyx reste un fondateur ordinaire —
+  // c'est avec lui qu'on vérifie la liaison, depuis DANS l'espace.
   { nom: 'discord', fichier: 'discord.test.mjs', port: 8903, discord: true,
-    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] }
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123'],
+              ['Sup', 'fondateur', 'motdepassesup12345', { plateforme: true }]] },
+  { nom: 'captures', fichier: 'captures.test.mjs', port: 8904, discord: true,
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123', { plateforme: true }]] }
 ];
 
 const filtre = process.argv.slice(2).filter(a => !a.startsWith('-'));
@@ -95,7 +101,9 @@ function lancer(cmd, args, env, silencieux) {
     const env = {
       PORT: String(s.port), SERVER_KEY: CLE, DB_FILE: fichierDb,
       PANEL_DIR: path.join(RACINE, '..'),
+      SCREEN_DIR: path.join(TRAVAIL, s.nom + '-screens'),
       ...(s.discord ? {
+        FAUX_DISCORD: 'http://127.0.0.1:' + FAUX_PORT,
         DISCORD_SITE: 'http://127.0.0.1:' + FAUX_PORT,
         DISCORD_API_BASE: 'http://127.0.0.1:' + FAUX_PORT + '/api/v10',
         DISCORD_CLIENT_SECRET: 'secret-de-test',

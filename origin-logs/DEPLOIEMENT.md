@@ -212,6 +212,56 @@ Passez ensuite `SECURE_COOKIE=1` et redémarrez le service.
 
 ---
 
+## 2 bis. Les captures d'écran (facultatif)
+
+La rubrique « Écran du joueur » peut récupérer l'image de l'écran d'un joueur
+sur demande du staff. Elle s'appuie sur la ressource officielle
+**screenshot-basic** :
+
+```bash
+cd resources
+git clone https://github.com/citizenfx/screenshot-basic
+```
+
+Puis dans `server.cfg`, **avant** `origin_logs` :
+
+```
+ensure screenshot-basic
+ensure origin_logs
+```
+
+Réglages dans `resource/config.lua` → `Config.Screenshots` : format (`jpg` ou
+`png`), qualité, plafond, et surtout `notifierJoueur` — prévenir ou non est un
+choix de serveur, pas un défaut technique.
+
+Côté API : `SCREEN_DIR` (dossier des images, `api/data/screens` par défaut),
+`MAX_SCREEN_MB` (6) et `SCREEN_DAYS` (0 = même rétention que les journaux).
+Le dossier grossit vite si les captures sont fréquentes : `du -sh api/data/screens`
+le dit, et baisser `quality` à 0,5 divise le poids sans rendre l'image
+inutilisable.
+
+Sans screenshot-basic, rien d'autre ne change : la demande échoue avec un
+message qui nomme la ressource à installer.
+
+---
+
+## 2 ter. Le retrait automatique des accès
+
+Rien à installer : dès que la liaison Discord est en place, l'API revérifie
+**tous** les comptes venus de Discord toutes les 30 minutes, et au démarrage.
+Celui qui a perdu son rôle staff est désactivé et ses sessions fermées, même
+s'il ne s'est pas reconnecté depuis.
+
+```
+ACCESS_SWEEP_MIN=30     # dans api/.env — 0 désactive (déconseillé)
+```
+
+L'état se lit dans **Supervision**, et le bouton **Vérifier** le signale s'il
+est à l'arrêt. Une panne de Discord ne retire l'accès de personne : ces
+comptes sont comptés à part.
+
+---
+
 ## 3. La ressource FiveM
 
 ```bash
@@ -298,6 +348,14 @@ préférez :
 sqlite3 /srv/origin-logs/api/data/origin-logs.db ".backup '/sauvegardes/logs-$(date +%F).db'"
 ```
 
+⚠️ **Les captures d'écran ne sont PAS dans ce fichier** : elles vivent à côté,
+dans `api/data/screens/`. Sauvegarder la base seule laisserait des lignes qui
+désignent des images disparues.
+
+```bash
+tar czf /sauvegardes/screens-$(date +%F).tgz -C /srv/origin-logs/api/data screens
+```
+
 ---
 
 ## Si quelque chose ne marche pas
@@ -315,4 +373,7 @@ sqlite3 /srv/origin-logs/api/data/origin-logs.db ".backup '/sauvegardes/logs-$(d
 | Le direct arrive par paquets | `proxy_buffering off;` manque côté Nginx. |
 | Déconnexion à chaque rechargement | `SECURE_COOKIE=1` sans HTTPS, ou l'inverse. |
 | Les sanctions ne partent pas | Vérifiez que la ressource tourne : elle vient chercher les tâches toutes les 5 s. |
+| « ressource screenshot-basic absente » | `ensure screenshot-basic` manque dans `server.cfg`, avant `origin_logs`. |
+| Une capture reste « en attente » | Le joueur s'est déconnecté entre la demande et la prise, ou son client n'a pas répondu. |
+| Un ancien staff se connecte encore | Le balayage tourne toutes les 30 min : lancez-le à la main depuis Supervision. |
 | Un espace semble en panne sans qu'on sache pourquoi | **Supervision → Vérifier** : le contrôle nomme la cause et le remède. |
