@@ -13,13 +13,21 @@ sect('Cloisonnement des espaces');
 let r=await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pseudo:'Owen',password:'motdepasseowen123'})});
 ck=(r.headers.get('set-cookie')||'').split(';')[0];
 const me0=await r.json();
-t('fondateur connecté, marqué plateforme', me0.staff.plateforme===true && me0.espace.id===1, me0.espace?.nom);
+// L'administration de plateforme se connecte HORS de tout espace : c'est
+// la règle, et le premier contrôle de cette suite.
+t('administration connectée, sans aucun espace', me0.plateforme===true && me0.espace===null, String(me0.espace));
+const horsEspace=await J('/api/events?limit=5');
+t('les routes d’espace refusent tant qu’on n’est entré nulle part', horsEspace.status===409, horsEspace.body?.error);
+const entre=await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:1})});
+t('entrer dans un espace est un geste', entre.body.ok===true, entre.body.espace);
+const me1=await J('/api/auth/me');
+t('la visite est signalée dès le premier espace', me1.body.espace.id===1 && me1.body.espace.visite===true, me1.body.espace.nom);
 
-await ing([{cat:'chat',sev:'info',actor:{key:'license:aaa',name:'Joueur A',sid:1},msg:'Message dans espace 1'}]);
+await ing([{cat:'connexions',sev:'info',actor:{key:'license:aaa',name:'Joueur A',sid:1},msg:'Message dans espace 1'}]);
 const sp2=await J('/api/platform/spaces',{method:'POST',body:JSON.stringify({nom:'Espace deux',guildId:'555000111',staffRoleId:'900001',retention:7})});
 t('espace créé avec sa propre clé', sp2.body.ok===true && !!sp2.body.cle && sp2.body.cle!==KEY);
 const K2=sp2.body.cle, ID2=sp2.body.id;
-await ing([{cat:'chat',sev:'info',actor:{key:'license:bbb',name:'Joueur B',sid:2},msg:'Message dans espace 2'}],K2);
+await ing([{cat:'connexions',sev:'info',actor:{key:'license:bbb',name:'Joueur B',sid:2},msg:'Message dans espace 2'}],K2);
 
 const ev1=await J('/api/events?limit=50');
 t('espace 1 ne voit que ses évènements', ev1.body.events.every(e=>/espace 1/.test(e.msg)||!/espace 2/.test(e.msg)) && ev1.body.events.some(e=>/espace 1/.test(e.msg)), ev1.body.total+' évènements');
@@ -34,8 +42,16 @@ const me2=await J('/api/auth/me');
 t('la visite est signalée', me2.body.espace.visite===true && me2.body.espace.id===ID2, me2.body.espace.nom);
 await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:1})});
 
+sect('Ressortir d’un espace');
+await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:0})});
+const meS=await J('/api/auth/me');
+t('on ressort d’un espace', meS.body.espace===null, String(meS.body.espace));
+const apresSortie=await J('/api/events?limit=5');
+t('et les routes d’espace redeviennent sans objet', apresSortie.status===409, apresSortie.body?.error);
+await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:1})});
+
 sect('Clé d’ingestion');
-const mauvaiseCle=await ing([{cat:'chat',sev:'info',msg:'x'}],'cle-inventee-xxxxxxxxxxxxxx');
+const mauvaiseCle=await ing([{cat:'connexions',sev:'info',msg:'x'}],'cle-inventee-xxxxxxxxxxxxxx');
 t('clé inconnue refusée', mauvaiseCle.status===401);
 
 sect('Rôles : création et composition (fondateur non-plateforme)');
@@ -45,14 +61,14 @@ const ckAdmin=await (async()=>{const x=await fetch(B+'/api/auth/login',{method:'
   body:JSON.stringify({pseudo:'Fondat2',password:'motdepassefond456'})});return (x.headers.get('set-cookie')||'').split(';')[0];})();
 const rr=await J('/api/roles');
 t('14 rôles d’origine semés', rr.body.roles.length===14, rr.body.roles.map(x=>x.label).slice(0,3).join(', ')+'…');
-t('rangs et rubriques présents', rr.body.roles[0].rank===100 && rr.body.roles[0].cats.length===19);
-const cree=await J('/api/roles',{method:'POST',body:JSON.stringify({label:'Responsable Whitelist',rank:55,discordRoleId:'900055',perms:['logs.view','players.view'],cats:['whitelist','staff']})});
+t('rangs et rubriques présents', rr.body.roles[0].rank===100 && rr.body.roles[0].cats.length===17);
+const cree=await J('/api/roles',{method:'POST',body:JSON.stringify({label:'Responsable Boutique',rank:55,discordRoleId:'900055',perms:['logs.view','players.view'],cats:['boutique_caisse','boutique_produits']})});
 t('rôle personnalisé créé', cree.body.ok===true, cree.body.key);
 const trop=await J('/api/roles',{method:'POST',body:JSON.stringify({label:'Au-dessus',rank:200})},ckAdmin);
 t('administrateur : rôle au-dessus du sien refusé', trop.status===403, trop.body.error);
 const tropF=await J('/api/roles',{method:'POST',body:JSON.stringify({label:'Au-dessus',rank:200})});
 t('administrateur de plateforme : non borné (voulu)', tropF.body.ok===true);
-const maj=await J('/api/roles/'+cree.body.key,{method:'PATCH',body:JSON.stringify({cats:['whitelist','staff','connexions'],perms:['logs.view','players.view','actions.warn']})});
+const maj=await J('/api/roles/'+cree.body.key,{method:'PATCH',body:JSON.stringify({cats:['boutique_caisse','boutique_produits','connexions'],perms:['logs.view','players.view','actions.warn']})});
 t('rubriques et droits modifiables', maj.body.ok===true);
 const apres=(await J('/api/roles')).body.roles.find(x=>x.key===cree.body.key);
 t('modification persistée', apres.cats.length===3 && apres.perms.includes('actions.warn'), apres.cats.join(','));
@@ -82,13 +98,35 @@ const ferme=await J('/api/platform/spaces/'+ID2,{method:'PATCH',body:JSON.string
 t('espace fermé', ferme.body.ok===true);
 const listeF=await J('/api/platform/spaces');
 t('état « fermé » visible', listeF.body.spaces.find(x=>x.id===ID2).etat==='ferme');
-const ingFerme=await ing([{cat:'chat',sev:'info',msg:'après fermeture'}],K2);
+const ingFerme=await ing([{cat:'connexions',sev:'info',msg:'après fermeture'}],K2);
 t('un espace fermé n’accepte plus de logs', ingFerme.status===401, 'HTTP '+ingFerme.status);
 await J('/api/platform/spaces/'+ID2,{method:'PATCH',body:JSON.stringify({etat:'actif'})});
 const proprioNon=await J('/api/platform/spaces/'+ID2,{method:'PATCH',body:JSON.stringify({proprietaire:1})});
 t('propriétaire hors de l’espace refusé', proprioNon.status===409, proprioNon.body.error);
 const supNom=await J('/api/platform/spaces/'+ID2+'?confirme=mauvais',{method:'DELETE'});
 t('suppression sans le bon nom refusée', supNom.status===400);
+
+sect('En visite, l’administration passe avant le fondateur');
+// On crée un fondateur DANS l'espace visité, puis on vérifie que
+// l'administration de plateforme reste au-dessus de lui — sinon entrer
+// dans un espace reviendrait à s'y soumettre.
+await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:ID2})});
+const fondLocal=await J('/api/staff',{method:'POST',body:JSON.stringify({pseudo:'FondLocal',password:'motdepasselocal789',role:'fondateur'})});
+t('fondateur créé dans l’espace visité', fondLocal.body.ok===true || !!fondLocal.body.staff, fondLocal.body.error||'');
+const moiIci=await J('/api/auth/me');
+t('toutes les rubriques, même en visite', moiIci.body.cats.length===17, moiIci.body.cats.length+' rubriques');
+t('tous les droits, même en visite', moiIci.body.perms.length>=14, moiIci.body.perms.length+' droits');
+const eqIci=await J('/api/staff');
+const cible=eqIci.body.staff.find(x=>x.pseudo==='FondLocal');
+const retro=await J('/api/staff/'+cible.id,{method:'PATCH',body:JSON.stringify({roles:['moderateur']})});
+t('elle peut rétrograder un fondateur de cet espace', retro.body.ok===true, retro.body.error||'');
+// Les rôles appartiennent à l'espace : on en crée un ICI pour vérifier
+// qu'on peut le composer et le retirer sans être membre de cet espace.
+const roleIci=await J('/api/roles',{method:'POST',body:JSON.stringify({label:'Régie Boutique',rank:70,perms:['logs.view'],cats:['boutique_caisse']})});
+t('elle crée un rôle dans l’espace visité', roleIci.body.ok===true, roleIci.body.key||roleIci.body.error);
+const supRole=await J('/api/roles/'+roleIci.body.key,{method:'DELETE'});
+t('et le retire', supRole.status===200, 'HTTP '+supRole.status);
+await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:1})});
 
 sect('Permissions : ce qu’un modérateur ne peut pas');
 let rm=await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pseudo:'Kaleb',password:'motdepassetest456'})});

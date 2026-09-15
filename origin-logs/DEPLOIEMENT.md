@@ -86,10 +86,15 @@ node staff.js platform VotrePseudo on
 node staff.js spaces      # liste les espaces et leur clé d'ingestion
 ```
 
-Ce compte-là n'arrive plus sur un flux d'évènements : il ouvre la
-**supervision**, qui montre l'état de tous les espaces à la fois. Le rail
-gagne deux entrées — *Supervision* et *Journal d'administration* — et le
+Ce compte-là n'a plus d'espace du tout à la connexion : il ouvre la
+**supervision**, qui montre l'état de tous les espaces à la fois. Le rail se
+limite à deux entrées — *Supervision* et *Journal d'administration* — et le
 bouton **Espaces de logs** apparaît dans la colonne de gauche.
+
+Pour modérer un serveur précis, il faut y **entrer** (bouton *Entrer* sur sa
+carte) ; la barre affiche alors « visite — nom de l'espace · sortir », et un
+clic dessus ressort. En visite, ce compte garde tous ses droits : il passe
+avant le fondateur de l'espace visité.
 
 ### Vérifier l'installation d'un seul clic
 

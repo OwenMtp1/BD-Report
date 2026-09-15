@@ -15,8 +15,8 @@ const evs=[
  {ts:now-3600e3,cat:'connexions',sev:'info',actor:{key:'license:aaa',name:'Luca Moreau',sid:42,discord:'discord:123',steam:'steam:11000010abc'},msg:'Luca Moreau a rejoint le serveur',data:{kind:'join',ping:'48 ms'},res:'origin_core'},
  {ts:now-1800e3,cat:'anticheat',sev:'critique',actor:{key:'license:bbb',name:'Rayan Reyes',sid:88},msg:'Injection de ressource détectée — Rayan Reyes',data:{detection:'resource_injection',ressource:'eulen'},res:'origin_guard'},
  {ts:now-900e3,cat:'admin',sev:'notice',actor:{key:'license:staff1',name:'Nyx',staff:true},msg:'Nyx a activé le noclip',data:{kind:'noclip'},res:'txAdmin'},
- {ts:now-600e3,cat:'economie',sev:'info',actor:{key:'license:aaa',name:'Luca Moreau',sid:42},target:{key:'license:bbb',name:'Rayan Reyes'},msg:'Luca Moreau a viré 12 400 $ à Rayan Reyes',data:{montant:12400},res:'origin_banking'},
- {cat:'nimporte',sev:'nimporte',actor:{name:'X'},msg:'catégorie inconnue repliée sur systeme'}
+ {ts:now-600e3,cat:'inventaire',sev:'info',actor:{key:'license:aaa',name:'Luca Moreau',sid:42},target:{key:'license:bbb',name:'Rayan Reyes'},msg:'Luca Moreau a viré 12 400 $ à Rayan Reyes',data:{montant:12400},res:'origin_banking'},
+ {cat:'nimporte',sev:'nimporte',actor:{name:'X'},msg:'catégorie inconnue repliée sur la rubrique de repli'}
 ];
 const ing=await j(await fetch(B+'/api/ingest',{method:'POST',headers:{'content-type':'application/json','x-origin-key':KEY},body:JSON.stringify({server:'origin-1',events:evs})}));
 t('ingestion du lot', ing.body?.recus===5, JSON.stringify(ing.body));
@@ -31,7 +31,7 @@ t('mot de passe refusé', (await call('/api/auth/login',{method:'POST',body:JSON
 let r=await call('/api/auth/login',{method:'POST',body:JSON.stringify({pseudo:'Nyx',password:'motdepassetest123'})});
 cookie=(r.headers.get('set-cookie')||'').split(';')[0];
 const meF=await r.json();
-t('connexion fondateur', r.status===200 && meF.staff.role==='fondateur' && meF.cats.length===19, meF.cats?.length+' catégories');
+t('connexion fondateur', r.status===200 && meF.staff.role==='fondateur' && meF.cats.length===17, meF.cats?.length+' catégories');
 
 // 6. requêtes
 let ev=(await(await call('/api/events?limit=50')).json());
@@ -75,7 +75,7 @@ const cookieF=cookie;
 r=await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pseudo:'Kaleb',password:'motdepassetest456'})});
 cookie=(r.headers.get('set-cookie')||'').split(';')[0];
 const meM=await r.json();
-t('connexion modérateur', meM.staff.role==='moderateur' && meM.cats.length===16);
+t('connexion modérateur', meM.staff.role==='moderateur' && meM.cats.length===13);
 const evM=await(await call('/api/events?limit=50')).json();
 t('le modérateur ne voit pas les logs admin', !evM.events.some(e=>e.cat==='admin'), evM.total+' évènements sur 6');
 const forced=await(await call('/api/events?cat=admin')).json();

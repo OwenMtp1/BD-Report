@@ -26,12 +26,18 @@ Config.QueueMax  = 3000      -- file de secours si l'API est injoignable
 -- Catégories émises. Couper une catégorie ici arrête l'émission à la
 -- source : c'est plus efficace que de la masquer dans le panneau.
 Config.Categories = {
-  bans = true,
-  connexions = true, chat = true, combat = true, economie = true,
-  inventaire = true, vehicules = true, jobs = true, proprietes = true,
-  braquages = true, drogue = true, organisations = true, craft = true,
-  admin = true, anticheat = true, sanctions = true, staff = true,
-  whitelist = true, systeme = true
+  -- Modération
+  bans = true, sanctions = true, anticheat = true,
+  -- Joueurs
+  connexions = true, deconnexion = true, ecran_joueur = true, combat = true,
+  -- Argent & biens          (combat = morts de joueurs ; inventaire = transactions et coffres)
+  inventaire = true, items_sol = true, proprietes = true,
+  -- Boutique
+  boutique_caisse = true, boutique_monnaie = true, boutique_produits = true,
+  -- Activités RP
+  jobs = true, casino = true, facture_ems = true,
+  -- Staff
+  admin = true
 }
 
 -- Refuser la connexion d'un joueur banni depuis le panneau.

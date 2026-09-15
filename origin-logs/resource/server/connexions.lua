@@ -83,7 +83,7 @@ AddEventHandler('playerDropped', function(reason)
   sessions[src] = nil
   if not p then return end
   Origin.Log({
-    cat = 'connexions', sev = 'info', actor = p,
+    cat = 'deconnexion', sev = 'info', actor = p,
     msg = ('%s s\'est déconnecté'):format(p.name),
     data = { kind = 'leave', raison = reason, serverId = src,
              session = debut and (math.floor((os.time() - debut) / 60) .. ' min') or 'inconnue' },

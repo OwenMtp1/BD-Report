@@ -2,22 +2,12 @@
 -- Évènements de jeu couverts nativement, sans framework
 -- ============================================================
 
--- Chat de proximité / global. Les commandes (/me, /do) ne passent PAS
--- par ici : elles appartiennent à votre ressource de chat, qui peut
--- les journaliser via exports['origin_logs']:Log{...}.
-AddEventHandler('chatMessage', function(src, name, message)
-  local p = Framework.GetPlayer(src)
-  if not p then return end
-  local ped = GetPlayerPed(src)
-  local c = ped and GetEntityCoords(ped) or nil
-  Origin.Log({
-    cat = 'chat', sev = 'info', actor = p,
-    msg = ('%s : « %s »'):format(p.name, message),
-    data = { kind = 'chat', texte = message,
-             position = c and ('vector3(%.2f, %.2f, %.2f)'):format(c.x, c.y, c.z) or nil },
-    res = 'origin_chat'
-  })
-end)
+-- ⚠️ LE CHAT N'EST PLUS JOURNALISÉ : il ne fait pas partie des rubriques
+-- retenues par le serveur. Le bloc qui écoutait `chatMessage` a été retiré
+-- plutôt que laissé à tourner vers une rubrique inexistante — écrire des
+-- lignes que personne ne peut lire coûte de la base pour rien.
+-- Pour le remettre un jour : une rubrique dans api/catalogue.js, puis un
+-- handler qui appelle exports['origin_logs']:Log{...}.
 
 -- baseevents publie les morts et les éliminations. S'il n'est pas démarré,
 -- on le dit une fois au lieu de laisser une catégorie vide sans explication.
@@ -25,7 +15,7 @@ CreateThread(function()
   Wait(3000)
   if GetResourceState('baseevents') ~= 'started' then
     print('[origin_logs] baseevents n\'est pas démarré : les morts et éliminations ne seront pas journalisées.')
-    Origin.Notice('systeme', 'baseevents inactif — combats non journalisés',
+    Origin.Notice('admin', 'baseevents inactif — morts de joueurs non journalisées',
       { kind = 'config', remede = 'ensure baseevents dans server.cfg' })
   end
 end)
@@ -51,7 +41,7 @@ RegisterNetEvent('baseevents:onPlayerKilled', function(tueur, donnees)
   if k then
     Origin.Log({
       cat = 'combat', sev = 'notice', actor = k, target = p,
-      msg = ('%s a éliminé %s'):format(k.name, p.name),
+      msg = ('%s est mort — tué par %s'):format(p.name, k.name),
       data = { kind = 'kill', arme = arme, distance = dist and (('%.0f m'):format(dist)) or nil,
                victime = p.name },
       res = 'origin_medical'
@@ -77,7 +67,9 @@ RegisterNetEvent('origin_logs:tir', function()
     if #(c - z.coords) <= z.rayon then
       local p = Framework.GetPlayer(src)
       if p then
-        Origin.Alerte('combat', ('Tir en zone protégée — %s'):format(p.name),
+        -- Une détection automatique, pas une mort : elle va avec l'anticheat,
+        -- là où le staff va chercher ce que le serveur a repéré tout seul.
+        Origin.Alerte('anticheat', ('Tir en zone protégée — %s'):format(p.name),
           { kind = 'safezone', zone = z.nom,
             position = ('vector3(%.2f, %.2f, %.2f)'):format(c.x, c.y, c.z) }, p)
       end
@@ -90,7 +82,7 @@ end)
 -- console du serveur dépose un évènement dans chaque catégorie active.
 RegisterCommand('origin_logs_test', function(src)
   if src ~= 0 then return end   -- console uniquement
-  Origin.Notice('systeme', 'Test de journalisation déclenché depuis la console',
+  Origin.Notice('admin', 'Test de journalisation déclenché depuis la console',
     { kind = 'test', api = Config.ApiUrl, serveur = Config.ServerName })
-  print('[origin_logs] évènement de test envoyé — il doit apparaître dans le panneau sous « Serveur ».')
+  print('[origin_logs] évènement de test envoyé — il doit apparaître dans le panneau sous « Action staff ».')
 end, true)

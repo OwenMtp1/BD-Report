@@ -44,7 +44,7 @@ end)
 --- @param o table {cat, sev, actor (src ou table), target (src ou table), msg, data, res}
 function Origin.Log(o)
   if not o or not o.msg then return end
-  local cat = o.cat or 'systeme'
+  local cat = o.cat or 'admin'   -- rubrique de repli : cf. CAT_FALLBACK côté API
   if Config.Categories[cat] == false then return end
 
   local acteur = o.actor
@@ -68,7 +68,7 @@ function Origin.Alerte(cat, msg, data, actor, target) Origin.Log({cat=cat,sev='a
 function Origin.Critique(cat,msg, data, actor, target)Origin.Log({cat=cat,sev='critique',msg=msg,data=data,actor=actor,target=target}) end
 
 -- Export pour vos autres ressources :
---   exports['origin_logs']:Log({ cat='braquages', sev='alerte', actor=source,
+--   exports['origin_logs']:Log({ cat='casino', sev='alerte', actor=source,
 --     msg=('%s a lancé le braquage de la Fleeca'):format(GetPlayerName(source)),
 --     data={ kind='start', banque='Fleeca Legion' } })
 exports('Log', function(o) Origin.Log(o) end)

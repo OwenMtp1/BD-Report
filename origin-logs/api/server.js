@@ -170,13 +170,23 @@ function whoami(req) {
   if (!roles.length) roles = [CAT.canon(r.role)];
 
   const platform = !!r.platform_admin;
-  // Un administrateur de plateforme peut visiter un autre espace ; sa
-  // visite ne change pas l'espace de son compte.
-  const spaceId = Number(r.visite || r.space_id || 1);
-  const esp = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(spaceId));
+  // ⚠️ L'ADMINISTRATION DE PLATEFORME N'A AUCUN ESPACE PAR DÉFAUT.
+  // Elle surveille des espaces, elle n'en habite aucun : le compte a beau
+  // être né dans l'espace 1, s'y trouver « déjà » à la connexion lui ferait
+  // lire un flux de modération qui n'est pas son travail, et modérer un
+  // serveur client sans l'avoir décidé. Son espace courant est donc
+  // EXACTEMENT celui qu'elle a demandé (la visite), et rien sinon.
+  // Pour tous les autres, l'espace du compte reste l'espace courant.
+  const spaceId = r.visite ? Number(r.visite) : (platform ? null : Number(r.space_id || 1));
+  const esp = spaceId ? DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(spaceId)) : null;
   if (r.source === 'discord' && !manuels.length) refreshRolesSoon(r);
 
-  const res = ROLESVC.resolve(db, spaceId, roles);
+  // Hors espace, les rôles de l'espace 1 ne veulent rien dire : on résout
+  // sur l'espace courant quand il y en a un, et on s'en passe sinon —
+  // l'administration de plateforme tient ses droits de son statut, pas
+  // d'un rôle emprunté à un client.
+  const res = spaceId ? ROLESVC.resolve(db, spaceId, roles)
+                      : { keys: [], labels: [], perms: [], cats: [], rank: 0, main: null };
   // Le PROPRIÉTAIRE de l'espace peut attribuer jusqu'à son propre rang :
   // sans cela, un fondateur ne pourrait jamais en nommer un second, et
   // l'espace resterait suspendu à une seule personne.
@@ -190,8 +200,11 @@ function whoami(req) {
            rank: platform ? 1000 : res.rank,
            manual: manuels.length > 0, platform, owner: proprio,
            plafond: platform ? 10000 : (res.rank + (proprio ? 1 : 0)),
-           spaceId, space: esp, visiting: !!r.visite && Number(r.visite) !== Number(r.space_id),
-           homeSpaceId: Number(r.space_id || 1),
+           spaceId, space: esp,
+           // Un administrateur de plateforme est TOUJOURS en visite : il
+           // n'a pas d'espace à lui, seulement celui où il est entré.
+           visiting: platform ? !!r.visite : (!!r.visite && Number(r.visite) !== Number(r.space_id)),
+           homeSpaceId: platform ? null : Number(r.space_id || 1),
            source: r.source, discordId: r.discord_id, perms, cats };
 }
 function parseRoles(j) {
@@ -217,7 +230,7 @@ function refreshRolesSoon(r) {
     if (!v.ok) {
       db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(r.id);
       db.prepare('UPDATE staff SET disabled = 1 WHERE id = ?').run(r.id);
-      audit(null, 'discord.revocation', `${r.pseudo} — ${v.raison}`, null);
+      audit(null, 'discord.revocation', `${r.pseudo} — ${v.raison}`, null, Number(r.space_id || 1));
       console.log(`[discord] ${r.pseudo} a perdu son accès (${v.raison}) — sessions fermées`);
       return;
     }
@@ -225,16 +238,20 @@ function refreshRolesSoon(r) {
     const apres = JSON.stringify(v.roles);
     if (avant !== apres) {
       db.prepare('UPDATE staff SET roles = ?, role = ? WHERE id = ?').run(apres, v.roles[0], r.id);
-      audit(null, 'discord.roles', `${r.pseudo} → ${v.roles.join(', ')}`, null);
+      audit(null, 'discord.roles', `${r.pseudo} → ${v.roles.join(', ')}`, null, Number(r.space_id || 1));
     }
   }).catch(e => console.error('[discord] revérification impossible :', e.message))
     .finally(() => enVol.delete(r.id));
 }
 const iAudit = db.prepare('INSERT INTO audit(ts,staff_id,pseudo,action,detail,ip,space_id) VALUES(?,?,?,?,?,?,?)');
+// space_id = 0 : geste posé AU-DESSUS des espaces, par l'administration de
+// la plateforme hors de tout espace. Le rattacher d'office à l'espace 1
+// ferait lire « chez Origin Roleplay » une décision qui ne le concernait
+// pas. La colonne est NOT NULL depuis l'origine, d'où le 0 plutôt qu'un NULL.
 const audit = (me, action, detail, ip, spaceId) =>
   iAudit.run(now(), me ? me.id : null, me ? me.pseudo : null, action,
              detail ? String(detail).slice(0, 400) : null, ip || null,
-             Number(spaceId || (me && me.spaceId) || 1));
+             Number(spaceId != null ? spaceId : (me && me.spaceId) || 0));
 
 /* Le verdict s'appuie sur les rôles de CET espace : c'est la table
    `roles` qui porte les identifiants Discord, plus un fichier. */
@@ -284,8 +301,11 @@ function upsertDiscordStaff(user, v, spaceId) {
 }
 function ouvrirSession(res, compte, req) {
   const token = AUTH.newToken(), exp = now() + CFG.sessionDays * 86400000;
+  // La visite reste VIDE pour l'administration de plateforme : entrer dans
+  // un espace est un geste, y compris quand on arrive par Discord.
+  const visite = compte.platform_admin ? null : (compte.space_id || 1);
   db.prepare('INSERT INTO sessions(token,staff_id,created_at,expires_at,ua,space_id) VALUES(?,?,?,?,?,?)')
-    .run(token, compte.id, now(), exp, String(req.headers['user-agent'] || '').slice(0, 200), compte.space_id || 1);
+    .run(token, compte.id, now(), exp, String(req.headers['user-agent'] || '').slice(0, 200), visite);
   return AUTH.cookieHeader('origin_sid', token, { maxAge: CFG.sessionDays * 86400, secure: CFG.secure });
 }
 
@@ -324,7 +344,7 @@ const S = v => (v == null ? null : String(v));
 const N = v => (v == null || v === '' || isNaN(Number(v)) ? null : Number(v));
 
 function normalize(raw, server) {
-  const cat = CAT.CAT_IDS.includes(raw.cat) ? raw.cat : 'systeme';
+  const cat = CAT.canonCat(raw.cat);
   const sev = CAT.SEV_IDS.includes(raw.sev) ? raw.sev : 'info';
   let ts = N(raw.ts) || now();
   const max = now() + 5 * 60000, min = now() - 7 * 86400000;
@@ -826,7 +846,7 @@ async function route(req, res) {
     const row = DB.row(db.prepare('SELECT * FROM staff WHERE pseudo = ? COLLATE NOCASE').get(pseudo));
     if (!row || row.disabled || row.source === 'discord' || !AUTH.verify(String(b.password || ''), row.pass)) {
       AUTH.noteFail(ip);
-      audit(null, 'auth.echec', pseudo, ip);
+      audit(null, 'auth.echec', pseudo, ip, Number((row && row.space_id) || 1));
       return fail(res, 401, 'Pseudo ou mot de passe incorrect.');
     }
     AUTH.clearFails(ip);
@@ -834,19 +854,22 @@ async function route(req, res) {
     db.prepare('INSERT INTO sessions(token,staff_id,created_at,expires_at,ua) VALUES(?,?,?,?,?)')
       .run(token, row.id, now(), exp, String(req.headers['user-agent'] || '').slice(0, 200));
     db.prepare('UPDATE staff SET last_login=? WHERE id=?').run(now(), row.id);
-    audit({ id: row.id, pseudo: row.pseudo }, 'auth.connexion', null, ip);
+    audit({ id: row.id, pseudo: row.pseudo }, 'auth.connexion', null, ip, Number(row.space_id || 1));
     const manuels = parseRoles(row.manual_roles);
     const sesRoles = manuels.length ? manuels : (parseRoles(row.roles).length ? parseRoles(row.roles) : [CAT.canon(row.role)]);
+    const platform = !!row.platform_admin;
     const spId = Number(row.space_id || 1);
     const rr = ROLESVC.resolve(db, spId, sesRoles);
-    const esp = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(spId));
-    const platform = !!row.platform_admin;
+    // Même règle qu'à la reprise de session : l'administration de plateforme
+    // se connecte HORS de tout espace. La session naît donc sans visite.
+    const esp = platform ? null : DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(spId));
     return send(res, 200, {
       staff: { pseudo: row.pseudo, role: rr.main ? rr.main.key : sesRoles[0],
                roleLabel: rr.main ? rr.main.label : sesRoles[0],
                roles: rr.labels, source: row.source || 'local',
                manuel: manuels.length > 0, plateforme: platform },
       espace: esp ? { id: esp.id, nom: esp.name, etat: esp.state, visite: false, monEspace: esp.id } : null,
+      plateforme: platform,
       perms: platform ? CAT.PERM_IDS.slice() : rr.perms,
       cats: platform ? CAT.CATS.map(c => c.id) : rr.cats
     }, { 'set-cookie': AUTH.cookieHeader('origin_sid', token, { maxAge: CFG.sessionDays * 86400, secure: CFG.secure }) });
@@ -875,17 +898,27 @@ async function route(req, res) {
       perms: me.perms, cats: me.cats });
   }
   if (p === '/api/catalogue') {
+    // Hors espace, il n'y a pas de rôles à lister : ceux de l'espace 1 ne
+    // décrivent que l'espace 1.
     const sp = me ? me.spaceId : 1;
     return ok(res, {
       cats: CAT.CATS, sevs: CAT.SEVS, groups: CAT.GROUPS, perms: CAT.PERMS,
-      roles: ROLESVC.list(db, sp).map(r => ({ id: r.key, label: r.label, rank: r.rank,
-        desc: r.desc, perms: r.perms, cats: r.cats })),
+      roles: sp ? ROLESVC.list(db, sp).map(r => ({ id: r.key, label: r.label, rank: r.rank,
+        desc: r.desc, perms: r.perms, cats: r.cats })) : [],
       espace: me && me.space ? { id: me.space.id, nom: me.space.name, etat: me.space.state } : null,
       retention: (me && me.space && me.space.retention) || CFG.retention });
   }
 
   if (p.startsWith('/api/')) {
     if (!me) return fail(res, 401, 'Connexion requise.');
+    // ⚠️ SANS ESPACE COURANT, LES ROUTES D'ESPACE N'ONT PAS DE RÉPONSE.
+    // Un administrateur de plateforme qui n'est entré nulle part n'a ni
+    // flux, ni joueurs, ni registre : ce ne sont pas des données vides,
+    // c'est une question sans sujet. Se replier sur l'espace 1 aurait
+    // servi les journaux d'un client au hasard. Seules restent la
+    // supervision, l'identité et la déconnexion.
+    if (!me.spaceId && !p.startsWith('/api/platform') && !p.startsWith('/api/auth'))
+      return fail(res, 409, 'Entrez d’abord dans un espace de logs.');
     const need = perm => { if (!me.perms.includes(perm)) { fail(res, 403, 'Droit insuffisant.'); return false; } return true; };
 
     if (p === '/api/events' && method === 'GET') {
@@ -1620,6 +1653,15 @@ async function route(req, res) {
       if (p === '/api/platform/enter' && method === 'POST') {
         const b = await readBody(req);
         const sid = Number(b.spaceId) || 0;
+        // spaceId absent ou 0 = RESSORTIR. Entrer sans pouvoir ressortir
+        // aurait fait de la visite un aller simple : l'administration se
+        // serait retrouvée coincée dans le panneau d'un client jusqu'à la
+        // déconnexion, alors que son écran est la supervision.
+        if (!sid) {
+          db.prepare('UPDATE sessions SET space_id = NULL WHERE token = ?').run(me.token);
+          audit(me, 'plateforme.sortie', me.space ? me.space.name : null, ip, me.spaceId);
+          return ok(res, { ok: true, espace: null });
+        }
         const sp = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(sid));
         if (!sp) return fail(res, 404, 'Espace inconnu.');
         db.prepare('UPDATE sessions SET space_id = ? WHERE token = ?').run(sid, me.token);

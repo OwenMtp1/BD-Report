@@ -13,35 +13,37 @@ const GROUPS = [
   { id:'moderation', label:'Modération',      fam:'var(--f-surv)'  },
   { id:'joueurs',    label:'Joueurs',         fam:'var(--f-play)'  },
   { id:'biens',      label:'Argent & biens',  fam:'var(--f-bien)'  },
+  { id:'boutique',   label:'Boutique',        fam:'var(--f-shop)'  },
   { id:'rp',         label:'Activités RP',    fam:'var(--f-monde)' },
   { id:'serveur',    label:'Staff & serveur', fam:'var(--f-staff)' }
 ];
 
 const CATS = [
-  { id:'bans',         code:'BAN', label:'Bannissements',      group:'moderation', desc:'Bannissements prononcés, levés et refus de connexion.' },
-  { id:'sanctions',    code:'SNC', label:'Sanctions',          group:'moderation', desc:'Avertissements, expulsions et coupures de vocal.' },
-  { id:'anticheat',    code:'ACH', label:'Anticheat',          group:'moderation', desc:'Détections automatiques et évènements réseau suspects.' },
-  { id:'staff',        code:'RPT', label:'Reports & tickets',  group:'moderation', desc:'Signalements joueurs, prises en charge et clôtures.' },
+  { id:'bans',              code:'BAN', label:'Bannissement',              group:'moderation', desc:'Bannissements prononcés, levés et refus de connexion.' },
+  { id:'sanctions',         code:'AVT', label:'Avertissement',             group:'moderation', desc:'Avertissements, expulsions et rappels à l’ordre.' },
+  { id:'anticheat',         code:'ACH', label:'Anticheat',                 group:'moderation', desc:'Détections automatiques et évènements réseau suspects.' },
 
-  { id:'connexions',   code:'CNX', label:'Connexions',         group:'joueurs',    desc:'Arrivées, départs, file d’attente et refus de whitelist.' },
-  { id:'chat',         code:'CHT', label:'Chat & commandes',   group:'joueurs',    desc:'Proximité, OOC, /me, /do, Twitter et commandes joueur.' },
-  { id:'combat',       code:'CBT', label:'Combat & morts',     group:'joueurs',    desc:'Dégâts, éliminations, décès et réanimations EMS.' },
+  { id:'connexions',        code:'CNX', label:'Connexion',                 group:'joueurs',    desc:'Arrivées sur le serveur, file d’attente et refus.' },
+  { id:'deconnexion',       code:'DCX', label:'Déconnexion',               group:'joueurs',    desc:'Départs, crashs et coupures de connexion.' },
+  { id:'ecran_joueur',      code:'ECR', label:'Écran du joueur',           group:'joueurs',    desc:'Ce que le joueur a sous les yeux : menus, interactions, HUD.' },
+  { id:'combat',            code:'MRT', label:'Mort joueur',               group:'joueurs',    desc:'Décès, éliminations, réanimations EMS.' },
 
-  { id:'economie',     code:'ECO', label:'Économie',           group:'biens',      desc:'Liquide, banque, virements, salaires, factures et amendes.' },
-  { id:'inventaire',   code:'INV', label:'Inventaire',         group:'biens',      desc:'Échanges, sols, coffres, stockage et suppressions staff.' },
-  { id:'vehicules',    code:'VEH', label:'Véhicules',          group:'biens',      desc:'Garages, fourrière, concession, effractions et destructions.' },
-  { id:'craft',        code:'CRF', label:'Craft & armes',      group:'biens',      desc:'Établis, composants, armes et munitions fabriquées.' },
+  { id:'inventaire',        code:'TRX', label:'Transactions et coffres',   group:'biens',      desc:'Échanges entre joueurs, coffres, stockage et retraits.' },
+  { id:'items_sol',         code:'SOL', label:'Items au sol',              group:'biens',      desc:'Objets jetés, ramassés et disparus au sol.' },
+  { id:'proprietes',        code:'IMM', label:'Immobilier',                group:'biens',      desc:'Achats, ventes, loyers, clés partagées et coffres de logement.' },
 
-  { id:'jobs',         code:'JOB', label:'Jobs & entreprises', group:'rp',         desc:'Embauches, grades, prises de service et comptes société.' },
-  { id:'proprietes',   code:'IMM', label:'Propriétés',         group:'rp',         desc:'Achats, loyers, clés partagées et coffres de logement.' },
-  { id:'organisations',code:'ORG', label:'Organisations',      group:'rp',         desc:'Coffres d’orga, adhésions, grades, territoires et guerres.' },
-  { id:'braquages',    code:'BRQ', label:'Braquages',          group:'rp',         desc:'Fleeca, Pacific, bijouterie : départ, butin, issue.' },
-  { id:'drogue',       code:'DRG', label:'Drogue & labos',     group:'rp',         desc:'Champs, récolte, transformation, revente et saisies.' },
+  { id:'boutique_caisse',   code:'BQC', label:'Boutique : caisse',         group:'boutique',   desc:'Paiements encaissés, remboursements et échecs de transaction.' },
+  { id:'boutique_monnaie',  code:'BQM', label:'Boutique : monnaie et grades', group:'boutique', desc:'Monnaie de boutique créditée ou dépensée, grades accordés.' },
+  { id:'boutique_produits', code:'BQP', label:'Boutique : produits',       group:'boutique',   desc:'Produits livrés, stocks, prix et mises en vente.' },
 
-  { id:'admin',        code:'ADM', label:'Administration',     group:'serveur',    desc:'Actions staff en jeu : noclip, spawn, téléportation, revive.' },
-  { id:'whitelist',    code:'WLT', label:'Whitelist',          group:'serveur',    desc:'Candidatures Discord, entretiens, acceptations et refus.' },
-  { id:'systeme',      code:'SYS', label:'Serveur',            group:'serveur',    desc:'Redémarrages, erreurs de ressource, performance et sauvegardes.' }
+  { id:'jobs',              code:'ENT', label:'Entreprise et crew',        group:'rp',         desc:'Embauches, grades, prises de service, comptes société et crews.' },
+  { id:'casino',            code:'CAS', label:'Casino',                    group:'rp',         desc:'Mises, gains, pertes et jetons échangés.' },
+  { id:'facture_ems',       code:'EMS', label:'Facture EMS',               group:'rp',         desc:'Prises en charge médicales facturées et soins payés.' },
+
+  { id:'admin',             code:'STF', label:'Action staff',              group:'serveur',    desc:'Actions du staff en jeu : noclip, spawn, téléportation, revive, don.' }
 ];
+
+const CAT_IDS = CATS.map(c => c.id);
 
 const SEVS = [
   { id:'critique', label:'Critique',   c:'var(--crit)'  },
@@ -72,13 +74,8 @@ const PERM_IDS = PERMS.map(p => p.id);
 
 // Raccourcis de catégories, par groupe : un rôle se décrit par les
 // métiers qu'il couvre, pas par une liste de dix-neuf identifiants.
-const G = {
-  moderation: CATS.filter(c => c.group === 'moderation').map(c => c.id),
-  joueurs:    CATS.filter(c => c.group === 'joueurs').map(c => c.id),
-  biens:      CATS.filter(c => c.group === 'biens').map(c => c.id),
-  rp:         CATS.filter(c => c.group === 'rp').map(c => c.id),
-  serveur:    CATS.filter(c => c.group === 'serveur').map(c => c.id)
-};
+const G = Object.fromEntries(GROUPS.map(g =>
+  [g.id, CATS.filter(c => c.group === g.id).map(c => c.id)]));
 const P = {
   lire:    ['logs.view', 'logs.mark', 'logs.export', 'players.view'],
   moderer: ['actions.warn', 'actions.kick'],
@@ -119,31 +116,31 @@ const ROLES = {
   responsable_remboursement: {
     label:'Responsable Remboursement', rank:65,
     perms: u(P.lire, ['players.identifiers', 'actions.give', 'actions.warn']),
-    cats: u(G.biens, G.joueurs, ['staff', 'bans', 'sanctions']),
+    cats: u(G.biens, G.boutique, G.joueurs, ['bans', 'sanctions']),
     desc:'Instruit les demandes de remboursement et rend les biens perdus.'
   },
   gerant_legal: {
     label:'Gérant Légal', rank:60,
     perms: u(P.lire, ['actions.warn']),
-    cats: u(G.biens, G.rp, G.joueurs, ['staff']),
+    cats: u(G.biens, G.rp, G.joueurs),
     desc:'Suit les entreprises, les emplois et les propriétés.'
   },
   gerant_illegal: {
     label:'Gérant Illégal', rank:60,
     perms: u(P.lire, ['actions.warn']),
-    cats: u(G.rp, G.biens, G.joueurs, ['staff']),
+    cats: u(G.rp, G.biens, G.joueurs),
     desc:'Suit les organisations, les braquages et les trafics.'
   },
   gerant_animation: {
     label:'Gérant Animation', rank:60,
     perms: u(P.lire, ['actions.give']),
-    cats: u(G.joueurs, G.rp, ['systeme', 'staff']),
+    cats: u(G.joueurs, G.rp, G.boutique),
     desc:'Prépare les events et dédommage les participants.'
   },
   gerant_communication: {
     label:'Gérant Communication', rank:60,
     perms: u(P.lire, []),
-    cats: u(G.joueurs, ['staff', 'whitelist']),
+    cats: u(G.joueurs),
     desc:'Suit les annonces, les candidatures et les retours joueurs.'
   },
   moderateur: {
@@ -161,7 +158,7 @@ const ROLES = {
   helper: {
     label:'Helper', rank:30,
     perms: u(['logs.view', 'players.view'], ['actions.warn']),
-    cats: u(G.joueurs, ['staff']),
+    cats: u(G.joueurs),
     desc:'Accompagne les joueurs et remonte ce qui dépasse.'
   },
   animateur: {
@@ -173,7 +170,7 @@ const ROLES = {
   communication: {
     label:'Communication', rank:25,
     perms: ['logs.view'],
-    cats: u(G.joueurs, ['staff', 'whitelist']),
+    cats: u(G.joueurs),
     desc:'Rédige et relaie, sans pouvoir de modération.'
   }
 };
@@ -182,6 +179,27 @@ const ROLES = {
 // renommer sans passerelle aurait dégradé tout le monde en silence.
 const ALIAS = { admin: 'administrateur', modo: 'moderateur' };
 const canon = r => (ROLES[r] ? r : (ALIAS[r] || 'moderateur'));
+
+/* ---------- catégories retirées ----------
+   Le catalogue a été refait sur les rubriques réellement voulues par le
+   serveur. Les scripts d'une version précédente peuvent encore émettre
+   un ancien identifiant : on le rattache à la rubrique la plus proche
+   plutôt que de le laisser tomber dans le fourre-tout. Ce qui n'a PAS
+   d'équivalent (chat de proximité, véhicules, craft, drogue, braquages,
+   organisations, whitelist) n'est plus journalisé : c'est un choix de
+   périmètre, pas un oubli — retirer la rubrique et continuer d'en
+   remplir la table aurait donné des journaux que personne ne lit.
+   CAT_FALLBACK reçoit tout le reste : une catégorie inconnue est une
+   faute de frappe dans un script, et elle doit se VOIR quelque part. */
+const CAT_ALIAS = {
+  economie:  'inventaire',      // virements, salaires, factures
+  staff:     'admin',           // reports et tickets : ce que fait le staff
+  systeme:   'admin',
+  whitelist: 'connexions',
+  chat:      'ecran_joueur'
+};
+const CAT_FALLBACK = 'admin';
+const canonCat = c => (CAT_IDS.includes(c) ? c : (CAT_ALIAS[c] || CAT_FALLBACK));
 
 const ROLE_IDS = Object.keys(ROLES);
 const roleOf = r => ROLES[canon(r)];
@@ -211,9 +229,10 @@ const rankOf   = r => roleOf(r).rank;
 const hasPerm  = (r, p) => permsOf(r).includes(p);
 const canSeeCat = (r, c) => catsOf(r).includes(c);
 
-const CAT_IDS = CATS.map(c => c.id);
+// déclaré plus haut pour canonCat
+
 const SEV_IDS = SEVS.map(s => s.id);
 
-module.exports = { CATS, SEVS, GROUPS, CAT_IDS, SEV_IDS, PERMS, PERM_IDS, ROLES, ROLE_IDS,
+module.exports = { CATS, SEVS, GROUPS, CAT_IDS, SEV_IDS, canonCat, CAT_ALIAS, CAT_FALLBACK, PERMS, PERM_IDS, ROLES, ROLE_IDS,
                    roleOf, canon, permsOf, catsOf, rankOf, hasPerm, canSeeCat,
                    permsOfRoles, catsOfRoles, rankOfRoles, mainRole };

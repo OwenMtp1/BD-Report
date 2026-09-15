@@ -45,6 +45,7 @@
   --f-bien:#F0A93C;
   --f-monde:#37C4B4;
   --f-staff:#79A6FF;
+  --f-shop:#E879C5;
 
   --ui:'Archivo','Helvetica Neue',Arial,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -132,7 +133,7 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
   backdrop-filter:blur(12px);
   border-bottom:1px solid var(--edge);
 }
-.find{position:relative;flex:1 1 240px;min-width:0}
+.find{position:relative;flex:1 1 180px;min-width:0}
 .find input{
   width:100%;height:34px;padding:0 34px 0 32px;border-radius:7px;
   background:var(--panel);border:1px solid var(--edge);color:var(--ink);font-size:13px;
@@ -177,10 +178,15 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .tag-mode{
   font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
   padding:4px 9px;border-radius:999px;white-space:nowrap;
+  /* Le nom d'un espace peut être long : il se coupe plutôt que de pousser
+     l'identité et la déconnexion à la ligne suivante. */
+  overflow:hidden;text-overflow:ellipsis;max-width:min(40vw,320px);
 }
+.tag-mode[role="button"]{cursor:pointer}
+.tag-mode[role="button"]:hover{filter:brightness(1.18)}
 .tag-mode.demo{background:rgba(245,165,36,.12);border:1px solid rgba(245,165,36,.36);color:#FFC55C}
 .tag-mode.live{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.34);color:#8FEBD3}
-.who{display:flex;align-items:center;gap:9px;padding-left:4px;border-left:1px solid var(--edge);margin-left:2px}
+.who{display:flex;align-items:center;gap:9px;padding-left:4px;border-left:1px solid var(--edge);margin-left:2px;flex:none}
 .who-name{font-size:12.5px;font-weight:500;line-height:1.15}
 .who-role{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--vio-hi)}
 
@@ -785,9 +791,11 @@ select.input{height:36px}
     </div>
     <div class="nav" id="nav"></div>
     <div class="rail-foot">
-      <div class="foot-line"><span class="pulse" id="pulse"></span><span>Flux <b id="liveState">en direct</b></span></div>
-      <div class="foot-line">Dernier évènement <b id="lastTick">—</b></div>
-      <div class="foot-line">Rétention <b id="retention">30 jours</b></div>
+      <div id="railLive">
+        <div class="foot-line"><span class="pulse" id="pulse"></span><span>Flux <b id="liveState">en direct</b></span></div>
+        <div class="foot-line">Dernier évènement <b id="lastTick">—</b></div>
+        <div class="foot-line">Rétention <b id="retention">30 jours</b></div>
+      </div>
       <button class="btn sm" id="teamBtn" hidden>Gérer l'équipe</button>
       <button class="btn sm" id="rolesBtn" hidden>Rôles &amp; accès</button>
       <button class="btn sm" id="discordBtn" hidden>Liaison Discord</button>
@@ -798,7 +806,7 @@ select.input{height:36px}
 
   <div class="main">
     <header class="bar">
-      <div class="find">
+      <div class="find" id="findBox">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/>
           <path d="M10.6 10.6 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -807,7 +815,7 @@ select.input{height:36px}
         <kbd aria-hidden="true">/</kbd>
         <div class="suggest" id="suggest" hidden role="listbox" aria-label="Suggestions"></div>
       </div>
-      <div class="seg" role="group" aria-label="Période">
+      <div class="seg" id="rangeSeg" role="group" aria-label="Période">
         <button data-range="1" aria-pressed="false">1 h</button>
         <button data-range="6" aria-pressed="false">6 h</button>
         <button data-range="24" aria-pressed="true">24 h</button>
@@ -1030,40 +1038,43 @@ select.input{height:36px}
 'use strict';
 
 /* Les catégories sont rangées par MÉTIER, pas alphabétiquement.
-   Dix-neuf sigles à plat formaient un mur que personne ne lisait ;
-   c'est le groupe qui porte la couleur, pas chaque catégorie. */
+   Dix-sept sigles à plat formeraient un mur que personne ne lit ;
+   c'est le groupe qui porte la couleur, pas chaque catégorie.
+   ⚠️ Cette liste est une COPIE de secours : servie par l'API, la page
+   adopte la sienne (GET /api/catalogue). Les deux doivent rester
+   identiques — le mode démonstration n'a que celle-ci. */
 let GROUPS = [
-  { id:'moderation', label:'Modération',     fam:'var(--f-surv)'  },
-  { id:'joueurs',    label:'Joueurs',        fam:'var(--f-play)'  },
-  { id:'biens',      label:'Argent & biens', fam:'var(--f-bien)'  },
-  { id:'rp',         label:'Activités RP',   fam:'var(--f-monde)' },
-  { id:'serveur',    label:'Staff & serveur',fam:'var(--f-staff)' }
+  { id:'moderation', label:'Modération',      fam:'var(--f-surv)'  },
+  { id:'joueurs',    label:'Joueurs',         fam:'var(--f-play)'  },
+  { id:'biens',      label:'Argent & biens',  fam:'var(--f-bien)'  },
+  { id:'boutique',   label:'Boutique',        fam:'var(--f-shop)'  },
+  { id:'rp',         label:'Activités RP',    fam:'var(--f-monde)' },
+  { id:'serveur',    label:'Staff & serveur', fam:'var(--f-staff)' }
 ];
 
 let CATS = [
-  { id:'bans',         code:'BAN', label:'Bannissements',      group:'moderation', desc:'Bannissements prononcés, levés et refus de connexion.' },
-  { id:'sanctions',    code:'SNC', label:'Sanctions',          group:'moderation', desc:'Avertissements, expulsions et coupures de vocal.' },
-  { id:'anticheat',    code:'ACH', label:'Anticheat',          group:'moderation', desc:'Détections automatiques et évènements réseau suspects.' },
-  { id:'staff',        code:'RPT', label:'Reports & tickets',  group:'moderation', desc:'Signalements joueurs, prises en charge et clôtures.' },
+  { id:'bans',              code:'BAN', label:'Bannissement',              group:'moderation', desc:'Bannissements prononcés, levés et refus de connexion.' },
+  { id:'sanctions',         code:'AVT', label:'Avertissement',             group:'moderation', desc:'Avertissements, expulsions et rappels à l’ordre.' },
+  { id:'anticheat',         code:'ACH', label:'Anticheat',                 group:'moderation', desc:'Détections automatiques et évènements réseau suspects.' },
 
-  { id:'connexions',   code:'CNX', label:'Connexions',         group:'joueurs',    desc:'Arrivées, départs, file d’attente et refus de whitelist.' },
-  { id:'chat',         code:'CHT', label:'Chat & commandes',   group:'joueurs',    desc:'Proximité, OOC, /me, /do, Twitter et commandes joueur.' },
-  { id:'combat',       code:'CBT', label:'Combat & morts',     group:'joueurs',    desc:'Dégâts, éliminations, décès et réanimations EMS.' },
+  { id:'connexions',        code:'CNX', label:'Connexion',                 group:'joueurs',    desc:'Arrivées sur le serveur, file d’attente et refus.' },
+  { id:'deconnexion',       code:'DCX', label:'Déconnexion',               group:'joueurs',    desc:'Départs, crashs et coupures de connexion.' },
+  { id:'ecran_joueur',      code:'ECR', label:'Écran du joueur',           group:'joueurs',    desc:'Ce que le joueur a sous les yeux : menus, interactions, HUD.' },
+  { id:'combat',            code:'MRT', label:'Mort joueur',               group:'joueurs',    desc:'Décès, éliminations, réanimations EMS.' },
 
-  { id:'economie',     code:'ECO', label:'Économie',           group:'biens',      desc:'Liquide, banque, virements, salaires, factures et amendes.' },
-  { id:'inventaire',   code:'INV', label:'Inventaire',         group:'biens',      desc:'Échanges, sols, coffres, stockage et suppressions staff.' },
-  { id:'vehicules',    code:'VEH', label:'Véhicules',          group:'biens',      desc:'Garages, fourrière, concession, effractions et destructions.' },
-  { id:'craft',        code:'CRF', label:'Craft & armes',      group:'biens',      desc:'Établis, composants, armes et munitions fabriquées.' },
+  { id:'inventaire',        code:'TRX', label:'Transactions et coffres',   group:'biens',      desc:'Échanges entre joueurs, coffres, stockage et retraits.' },
+  { id:'items_sol',         code:'SOL', label:'Items au sol',              group:'biens',      desc:'Objets jetés, ramassés et disparus au sol.' },
+  { id:'proprietes',        code:'IMM', label:'Immobilier',                group:'biens',      desc:'Achats, ventes, loyers, clés partagées et coffres de logement.' },
 
-  { id:'jobs',         code:'JOB', label:'Jobs & entreprises', group:'rp',         desc:'Embauches, grades, prises de service et comptes société.' },
-  { id:'proprietes',   code:'IMM', label:'Propriétés',         group:'rp',         desc:'Achats, loyers, clés partagées et coffres de logement.' },
-  { id:'organisations',code:'ORG', label:'Organisations',      group:'rp',         desc:'Coffres d’orga, adhésions, grades, territoires et guerres.' },
-  { id:'braquages',    code:'BRQ', label:'Braquages',          group:'rp',         desc:'Fleeca, Pacific, bijouterie : départ, butin, issue.' },
-  { id:'drogue',       code:'DRG', label:'Drogue & labos',     group:'rp',         desc:'Champs, récolte, transformation, revente et saisies.' },
+  { id:'boutique_caisse',   code:'BQC', label:'Boutique : caisse',         group:'boutique',   desc:'Paiements encaissés, remboursements et échecs de transaction.' },
+  { id:'boutique_monnaie',  code:'BQM', label:'Boutique : monnaie et grades', group:'boutique', desc:'Monnaie de boutique créditée ou dépensée, grades accordés.' },
+  { id:'boutique_produits', code:'BQP', label:'Boutique : produits',       group:'boutique',   desc:'Produits livrés, stocks, prix et mises en vente.' },
 
-  { id:'admin',        code:'ADM', label:'Administration',     group:'serveur',    desc:'Actions staff en jeu : noclip, spawn, téléportation, revive.' },
-  { id:'whitelist',    code:'WLT', label:'Whitelist',          group:'serveur',    desc:'Candidatures Discord, entretiens, acceptations et refus.' },
-  { id:'systeme',      code:'SYS', label:'Serveur',            group:'serveur',    desc:'Redémarrages, erreurs de ressource, performance et sauvegardes.' }
+  { id:'jobs',              code:'ENT', label:'Entreprise et crew',        group:'rp',         desc:'Embauches, grades, prises de service, comptes société et crews.' },
+  { id:'casino',            code:'CAS', label:'Casino',                    group:'rp',         desc:'Mises, gains, pertes et jetons échangés.' },
+  { id:'facture_ems',       code:'EMS', label:'Facture EMS',               group:'rp',         desc:'Prises en charge médicales facturées et soins payés.' },
+
+  { id:'admin',             code:'STF', label:'Action staff',              group:'serveur',    desc:'Actions du staff en jeu : noclip, spawn, téléportation, revive, don.' }
 ];
 
 let SEVS = [
@@ -1156,7 +1167,7 @@ const DROGUES=[['coca','Feuilles de coca'],['weed','Pousses de weed'],['meth','M
 const LABOS=['le labo de Grapeseed','la planque de Cypress Flats','le hangar de Paleto','la cave de Mirror Park'];
 const ORGAS=['Ballas','Vagos','Families','Cartel del Norte','Triades','Lost MC'];
 const ETABLIS=['l’établi de Cypress Flats','la remise de Sandy Shores','l’atelier du port'];
-const RESSOURCES={bans:'origin_admin',braquages:'origin_heists',drogue:'origin_drugs',organisations:'origin_gangs',craft:'origin_craft',whitelist:'origin_whitelist',systeme:'origin_core',connexions:'origin_core',chat:'origin_chat',combat:'origin_medical',economie:'origin_banking',inventaire:'ox_inventory',vehicules:'origin_garage',jobs:'origin_jobs',proprietes:'origin_housing',admin:'txAdmin',anticheat:'origin_guard',sanctions:'origin_admin',staff:'origin_reports'};
+const RESSOURCES={bans:'origin_admin',sanctions:'origin_admin',anticheat:'origin_guard',connexions:'origin_core',deconnexion:'origin_core',ecran_joueur:'origin_hud',combat:'origin_medical',inventaire:'ox_inventory',items_sol:'ox_inventory',proprietes:'origin_housing',boutique_caisse:'origin_shop',boutique_monnaie:'origin_shop',boutique_produits:'origin_shop',jobs:'origin_jobs',casino:'origin_casino',facture_ems:'origin_medical',admin:'txAdmin'};
 
 const plate=()=>hex(2).toUpperCase()+int(10,99)+String.fromCharCode(65+int(0,25))+String.fromCharCode(65+int(0,25))+int(100,999);
 const coords=()=>`vector3(${(rnd()*6000-3500).toFixed(2)}, ${(rnd()*7000-3500).toFixed(2)}, ${(rnd()*70+2).toFixed(2)})`;
@@ -1182,159 +1193,134 @@ const MOTIFS_SANCTION=['RDM sur Legion Square','VDM répété','Fail RP en braqu
 const T={
 connexions:[
  {s:'info',w:9,f:(a)=>({msg:`${who(a)} a rejoint le serveur`,d:{serverId:a.sid,slot:`${int(60,128)}/128`,ping:a.ping+' ms',endpoint:'92.184.'+int(10,250)+'.***',identifiants:{license:a.license,discord:a.discord,steam:a.steam},onesync:'infinity'}})},
- {s:'info',w:8,f:(a)=>({msg:`${who(a)} s’est déconnecté`,d:{serverId:a.sid,raison:pick(RAISONS_DECO),session:`${int(12,340)} min`,derniereZone:pick(ZONES)}})},
- {s:'info',w:3,f:(a)=>({msg:`${who(a)} est entré en file d’attente`,d:{position:int(2,34),priorite:chance(.3)?'VIP':'aucune',attente:`${int(1,26)} min`}})},
+ {s:'info',w:4,f:(a)=>({msg:`${who(a)} est entré en file d’attente`,d:{position:int(2,34),priorite:chance(.3)?'VIP':'aucune',attente:`${int(1,26)} min`}})},
+ {s:'info',w:3,f:(a)=>({msg:`${who(a)} a chargé son personnage — ${it(a.job)}`,d:{personnage:a.name,job:a.jobKey,grade:a.grade,dernierePosition:coords(),chargement:int(3,22)+' s'}})},
  {s:'notice',w:2,f:(a)=>({msg:`Connexion refusée — <strong>${a.name}</strong> n’est pas whitelisté`,d:{license:a.license,discord:a.discord,motif:'whitelist_missing',candidature:chance(.5)?'en attente':'jamais déposée'}})},
  {s:'alerte',w:1,f:(a)=>({msg:`Tentative de connexion avec un identifiant banni — <strong>${a.name}</strong>`,d:{license:a.license,banId:'#'+int(1000,9999),expire:'permanent',motif:pick(MOTIFS_SANCTION)}})}
 ],
-chat:[
- {s:'info',w:10,f:(a)=>({msg:`${who(a)} <em>(proximité)</em> : « ${pick(PHRASES)} »`,d:{canal:'proximite',portee:'15 m',zone:pick(ZONES),ecoutes:int(1,9)}})},
- {s:'info',w:5,f:(a)=>({msg:`${who(a)} <em>/me</em> ${pick(MES)}`,d:{canal:'me',zone:pick(ZONES)}})},
- {s:'info',w:3,f:(a)=>({msg:`${who(a)} <em>/do</em> ${pick(DOS)}`,d:{canal:'do',zone:pick(ZONES)}})},
- {s:'info',w:4,f:(a)=>({msg:`${who(a)} <em>(OOC)</em> : « ${pick(['quelqu’un a vu mon véhicule ?','je reboot, 2 min','ticket ouvert pour un bug de coffre'])} »`,d:{canal:'ooc',global:true}})},
- {s:'info',w:3,f:(a)=>({msg:`${who(a)} a publié sur Twitter : « ${pick(['Vends Sultan RS, tarif à négocier.','Recherche mécano dispo ce soir.','Encore un braquage à Paleto…'])} »`,d:{canal:'twitter',pseudo:'@'+a.name.split(' ')[0].toLowerCase()+int(10,99),abonnes:int(20,1400)}})},
- {s:'info',w:3,f:(a)=>({msg:`${who(a)} a utilisé <span class="item">/911</span> — ${pick(['fusillade en cours','accident de la route','braquage de supérette'])}`,d:{commande:'/911',zone:pick(ZONES),unitesDisponibles:int(0,6)}})},
- {s:'notice',w:1,f:(a)=>({msg:`Message filtré pour <strong>${a.name}</strong> — terme HRP interdit`,d:{canal:'ooc',filtre:'insultes_hrp',action:'message bloqué',recidive:int(1,4)+' ce mois'}})}
+deconnexion:[
+ {s:'info',w:9,f:(a)=>({msg:`${who(a)} s’est déconnecté`,d:{serverId:a.sid,raison:pick(RAISONS_DECO),session:`${int(12,340)} min`,derniereZone:pick(ZONES),sauvegarde:'effectuée'}})},
+ {s:'notice',w:4,f:(a)=>({msg:`${who(a)} a perdu la connexion — ${it('client crash')}`,d:{serverId:a.sid,raison:'Client crashed',derniereAction:pick(['entrée dans un véhicule','ouverture de l’inventaire','changement de tenue']),position:coords()}})},
+ {s:'alerte',w:3,f:(a)=>({msg:`Déconnexion en pleine scène — ${who(a)}`,d:{serverId:a.sid,scene:pick(['interpellation en cours','braquage en cours','échange de tirs']),soupcon:'combat log',dureeScene:int(2,18)+' min'}})},
+ {s:'info',w:3,f:(a)=>({msg:`${who(a)} s’est déconnecté après ${int(4,11)} h de jeu`,d:{serverId:a.sid,session:int(240,680)+' min',argentGagne:money(int(400,18000)),sauvegarde:'effectuée'}})},
+ {s:'notice',w:2,f:(a)=>({msg:`${who(a)} a été renvoyé au menu — ${it('timeout réseau')}`,d:{serverId:a.sid,raison:'Timed out',pertePaquets:int(8,60)+' %',ping:int(180,900)+' ms'}})}
+],
+ecran_joueur:[
+ {s:'info',w:9,f:(a)=>({msg:`${who(a)} a ouvert ${it(pick(['son inventaire','le menu d’interaction','la carte','son téléphone','le menu du véhicule']))}`,d:{ecran:pick(['inventory','radial','map','phone','vehicle']),zone:pick(ZONES),dureeAffichage:int(2,90)+' s'}})},
+ {s:'info',w:6,f:(a)=>({msg:`${who(a)} a interagi avec ${it(pick(['un distributeur','une porte de commerce','un PNJ vendeur','un point de service','un coffre-fort']))}`,d:{cible:pick(['vending_1','shop_door_3','npc_seller','job_point','safe_2']),resultat:'ouvert',position:coords()}})},
+ {s:'info',w:5,f:(a)=>({msg:`${who(a)} a changé de tenue — ${it(pick(['civile','de service','de soirée','de sport']))}`,d:{ecran:'clothing',vestiaire:pick(['domicile','entreprise','magasin']),piecesModifiees:int(1,6)}})},
+ {s:'notice',w:3,f:(a)=>({msg:`${who(a)} est resté ${int(6,25)} min sur le même écran`,d:{ecran:pick(['inventory','shop','crafting']),soupcon:'AFK menu ouvert',relances:int(1,3)}})},
+ {s:'alerte',w:2,f:(a)=>({msg:`Menu ouvert sans y avoir accès — ${who(a)}`,d:{ecran:pick(['admin_menu','job_boss','vehicle_spawner']),jobAttendu:pick(['police','mechanic','patron']),jobReel:a.jobKey,refus:true}})}
 ],
 combat:[
- {s:'notice',w:7,f:(a,b)=>{const w=pick(ARMES);return{t:b,msg:`${who(a)} a éliminé ${who(b)} — ${it(w[1])}`,d:{arme:w[0],distance:int(2,140)+' m',headshot:chance(.25),zone:pick(ZONES),position:coords(),scene:chance(.6)?'braquage en cours':'non renseignée'}};}},
- {s:'info',w:8,f:(a,b)=>({t:b,msg:`${who(a)} a infligé <span class="amount">${int(4,68)}</span> dégâts à ${who(b)}`,d:{arme:pick(ARMES)[0],partie:pick(['torse','bras gauche','jambe droite','tête']),santeRestante:int(12,96)+'%'}})},
- {s:'info',w:5,f:(a)=>({msg:`${who(a)} est mort — ${pick(MORTS)}`,d:{cause:'environnement',zone:pick(ZONES),position:coords(),tempsAuSol:int(1,15)+' min'}})},
- {s:'info',w:4,f:(a,b)=>({t:b,msg:`${who(b)} a réanimé ${who(a)} <em>(EMS)</em>`,d:{soignant:b.name,job:'ems',item:'medikit',dureeIntervention:int(2,18)+' min',hopital:pick(['Pillbox Hill','Sandy Shores','Paleto Bay'])}})},
- {s:'alerte',w:2,f:(a,b)=>({t:b,msg:`Tir en zone protégée — ${who(a)} a ouvert le feu sur ${who(b)}`,d:{zone:'Safe zone — '+pick(['Legion Square','Hôpital Pillbox','Commissariat Mission Row']),arme:pick(ARMES)[0],regleServeur:'art. 4.2 — pas de violence en zone verte'}})}
-],
-economie:[
- {s:'info',w:7,f:(a)=>{const n=int(50,4000);return{msg:`${who(a)} a retiré ${amt(n)} au distributeur`,d:{compte:'bank',montant:n,soldeApres:money(a.bank-n),distributeur:pick(ZONES)}};}},
- {s:'info',w:6,f:(a)=>{const n=int(100,9000);return{msg:`${who(a)} a déposé ${amt(n)} en banque`,d:{compte:'bank',montant:n,soldeApres:money(a.bank+n),agence:'Fleeca '+pick(ZONES)}};}},
- {s:'info',w:6,f:(a,b)=>{const n=int(200,25000);return{t:b,msg:`${who(a)} a viré ${amt(n)} à ${who(b)}`,d:{de:a.name,vers:b.name,montant:n,motif:pick(['achat véhicule','remboursement','prestation mécano','loyer']),reference:'TR-'+int(100000,999999)}};}},
- {s:'info',w:5,f:(a)=>{const n=int(400,3200);return{msg:`Salaire versé à ${who(a)} — ${amt(n)}`,d:{job:a.jobKey,grade:a.grade,montant:n,periode:'paye horaire',source:'société'}};}},
- {s:'info',w:3,f:(a)=>{const n=int(600,4800);return{msg:`${who(a)} a payé une amende de ${amt(n)}`,d:{emetteur:'LSPD',motif:pick(['excès de vitesse','conduite dangereuse','port d’arme non déclaré']),montant:n,statut:'réglée'}};}},
- {s:'info',w:3,f:(a)=>{const e=pick(ENTREPRISES),n=int(900,18000);return{msg:`${who(a)} a facturé ${amt(n)} au nom de ${it(e)}`,d:{entreprise:e,montant:n,tva:'20 %',statut:chance(.7)?'payée':'en attente'}};}},
- {s:'notice',w:2,f:(a)=>{const n=int(5000,60000),e=pick(ENTREPRISES);return{msg:`${who(a)} a retiré ${amt(n)} du compte de ${it(e)}`,d:{entreprise:e,montant:n,grade:'patron',soldeSociete:money(int(1000,90000)),justificatif:'aucun'}};}},
- {s:'alerte',w:1,f:(a)=>{const n=int(40000,320000);return{msg:`Blanchiment inhabituel — ${who(a)} a converti ${amt(n)} d’argent sale`,d:{montantSale:n,taux:'62 %',montantPropre:money(Math.round(n*.62)),lieu:pick(['Blanchisserie de La Mesa','Casino']),cumul24h:money(n+int(10000,90000)),seuilAlerte:money(50000)}};}}
+ {s:'notice',w:8,f:(a,b)=>{const w=pick(ARMES);return{t:b,msg:`${who(b)} est mort — tué par ${who(a)} avec ${it(w[1])}`,d:{arme:w[0],distance:int(2,140)+' m',headshot:chance(.25),zone:pick(ZONES),position:coords(),scene:chance(.6)?'braquage en cours':'non renseignée'}};}},
+ {s:'info',w:6,f:(a)=>({msg:`${who(a)} est mort — ${pick(MORTS)}`,d:{cause:'environnement',zone:pick(ZONES),position:coords(),tempsAuSol:int(1,15)+' min'}})},
+ {s:'info',w:5,f:(a,b)=>({t:b,msg:`${who(b)} a réanimé ${who(a)} <em>(EMS)</em>`,d:{soignant:b.name,job:'ems',item:'medikit',dureeIntervention:int(2,18)+' min',hopital:pick(['Pillbox Hill','Sandy Shores','Paleto Bay'])}})},
+ {s:'info',w:4,f:(a)=>({msg:`${who(a)} a été transporté à l’hôpital`,d:{hopital:pick(['Pillbox Hill','Sandy Shores','Paleto Bay']),tempsAuSol:int(3,20)+' min',pertes:pick(['aucune','argent liquide','objets de valeur'])}})},
+ {s:'alerte',w:2,f:(a,b)=>({t:b,msg:`Mort en zone protégée — ${who(b)} tué par ${who(a)}`,d:{zone:'Safe zone — '+pick(['Legion Square','Hôpital Pillbox','Commissariat Mission Row']),arme:pick(ARMES)[0],regleServeur:'art. 4.2 — pas de violence en zone verte'}})}
 ],
 inventaire:[
- {s:'info',w:8,f:(a,b)=>{const i=pick(ITEMS),q=int(1,12);return{t:b,msg:`${who(a)} a donné ${q}× ${it(i[1])} à ${who(b)}`,d:{item:i[0],quantite:q,de:a.name,vers:b.name,distance:int(1,4)+' m',poidsApres:int(12,48)+'/60 kg'}};}},
- {s:'info',w:5,f:(a)=>{const i=pick(ITEMS),q=int(1,5);return{msg:`${who(a)} a jeté ${q}× ${it(i[1])} au sol`,d:{item:i[0],quantite:q,position:coords(),expiration:'10 min'}};}},
- {s:'info',w:5,f:(a)=>{const i=pick(ITEMS),q=int(1,5);return{msg:`${who(a)} a ramassé ${q}× ${it(i[1])}`,d:{item:i[0],quantite:q,origine:chance(.5)?'sol':'fouille de corps',position:coords()}};}},
- {s:'info',w:4,f:(a)=>{const i=pick(ITEMS);return{msg:`${who(a)} a fabriqué ${it(i[1])}`,d:{item:i[0],etabli:pick(['Benny’s','Atelier clandestin','Cuisine mobile']),composants:['plastic ×2','metal ×1'],duree:int(6,40)+' s'}};}},
- {s:'info',w:4,f:(a)=>{const i=pick(ITEMS),e=pick(ENTREPRISES),q=int(1,20);return{msg:`${who(a)} a déposé ${q}× ${it(i[1])} dans le coffre de ${it(e)}`,d:{coffre:'society_'+e.toLowerCase().replace(/[^a-z]/g,''),item:i[0],quantite:q,capacite:int(120,400)+'/500 kg'}};}},
- {s:'notice',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a supprimé un item de l’inventaire de <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,item:pick(ITEMS)[0],quantite:int(1,5),motif:'duplication signalée',ticket:'#'+int(400,999)}})},
- {s:'alerte',w:1,f:(a)=>{const i=pick(ITEMS),q=int(180,900);return{msg:`Quantité anormale — ${who(a)} détient ${q}× ${it(i[1])}`,d:{item:i[0],quantite:q,plafondServeur:int(20,60),poids:int(300,900)+' kg',detection:'origin_guard/inventory_cap'}};}}
+ {s:'info',w:9,f:(a,b)=>{const i=pick(ITEMS),q=int(1,12);return{t:b,msg:`${who(a)} a donné ${q}× ${it(i[1])} à ${who(b)}`,d:{kind:'trade',item:i[0],quantite:q,distance:int(1,4)+' m',poidsApres:int(8,48)+' kg'}};}},
+ {s:'info',w:8,f:(a)=>{const i=pick(ITEMS),q=int(1,25);return{msg:`${who(a)} a déposé ${q}× ${it(i[1])} dans ${it(pick(['un coffre de véhicule','le coffre de son logement','le coffre de l’entreprise','un casier']))}`,d:{kind:'stash_in',item:i[0],quantite:q,coffre:'stash_'+hex(4),capacite:int(20,200)+' kg'}};}},
+ {s:'notice',w:7,f:(a)=>{const i=pick(ITEMS),q=int(1,25);return{msg:`${who(a)} a retiré ${q}× ${it(i[1])} d’${it(pick(['un coffre de véhicule','le coffre de son logement','le coffre de l’entreprise','un casier']))}`,d:{kind:'stash_out',item:i[0],quantite:q,coffre:'stash_'+hex(4),soldeCoffre:int(0,140)+' objets'}};}},
+ {s:'info',w:6,f:(a,b)=>{const n=int(50,12000);return{t:b,msg:`${who(a)} a viré ${amt(n)} à ${who(b)}`,d:{kind:'transfer',montant:n,moyen:pick(['virement bancaire','espèces','application']),soldeApres:money(int(0,90000)),motif:pick(['loyer','véhicule','service rendu','non renseigné'])}};}},
+ {s:'alerte',w:2,f:(a)=>{const i=pick(ITEMS),q=int(30,400);return{msg:`Quantité inhabituelle — ${who(a)} détient ${q}× ${it(i[1])}`,d:{kind:'anomaly',item:i[0],quantite:q,plafondNormal:int(10,40),gainEn:int(2,20)+' min'}};}}
 ],
-vehicules:[
- {s:'info',w:8,f:(a)=>{const v=pick(VEHS);return{msg:`${who(a)} a sorti ${it(v[1])} du garage`,d:{modele:v[0],plaque:plate(),garage:pick(['Pinkcage','Aéroport','Sandy Shores']),carburant:int(18,100)+'%',etatMoteur:int(420,1000)+'/1000'}};}},
- {s:'info',w:6,f:(a)=>{const v=pick(VEHS);return{msg:`${who(a)} a rangé ${it(v[1])} au garage`,d:{modele:v[0],plaque:plate(),kmSession:int(2,48)+' km',degats:chance(.4)?'carrosserie endommagée':'aucun'}};}},
- {s:'info',w:3,f:(a)=>{const v=pick(VEHS),n=int(400,2500);return{msg:`${who(a)} a récupéré ${it(v[1])} à la fourrière — ${amt(n)}`,d:{modele:v[0],plaque:plate(),frais:n,motifMiseEnFourriere:pick(['stationnement gênant','véhicule abandonné','saisie LSPD'])}};}},
- {s:'info',w:3,f:(a)=>{const v=pick(VEHS),n=int(18000,420000);return{msg:`${who(a)} a acheté ${it(v[1])} — ${amt(n)}`,d:{modele:v[0],plaque:plate(),prix:n,concession:'PDM',paiement:chance(.5)?'banque':'crédit 12 mois'}};}},
- {s:'notice',w:3,f:(a)=>{const v=pick(VEHS),ok=chance(.45);return{msg:`${who(a)} a ${ok?'crocheté':'échoué à crocheter'} ${it(v[1])}`,d:{modele:v[0],plaque:plate(),resultat:ok?'succès':'échec',item:'lockpick',alarme:chance(.6),position:coords()}};}},
- {s:'info',w:3,f:(a)=>{const v=pick(VEHS);return{msg:`${it(v[1])} de ${who(a)} a été détruit`,d:{modele:v[0],plaque:plate(),cause:pick(['collision','tirs','explosion']),assurance:chance(.6)?'couverte':'non couverte'}};}},
- {s:'info',w:2,f:(a,b)=>{const v=pick(VEHS);return{t:b,msg:`${who(a)} a partagé les clés de ${it(v[1])} avec ${who(b)}`,d:{modele:v[0],plaque:plate(),beneficiaire:b.name,duree:'permanent'}};}}
-],
-jobs:[
- {s:'info',w:5,f:(a,b)=>({t:b,msg:`${who(b)} a embauché ${who(a)} — ${it(a.job)}`,d:{job:a.jobKey,grade:0,libelleGrade:'recrue',recruteur:b.name,entreprise:pick(ENTREPRISES)}})},
- {s:'info',w:4,f:(a,b)=>({t:b,msg:`${who(a)} est passé grade ${int(1,6)} — ${it(a.job)}`,d:{job:a.jobKey,ancienGrade:a.grade,nouveauGrade:a.grade+1,decidePar:b.name,salaireHoraire:money(int(300,1800))}})},
- {s:'info',w:6,f:(a)=>({msg:`${who(a)} a pris son service — ${it(a.job)}`,d:{job:a.jobKey,grade:a.grade,effectifEnService:int(1,9),radio:int(1,12)+'.0'}})},
- {s:'info',w:5,f:(a)=>({msg:`${who(a)} a terminé son service — ${it(a.job)}`,d:{job:a.jobKey,dureeService:int(24,280)+' min',interventions:int(0,14)}})},
- {s:'notice',w:2,f:(a,b)=>({t:b,msg:`${who(b)} a licencié ${who(a)} — ${it(a.job)}`,d:{job:a.jobKey,motif:pick(['absences répétées','faute grave','départ volontaire']),soldeToutCompte:money(int(500,6000))}})},
- {s:'info',w:1,f:(a)=>{const e=pick(ENTREPRISES);return{msg:`${who(a)} a créé l’entreprise ${it(e)}`,d:{entreprise:e,type:'SARL',capital:money(int(25000,150000)),patron:a.name,employes:0}};}}
+items_sol:[
+ {s:'info',w:9,f:(a)=>{const i=pick(ITEMS),q=int(1,10);return{msg:`${who(a)} a jeté ${q}× ${it(i[1])} au sol`,d:{kind:'drop',item:i[0],quantite:q,position:coords(),zone:pick(ZONES),expiration:int(10,60)+' min'}};}},
+ {s:'info',w:8,f:(a)=>{const i=pick(ITEMS),q=int(1,10);return{msg:`${who(a)} a ramassé ${q}× ${it(i[1])}`,d:{kind:'pickup',item:i[0],quantite:q,position:coords(),deposePar:pick(RP).name,ageDuSac:int(1,45)+' min'}};}},
+ {s:'notice',w:4,f:(a)=>{const w=pick(ARMES);return{msg:`${who(a)} a jeté ${it(w[1])} au sol`,d:{kind:'drop_weapon',arme:w[0],munitions:int(0,120),position:coords(),zone:pick(ZONES)}};}},
+ {s:'info',w:4,f:()=>{const i=pick(ITEMS),q=int(1,8);return{msg:`Sac disparu — ${q}× ${it(i[1])} expiré au sol`,d:{kind:'expire',item:i[0],quantite:q,dureeAuSol:'60 min',zone:pick(ZONES)}};}},
+ {s:'alerte',w:2,f:(a,b)=>{const i=pick(ITEMS);return{t:b,msg:`${who(b)} a ramassé le sac de ${who(a)} ${int(2,9)} s après sa mort`,d:{kind:'loot_body',item:i[0],quantite:int(1,20),delai:int(2,9)+' s',zone:pick(ZONES),soupcon:'loot instantané'}};}}
 ],
 proprietes:[
- {s:'info',w:4,f:(a)=>{const n=int(180000,1400000);return{msg:`${who(a)} a acheté un logement à ${it(pick(ZONES))} — ${amt(n)}`,d:{bien:'Villa '+int(1,40),prix:n,quartier:pick(ZONES),garagePlaces:int(2,10),coffre:'500 kg'}};}},
- {s:'info',w:5,f:(a)=>{const n=int(2500,18000);return{msg:`${who(a)} a payé son loyer — ${amt(n)}`,d:{bien:'Appartement '+int(100,899),loyer:n,echeance:'hebdomadaire',retard:chance(.2)?int(1,3)+' jour(s)':'aucun'}};}},
- {s:'info',w:4,f:(a,b)=>({t:b,msg:`${who(a)} a donné un accès de logement à ${who(b)}`,d:{bien:'Appartement '+int(100,899),beneficiaire:b.name,droits:['porte','coffre','garage'],revocable:true}})},
- {s:'info',w:4,f:(a)=>{const i=pick(ITEMS),q=int(1,14);return{msg:`${who(a)} a ${chance(.5)?'déposé':'retiré'} ${q}× ${it(i[1])} dans le coffre de son logement`,d:{bien:'Villa '+int(1,40),item:i[0],quantite:q,poidsCoffre:int(40,480)+'/500 kg'}};}},
- {s:'alerte',w:1,f:(a,b)=>({t:b,msg:`Effraction — ${who(a)} est entré chez ${who(b)}`,d:{bien:'Appartement '+int(100,899),proprietaire:b.name,methode:'crochetage',alarme:'déclenchée',lspdPrevenu:chance(.7)}})}
+ {s:'info',w:6,f:(a)=>{const n=int(90000,2400000);return{msg:`${who(a)} a acheté ${it(pick(['un appartement à Mirror Park','une villa de Vinewood Hills','un pavillon de Grove Street','un studio à Vespucci']))} — ${amt(n)}`,d:{kind:'buy',montant:n,agence:'Dynasty 8',financement:pick(['comptant','crédit 12 mois']),soldeApres:money(int(0,300000))}};}},
+ {s:'info',w:5,f:(a,b)=>({t:b,msg:`${who(a)} a donné une clé de son logement à ${who(b)}`,d:{kind:'key',beneficiaire:b.name,logement:'prop_'+hex(4),accesCoffre:chance(.5),revocable:true}})},
+ {s:'info',w:5,f:(a)=>{const n=int(800,14000);return{msg:`${who(a)} a payé son loyer — ${amt(n)}`,d:{kind:'rent',montant:n,logement:'prop_'+hex(4),echeance:'le 1er',retard:chance(.2)?int(1,9)+' jours':'aucun'}};}},
+ {s:'notice',w:4,f:(a)=>{const n=int(60000,1800000);return{msg:`${who(a)} a revendu ${it('son logement')} — ${amt(n)}`,d:{kind:'sell',montant:n,plusValue:money(int(-90000,240000)),coffreVide:chance(.7)}};}},
+ {s:'alerte',w:2,f:(a,b)=>({t:b,msg:`${who(a)} a forcé la porte du logement de ${who(b)}`,d:{kind:'break_in',outil:'lockpick',duree:int(20,180)+' s',alarme:chance(.5)?'déclenchée':'silencieuse',position:coords()}})}
+],
+boutique_caisse:[
+ {s:'info',w:9,f:(a)=>{const n=int(5,60);return{msg:`${who(a)} a payé ${it(money(n*100).replace(' $',' €'))} en boutique`,d:{kind:'payment',montantEuros:n,moyen:pick(['carte bancaire','PayPal','PaySafeCard']),commande:'#'+int(10000,99999),statut:'validé'}};}},
+ {s:'info',w:5,f:(a)=>({msg:`Commande livrée à ${who(a)} — ${it('#'+int(10000,99999))}`,d:{kind:'delivered',delai:int(1,40)+' s',articles:int(1,4),automatique:true}})},
+ {s:'notice',w:4,f:(a)=>{const n=int(5,60);return{msg:`Paiement refusé — ${who(a)}`,d:{kind:'declined',montantEuros:n,moyen:pick(['carte bancaire','PayPal']),code:pick(['insufficient_funds','3ds_failed','card_expired']),relance:'automatique'}};}},
+ {s:'notice',w:3,sf:1,f:(a,b,st)=>{const n=int(5,60);return{t:st,msg:`${who(st)} a remboursé ${who(a)} — ${it(money(n*100).replace(' $',' €'))}`,d:{kind:'refund',montantEuros:n,commande:'#'+int(10000,99999),motif:pick(['livraison échouée','achat en double','geste commercial']),staff:st.name}};}},
+ {s:'alerte',w:2,f:(a)=>({msg:`Litige ouvert sur un paiement de ${who(a)}`,d:{kind:'chargeback',commande:'#'+int(10000,99999),montantEuros:int(10,90),banque:'contestation client',consequence:'accès boutique suspendu'}})}
+],
+boutique_monnaie:[
+ {s:'info',w:9,f:(a)=>{const q=int(100,5000);return{msg:`${who(a)} a reçu ${it(q+' jetons Origin')}`,d:{kind:'credit',jetons:q,origine:pick(['achat boutique','récompense d’event','compensation staff']),soldeApres:int(q,26000)+' jetons'}};}},
+ {s:'info',w:7,f:(a)=>{const q=int(50,3000);return{msg:`${who(a)} a dépensé ${it(q+' jetons Origin')}`,d:{kind:'debit',jetons:q,achat:pick(['véhicule boutique','place de garage','tenue exclusive','slot de personnage']),soldeApres:int(0,9000)+' jetons'}};}},
+ {s:'notice',w:5,f:(a)=>({msg:`${who(a)} est passé grade ${it(pick(['VIP','VIP+','Premium','Légende']))}`,d:{kind:'grade_up',grade:pick(['vip','vip_plus','premium','legende']),duree:pick(['30 jours','90 jours','à vie']),avantages:pick(['prioritaire en file','slots de garage','tenues exclusives'])}})},
+ {s:'info',w:4,f:(a)=>({msg:`Grade expiré pour ${who(a)} — ${it(pick(['VIP','VIP+','Premium']))}`,d:{kind:'grade_end',grade:pick(['vip','vip_plus','premium']),duree:'90 jours',renouvellement:chance(.4)?'automatique':'aucun'}})},
+ {s:'alerte',w:2,sf:1,f:(a,b,st)=>({t:st,msg:`${who(st)} a retiré ${it(int(100,4000)+' jetons')} à ${who(a)}`,d:{kind:'debit_staff',staff:st.name,motif:pick(['achat frauduleux','litige bancaire','erreur de crédit']),soldeApres:int(0,2000)+' jetons'}})}
+],
+boutique_produits:[
+ {s:'info',w:8,f:(a)=>{const v=pick(VEHS);return{msg:`${who(a)} a réclamé ${it(v[1])} depuis la boutique`,d:{kind:'claim',modele:v[0],plaque:plate(),garage:pick(['Legion Square','Vinewood','Paleto Bay']),unique:chance(.3)}};}},
+ {s:'info',w:6,f:(a)=>({msg:`${who(a)} a réclamé ${it(pick(['une place de garage','un slot de personnage','un pack de tenues','un logement boutique']))}`,d:{kind:'claim',produit:pick(['garage_slot','char_slot','clothing_pack','housing']),livraison:'immédiate'}})},
+ {s:'notice',w:4,sf:1,f:(a,b,st)=>({t:st,msg:`${who(st)} a mis en vente ${it(pick(VEHS)[1])} — ${int(15,120)} €`,d:{kind:'listing',staff:st.name,stock:pick(['illimité',int(5,40)+' exemplaires']),visible:'immédiatement'}})},
+ {s:'notice',w:3,sf:1,f:(a,b,st)=>({t:st,msg:`${who(st)} a modifié le prix de ${it(pick(['un véhicule','un pack de tenues','une place de garage']))}`,d:{kind:'price',ancien:int(20,140)+' €',nouveau:int(10,120)+' €',staff:st.name,motif:pick(['promotion','ajustement','fin d’offre'])}})},
+ {s:'alerte',w:2,f:(a)=>({msg:`Stock épuisé — ${it(pick(VEHS)[1])}`,d:{kind:'out_of_stock',demandesEnAttente:int(2,30),reapprovisionnement:pick(['manuel','aucun prévu'])}})}
+],
+jobs:[
+ {s:'info',w:7,f:(a,b)=>{const e=pick(ENTREPRISES);return{t:b,msg:`${who(b)} a embauché ${who(a)} chez ${it(e)}`,d:{kind:'hire',entreprise:e,grade:'novice',patron:b.name,effectif:int(2,18)}};}},
+ {s:'info',w:6,f:(a)=>({msg:`${who(a)} a pris son service — ${it(a.job)}`,d:{kind:'duty',job:a.jobKey,grade:a.grade,zone:pick(ZONES),collegues:int(0,9)}})},
+ {s:'info',w:5,f:(a)=>{const e=pick(ENTREPRISES),n=int(1200,48000);return{msg:`${who(a)} a retiré ${amt(n)} du compte de ${it(e)}`,d:{kind:'company_funds',entreprise:e,montant:n,soldeApres:money(int(0,320000)),justificatif:chance(.5)?'salaires':'aucun'}};}},
+ {s:'info',w:5,f:(a,b)=>{const o=pick(ORGAS);return{t:b,msg:`${who(b)} a intégré ${who(a)} au crew ${it(o)}`,d:{kind:'crew_join',crew:o,parrain:b.name,grade:'recrue',effectif:int(4,28)}};}},
+ {s:'notice',w:4,f:(a,b)=>{const e=pick(ENTREPRISES);return{t:b,msg:`${who(b)} a licencié ${who(a)} de ${it(e)}`,d:{kind:'fire',entreprise:e,motif:pick(['inactivité','faute grave','réorganisation']),grade:pick(['novice','confirmé','gérant'])}};}},
+ {s:'alerte',w:2,f:(a)=>{const e=pick(ENTREPRISES),n=int(40000,300000);return{msg:`Retrait massif — ${who(a)} a vidé la caisse de ${it(e)}`,d:{kind:'company_drain',entreprise:e,montant:n,soldeApres:money(int(0,900)),grade:'gérant',justificatif:'aucun'}};}}
+],
+casino:[
+ {s:'info',w:9,f:(a)=>{const n=int(200,15000);return{msg:`${who(a)} a misé ${amt(n)} — ${it(pick(['roulette','blackjack','machine à sous','poker']))}`,d:{kind:'bet',montant:n,jeu:pick(['roulette','blackjack','slots','poker']),table:'table_'+int(1,12),solde:money(int(0,180000))}};}},
+ {s:'notice',w:5,f:(a)=>{const n=int(1000,90000);return{msg:`${who(a)} a gagné ${amt(n)} au casino`,d:{kind:'win',montant:n,jeu:pick(['roulette','blackjack','slots','poker']),multiplicateur:'×'+int(2,35),miseInitiale:money(int(100,6000))}};}},
+ {s:'info',w:7,f:(a)=>{const n=int(300,40000);return{msg:`${who(a)} a perdu ${amt(n)} au casino`,d:{kind:'loss',montant:n,jeu:pick(['roulette','blackjack','slots','poker']),sessionTotale:money(int(1000,120000))}};}},
+ {s:'info',w:4,f:(a)=>{const n=int(500,60000);return{msg:`${who(a)} a échangé ${amt(n)} contre des jetons`,d:{kind:'chips_in',montant:n,jetons:int(50,6000),caisse:'casino_diamond'}};}},
+ {s:'alerte',w:2,f:(a)=>{const n=int(120000,900000);return{msg:`Gain inhabituel — ${who(a)} a encaissé ${amt(n)}`,d:{kind:'jackpot_anomaly',montant:n,jeu:pick(['slots','roulette']),partiesJouees:int(2,20),tauxDeGain:int(80,100)+' %'}};}}
+],
+facture_ems:[
+ {s:'info',w:9,f:(a,b)=>{const n=int(400,6000);return{t:b,msg:`${who(b)} a facturé ${amt(n)} à ${who(a)} — ${it('prise en charge EMS')}`,d:{kind:'invoice',montant:n,soignant:b.name,hopital:pick(['Pillbox Hill','Sandy Shores','Paleto Bay']),acte:pick(['réanimation','soins légers','chirurgie','transport'])}};}},
+ {s:'info',w:6,f:(a)=>{const n=int(400,6000);return{msg:`${who(a)} a réglé sa facture EMS — ${amt(n)}`,d:{kind:'paid',montant:n,moyen:pick(['banque','espèces']),delai:int(1,72)+' h',soldeApres:money(int(0,80000))}};}},
+ {s:'notice',w:5,f:(a)=>{const n=int(400,6000);return{msg:`Facture EMS impayée — ${who(a)}`,d:{kind:'unpaid',montant:n,relances:int(1,5),anciennete:int(2,30)+' jours',consequence:pick(['prélèvement automatique','saisie sur salaire'])}};}},
+ {s:'info',w:4,f:(a,b)=>({t:b,msg:`${who(b)} a offert les soins à ${who(a)}`,d:{kind:'waived',soignant:b.name,motif:pick(['patient sans ressources','erreur médicale','geste du service']),montantAnnule:money(int(400,4000))}})},
+ {s:'alerte',w:2,f:(a,b)=>({t:b,msg:`Facture contestée — ${who(a)} conteste ${who(b)}`,d:{kind:'dispute',montant:money(int(1000,9000)),motif:pick(['soins non prodigués','montant excessif','patient déjà mort']),arbitrage:'staff'}})}
 ],
 admin:[
- {s:'info',w:6,f:(a,b,st)=>({t:st,msg:`${who(st)} a ${chance(.5)?'activé':'désactivé'} le noclip`,d:{staff:st.name,rang:'Modérateur',position:coords(),duree:int(1,22)+' min'}})},
- {s:'info',w:5,f:(a,b,st)=>({t:st,msg:`${who(st)} a réanimé <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,motif:'bug de mort — ticket #'+int(400,999),santeRendue:'100 %'}})},
- {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} s’est téléporté sur <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,commande:'/goto '+a.sid,position:coords()}})},
- {s:'notice',w:3,f:(a,b,st)=>{const v=pick(VEHS);return{t:st,msg:`${who(st)} a fait apparaître ${it(v[1])}`,d:{staff:st.name,modele:v[0],plaque:'ADMIN'+int(10,99),motif:'test de véhicule',supprimeApres:'10 min'}};}},
- {s:'notice',w:3,f:(a,b,st)=>{const i=pick(ITEMS),q=int(1,10);return{t:st,msg:`${who(st)} a donné ${q}× ${it(i[1])} à <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,item:i[0],quantite:q,motif:'restitution après bug',ticket:'#'+int(400,999)}};}},
- {s:'alerte',w:2,f:(a,b,st)=>{const n=int(10000,250000);return{t:st,msg:`${who(st)} a crédité ${amt(n)} à <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,montant:n,compte:'bank',motif:'remboursement — perte de véhicule',validePar:pick(STAFF).name,ticket:'#'+int(400,999)}};}},
- {s:'notice',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a activé le mode invincible`,d:{staff:st.name,duree:int(1,14)+' min',contexte:'intervention sur scène bloquée'}})},
- {s:'info',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a diffusé une annonce serveur`,d:{staff:st.name,texte:pick(['Redémarrage dans 15 minutes.','Rappel : pas de HRP en vocal.','Event braquage à 21 h.']),destinataires:int(60,128)+' joueurs'}})}
+ {s:'notice',w:6,f:(a,b,st)=>({t:st,msg:`${who(st)} a activé ${it('le noclip')}`,d:{kind:'noclip',staff:st.name,duree:int(1,25)+' min',zone:pick(ZONES),motif:pick(['vérification d’un report','contrôle anticheat','préparation d’event'])}})},
+ {s:'notice',w:5,f:(a,b,st)=>({t:st,msg:`${who(st)} s’est téléporté auprès de ${who(a)}`,d:{kind:'goto',staff:st.name,cible:a.name,serverId:a.sid,position:coords(),motif:'report en cours'}})},
+ {s:'alerte',w:4,f:(a,b,st)=>{const i=pick(ITEMS),q=int(1,20);return{t:st,msg:`${who(st)} a donné ${q}× ${it(i[1])} à ${who(a)}`,d:{kind:'give',staff:st.name,item:i[0],quantite:q,motif:pick(['remboursement validé','récompense d’event','perte due à un bug']),ticket:'#'+int(100,999)}};}},
+ {s:'notice',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a réanimé ${who(a)}`,d:{kind:'revive',staff:st.name,cible:a.name,motif:pick(['bug de mort','joueur bloqué au sol','event'])}})},
+ {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a consulté le dossier de ${who(a)}`,d:{kind:'lookup',staff:st.name,cible:a.name,identifiants:'consultés',motif:'vérification'}})},
+ {s:'alerte',w:2,f:(a,b,st)=>{const v=pick(VEHS);return{t:st,msg:`${who(st)} a fait apparaître ${it(v[1])}`,d:{kind:'spawn',staff:st.name,modele:v[0],plaque:plate(),supprimeApres:chance(.6)?int(2,30)+' min':'non supprimé'}};}}
 ],
 anticheat:[
- {s:'critique',w:3,f:(a)=>({msg:`Évènement réseau refusé — <strong>${a.name}</strong> a déclenché un trigger protégé`,d:{detection:'trigger_blacklist',trigger:'origin_banking:server:giveMoney',payload:'{ amount: 999999 }',action:'bloqué + capture',license:a.license,recidive:int(1,6),score:int(72,100)+'/100'}})},
- {s:'critique',w:2,f:(a)=>({msg:`Injection de ressource détectée — <strong>${a.name}</strong>`,d:{detection:'resource_injection',ressource:pick(['lynx_menu','eulen','redengine']),action:'déconnexion immédiate + bannissement auto',license:a.license,score:'100/100'}})},
- {s:'alerte',w:3,f:(a)=>({msg:`Santé modifiée hors gameplay — <strong>${a.name}</strong>`,d:{detection:'health_regen',valeurAvant:int(4,40),valeurApres:200,fenetre:'0,4 s',action:'santé restaurée + signalement',score:int(58,88)+'/100'}})},
- {s:'alerte',w:3,f:(a)=>({msg:`Téléportation anormale — <strong>${a.name}</strong>`,d:{detection:'position_delta',distance:int(400,4200)+' m',duree:'0,2 s',depart:coords(),arrivee:coords(),action:'position rétablie'}})},
- {s:'notice',w:3,f:(a)=>({msg:`Vitesse véhicule anormale — <strong>${a.name}</strong>`,d:{detection:'vehicle_speed',modele:pick(VEHS)[0],vitesse:int(320,690)+' km/h',plafondModele:int(180,260)+' km/h',action:'signalé, aucune sanction automatique'}})},
- {s:'alerte',w:2,f:(a)=>({msg:`Entité blacklistée refusée — <strong>${a.name}</strong>`,d:{detection:'entity_blacklist',entite:pick(['rhino','lazer','cargoplane']),action:'suppression immédiate',position:coords()}})},
- {s:'critique',w:1,f:(a)=>({msg:`Explosion non autorisée — <strong>${a.name}</strong>`,d:{detection:'explosion_owner',type:'EXP_TAG_ROCKET',zone:pick(ZONES),victimes:int(0,7),action:'explosion annulée + kick'}})}
+ {s:'critique',w:5,f:(a)=>({msg:`Injection de ressource détectée — ${who(a)}`,d:{detection:'resource_injection',ressource:pick(['eulen','redengine','lynx']),signature:hex(16),actionAuto:'kick immédiat',confiance:int(88,99)+' %'}})},
+ {s:'critique',w:4,f:(a)=>({msg:`Téléportation anormale — ${who(a)}`,d:{detection:'teleport',distance:int(400,4200)+' m',duree:'0,2 s',depuis:coords(),vers:coords(),faux_positif_possible:'tunnel/ascenseur'}})},
+ {s:'alerte',w:5,f:(a)=>({msg:`Vitesse excessive à pied — ${who(a)}`,d:{detection:'speedhack',vitesse:int(28,95)+' m/s',normale:'7 m/s',echantillons:int(4,30),zone:pick(ZONES)}})},
+ {s:'alerte',w:4,f:(a)=>({msg:`Munitions impossibles — ${who(a)}`,d:{detection:'ammo',arme:pick(ARMES)[0],munitions:int(500,9999),plafond:250,source:'inconnue'}})},
+ {s:'notice',w:4,f:(a)=>({msg:`Évènement réseau suspect — ${who(a)}`,d:{detection:'event_spam',evenement:pick(['esx:giveInventoryItem','bank:transfer','vehicle:spawn']),appels:int(40,900),fenetre:'10 s',bloque:true}})},
+ {s:'info',w:3,f:(a)=>({msg:`Contrôle automatique passé — ${who(a)}`,d:{detection:'scan_ok',verifications:int(12,40),duree:int(200,900)+' ms'}})}
 ],
 bans:[
- {s:'alerte',w:5,f:(a,b,st)=>{const j=int(2,30);return{t:st,msg:`${who(st)} a banni <strong>${a.name}</strong> pour ${j} jours`,d:{kind:'ban',type:'ban',cible:a.name,cibleKey:a.key,motif:pick(MOTIFS_SANCTION),duree:j+' jour(s)',expireAt:Date.now()+j*86400000,banId:'#'+int(1000,9999),staff:st.name,appelPossible:true}};}},
- {s:'critique',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a banni définitivement <strong>${a.name}</strong>`,d:{kind:'ban',type:'ban',cible:a.name,cibleKey:a.key,motif:'Cheat détecté — menu illégal',duree:'permanent',expireAt:null,banId:'#'+int(1000,9999),staff:st.name,identifiants:{license:a.license,discord:a.discord,steam:a.steam},appelPossible:false}})},
- {s:'info',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a levé le bannissement de <strong>${a.name}</strong>`,d:{kind:'unban',type:'unban',cible:a.name,cibleKey:a.key,motif:'appel accepté — erreur de détection',banId:'#'+int(1000,9999),staff:st.name}})},
- {s:'alerte',w:3,f:(a)=>({msg:`Connexion refusée — <strong>${a.name}</strong> est banni`,d:{kind:'ban_refuse',cible:a.name,cibleKey:a.key,banId:'#'+int(1000,9999),motif:pick(MOTIFS_SANCTION),identifiants:{license:a.license,discord:a.discord}}})},
- {s:'notice',w:2,f:(a,b,st)=>({t:st,msg:`Contestation déposée par <strong>${a.name}</strong>`,d:{kind:'appeal',cible:a.name,cibleKey:a.key,banId:'#'+int(1000,9999),canal:'Discord',examinePar:st.name}})}
+ {s:'critique',w:5,f:(a,b,st)=>({t:st,msg:`${who(st)} a banni ${who(a)} définitivement`,d:{type:'ban',cible:a.name,cibleKey:a.license,motif:pick(MOTIFS_SANCTION),duree:'permanent',preuve:pick(['clip Medal','capture anticheat','témoignages']),banId:'#'+int(1000,9999)}})},
+ {s:'alerte',w:5,f:(a,b,st)=>{const j=int(1,30);return{t:st,msg:`${who(st)} a banni ${who(a)} pour ${j} jour(s)`,d:{type:'ban',cible:a.name,cibleKey:a.license,motif:pick(MOTIFS_SANCTION),duree:j+' jours',expire:new Date(Date.now()+j*86400000).toLocaleDateString('fr-FR'),banId:'#'+int(1000,9999)}};}},
+ {s:'info',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a levé le bannissement de ${who(a)}`,d:{type:'unban',cible:a.name,cibleKey:a.license,motifLevee:pick(['appel accepté','erreur de modération','peine purgée']),banId:'#'+int(1000,9999)}})},
+ {s:'notice',w:3,f:(a)=>({msg:`Connexion refusée — <strong>${a.name}</strong> est banni`,d:{type:'refus',cible:a.name,cibleKey:a.license,banId:'#'+int(1000,9999),restant:pick(['permanent',int(1,29)+' jours'])}})},
+ {s:'alerte',w:2,f:(a,b,st)=>({t:st,msg:`Contournement détecté — <strong>${a.name}</strong> revient sous un autre compte`,d:{type:'evasion',cible:a.name,licenceBannie:'license:'+hex(40),nouvelleLicence:a.license,correlation:pick(['même IP','même Steam','même matériel'])}})}
 ],
 sanctions:[
- {s:'notice',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a averti <strong>${a.name}</strong> — ${pick(MOTIFS_SANCTION)}`,d:{staff:st.name,cible:a.name,type:'warn',cumul:int(1,3)+'/3',consequence:'au 3e avertissement : ban 3 jours',ticket:'#'+int(400,999)}})},
- {s:'notice',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a expulsé <strong>${a.name}</strong> — ${pick(MOTIFS_SANCTION)}`,d:{staff:st.name,cible:a.name,type:'kick',license:a.license,preuve:'clip Discord'}})},
- {s:'notice',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a coupé le vocal de <strong>${a.name}</strong>`,d:{staff:st.name,cible:a.name,duree:int(10,120)+' min',motif:'insultes HRP'}})}
-],
-staff:[
- {s:'notice',w:5,f:(a,b)=>({t:b,msg:`${who(a)} a signalé ${who(b)} — ${pick(MOTIFS_SANCTION)}`,d:{ticket:'#'+int(400,999),auteur:a.name,vise:b.name,priorite:pick(['haute','moyenne','basse']),preuve:chance(.6)?'clip joint':'aucune'}})},
- {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a pris en charge le ticket <span class="item">#${int(400,999)}</span>`,d:{staff:st.name,delaiPriseEnCharge:int(1,38)+' min',categorie:pick(['bug','report joueur','remboursement'])}})},
- {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a clôturé le ticket <span class="item">#${int(400,999)}</span>`,d:{staff:st.name,resolution:pick(['sanction appliquée','sans suite','bug corrigé','remboursement']),duree:int(4,180)+' min',satisfaction:int(3,5)+'/5'}})}
-],
-braquages:[
- {s:'alerte',w:4,f:(a,b)=>{const q=pick(BANQUES);return{t:b,msg:`${who(a)} a lancé le braquage de ${it(q)}`,d:{kind:'start',cible:q,equipe:int(2,6),niveauAlerte:int(1,5),unitesLSPD:int(0,8),position:coords()}};}},
- {s:'notice',w:4,f:(a)=>{const ok=chance(.6);return{msg:`${who(a)} a ${ok?'piraté':'échoué à pirater'} le coffre de ${it(pick(BANQUES))}`,d:{kind:'hack',resultat:ok?'succès':'échec',essais:int(1,4),duree:int(20,180)+' s',item:'thermal_charge'}};}},
- {s:'alerte',w:3,f:(a)=>{const n=int(18000,420000),q=pick(BANQUES);return{msg:`${who(a)} a récupéré ${amt(n)} dans ${it(q)}`,d:{kind:'loot',cible:q,butin:n,sacs:int(1,6),partage:int(2,5)+' participants'}};}},
- {s:'info',w:3,f:(a,b)=>({t:b,msg:`${who(b)} a interpellé ${who(a)} après le braquage`,d:{kind:'arrest',suspect:a.name,agent:b.name,butinRecupere:chance(.5),peine:int(20,90)+' mois'}})},
- {s:'info',w:2,f:(a)=>({msg:`${who(a)} a pris la fuite — braquage clôturé`,d:{kind:'escape',duree:int(4,22)+' min',vehicule:pick(VEHS)[0],zone:pick(ZONES)}})}
-],
-drogue:[
- {s:'info',w:6,f:(a)=>{const d=pick(DROGUES),q=int(4,40);return{msg:`${who(a)} a récolté ${q}× ${it(d[1])}`,d:{kind:'harvest',produit:d[0],quantite:q,champ:pick(ZONES),duree:int(3,20)+' min'}};}},
- {s:'notice',w:4,f:(a)=>{const d=pick(DROGUES),q=int(2,18);return{msg:`${who(a)} a transformé ${q}× ${it(d[1])} dans ${it(pick(LABOS))}`,d:{kind:'process',produit:d[0],quantite:q,rendement:int(55,95)+' %'}};}},
- {s:'notice',w:4,f:(a,b)=>{const d=pick(DROGUES),n=int(400,9000);return{t:b,msg:`${who(a)} a vendu ${it(d[1])} à ${who(b)} — ${amt(n)}`,d:{kind:'deal',produit:d[0],quantite:int(1,12),montant:n,zone:pick(ZONES),temoins:int(0,4)}};}},
- {s:'info',w:3,f:(a)=>{const n=int(300,4200);return{msg:`${who(a)} a écoulé sa marchandise auprès d’un revendeur — ${amt(n)}`,d:{kind:'sell_npc',montant:n,zone:pick(ZONES),risqueInterpellation:int(5,60)+' %'}};}},
- {s:'alerte',w:2,f:(a,b)=>({t:b,msg:`${who(b)} a saisi la marchandise de ${who(a)}`,d:{kind:'seizure',agent:b.name,produit:pick(DROGUES)[0],quantite:int(5,60),destruction:true}})},
- {s:'alerte',w:1,f:(a)=>({msg:`Laboratoire découvert par le LSPD — ${it(pick(LABOS))}`,d:{kind:'lab_raid',proprietairePresume:a.name,saisie:int(20,200)+' unités',position:coords()}})}
-],
-organisations:[
- {s:'info',w:5,f:(a)=>{const o=pick(ORGAS),i=pick(ITEMS),q=int(1,30);return{msg:`${who(a)} a déposé ${q}× ${it(i[1])} dans le coffre des ${it(o)}`,d:{kind:'stash_in',orga:o,item:i[0],quantite:q,capacite:int(200,900)+'/1000 kg'}};}},
- {s:'notice',w:4,f:(a)=>{const o=pick(ORGAS),i=pick(ITEMS),q=int(1,30);return{msg:`${who(a)} a retiré ${q}× ${it(i[1])} du coffre des ${it(o)}`,d:{kind:'stash_out',orga:o,item:i[0],quantite:q,grade:pick(['membre','lieutenant','patron'])}};}},
- {s:'info',w:3,f:(a,b)=>{const o=pick(ORGAS);return{t:b,msg:`${who(b)} a intégré ${who(a)} aux ${it(o)}`,d:{kind:'join',orga:o,parrain:b.name,grade:'recrue',effectif:int(4,28)}};}},
- {s:'notice',w:2,f:(a,b)=>{const o=pick(ORGAS);return{t:b,msg:`${who(b)} a exclu ${who(a)} des ${it(o)}`,d:{kind:'kick',orga:o,motif:pick(['trahison','inactivité','ordre du patron'])}};}},
- {s:'alerte',w:2,f:(a)=>{const o=pick(ORGAS);return{msg:`Territoire capturé par les ${it(o)} — ${pick(ZONES)}`,d:{kind:'turf',orga:o,zone:pick(ZONES),duree:int(6,40)+' min',pertes:int(0,7)}};}},
- {s:'notice',w:2,f:(a)=>{const o=pick(ORGAS),n=int(5000,180000);return{msg:`${who(a)} a retiré ${amt(n)} de la caisse des ${it(o)}`,d:{kind:'funds',orga:o,montant:n,soldeApres:money(int(2000,400000)),justificatif:'aucun'}};}}
-],
-craft:[
- {s:'alerte',w:4,f:(a)=>{const w=pick(ARMES);return{msg:`${who(a)} a fabriqué ${it(w[1])}`,d:{kind:'craft_weapon',arme:w[0],etabli:pick(ETABLIS),composants:['metal_scrap ×12','weapon_parts ×3'],duree:int(30,240)+' s'}};}},
- {s:'notice',w:5,f:(a)=>{const q=int(20,250);return{msg:`${who(a)} a fabriqué ${q}× ${it('Munitions 9mm')}`,d:{kind:'craft_ammo',item:'ammo-9',quantite:q,etabli:pick(ETABLIS),plafondHoraire:300}};}},
- {s:'info',w:4,f:(a)=>{const i=pick(ITEMS),q=int(1,10);return{msg:`${who(a)} a fabriqué ${q}× ${it(i[1])}`,d:{kind:'craft',item:i[0],quantite:q,etabli:pick(ETABLIS)}};}},
- {s:'info',w:3,f:(a)=>{const q=int(5,60);return{msg:`${who(a)} a récupéré ${q}× ${it('Ferraille')} à la casse`,d:{kind:'scrap',item:'metal_scrap',quantite:q,lieu:'Casse de Sandy Shores'}};}},
- {s:'alerte',w:1,f:(a,b)=>({t:b,msg:`${who(b)} a démantelé l’établi clandestin de ${who(a)}`,d:{kind:'raid',agent:b.name,etabli:pick(ETABLIS),saisie:int(2,14)+' armes'}})}
-],
-whitelist:[
- {s:'info',w:5,f:(a)=>({msg:`Candidature déposée par <strong>${a.name}</strong>`,d:{kind:'apply',discord:a.discord,age:int(16,38),experienceRP:pick(['débutant','1 an','3 ans et plus']),fiche:'#'+int(1000,9999)}})},
- {s:'notice',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a planifié l’entretien de <strong>${a.name}</strong>`,d:{kind:'interview',candidat:a.name,staff:st.name,creneau:'ce soir '+int(18,23)+' h'}})},
- {s:'info',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a accepté la candidature de <strong>${a.name}</strong>`,d:{kind:'accept',candidat:a.name,staff:st.name,delaiTraitement:int(1,6)+' jour(s)'}})},
- {s:'notice',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a refusé la candidature de <strong>${a.name}</strong>`,d:{kind:'reject',candidat:a.name,staff:st.name,motif:pick(['background trop léger','règlement non lu','entretien non honoré']),nouvelleTentative:'dans 15 jours'}})},
- {s:'info',w:2,f:(a,b,st)=>({t:st,msg:`${who(st)} a validé le changement de nom RP de <strong>${a.name}</strong>`,d:{kind:'rename',ancien:pick(PRENOMS)+' '+pick(NOMS),nouveau:a.name,staff:st.name}})}
-],
-systeme:[
- {s:'notice',w:4,f:()=>({msg:`Redémarrage programmé dans ${int(5,30)} minutes`,d:{kind:'restart',prevenus:int(40,128)+' joueurs',uptime:int(3,11)+' h'}})},
- {s:'alerte',w:3,f:()=>{const r=pick(['origin_garage','ox_inventory','origin_banking','origin_housing']);return{msg:`Erreur de ressource — ${it(r)}`,d:{kind:'error',ressource:r,message:"attempt to index a nil value (field 'PlayerData')",occurrences:int(2,140)}};}},
- {s:'info',w:4,f:()=>({msg:`Sauvegarde de la base terminée`,d:{kind:'backup',duree:int(2,40)+' s',taille:int(40,900)+' Mo',destination:'sauvegardes/'}})},
- {s:'notice',w:3,f:()=>({msg:`Charge élevée — ${int(96,128)} joueurs connectés`,d:{kind:'load',joueurs:int(96,128),tickrate:int(12,48)+' ms',memoire:int(3,11)+' Go'}})},
- {s:'info',w:2,f:()=>({msg:`Journalisation démarrée — framework ${pick(['qbox','qb','esx','standalone'])}`,d:{kind:'boot',ressource:'origin_logs',version:'1.0.0'}})},
- {s:'critique',w:1,f:()=>({msg:`Le serveur a cessé de répondre pendant ${int(4,22)} secondes`,d:{kind:'hitch',duree:int(4,22)+' s',causeProbable:pick(['sauvegarde bloquante','boucle dans une ressource','pic réseau']),joueursPerdus:int(0,18)}})}
+ {s:'notice',w:7,f:(a,b,st)=>({t:st,msg:`${who(st)} a averti ${who(a)}`,d:{type:'warn',cible:a.name,cibleKey:a.license,motif:pick(MOTIFS_SANCTION),avertissements:int(1,3),prochaineEtape:'expulsion'}})},
+ {s:'alerte',w:6,f:(a,b,st)=>({t:st,msg:`${who(st)} a expulsé ${who(a)}`,d:{type:'kick',cible:a.name,cibleKey:a.license,motif:pick(MOTIFS_SANCTION),retourPossible:'immédiat'}})},
+ {s:'notice',w:4,f:(a,b,st)=>({t:st,msg:`${who(st)} a coupé le vocal de ${who(a)}`,d:{type:'mute',cible:a.name,cibleKey:a.license,duree:int(10,120)+' min',motif:pick(['insultes HRP','spam vocal','micro saturé'])}})},
+ {s:'info',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a classé le signalement visant ${who(a)}`,d:{type:'classe',cible:a.name,motif:'aucune infraction constatée',dureeTraitement:int(2,40)+' min'}})},
+ {s:'info',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a retiré un avertissement à ${who(a)}`,d:{type:'unwarn',cible:a.name,motif:pick(['erreur de saisie','appel accepté']),avertissementsRestants:int(0,2)}})}
 ]};
 
 /* ---------- fabrique d'évènements de démonstration ----------
    Les serveurs RP vivent le soir : une distribution plate donnerait
    un graphique d'activité que personne ne reconnaîtrait. */
 const HOUR_W=[.55,.40,.25,.15,.10,.08,.10,.15,.22,.30,.38,.45,.50,.50,.55,.60,.68,.78,.90,1,1,.95,.85,.70];
-const CAT_W={bans:2,chat:18,economie:12,inventaire:10,connexions:9,vehicules:8,combat:8,drogue:5,jobs:5,
-             admin:4,organisations:4,proprietes:3.5,braquages:3,craft:3,sanctions:2.5,anticheat:2,
-             staff:1.5,whitelist:1.5,systeme:1};
+const CAT_W={inventaire:14,ecran_joueur:12,connexions:9,deconnexion:8,items_sol:8,combat:8,
+             casino:6,jobs:5,boutique_monnaie:4.5,boutique_produits:4,proprietes:3.5,facture_ems:3.5,
+             admin:3.5,boutique_caisse:3,sanctions:2.5,bans:2,anticheat:2};
 const CAT_PICK=[];
 Object.entries(CAT_W).forEach(([k,w])=>{ for(let i=0;i<Math.round(w*2);i++) CAT_PICK.push(k); });
 let SEQ=1;
@@ -1347,7 +1333,10 @@ function makeEvent(t){
   let a=pick(RP), b=pick(RP); while(b===a) b=pick(RP);
   const st=pick(STAFF);
   const r=tpl.f(a,b,st);
-  const acteur=(cat==='admin'||cat==='sanctions'||cat==='bans')?st:a;
+  // Qui AGIT : le staff dans les rubriques de modération, et partout où
+  // le modèle le déclare (`sf`) — sans quoi « Nyx a remboursé Luca »
+  // serait attribué à Luca, et le dossier du mauvais joueur s'ouvrirait.
+  const acteur=(tpl.sf||cat==='admin'||cat==='sanctions'||cat==='bans')?st:a;
   const txt=String(r.msg).replace(/<[^>]+>/g,'');
   return {
     id:'EV-'+String(SEQ++).padStart(6,'0'),
@@ -1639,6 +1628,9 @@ async function refresh() {
   // ses propres sources, et n'a que faire des filtres de catégorie.
   if (STATE.view === 'platform')    { renderNav(); renderActiveFilters(); return chargerPlateforme(); }
   if (STATE.view === 'platformlog') { renderNav(); renderActiveFilters(); return chargerJournal(); }
+  // Hors espace, l'API répond 409 à tout le reste : lui poser la question
+  // ne ferait qu'afficher une erreur là où il n'y a rien à afficher.
+  if (sansEspace()) { renderNav(); renderActiveFilters(); return; }
   const token = ++refreshToken;
   const from = windowFrom(), to = Date.now();
   try {
@@ -1686,8 +1678,13 @@ function buildNav() {
       <button class="nav-item" data-view="platform" style="--fam:var(--f-staff)">
         <span class="nav-dot"></span><span class="nav-label">Supervision</span><span class="nav-n"></span></button>
       <button class="nav-item" data-view="platformlog" style="--fam:var(--f-staff)">
-        <span class="nav-dot"></span><span class="nav-label">Journal d'administration</span><span class="nav-n"></span></button>
-      <div class="nav-group eyebrow">${esc((ME.espace && ME.espace.nom) || 'Espace courant')}</div>`;
+        <span class="nav-dot"></span><span class="nav-label">Journal d'administration</span><span class="nav-n"></span></button>`;
+    // ⚠️ AUCUN ESPACE = AUCUNE RUBRIQUE. Tant que l'administration n'est
+    // entrée nulle part, le rail s'arrête ici : afficher « Flux complet »
+    // et dix-sept rubriques qui répondraient toutes « entrez d'abord dans
+    // un espace » serait proposer dix-sept impasses.
+    if (!ME.espace) { host.innerHTML = html; return; }
+    html += `<div class="nav-group eyebrow">${esc(ME.espace.nom)}</div>`;
   }
   html += `
     <button class="nav-item" data-view="overview" style="--fam:var(--vio-hi)">
@@ -2335,6 +2332,11 @@ function syncHash(replace) {
   try { replace ? history.replaceState(null, '', h) : history.pushState(null, '', h); }
   catch (e) { location.hash = h; }
 }
+// Sans espace courant, seules les vues de plateforme existent. Le dire ici
+// plutôt qu'à chaque appel : un lien collé, un bouton Retour ou un
+// rechargement passent tous par là.
+function sansEspace() { return !!(ME.plateforme && !ME.espace); }
+
 function applyHash() {
   const brut = location.hash.replace(/^#/, '');
   if (!brut) return false;
@@ -2345,6 +2347,10 @@ function applyHash() {
   else if (seg[0] === 'bans') { STATE.view = 'bans'; STATE.cat = 'bans';
                                 STATE.banState = ['actifs','expires','tous'].includes(seg[1]) ? seg[1] : 'actifs'; }
   else                        { STATE.view = 'overview'; STATE.cat = 'all'; }
+  // Un lien vers un flux, collé par un collègue qui, lui, est dans un
+  // espace : on ne montre pas une page vide, on ramène à la supervision.
+  if (sansEspace() && STATE.view !== 'platform' && STATE.view !== 'platformlog')
+    STATE.view = 'platform';
   const p = new URLSearchParams(requete || '');
   STATE.q = p.get('q') || '';
   const per = Number(p.get('p'));
@@ -2863,7 +2869,9 @@ function carteEspace(sp, d) {
         ${sp.motifFermeture ? `<div class="lite-m">${esc(sp.motifFermeture)}</div>` : ''}
       </div>
       <div class="tools">
-        ${sp.id !== d.monEspace ? `<button class="btn sm" data-enter="${sp.id}">Entrer</button>` : ''}
+        ${ME.espace && sp.id === ME.espace.id
+            ? `<button class="btn sm" data-sortir="1">Sortir</button>`
+            : `<button class="btn sm" data-enter="${sp.id}">Entrer</button>`}
         <button class="btn sm" data-spacetoggle="${sp.id}" data-etat="${sp.etat}">${actif ? 'Fermer' : 'Rouvrir'}</button>
       </div>
     </div>
@@ -2931,7 +2939,8 @@ async function choisirProprietaire(spaceId) {
   ];
   const TOUT = DEMO_PERMS.map(p => p.id);
   const g = id => CATS.filter(c => c.group === id).map(c => c.id);
-  const G = { moderation:g('moderation'), joueurs:g('joueurs'), biens:g('biens'), rp:g('rp'), serveur:g('serveur') };
+  // Dérivé des GROUPES : ajouter un groupe au catalogue suffit.
+  const G = Object.fromEntries(GROUPS.map(gr => [gr.id, g(gr.id)]));
   const lire = ['logs.view','logs.mark','logs.export','players.view'];
   const moderer = ['actions.warn','actions.kick'];
   const bannir = ['actions.ban','actions.unban'];
@@ -2943,16 +2952,16 @@ async function choisirProprietaire(spaceId) {
     ['administrateur','Administrateur',90,TOUT.filter(x=>!['settings.discord','roles.manage'].includes(x)),tousCats,'Tout sauf la liaison Discord et la composition des rôles.',D+'01'],
     ['developpeur','Développeur',80,u(lire,['audit.view']),tousCats,'Lecture complète, y compris les journaux techniques.',''],
     ['gerant_anticheat','Gérant Brigade Anti-Cheat',70,u(lire,moderer,bannir,['players.identifiers','audit.view']),u(G.moderation,G.joueurs,G.rp),'Pilote la lutte contre la triche : détections, bannissements, appels.',D+'02'],
-    ['responsable_remboursement','Responsable Remboursement',65,u(lire,['players.identifiers','actions.give','actions.warn']),u(G.biens,G.joueurs,['staff','bans','sanctions']),'Instruit les demandes de remboursement et rend les biens perdus.',D+'03'],
-    ['gerant_legal','Gérant Légal',60,u(lire,['actions.warn']),u(G.biens,G.rp,G.joueurs,['staff']),'Suit les entreprises, les emplois et les propriétés.',D+'04'],
-    ['gerant_illegal','Gérant Illégal',60,u(lire,['actions.warn']),u(G.rp,G.biens,G.joueurs,['staff']),'Suit les organisations, les braquages et les trafics.',D+'05'],
-    ['gerant_animation','Gérant Animation',60,u(lire,['actions.give']),u(G.joueurs,G.rp,['systeme','staff']),'Prépare les events et dédommage les participants.',D+'06'],
-    ['gerant_communication','Gérant Communication',60,lire,u(G.joueurs,['staff','whitelist']),'Suit les annonces, les candidatures et les retours joueurs.',D+'07'],
+    ['responsable_remboursement','Responsable Remboursement',65,u(lire,['players.identifiers','actions.give','actions.warn']),u(G.biens,G.boutique,G.joueurs,['bans','sanctions']),'Instruit les demandes de remboursement et rend les biens perdus.',D+'03'],
+    ['gerant_legal','Gérant Légal',60,u(lire,['actions.warn']),u(G.biens,G.rp,G.joueurs),'Suit les entreprises, les emplois et les propriétés.',D+'04'],
+    ['gerant_illegal','Gérant Illégal',60,u(lire,['actions.warn']),u(G.rp,G.biens,G.joueurs),'Suit les organisations, les braquages et les trafics.',D+'05'],
+    ['gerant_animation','Gérant Animation',60,u(lire,['actions.give']),u(G.joueurs,G.rp,G.boutique),'Prépare les events et dédommage les participants.',D+'06'],
+    ['gerant_communication','Gérant Communication',60,lire,u(G.joueurs),'Suit les annonces, les candidatures et les retours joueurs.',D+'07'],
     ['moderateur','Modérateur',50,u(lire,moderer),u(G.moderation,G.joueurs,G.rp,G.biens),'Traite les signalements du quotidien : avertir, expulser.',D+'08'],
     ['anticheat','Brigade Anti-Cheat',45,u(lire,moderer,['actions.ban']),u(['anticheat','bans','sanctions'],G.joueurs),'Traite les détections et bannit les tricheurs (sans lever).',D+'09'],
-    ['helper','Helper',30,['logs.view','players.view','actions.warn'],u(G.joueurs,['staff']),'Accompagne les joueurs et remonte ce qui dépasse.',D+'10'],
+    ['helper','Helper',30,['logs.view','players.view','actions.warn'],u(G.joueurs),'Accompagne les joueurs et remonte ce qui dépasse.',D+'10'],
     ['animateur','Animateur',25,['logs.view','players.view'],u(G.joueurs,G.rp),'Anime les events, en lecture seule sur les journaux.',D+'11'],
-    ['communication','Communication',25,['logs.view'],u(G.joueurs,['staff','whitelist']),'Rédige et relaie, sans pouvoir de modération.','']
+    ['communication','Communication',25,['logs.view'],u(G.joueurs),'Rédige et relaie, sans pouvoir de modération.','']
   ].map(([key,label,rank,perms,cats,desc,dc]) => ({
     key, label, rank, perms, cats: tousCats.filter(c => cats.includes(c)),
     desc, discordRoleId: dc, builtin: true
@@ -3012,7 +3021,7 @@ async function openTeam() {
    ============================================================ */
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
-    + '[data-memoff],[data-memdel],[data-enter],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],'
+    + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],'
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
@@ -3055,6 +3064,7 @@ document.addEventListener('click', async ev => {
     catch (e) { toast(e.message); }
     return;
   }
+  if (D.sortir) return sortirEspace();
   if (D.enter) {
     try { const r = await api('/api/platform/enter', { method:'POST', body: JSON.stringify({ spaceId: Number(D.enter) }) });
           toast('Vous êtes dans « ' + r.espace + ' ».'); location.reload(); } catch (e) { toast(e.message); }
@@ -3176,7 +3186,9 @@ function rendrePlateforme() {
         <span class="pulse-dot" style="--c:${s.c}"></span>
         <span><span class="pname">${esc(e.nom)}</span>
           <span class="psub">#${e.id} · ${esc(s.mot)}${e.proprietaire ? ' · ' + esc(e.proprietaire) : ' · sans propriétaire'}</span></span>
-        <button class="btn sm" data-enter="${e.id}">Entrer</button>
+        ${ME.espace && e.id === ME.espace.id
+            ? `<button class="btn sm" data-sortir="1">Sortir</button>`
+            : `<button class="btn sm" data-enter="${e.id}">Entrer</button>`}
       </div>
       <div class="pnums">
         <span class="pnum"><b>${(e.evenements24 || 0).toLocaleString('fr-FR')}</b><span>24 h</span></span>
@@ -3486,7 +3498,24 @@ function onLive(e) {
   }
   if (!softTimer) softTimer = setTimeout(() => { softTimer = null; if (STATE.live) refresh(); }, 15000);
 }
-function startStream() { if (stopStream) stopStream(); stopStream = DS.stream(onLive); }
+/* ---------- ressortir d'un espace ----------
+   Le pendant d'« Entrer ». L'administration n'habite aucun espace : y
+   rester après coup lui ferait relire un flux de modération qui n'est pas
+   son travail, et lui masquerait la supervision. ---------- */
+async function sortirEspace() {
+  if (MODE === 'demo') return toast('Mode démonstration : rien n’est enregistré.');
+  try {
+    await api('/api/platform/enter', { method:'POST', body: JSON.stringify({ spaceId: 0 }) });
+    location.hash = '#/plateforme';
+    location.reload();
+  } catch (e) { toast(e.message); }
+}
+
+function startStream() {
+  if (stopStream) stopStream();
+  if (sansEspace()) { stopStream = null; return; }   // pas d'espace, pas de direct
+  stopStream = DS.stream(onLive);
+}
 
 $('#liveBtn').addEventListener('click', () => {
   STATE.live = !STATE.live;
@@ -3595,19 +3624,38 @@ async function startPanel() {
     }
     $('#whoAv').style.cssText = avatarStyle({ name: ME.pseudo, hue: 268 });
     $('#whoAv').textContent = initials({ name: ME.pseudo });
-    $('#teamBtn').hidden = !can('accounts.manage');
-    $('#rolesBtn').hidden = !can('roles.manage');
-    $('#discordBtn').hidden = !can('settings.discord');
+    // ⚠️ Ces cinq boutons agissent DANS un espace : sans espace courant,
+    // ils ouvriraient des écrans que l'API refuse (409). Seul « Espaces de
+    // logs » reste — c'est par lui qu'on entre quelque part.
+    const dansUnEspace = !!ME.espace;
+    $('#teamBtn').hidden = !can('accounts.manage') || !dansUnEspace;
+    $('#rolesBtn').hidden = !can('roles.manage') || !dansUnEspace;
+    $('#discordBtn').hidden = !can('settings.discord') || !dansUnEspace;
     $('#platformBtn').hidden = !ME.plateforme;
     if (ME.espace && ME.espace.visite) {
       // Une visite d'administration doit se voir : on ne modère pas un
-      // autre serveur en croyant être chez soi.
+      // autre serveur en croyant être chez soi. Et elle se quitte d'un
+      // clic — entrer sans pouvoir ressortir serait un aller simple.
       $('#modeTag').className = 'tag-mode demo';
-      $('#modeTag').textContent = 'visite — ' + ME.espace.nom;
+      $('#modeTag').textContent = 'visite — ' + ME.espace.nom + ' ✕';
+      $('#modeTag').title = 'Administration de plateforme : vous passez avant le fondateur de cet espace. Cliquez pour ressortir.';
+      $('#modeTag').setAttribute('role', 'button');
+      $('#modeTag').setAttribute('tabindex', '0');
+      $('#modeTag').onclick = sortirEspace;
     } else if (ME.espace) {
       $('#modeTag').textContent = ME.espace.nom;
+    } else if (ME.plateforme) {
+      // Aucun espace : le dire franchement. « Origin Roleplay » en barre
+      // laisserait croire qu'on est quelque part.
+      $('#modeTag').className = 'tag-mode demo';
+      $('#modeTag').textContent = 'administration — aucun espace';
+      $('#modeTag').title = 'Vous suivez tous les espaces. Entrez dans l’un d’eux depuis « Espaces de logs » ou la supervision.';
     }
-    $('#auditBtn').hidden = !can('audit.view');
+    $('#auditBtn').hidden = !can('audit.view') || !dansUnEspace;
+    // La recherche, la période, le direct et l'export portent tous sur les
+    // journaux d'un espace : hors espace, ils ne cherchent rien.
+    for (const sel of ['#findBox', '#rangeSeg', '#liveBtn', '#exportBtn', '#railLive'])
+      { const n = $(sel); if (n) n.hidden = !dansUnEspace; }
     document.title = `Origin Roleplay — Journal serveur (${ME.pseudo})`;
   }
   if (MODE === 'demo') {
@@ -3616,6 +3664,9 @@ async function startPanel() {
     ME.pseudo = 'Owen'; ME.role = 'fondateur'; ME.roleLabel = 'Fondateur';
     ME.roles = [{ id:'fondateur', label:'Fondateur' }];
     ME.source = 'local'; ME.plateforme = true;
+    // L'aperçu montre un administrateur DÉJÀ ENTRÉ dans un espace : c'est
+    // l'état où le panneau a le plus à montrer.
+    ME.espace = { id:1, nom:'Origin Roleplay', visite:false };
     ME.perms = DEMO_PERMS.map(p => p.id); ME.cats = CATS.map(c => c.id);
     $('#whoBox').hidden = false;
     $('#whoName').textContent = ME.pseudo;

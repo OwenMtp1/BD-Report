@@ -16,7 +16,7 @@ CreateThread(function()
       local p = Framework.GetPlayer(src); if not p then return end
       local verbe = operation == 'add' and 'a reçu' or 'a perdu'
       Origin.Log({
-        cat = 'economie', sev = montant >= 50000 and 'notice' or 'info', actor = p,
+        cat = 'inventaire', sev = montant >= 50000 and 'notice' or 'info', actor = p,
         msg = ('%s %s %s $ (%s)'):format(p.name, verbe, montant, compte),
         data = { kind = 'money', compte = compte, montant = montant,
                  operation = operation, motif = raison },
@@ -41,7 +41,7 @@ CreateThread(function()
         { kind = 'job', job = job.name, grade = job.grade, ancien = ancien and ancien.name }, p)
     end)
     -- ESX ne publie pas les mouvements d'argent. Ajoutez dans vos scripts :
-    --   exports['origin_logs']:Log({ cat='economie', sev='info', actor=source,
+    --   exports['origin_logs']:Log({ cat='inventaire', sev='info', actor=source,
     --     msg=('%s a retiré %s $'):format(nom, montant), data={ kind='money', montant=montant } })
   end
 
@@ -98,7 +98,9 @@ CreateThread(function()
       { kind = 'warn', type = 'warn', cible = d.target, motif = d.reason, staff = d.author })
   end)
   AddEventHandler('txAdmin:events:playerWhitelisted', function(d)
-    Origin.Info('whitelist', ('%s a whitelisté %s'):format(d.author or 'staff', d.target or '?'),
+    -- La whitelist n'a plus de rubrique à elle : c'est un accès au serveur,
+    -- donc une affaire de connexion.
+    Origin.Info('connexions', ('%s a whitelisté %s'):format(d.author or 'staff', d.target or '?'),
       { kind = 'whitelist', cible = d.target, staff = d.author })
   end)
   AddEventHandler('txAdmin:events:announcement', function(d)
@@ -106,11 +108,11 @@ CreateThread(function()
       { kind = 'announce', auteur = d.author, texte = d.message })
   end)
   AddEventHandler('txAdmin:events:scheduledRestart', function(d)
-    Origin.Notice('systeme', ('Redémarrage programmé dans %s'):format(d.secondsRemaining and (d.secondsRemaining .. ' s') or '?'),
+    Origin.Notice('admin', ('Redémarrage programmé dans %s'):format(d.secondsRemaining and (d.secondsRemaining .. ' s') or '?'),
       { kind = 'restart', secondes = d.secondsRemaining })
   end)
   AddEventHandler('txAdmin:events:serverShuttingDown', function(d)
-    Origin.Alerte('systeme', ('Arrêt du serveur — %s'):format(d.message or 'sans message'),
+    Origin.Alerte('admin', ('Arrêt du serveur — %s'):format(d.message or 'sans message'),
       { kind = 'shutdown', delai = d.delay, auteur = d.author })
   end)
 end)
@@ -127,7 +129,7 @@ CreateThread(function()
     local ms = GetGameTimer()
     -- On ne signale qu'un franchissement de seuil, pas chaque minute.
     if joueurs >= 100 and dernier < 100 then
-      Origin.Notice('systeme', ('Charge élevée — %d joueurs connectés'):format(joueurs),
+      Origin.Notice('admin', ('Charge élevée — %d joueurs connectés'):format(joueurs),
         { kind = 'load', joueurs = joueurs, uptime = math.floor(ms / 60000) .. ' min' })
     end
     dernier = joueurs

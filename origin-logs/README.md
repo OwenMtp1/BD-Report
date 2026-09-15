@@ -20,16 +20,31 @@ Installation pas à pas : **[DEPLOIEMENT.md](DEPLOIEMENT.md)**.
 
 ## Ce que le panneau couvre
 
-**19 catégories**, rangées par métier — le groupe porte la couleur, la
-catégorie porte le nom :
+**17 rubriques**, rangées par métier — le groupe porte la couleur, la
+rubrique porte le nom :
 
-| Groupe | Catégories |
+| Groupe | Rubriques |
 |---|---|
-| **Modération** | `BAN` Bannissements · `SNC` Sanctions · `ACH` Anticheat · `RPT` Reports & tickets |
-| **Joueurs** | `CNX` Connexions · `CHT` Chat & commandes · `CBT` Combat & morts |
-| **Argent & biens** | `ECO` Économie · `INV` Inventaire · `VEH` Véhicules · `CRF` Craft & armes |
-| **Activités RP** | `JOB` Jobs · `IMM` Propriétés · `ORG` Organisations · `BRQ` Braquages · `DRG` Drogue & labos |
-| **Staff & serveur** | `ADM` Administration · `WLT` Whitelist · `SYS` Serveur |
+| **Modération** | `BAN` Bannissement · `AVT` Avertissement · `ACH` Anticheat |
+| **Joueurs** | `CNX` Connexion · `DCX` Déconnexion · `ECR` Écran du joueur · `MRT` Mort joueur |
+| **Argent & biens** | `TRX` Transactions et coffres · `SOL` Items au sol · `IMM` Immobilier |
+| **Boutique** | `BQC` Boutique : caisse · `BQM` Boutique : monnaie et grades · `BQP` Boutique : produits |
+| **Activités RP** | `ENT` Entreprise et crew · `CAS` Casino · `EMS` Facture EMS |
+| **Staff & serveur** | `STF` Action staff |
+
+Ce sont les rubriques du serveur, pas une liste générique : ce qui n'y figure
+pas n'est plus journalisé du tout (le chat de proximité, les véhicules, le
+craft, la drogue, les braquages, les organisations, la whitelist). Couper une
+rubrique à la source coûte moins cher que de la masquer dans le panneau —
+`Config.Categories` dans `resource/config.lua` le fait serveur par serveur.
+
+⚠️ **La rubrique est la clé du reste.** Elle décide de ce qu'un rôle voit
+(chaque rôle porte sa liste), de ce que la recherche peut atteindre et de ce
+que le serveur de jeu a le droit d'écrire. En ajouter une : une ligne dans
+`api/catalogue.js` (id **stable** — il est stocké sur chaque évènement), et
+elle apparaît partout, rail compris. Une rubrique inconnue reçue du jeu est
+rattachée à **Action staff** plutôt que rejetée : c'est une faute de frappe
+dans un script, et elle doit se voir quelque part.
 
 **Quatre gravités** — critique, alerte, à vérifier, info — lisibles d'un coup
 d'œil à la strie de couleur en début de ligne.
@@ -42,7 +57,7 @@ d'œil à la strie de couleur en début de ligne.
   le panneau existe pour poser. Le graphique d'activité est **empilé par
   gravité** — 40 évènements peuvent être 40 messages de chat ou 3 détections,
   et seul l'empilement montre quand la soirée a dérapé.
-- **Bannissements** — un **registre**, pas une relecture du flux : qui est
+- **Bannissement** — un **registre**, pas une relecture du flux : qui est
   banni *maintenant*, pour quoi, par qui, jusqu'à quand. C'est cette table
   que le serveur de jeu interroge à chaque connexion. Filtres en cours /
   terminés / tous, et levée en un clic pour qui en a le droit.
@@ -119,10 +134,28 @@ est en panne.
 
 ## Supervision de la plateforme
 
-L'administrateur de plateforme n'a **pas de panneau par défaut**. Il surveille
+L'administrateur de plateforme n'a **aucun espace par défaut**. Il surveille
 des espaces, il n'en habite aucun : à la connexion il arrive sur la
-**supervision**, pas sur un flux d'évènements. Entrer dans un espace reste
-possible — c'est un geste explicite, et la barre affiche alors « visite ».
+**supervision**, sans serveur courant. Le rail s'arrête là — pas de « Flux
+complet », pas de rubriques : elles répondraient toutes « entrez d'abord dans
+un espace », et dix-sept impasses ne valent mieux que rien.
+
+⚠️ **Ce n'est pas seulement l'écran d'accueil qui change.** Tant qu'il n'est
+entré nulle part, l'API refuse (409) toute route d'espace — journaux,
+joueurs, registre, statistiques. Se replier sur le premier espace aurait servi
+les journaux d'un client au hasard ; son compte a beau être né quelque part,
+ce n'est plus un domicile.
+
+**Entrer** est un geste, depuis la supervision ou « Espaces de logs », et la
+barre affiche alors « visite — nom de l'espace · sortir ». **Ressortir** en
+est un aussi : un clic sur cette étiquette, ou le bouton *Sortir* sur la carte
+de l'espace.
+
+🔑 **En visite, l'administration passe AVANT le fondateur de l'espace.**
+Elle garde tous ses droits et toutes les rubriques, quel que soit l'espace :
+elle peut composer et retirer ses rôles, rétrograder son fondateur, rouvrir un
+espace fermé. Entrer chez quelqu'un ne revient pas à s'y soumettre — sinon
+un fondateur pourrait se rendre intouchable dans son propre espace.
 
 ### Vue d'ensemble de tous les espaces
 
@@ -217,20 +250,20 @@ accès**, en crée de nouveaux, et relie chacun à un rôle Discord (écran
 
 | Rang | Rôle | Fait | Voit |
 |---|---|---|---|
-| 100 | **Fondateur** | tout, y compris la liaison Discord, les rôles et les comptes | 19 rubriques |
-| 90 | **Administrateur** | tout sauf la liaison Discord et la composition des rôles | 19 |
-| 80 | **Développeur** | lecture et journal du panneau | 19 |
-| 70 | **Gérant Brigade Anti-Cheat** | avertir, expulser, bannir, lever, identifiants | 12 |
-| 65 | **Responsable Remboursement** | rendre un bien, avertir, identifiants | 10 |
-| 60 | **Gérant Légal** | avertir | 13 |
-| 60 | **Gérant Illégal** | avertir | 13 |
+| 100 | **Fondateur** | tout, y compris la liaison Discord, les rôles et les comptes | 17 rubriques |
+| 90 | **Administrateur** | tout sauf la liaison Discord et la composition des rôles | 17 |
+| 80 | **Développeur** | lecture et journal du panneau | 17 |
+| 70 | **Gérant Brigade Anti-Cheat** | avertir, expulser, bannir, lever, identifiants | 10 |
+| 65 | **Responsable Remboursement** | rendre un bien, avertir, identifiants | 12 |
+| 60 | **Gérant Légal** | avertir | 10 |
+| 60 | **Gérant Illégal** | avertir | 10 |
 | 60 | **Gérant Animation** | rendre un bien | 10 |
-| 60 | **Gérant Communication** | lecture | 5 |
-| 50 | **Modérateur** | avertir, expulser | 16 |
-| 45 | **Brigade Anti-Cheat** | avertir, expulser, bannir *(sans lever)* | 6 |
+| 60 | **Gérant Communication** | lecture | 4 |
+| 50 | **Modérateur** | avertir, expulser | 13 |
+| 45 | **Brigade Anti-Cheat** | avertir, expulser, bannir *(sans lever)* | 7 |
 | 30 | **Helper** | avertir | 4 |
-| 25 | **Animateur** | lecture | 8 |
-| 25 | **Communication** | lecture | 5 |
+| 25 | **Animateur** | lecture | 7 |
+| 25 | **Communication** | lecture | 4 |
 
 ### Le rang, et qui peut quoi
 
@@ -308,20 +341,32 @@ La base est un fichier : la sauvegarder, c'est le copier.
 `server.cfg`. Un seul fichier à éditer : `config.lua` (adresse de l'API et
 `ServerKey`, identique à celle du serveur).
 
-Elle fonctionne **sans framework** : les connexions, le chat, les morts, les
-explosions et les détections passent par les évènements natifs de FiveM. ESX,
+Elle fonctionne **sans framework** : les connexions, les déconnexions, les
+morts et les détections passent par les évènements natifs de FiveM. ESX,
 QBCore, QBox, ox_inventory et txAdmin sont raccordés **en plus** quand ils
 sont présents — rien ne casse s'ils sont absents.
 
-Pour journaliser depuis vos propres scripts :
+**Ce que la ressource remplit toute seule** : `Connexion`, `Déconnexion`,
+`Mort joueur`, `Anticheat`, `Bannissement`, `Avertissement`, `Action staff`,
+et — via les hooks de framework — `Transactions et coffres` et
+`Entreprise et crew`.
+
+**Ce que vos scripts doivent émettre** : `Écran du joueur`, `Items au sol`,
+`Immobilier`, `Casino`, `Facture EMS` et les trois rubriques `Boutique`.
+Aucun framework ne les expose de façon standard — elles dépendent de vos
+ressources, et c'est justement pourquoi elles passent par l'export :
 
 ```lua
 exports['origin_logs']:Log({
-  cat = 'braquages', sev = 'alerte', actor = source,
-  msg = ('%s a lancé le braquage de la Fleeca'):format(GetPlayerName(source)),
-  data = { kind = 'start', banque = 'Fleeca Legion', equipe = 4 }
+  cat = 'casino', sev = 'notice', actor = source,
+  msg = ('%s a gagné 42 000 $ à la roulette'):format(GetPlayerName(source)),
+  data = { kind = 'win', montant = 42000, jeu = 'roulette', table = 'table_3' }
 })
 ```
+
+Un évènement bien journalisé porte son `data` : c'est lui qui remplit
+l'inspecteur, et c'est lui qu'on relit six semaines plus tard quand le joueur
+conteste. Le `msg` sert à lire, le `data` sert à prouver.
 
 ---
 

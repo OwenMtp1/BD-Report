@@ -26,7 +26,7 @@ CreateThread(function()
   end
   print(('[origin_logs] framework détecté : %s'):format(Framework.nom))
   Origin.Log({
-    cat = 'systeme', sev = 'info',
+    cat = 'admin', sev = 'info',
     msg = ('Journalisation démarrée — framework %s'):format(Framework.nom),
     data = { kind = 'boot', framework = Framework.nom, ressource = GetCurrentResourceName(),
              version = GetResourceMetadata(GetCurrentResourceName(), 'version', 0) },
