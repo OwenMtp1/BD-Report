@@ -46,6 +46,13 @@ if (!cle) {
     'RETENTION_DAYS=30',
     '# Passez à 1 dès que le site est servi en HTTPS :',
     'SECURE_COOKIE=0',
+    '',
+    '# --- Connexion Discord (facultative) ---',
+    '# Seuls ces DEUX SECRETS vivent ici. Le serveur, le rôle staff et les',
+    '# rôles du panneau se règlent dans le panneau (écran « Liaison Discord »),',
+    '# pour qu\'un fondateur puisse les changer sans toucher au fichier.',
+    '#DISCORD_CLIENT_SECRET=',
+    '#DISCORD_BOT_TOKEN=',
     ''
   ].join('\n'), { mode: 0o600 });
 }
@@ -87,6 +94,15 @@ L('     2. Dans resource/config.lua, coller la clé ci-dessus :');
 L(`        Config.ServerKey = '${cle}'`);
 L('        puis, dans server.cfg :   ensure baseevents');
 L('                                  ensure origin_logs');
+L('');
+L('     Pour brancher la connexion Discord (facultatif) :');
+L('        a. Application sur discord.com/developers → OAuth2 : ajoutez');
+L('           l\'URL de redirection affichée par le panneau.');
+L('        b. Créez un bot, invitez-le sur votre serveur (aucune permission');
+L('           particulière : il ne fait que LIRE les membres et les rôles).');
+L('        c. Collez CLIENT_SECRET et BOT_TOKEN dans api/.env, relancez,');
+L('           puis ouvrez « Liaison Discord » dans le panneau pour relier');
+L('           le rôle staff et chaque rôle du panneau.');
 L('');
 L('     Pour voir le panneau se remplir sans serveur de jeu :');
 L(`        SERVER_KEY=${cle} node seed-demo.js 600`);

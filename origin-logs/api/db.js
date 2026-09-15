@@ -126,6 +126,16 @@ CREATE TABLE IF NOT EXISTS staff(
   last_login INTEGER
 );
 
+-- Réglages modifiables depuis le panneau (liaison Discord, IDs de rôles).
+-- En base plutôt qu'en fichier : un fondateur doit pouvoir les changer
+-- sans accès SSH, et chaque changement laisse une trace.
+CREATE TABLE IF NOT EXISTS settings(
+  k          TEXT PRIMARY KEY,
+  v          TEXT,
+  updated_at INTEGER,
+  by_name    TEXT
+);
+
 CREATE TABLE IF NOT EXISTS sessions(
   token      TEXT PRIMARY KEY,
   staff_id   INTEGER NOT NULL,
@@ -150,10 +160,23 @@ CREATE TABLE IF NOT EXISTS audit(
 CREATE INDEX IF NOT EXISTS idx_au_ts ON audit(ts DESC);
 `;
 
+// Les bases déjà en service n'ont pas les colonnes Discord : on les
+// ajoute au démarrage plutôt que d'exiger une migration manuelle.
+function ensureColumn(db, table, name, decl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+  if (!cols.includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${decl}`);
+}
+
 function open(file) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
+  ensureColumn(db, 'staff', 'discord_id',       'TEXT');
+  ensureColumn(db, 'staff', 'avatar',           'TEXT');
+  ensureColumn(db, 'staff', 'roles',            'TEXT');      // JSON : plusieurs rôles cumulés
+  ensureColumn(db, 'staff', 'source',           "TEXT NOT NULL DEFAULT 'local'");
+  ensureColumn(db, 'staff', 'roles_checked_at', 'INTEGER');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_discord ON staff(discord_id) WHERE discord_id IS NOT NULL');
   return db;
 }
 

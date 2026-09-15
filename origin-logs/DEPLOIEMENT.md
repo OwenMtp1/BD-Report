@@ -74,6 +74,52 @@ journalctl -u origin-logs -f
 
 ---
 
+## 1 bis. La connexion Discord (recommandé)
+
+Sans elle, le panneau fonctionne avec des mots de passe. Avec elle, le staff
+entre avec son compte Discord et ses **rôles Discord décident de ses droits**.
+
+**a. L'application.** Sur `discord.com/developers/applications` → *New
+Application*. Dans **OAuth2**, ajoutez l'URL de redirection exacte :
+
+```
+https://logs.origin-rp.fr/api/auth/discord/callback
+```
+
+(le panneau affiche celle qu'il attend dans l'écran « Liaison Discord » ;
+c'est cette valeur-là qu'il faut coller, au caractère près).
+
+**b. Le bot.** Onglet **Bot** → *Add Bot*, copiez le **jeton**. Invitez-le sur
+votre serveur avec le scope `bot` — **aucune permission n'est nécessaire** : il
+ne fait que LIRE la liste des membres et leurs rôles.
+
+**c. Les deux secrets** dans `api/.env`, puis relancez l'API :
+
+```
+DISCORD_CLIENT_SECRET=...   # onglet OAuth2 de l'application
+DISCORD_BOT_TOKEN=...       # onglet Bot
+```
+
+**d. Le reste dans le panneau.** Connectez-vous avec le compte fondateur créé
+à l'étape 1, puis **Liaison Discord** dans la colonne de gauche :
+
+1. identifiant de l'application (Client ID) et **identifiant du serveur
+   Discord** (clic droit sur le serveur → *Copier l'identifiant*, mode
+   développeur activé) ;
+2. **Charger les rôles du serveur** — le bot les lit, et les champs deviennent
+   des listes : plus d'identifiant à recopier ;
+3. le **rôle staff** (obligatoire pour entrer) ;
+4. un rôle Discord pour chaque rôle du panneau.
+
+⚠️ Un membre qui a le rôle staff mais **aucun** rôle du panneau est refusé,
+avec un message qui le lui dit — c'est volontaire : mieux vaut un refus
+explicite qu'un panneau vide sans explication.
+
+⚠️ Gardez au moins **un compte fondateur par mot de passe**. C'est lui qui
+rouvre la porte si Discord est indisponible ou si la liaison est mal réglée.
+
+---
+
 ## 2. Le site — HTTPS et reverse proxy
 
 ⚠️ **N'exposez jamais le port 8080 directement.** L'API ne fait pas de TLS :
@@ -206,6 +252,10 @@ sqlite3 /srv/origin-logs/api/data/origin-logs.db ".backup '/sauvegardes/logs-$(d
 | Symptôme | Cause la plus fréquente |
 |---|---|
 | Le panneau affiche « démonstration » | La page n'est pas servie par l'API — ouvrez le domaine, pas le fichier. |
+| Pas de bouton « Continuer avec Discord » | Il manque un des cinq réglages ; l'écran de connexion dit lequel. |
+| « Lien de connexion expiré ou invalide » | L'URL de redirection de l'application Discord ne correspond pas exactement à celle affichée dans « Liaison Discord ». |
+| « Vous n'êtes pas sur le serveur Discord » alors que si | Le bot n'est pas invité sur CE serveur, ou l'identifiant du serveur est faux. |
+| Un staff garde ses droits après rétrogradation | Normal jusqu'à 15 minutes : c'est le délai de revérification. |
 | « Clé serveur invalide » en console de jeu | `Config.ServerKey` ≠ `SERVER_KEY`. |
 | Aucun évènement n'arrive | L'API n'est pas joignable depuis le serveur de jeu : testez `curl http://127.0.0.1:8080/api/catalogue`. |
 | Pas de morts ni d'éliminations | `ensure baseevents` manque dans `server.cfg`. |

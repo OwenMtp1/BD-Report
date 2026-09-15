@@ -483,6 +483,26 @@ select.input{height:36px}
 .gate-note code{font-family:var(--mono);font-size:11px;color:var(--vio-hi)}
 .btn.block{width:100%;justify-content:center;height:38px}
 
+/* ---------- connexion Discord ---------- */
+.btn.discord{background:#5865F2;border-color:#7983f5;color:#fff;font-weight:600}
+.btn.discord:hover{background:#6b76f5;border-color:#98a0f7;color:#fff}
+.or{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:11px}
+.or::before,.or::after{content:'';flex:1;height:1px;background:var(--edge)}
+.or[hidden]{display:none}
+
+/* ---------- liaison : une ligne par rôle ---------- */
+.map-row{
+  display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:12px;align-items:center;
+  padding:8px 0;border-bottom:1px solid var(--edge-soft);
+}
+.map-row:last-child{border-bottom:none}
+.map-row > *{min-width:0}
+.map-name{font-size:13px;color:var(--ink)}
+.map-desc{font-size:11.5px;color:var(--muted);display:block;margin-top:2px}
+.map-rank{font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+.linked{color:var(--ok)}
+.unlinked{color:var(--muted)}
+
 /* ---------- note de démonstration ---------- */
 .demo{
   display:flex;align-items:flex-start;gap:10px;margin-top:16px;
@@ -620,18 +640,27 @@ select.input{height:36px}
       </div>
     </div>
     <div class="gate-err" id="gateErr" hidden></div>
-    <div class="field">
-      <label for="gatePseudo">Pseudo staff</label>
-      <input class="input" id="gatePseudo" name="username" autocomplete="username" required>
+
+    <a class="btn discord block" id="gateDiscord" href="/api/auth/discord" hidden>
+      <svg width="17" height="13" viewBox="0 0 71 55" fill="currentColor" aria-hidden="true"><path d="M60.1 4.9A58.5 58.5 0 0 0 45.6.5a41 41 0 0 0-1.9 3.8 54.1 54.1 0 0 0-16.2 0A38.4 38.4 0 0 0 25.6.5a58.3 58.3 0 0 0-14.6 4.4C1.8 18.6-.7 31.9.5 45.1a58.9 58.9 0 0 0 17.9 9 43.3 43.3 0 0 0 3.8-6.2 38.2 38.2 0 0 1-6-2.9l1.5-1.2a42 42 0 0 0 36 0l1.5 1.2a38.2 38.2 0 0 1-6 2.9 42.9 42.9 0 0 0 3.8 6.2 58.7 58.7 0 0 0 18-9c1.4-15.3-2.5-28.5-10-40.2ZM23.7 37c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.3 6.4-7.3 6.5 3.3 6.4 7.3c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.3 6.4-7.3 6.5 3.3 6.4 7.3c0 4-2.8 7.2-6.4 7.2Z"/></svg>
+      Continuer avec Discord
+    </a>
+    <div class="or" id="gateOr" hidden><span>ou</span></div>
+
+    <div id="gatePwd">
+      <div class="field">
+        <label for="gatePseudo">Pseudo staff</label>
+        <input class="input" id="gatePseudo" name="username" autocomplete="username">
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label for="gatePass">Mot de passe</label>
+        <input class="input" id="gatePass" name="password" type="password" autocomplete="current-password">
+      </div>
+      <button class="btn primary block" id="gateGo" type="submit" style="margin-top:14px">Se connecter</button>
     </div>
-    <div class="field">
-      <label for="gatePass">Mot de passe</label>
-      <input class="input" id="gatePass" name="password" type="password" autocomplete="current-password" required>
-    </div>
-    <button class="btn primary block" id="gateGo" type="submit">Se connecter</button>
-    <div class="gate-note">
-      Les comptes sont créés par un fondateur, en console :
-      <code>node staff.js add &lt;pseudo&gt; moderateur</code>
+    <div class="gate-note" id="gateNote">
+      L’accès passe par votre compte Discord : il faut être sur le serveur
+      d’Origin Roleplay et y porter le rôle staff.
     </div>
   </form>
 </div>
@@ -651,6 +680,7 @@ select.input{height:36px}
       <div class="foot-line">Dernier évènement <b id="lastTick">—</b></div>
       <div class="foot-line">Rétention <b id="retention">30 jours</b></div>
       <button class="btn sm" id="teamBtn" hidden>Gérer l'équipe</button>
+      <button class="btn sm" id="discordBtn" hidden>Liaison Discord</button>
       <button class="btn sm" id="auditBtn" hidden>Journal du panneau</button>
     </div>
   </nav>
@@ -1242,7 +1272,9 @@ async function api(path, opts = {}) {
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' }
   }, opts));
-  if (r.status === 401 && MODE === 'api') { showGate('Votre session a expiré. Reconnectez-vous.'); throw new Error('401'); }
+  if (r.status === 401 && MODE === 'api' && !path.startsWith('/api/auth/')) {
+    showGate('Votre session a expiré. Reconnectez-vous.'); throw new Error('401');
+  }
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(body.error || ('Erreur ' + r.status));
   return body;
@@ -1991,10 +2023,14 @@ async function openTeam() {
       <div class="team-row ${s.disabled ? 'off' : ''}">
         <span class="av sm" style="${avatarStyle(s)}">${initials(s)}</span>
         <span><span class="lite-t">${esc(s.pseudo)}</span>
-          <span class="lite-m">${s.last_login ? 'vu ' + dayLabel(s.last_login) : 'jamais connecté'}</span></span>
-        <select class="input" style="height:30px;width:auto" data-staff-role="${s.id}">
-          ${d.roles.map(r => `<option value="${r.id}" ${r.id === s.role ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
-        </select>
+          <span class="lite-m">${(s.roles || []).map(r => esc(r.label)).join(' + ') || '—'}
+            · ${s.source === 'discord' ? 'Discord' : 'mot de passe'}
+            · ${s.last_login ? 'vu ' + dayLabel(s.last_login) : 'jamais connecté'}</span></span>
+        ${s.source === 'discord'
+          ? `<span class="lite-m" title="Ces rôles viennent du serveur Discord">rôles gérés sur Discord</span>`
+          : `<select class="input" style="height:30px;width:auto" data-staff-role="${s.id}">
+              ${d.roles.map(r => `<option value="${r.id}" ${r.id === s.role ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+            </select>`}
         <button class="btn sm" data-staff-toggle="${s.id}" data-off="${s.disabled ? 1 : 0}">${s.disabled ? 'Réactiver' : 'Suspendre'}</button>
       </div>`).join('')}</div>
     <div class="block">
@@ -2006,6 +2042,95 @@ async function openTeam() {
       <button class="btn primary" id="nsGo" style="justify-self:start">Créer le compte</button>
     </div>`);
 }
+/* ============================================================
+   Liaison Discord
+   L'identité vient de Discord, et ce sont les RÔLES DISCORD qui
+   accordent les droits. Tout se règle ici : aucun identifiant de rôle
+   ne vit dans le code, un serveur qui réorganise ses rôles n'a rien à
+   redéployer.
+   ============================================================ */
+let DROLES = null;     // rôles du serveur Discord, une fois chargés
+
+function champRole(id, valeur) {
+  if (DROLES) {
+    return `<select class="input" data-map="${esc(id)}">
+      <option value="">— non relié —</option>
+      ${DROLES.map(r => `<option value="${esc(r.id)}" ${r.id === valeur ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
+    </select>`;
+  }
+  return `<input class="input" data-map="${esc(id)}" value="${esc(valeur || '')}" placeholder="ID du rôle Discord" inputmode="numeric">`;
+}
+
+async function openDiscordSettings() {
+  let d;
+  try { d = await api('/api/discord/config'); } catch (e) { return toast(e.message); }
+  const etat = d.pret
+    ? `<div class="banner" style="--c:var(--ok)"><b>Liaison active.</b> Le staff se connecte avec Discord ; l’appartenance au serveur et le rôle staff sont vérifiés à chaque connexion, puis revérifiés toutes les 15 minutes.</div>`
+    : `<div class="banner" style="--c:var(--warn)"><b>Liaison incomplète.</b> Renseignez le serveur et le rôle staff ci-dessous. Les deux secrets se posent dans <code>.env</code> : <code>DISCORD_CLIENT_SECRET</code> ${d.secrets.clientSecret ? '<span class="linked">✓ en place</span>' : '<span class="unlinked">manquant</span>'}, <code>DISCORD_BOT_TOKEN</code> ${d.secrets.botToken ? '<span class="linked">✓ en place</span>' : '<span class="unlinked">manquant</span>'}.</div>`;
+
+  openSheet('Liaison Discord', 'Un rôle Discord = les droits correspondants dans le panneau',
+    { name:'Discord', hue:235 }, `
+    ${etat}
+    <div class="block">
+      <h3 class="eyebrow">Serveur et accès</h3>
+      <div class="field"><label for="dcClient">Identifiant de l’application Discord</label>
+        <input class="input" id="dcClient" value="${esc(d.clientId)}" inputmode="numeric" placeholder="Client ID"></div>
+      <div class="field"><label for="dcGuild">Identifiant du serveur Discord</label>
+        <input class="input" id="dcGuild" value="${esc(d.guildId)}" inputmode="numeric" placeholder="Guild ID"></div>
+      <div class="field"><label for="dcStaff">Rôle staff — obligatoire pour entrer</label>
+        ${DROLES ? `<select class="input" id="dcStaff">
+            <option value="">— non relié —</option>
+            ${DROLES.map(r => `<option value="${esc(r.id)}" ${r.id === d.staffRoleId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
+          </select>`
+          : `<input class="input" id="dcStaff" value="${esc(d.staffRoleId)}" inputmode="numeric" placeholder="ID du rôle staff">`}</div>
+      <div class="field"><label for="dcRedirect">URL de redirection (à déclarer dans l’application Discord)</label>
+        <input class="input" id="dcRedirect" value="${esc(d.redirectUri)}" placeholder="${esc(d.redirectUriParDefaut)}"></div>
+      <div class="tools" style="margin-top:10px">
+        <button class="btn sm" id="dcLoad">${DROLES ? 'Recharger les rôles du serveur' : 'Charger les rôles du serveur'}</button>
+        <button class="btn sm primary" id="dcSave">Enregistrer</button>
+      </div>
+    </div>
+    <div class="block">
+      <h3 class="eyebrow">Rôles du panneau — ${d.roles.length} au total</h3>
+      <span class="lite-m">Reliez chaque rôle du panneau à un rôle Discord. Une personne qui en cumule plusieurs obtient l’union de leurs droits.</span>
+      <div style="margin-top:6px">${d.roles.map(r => `
+        <div class="map-row">
+          <span><span class="map-name">${esc(r.label)} <span class="map-rank">rang ${r.rank}</span></span>
+            <span class="map-desc">${esc(r.desc || '')}</span></span>
+          ${champRole(r.id, d.roleMap[r.id] || '')}
+        </div>`).join('')}</div>
+    </div>`);
+}
+
+async function chargerRolesDiscord() {
+  const b = $('#dcLoad'); if (b) { b.disabled = true; b.textContent = 'Lecture du serveur…'; }
+  try {
+    // On enregistre d'abord : sans l'identifiant du serveur, le bot ne
+    // sait pas où regarder.
+    await enregistrerDiscord({ silencieux: true });
+    const d = await api('/api/discord/roles');
+    DROLES = d.roles;
+    toast(`${d.roles.length} rôles lus sur le serveur Discord`);
+    openDiscordSettings();
+  } catch (e) { toast(e.message); if (b) { b.disabled = false; b.textContent = 'Charger les rôles du serveur'; } }
+}
+
+async function enregistrerDiscord(o) {
+  const roleMap = {};
+  document.querySelectorAll('[data-map]').forEach(n => roleMap[n.dataset.map] = n.value.trim());
+  const corps = {
+    clientId: $('#dcClient').value.trim(), guildId: $('#dcGuild').value.trim(),
+    staffRoleId: $('#dcStaff').value.trim(), redirectUri: $('#dcRedirect').value.trim(), roleMap
+  };
+  const r = await api('/api/discord/config', { method:'POST', body: JSON.stringify(corps) });
+  if (!(o && o.silencieux)) {
+    toast(r.pret ? 'Liaison enregistrée — le staff peut se connecter avec Discord.'
+                 : 'Enregistré. La liaison reste incomplète.');
+    openDiscordSettings();
+  }
+  return r;
+}
+
 async function openAudit() {
   let d;
   try { d = await api('/api/audit'); } catch (e) { return toast(e.message); }
@@ -2335,7 +2460,10 @@ document.addEventListener('click', async ev => {
   if (id === 'bansToEvents')  goStream('bans');
   if (id === 'resetFilters')  clearFilter('tout');
   if (id === 'moreBtn')  loadMore();
-  if (id === 'teamBtn')  openTeam();
+  if (id === 'teamBtn')    openTeam();
+  if (id === 'discordBtn') { DROLES = null; openDiscordSettings(); }
+  if (id === 'dcLoad')     chargerRolesDiscord();
+  if (id === 'dcSave')     enregistrerDiscord().catch(e => toast(e.message));
   if (id === 'auditBtn') openAudit();
   if (id === 'nsGo') {
     try {
@@ -2467,15 +2595,33 @@ document.addEventListener('keydown', e => {
 /* ============================================================
    Connexion et démarrage
    ============================================================ */
-function showGate(msg) {
+async function showGate(msg) {
   $('#app').hidden = true; $('#inspector').classList.remove('open');
   $('#gate').hidden = false;
+
+  // Un message rapporté par le retour de Discord (rôle manquant, absent
+  // du serveur) doit être LU, pas deviné.
+  const dit = new URLSearchParams(location.search).get('discord');
+  if (dit) { msg = dit; history.replaceState(null, '', location.pathname + location.hash); }
   $('#gateErr').hidden = !msg; if (msg) $('#gateErr').textContent = msg;
-  $('#gatePseudo').focus();
+
+  let o = { discord:false, motDePasse:true, manque:[] };
+  try { o = await api('/api/auth/options'); } catch (e) {}
+  $('#gateDiscord').hidden = !o.discord;
+  $('#gateOr').hidden = !(o.discord && o.motDePasse);
+  $('#gatePwd').hidden = o.discord && !o.motDePasse;
+  $('#gateNote').innerHTML = o.discord
+    ? 'L’accès passe par votre compte Discord : il faut être sur le serveur d’Origin Roleplay et y porter le rôle staff.'
+    : (o.manque && o.manque.length
+        ? 'Connexion Discord indisponible — il manque : ' + o.manque.map(esc).join(', ') + '.'
+        : 'Les comptes sont créés par un fondateur, en console : <code>node staff.js add &lt;pseudo&gt; moderateur</code>');
+  if (!$('#gatePwd').hidden) $('#gatePseudo').focus();
 }
 function applyMe(d) {
   ME.pseudo = d.staff.pseudo; ME.role = d.staff.role; ME.roleLabel = d.staff.roleLabel;
   ME.perms = d.perms || []; ME.cats = d.cats || [];
+  ME.roles = d.staff.roles || [{ id: d.staff.role, label: d.staff.roleLabel }];
+  ME.source = d.staff.source || 'local';
 }
 $('#gateForm').addEventListener('submit', async ev => {
   ev.preventDefault();
@@ -2511,9 +2657,16 @@ async function startPanel() {
     $('#whoBox').hidden = false;
     $('#whoName').textContent = ME.pseudo;
     $('#whoRole').textContent = ME.roleLabel || ME.role;
+    // Plusieurs rôles cumulés : on annonce le principal et le nombre,
+    // le détail au survol — la barre n'a pas la place d'une liste.
+    if (ME.roles && ME.roles.length > 1) {
+      $('#whoRole').textContent = ME.roleLabel + ' +' + (ME.roles.length - 1);
+      $('#whoBox').title = 'Rôles : ' + ME.roles.map(r => r.label).join(', ');
+    }
     $('#whoAv').style.cssText = avatarStyle({ name: ME.pseudo, hue: 268 });
     $('#whoAv').textContent = initials({ name: ME.pseudo });
     $('#teamBtn').hidden = !can('accounts.manage');
+    $('#discordBtn').hidden = !can('settings.discord');
     $('#auditBtn').hidden = !can('audit.view');
     document.title = `Origin Roleplay — Journal serveur (${ME.pseudo})`;
   }
@@ -2539,6 +2692,6 @@ async function startPanel() {
   } catch (e) { etat = 'demo'; }
 
   if (etat === 'demo') { MODE = 'demo'; DS = Demo; await startPanel(); }
-  else { MODE = 'api'; DS = Api; if (etat === 'ouvert') await startPanel(); else showGate(); }
+  else { MODE = 'api'; DS = Api; if (etat === 'ouvert') await startPanel(); else await showGate(); }
 })();
 </script>

@@ -16,6 +16,7 @@ const url = require('node:url');
 const DB = require('./db.js');
 const AUTH = require('./auth.js');
 const CAT = require('./catalogue.js');
+const DISCORD = require('./discord.js');
 
 /* ---------- configuration ---------- */
 // setup.js écrit un .env ; sans cette lecture, `npm start` réclamerait
@@ -44,6 +45,23 @@ if (!CFG.serverKey) {
 
 const db = DB.open(CFG.dbFile);
 const now = () => Date.now();
+
+/* ---------- réglages ----------
+   Modifiables depuis le panneau par un fondateur : le rôle staff et
+   les rôles du panneau n'ont pas à passer par un redéploiement. */
+const qGet = db.prepare('SELECT v FROM settings WHERE k = ?');
+const qSet = db.prepare(`INSERT INTO settings(k,v,updated_at,by_name) VALUES(?,?,?,?)
+                         ON CONFLICT(k) DO UPDATE SET v=excluded.v, updated_at=excluded.updated_at, by_name=excluded.by_name`);
+const getSetting = k => { const r = DB.row(qGet.get(k)); return r ? r.v : ''; };
+const setSetting = (k, v, par) => qSet.run(k, v == null ? '' : String(v), Date.now(), par || null);
+const dconf = () => DISCORD.config(getSetting);
+
+function originOf(req) {
+  const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0] || (CFG.secure ? 'https' : 'http');
+  const host = req.headers['x-forwarded-host'] || req.headers.host || ('localhost:' + CFG.port);
+  return proto + '://' + host;
+}
+const redirectUriOf = (c, req) => c.redirectUri || (originOf(req) + '/api/auth/discord/callback');
 
 /* ---------- réponses ---------- */
 const JSONH = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
@@ -77,7 +95,8 @@ function readBody(req) {
 }
 
 /* ---------- session staff ---------- */
-const qSession = db.prepare(`SELECT s.token, s.expires_at, t.id, t.pseudo, t.role, t.disabled
+const qSession = db.prepare(`SELECT s.token, s.expires_at, t.id, t.pseudo, t.role, t.roles, t.disabled,
+                                    t.source, t.discord_id, t.roles_checked_at, t.avatar
                              FROM sessions s JOIN staff t ON t.id = s.staff_id WHERE s.token = ?`);
 const qDropSession = db.prepare('DELETE FROM sessions WHERE token = ?');
 
@@ -87,12 +106,88 @@ function whoami(req) {
   const r = DB.row(qSession.get(tok));
   if (!r) return null;
   if (r.expires_at < now() || r.disabled) { qDropSession.run(tok); return null; }
-  return { id: r.id, pseudo: r.pseudo, role: r.role, token: tok,
-           perms: CAT.permsOf(r.role), cats: CAT.catsOf(r.role) };
+  // Une personne cumule plusieurs rôles Discord : les droits sont
+  // l'UNION, le rang le plus haut, et le libellé celui du rôle principal.
+  let roles = [];
+  try { roles = JSON.parse(r.roles || '[]'); } catch (e) {}
+  if (!Array.isArray(roles) || !roles.length) roles = [r.role];
+  roles = roles.map(CAT.canon);
+  if (r.source === 'discord') refreshRolesSoon(r);
+  return { id: r.id, pseudo: r.pseudo, token: tok, avatar: r.avatar,
+           roles, role: CAT.mainRole(roles), rank: CAT.rankOfRoles(roles),
+           source: r.source, discordId: r.discord_id,
+           perms: CAT.permsOfRoles(roles), cats: CAT.catsOfRoles(roles) };
+}
+
+/* ---------- révocation ----------
+   Quelqu'un rétrogradé sur Discord garderait sinon ses droits jusqu'à
+   l'expiration de sa session. On revérifie au plus toutes les quinze
+   minutes, en tâche de fond : la requête en cours n'attend pas Discord. */
+const REVERIF_MS = 15 * 60 * 1000;
+const enVol = new Set();
+function refreshRolesSoon(r) {
+  if (enVol.has(r.id)) return;
+  if (r.roles_checked_at && now() - r.roles_checked_at < REVERIF_MS) return;
+  const c = dconf();
+  if (!DISCORD.isReady(c) || !r.discord_id) return;
+  enVol.add(r.id);
+  db.prepare('UPDATE staff SET roles_checked_at = ? WHERE id = ?').run(now(), r.id);
+  DISCORD.verdict(c, r.discord_id).then(v => {
+    if (!v.ok) {
+      db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(r.id);
+      db.prepare('UPDATE staff SET disabled = 1 WHERE id = ?').run(r.id);
+      audit(null, 'discord.revocation', `${r.pseudo} — ${v.raison}`, null);
+      console.log(`[discord] ${r.pseudo} a perdu son accès (${v.raison}) — sessions fermées`);
+      return;
+    }
+    const avant = r.roles || '[]';
+    const apres = JSON.stringify(v.roles);
+    if (avant !== apres) {
+      db.prepare('UPDATE staff SET roles = ?, role = ? WHERE id = ?').run(apres, CAT.mainRole(v.roles), r.id);
+      audit(null, 'discord.roles', `${r.pseudo} → ${v.roles.join(', ')}`, null);
+    }
+  }).catch(e => console.error('[discord] revérification impossible :', e.message))
+    .finally(() => enVol.delete(r.id));
 }
 const iAudit = db.prepare('INSERT INTO audit(ts,staff_id,pseudo,action,detail,ip) VALUES(?,?,?,?,?,?)');
 const audit = (me, action, detail, ip) =>
   iAudit.run(now(), me ? me.id : null, me ? me.pseudo : null, action, detail ? String(detail).slice(0, 400) : null, ip || null);
+
+/* ---------- comptes issus de Discord ----------
+   Le pseudo affiché vient de Discord ; en cas de collision avec un
+   compte local, on suffixe plutôt que d'écraser le compte de quelqu'un. */
+function pseudoLibre(base, discordId) {
+  const propre = String(base || 'staff').replace(/\s+/g, ' ').trim().slice(0, 28) || 'staff';
+  const pris = p => DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE AND (discord_id IS NULL OR discord_id <> ?)').get(p, discordId));
+  if (!pris(propre)) return propre;
+  return propre + '#' + String(discordId).slice(-4);
+}
+function upsertDiscordStaff(user, v) {
+  const nom = user.global_name || user.username;
+  const roles = JSON.stringify(v.roles);
+  const principal = CAT.mainRole(v.roles);
+  const existant = DB.row(db.prepare('SELECT * FROM staff WHERE discord_id = ?').get(user.id));
+  if (existant) {
+    db.prepare(`UPDATE staff SET pseudo=?, avatar=?, roles=?, role=?, disabled=0,
+                                 roles_checked_at=?, last_login=?, discord=? WHERE id=?`)
+      .run(pseudoLibre(nom, user.id), S(user.avatar), roles, principal, now(), now(),
+           'discord:' + user.id, existant.id);
+    return DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(existant.id));
+  }
+  // Le mot de passe est volontairement inutilisable : ce compte
+  // n'entre que par Discord, et AUTH.verify refuse cette valeur.
+  const r = db.prepare(`INSERT INTO staff(pseudo,pass,role,roles,discord,discord_id,avatar,source,created_at,roles_checked_at,last_login)
+                        VALUES(?,?,?,?,?,?,?, 'discord', ?,?,?)`)
+    .run(pseudoLibre(nom, user.id), 'discord', principal, roles,
+         'discord:' + user.id, user.id, S(user.avatar), now(), now(), now());
+  return DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(DB.num(r.lastInsertRowid)));
+}
+function ouvrirSession(res, compte, req) {
+  const token = AUTH.newToken(), exp = now() + CFG.sessionDays * 86400000;
+  db.prepare('INSERT INTO sessions(token,staff_id,created_at,expires_at,ua) VALUES(?,?,?,?,?)')
+    .run(token, compte.id, now(), exp, String(req.headers['user-agent'] || '').slice(0, 200));
+  return AUTH.cookieHeader('origin_sid', token, { maxAge: CFG.sessionDays * 86400, secure: CFG.secure });
+}
 
 /* ---------- flux temps réel (SSE) ---------- */
 const streams = new Set();
@@ -520,6 +615,72 @@ async function route(req, res) {
     return ok(res, { ban });
   }
 
+  /* ---- ce que l'écran de connexion doit proposer ---- */
+  if (p === '/api/auth/options' && method === 'GET') {
+    const c = dconf();
+    return ok(res, {
+      discord: DISCORD.isReady(c),
+      // Dire POURQUOI la liaison n'est pas prête évite de chercher au
+      // mauvais endroit : il manque presque toujours une seule chose.
+      manque: DISCORD.isReady(c) ? [] : [
+        !c.clientId && 'identifiant d’application',
+        !c.clientSecret && 'secret d’application (DISCORD_CLIENT_SECRET)',
+        !c.botToken && 'jeton du bot (DISCORD_BOT_TOKEN)',
+        !c.guildId && 'identifiant du serveur Discord',
+        !c.staffRoleId && 'identifiant du rôle staff'
+      ].filter(Boolean),
+      motDePasse: DB.row(db.prepare("SELECT COUNT(*) n FROM staff WHERE source='local' AND disabled=0").get()).n > 0
+    });
+  }
+
+  /* ---- départ vers Discord ---- */
+  if (p === '/api/auth/discord' && method === 'GET') {
+    const c = dconf();
+    if (!DISCORD.isReady(c)) return fail(res, 503, 'La connexion Discord n’est pas configurée.');
+    c.redirectUri = redirectUriOf(c, req);
+    const state = DISCORD.makeState(c.clientSecret);
+    res.writeHead(302, {
+      location: DISCORD.authorizeUrl(c, state),
+      'set-cookie': AUTH.cookieHeader('origin_state', state, { maxAge: 600, secure: CFG.secure }),
+      'cache-control': 'no-store'
+    });
+    return res.end();
+  }
+
+  /* ---- retour de Discord ---- */
+  if (p === '/api/auth/discord/callback' && method === 'GET') {
+    const c = dconf();
+    c.redirectUri = redirectUriOf(c, req);
+    const rentrer = (msg, cookie) => {
+      const tetes = { location: '/' + (msg ? '?discord=' + encodeURIComponent(msg) : ''), 'cache-control': 'no-store' };
+      const biscuits = [AUTH.cookieHeader('origin_state', '', { clear: true, secure: CFG.secure })];
+      if (cookie) biscuits.push(cookie);
+      tetes['set-cookie'] = biscuits;
+      res.writeHead(302, tetes); res.end();
+    };
+    try {
+      if (!DISCORD.isReady(c)) return rentrer('La connexion Discord n’est pas configurée.');
+      if (Q.error) return rentrer('Autorisation refusée sur Discord.');
+      const attendu = AUTH.parseCookies(req)['origin_state'];
+      if (!Q.state || Q.state !== attendu || !DISCORD.checkState(Q.state, c.clientSecret))
+        return rentrer('Lien de connexion expiré ou invalide. Réessayez.');
+      const jetons = await DISCORD.exchangeCode(c, String(Q.code || ''));
+      const user = await DISCORD.meFromToken(jetons.access_token);
+      const v = await DISCORD.verdict(c, user.id);
+      if (!v.ok) {
+        audit(null, 'discord.refus', `${user.username} — ${v.raison}`, ip);
+        return rentrer(v.message);
+      }
+      const compte = upsertDiscordStaff(user, v);
+      if (compte.disabled) return rentrer('Votre accès au panneau a été suspendu.');
+      audit({ id: compte.id, pseudo: compte.pseudo }, 'auth.discord', v.roles.join(', '), ip);
+      return rentrer(null, ouvrirSession(res, compte, req));
+    } catch (e) {
+      console.error('[discord] échec de connexion :', e.message);
+      return rentrer('Discord n’a pas répondu correctement : ' + e.message);
+    }
+  }
+
   /* ---- connexion ---- */
   if (p === '/api/auth/login' && method === 'POST') {
     const wait = AUTH.throttle(ip);
@@ -527,7 +688,7 @@ async function route(req, res) {
     const b = await readBody(req);
     const pseudo = String(b.pseudo || '').trim();
     const row = DB.row(db.prepare('SELECT * FROM staff WHERE pseudo = ? COLLATE NOCASE').get(pseudo));
-    if (!row || row.disabled || !AUTH.verify(String(b.password || ''), row.pass)) {
+    if (!row || row.disabled || row.source === 'discord' || !AUTH.verify(String(b.password || ''), row.pass)) {
       AUTH.noteFail(ip);
       audit(null, 'auth.echec', pseudo, ip);
       return fail(res, 401, 'Pseudo ou mot de passe incorrect.');
@@ -538,9 +699,12 @@ async function route(req, res) {
       .run(token, row.id, now(), exp, String(req.headers['user-agent'] || '').slice(0, 200));
     db.prepare('UPDATE staff SET last_login=? WHERE id=?').run(now(), row.id);
     audit({ id: row.id, pseudo: row.pseudo }, 'auth.connexion', null, ip);
+    const sesRoles = (() => { try { const x = JSON.parse(row.roles || '[]'); return x.length ? x : [row.role]; }
+                              catch (e) { return [row.role]; } })().map(CAT.canon);
     return send(res, 200, {
-      staff: { pseudo: row.pseudo, role: row.role, roleLabel: CAT.roleOf(row.role).label },
-      perms: CAT.permsOf(row.role), cats: CAT.catsOf(row.role)
+      staff: { pseudo: row.pseudo, role: CAT.mainRole(sesRoles), roleLabel: CAT.roleOf(CAT.mainRole(sesRoles)).label,
+               roles: sesRoles.map(r => ({ id: r, label: CAT.roleOf(r).label })), source: row.source || 'local' },
+      perms: CAT.permsOfRoles(sesRoles), cats: CAT.catsOfRoles(sesRoles)
     }, { 'set-cookie': AUTH.cookieHeader('origin_sid', token, { maxAge: CFG.sessionDays * 86400, secure: CFG.secure }) });
   }
 
@@ -552,12 +716,19 @@ async function route(req, res) {
   }
   if (p === '/api/auth/me') {
     if (!me) return fail(res, 401, 'Session expirée.');
-    return ok(res, { staff: { pseudo: me.pseudo, role: me.role, roleLabel: CAT.roleOf(me.role).label },
-                     perms: me.perms, cats: me.cats });
+    return ok(res, {
+      staff: { pseudo: me.pseudo, role: me.role, roleLabel: CAT.roleOf(me.role).label,
+               roles: me.roles.map(r => ({ id: r, label: CAT.roleOf(r).label })),
+               source: me.source, avatar: me.avatar, discordId: me.discordId },
+      perms: me.perms, cats: me.cats });
   }
   if (p === '/api/catalogue') {
-    return ok(res, { cats: CAT.CATS, sevs: CAT.SEVS, groups: CAT.GROUPS, roles: CAT.ROLES, perms: CAT.PERMS,
-                     retention: CFG.retention });
+    return ok(res, {
+      cats: CAT.CATS, sevs: CAT.SEVS, groups: CAT.GROUPS, perms: CAT.PERMS,
+      roles: CAT.ROLE_IDS.map(id => ({ id, label: CAT.ROLES[id].label, rank: CAT.ROLES[id].rank,
+        desc: CAT.ROLES[id].desc, perms: CAT.permsOf(id), cats: CAT.catsOf(id) }))
+        .sort((a, b) => b.rank - a.rank),
+      retention: CFG.retention });
   }
 
   if (p.startsWith('/api/')) {
@@ -595,6 +766,62 @@ async function route(req, res) {
       audit(me, 'dossier.ouvert', key, ip);
       return ok(res, f);
     }
+    /* ---- liaison Discord ----
+       Les identifiants de rôles se règlent ici, jamais dans le code :
+       un serveur qui renomme ses rôles n'a pas à redéployer. */
+    if (p === '/api/discord/config' && method === 'GET') {
+      if (!need('settings.discord')) return;
+      const c = dconf();
+      return ok(res, {
+        pret: DISCORD.isReady(c),
+        // Les secrets ne repartent JAMAIS vers le navigateur : on dit
+        // seulement s'ils sont en place.
+        secrets: { clientSecret: !!c.clientSecret, botToken: !!c.botToken },
+        clientId: c.clientId, guildId: c.guildId, staffRoleId: c.staffRoleId,
+        redirectUri: c.redirectUri, redirectUriParDefaut: originOf(req) + '/api/auth/discord/callback',
+        roleMap: c.roleMap,
+        roles: CAT.ROLE_IDS.map(id => ({ id, label: CAT.ROLES[id].label, rank: CAT.ROLES[id].rank, desc: CAT.ROLES[id].desc }))
+                 .sort((a, b) => b.rank - a.rank)
+      });
+    }
+    if (p === '/api/discord/config' && method === 'POST') {
+      if (!need('settings.discord')) return;
+      const b = await readBody(req);
+      const idOk = v => v === '' || /^[0-9]{5,25}$/.test(String(v));
+      const champs = { clientId:b.clientId, guildId:b.guildId, staffRoleId:b.staffRoleId };
+      for (const [k, v] of Object.entries(champs)) {
+        if (v === undefined) continue;
+        if (!idOk(v)) return fail(res, 400, `« ${k} » doit être un identifiant Discord (chiffres uniquement).`);
+        setSetting('discord.' + k, v, me.pseudo);
+      }
+      if (b.redirectUri !== undefined) setSetting('discord.redirectUri', String(b.redirectUri || '').slice(0, 300), me.pseudo);
+      if (b.roleMap && typeof b.roleMap === 'object') {
+        for (const id of CAT.ROLE_IDS) {
+          if (!(id in b.roleMap)) continue;
+          const v = String(b.roleMap[id] || '');
+          if (!idOk(v)) return fail(res, 400, `L’identifiant du rôle « ${CAT.ROLES[id].label} » est invalide.`);
+          setSetting('discord.role.' + id, v, me.pseudo);
+        }
+      }
+      audit(me, 'discord.config', 'liaison mise à jour', ip);
+      const c = dconf();
+      return ok(res, { ok: true, pret: DISCORD.isReady(c) });
+    }
+    // Lister les rôles du serveur évite de copier des identifiants à la
+    // main : on choisit dans une liste, et une faute de frappe disparaît.
+    if (p === '/api/discord/roles' && method === 'GET') {
+      if (!need('settings.discord')) return;
+      const c = dconf();
+      if (!c.botToken) return fail(res, 400, 'DISCORD_BOT_TOKEN manquant dans .env — le bot ne peut pas lire le serveur.');
+      if (!c.guildId) return fail(res, 400, 'Renseignez d’abord l’identifiant du serveur Discord.');
+      try {
+        const roles = await DISCORD.guildRoles(c);
+        return ok(res, { roles, guildId: c.guildId });
+      } catch (e) {
+        return fail(res, 502, e.message + ' Vérifiez que le bot est bien invité sur ce serveur.');
+      }
+    }
+
     if (p === '/api/bans' && method === 'GET') {
       if (!need('logs.view')) return;
       // Le registre n'est pas une relecture du flux : il dit qui est
@@ -656,9 +883,20 @@ async function route(req, res) {
     /* ---- comptes staff ---- */
     if (p === '/api/staff') {
       if (!need('accounts.manage')) return;
-      if (method === 'GET')
-        return ok(res, { staff: db.prepare('SELECT id,pseudo,role,discord,disabled,created_at,last_login FROM staff ORDER BY role DESC, pseudo').all().map(DB.row),
-                         roles: Object.entries(CAT.ROLES).map(([id, r]) => ({ id, label: r.label, rank: r.rank })) });
+      if (method === 'GET') {
+        const lignes = db.prepare('SELECT id,pseudo,role,roles,source,discord_id,avatar,disabled,created_at,last_login FROM staff').all().map(DB.row);
+        return ok(res, {
+          staff: lignes.map(x => {
+            let rs = []; try { rs = JSON.parse(x.roles || '[]'); } catch (e) {}
+            if (!rs.length) rs = [x.role];
+            rs = rs.map(CAT.canon);
+            return Object.assign({}, x, { roles: rs.map(r => ({ id: r, label: CAT.roleOf(r).label })),
+                                          rank: CAT.rankOfRoles(rs) });
+          }).sort((a, b) => b.rank - a.rank || a.pseudo.localeCompare(b.pseudo)),
+          roles: CAT.ROLE_IDS.map(id => ({ id, label: CAT.ROLES[id].label, rank: CAT.ROLES[id].rank }))
+                   .sort((a, b) => b.rank - a.rank)
+        });
+      }
       if (method === 'POST') {
         const b = await readBody(req);
         const pseudo = String(b.pseudo || '').trim();
@@ -666,7 +904,7 @@ async function route(req, res) {
         const role = CAT.ROLES[b.role] ? b.role : 'moderateur';
         if (pseudo.length < 3) return fail(res, 400, 'Pseudo trop court (3 caractères minimum).');
         if (pass.length < 10) return fail(res, 400, 'Mot de passe trop court (10 caractères minimum).');
-        if (CAT.roleOf(role).rank > CAT.roleOf(me.role).rank) return fail(res, 403, 'Vous ne pouvez pas créer un rôle supérieur au vôtre.');
+        if (CAT.roleOf(role).rank > me.rank) return fail(res, 403, 'Vous ne pouvez pas créer un rôle supérieur au vôtre.');
         if (DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE').get(pseudo))) return fail(res, 409, 'Ce pseudo existe déjà.');
         db.prepare('INSERT INTO staff(pseudo,pass,role,discord,created_at) VALUES(?,?,?,?,?)')
           .run(pseudo, AUTH.hash(pass), role, S(b.discord), now());
@@ -679,11 +917,15 @@ async function route(req, res) {
       const id = Number(p.slice('/api/staff/'.length)) || 0;
       const target = DB.row(db.prepare('SELECT * FROM staff WHERE id=?').get(id));
       if (!target) return fail(res, 404, 'Compte inconnu.');
-      if (CAT.roleOf(target.role).rank > CAT.roleOf(me.role).rank) return fail(res, 403, 'Ce compte est au-dessus de votre rôle.');
+      if (CAT.roleOf(target.role).rank > me.rank) return fail(res, 403, 'Ce compte est au-dessus de votre rôle.');
       if (method === 'PATCH') {
         const b = await readBody(req);
+        if (b.role && target.source === 'discord')
+          return fail(res, 409, 'Ce compte tient ses rôles de Discord : changez-les sur le serveur Discord.');
+        if (b.password && target.source === 'discord')
+          return fail(res, 409, 'Ce compte n’a pas de mot de passe : il se connecte par Discord.');
         if (b.role) {
-          if (!CAT.ROLES[b.role] || CAT.roleOf(b.role).rank > CAT.roleOf(me.role).rank) return fail(res, 403, 'Rôle refusé.');
+          if (!CAT.ROLES[b.role] || CAT.roleOf(b.role).rank > me.rank) return fail(res, 403, 'Rôle refusé.');
           if (target.role === 'fondateur' && b.role !== 'fondateur' &&
               DB.row(db.prepare(`SELECT COUNT(*) n FROM staff WHERE role='fondateur' AND disabled=0`).get()).n <= 1)
             return fail(res, 409, 'Il doit rester au moins un fondateur.');

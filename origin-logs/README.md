@@ -83,21 +83,61 @@ fermer · `g` puis `o` / `f` / `b` (vue d'ensemble, flux, bannissements) ·
 
 ---
 
+## Connexion Discord
+
+Le staff ne retient pas un mot de passe de plus : il clique sur **Continuer
+avec Discord**. À chaque connexion, l'API vérifie deux choses avec le jeton du
+bot — donc côté serveur, sans rien croire du navigateur :
+
+1. la personne est bien **membre du serveur Discord** ;
+2. elle y porte bien le **rôle staff** dont l'identifiant a été renseigné par
+   un fondateur.
+
+Ses **rôles Discord** sont ensuite traduits en rôles du panneau, et c'est ce
+qui lui donne ses droits. Quelqu'un qui cumule Modérateur et Animateur obtient
+l'**union** des deux : les droits s'ajoutent, jamais ne se retirent.
+
+⚠️ **Un départ sur Discord ferme le panneau.** Les rôles sont revérifiés au
+plus toutes les 15 minutes, en tâche de fond : qui perd le rôle staff voit ses
+sessions fermées sans attendre leur expiration.
+
+Tout se règle dans l'écran **Liaison Discord** (droit `settings.discord`,
+fondateur) : identifiant du serveur, rôle staff, et un rôle Discord par rôle du
+panneau — choisis dans une liste lue sur votre serveur, pour qu'aucun
+identifiant ne se recopie à la main. Seuls les deux **secrets**
+(`DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`) vivent dans `api/.env` et ne
+repartent jamais vers le navigateur.
+
+La connexion par mot de passe reste disponible pour le premier fondateur —
+c'est elle qui permet d'aller configurer la liaison, et de rentrer si Discord
+est en panne.
+
 ## Rôles et permissions
 
-Trois rôles, définis dans `api/catalogue.js` :
+**14 rôles**, chacun portant ce qu'il a le droit de **faire** et ce qu'il a le
+droit de **voir**. Le rang décide qui peut gérer qui.
 
-| | Modérateur | Administrateur | Fondateur |
+| Rang | Rôle | Fait | Voit |
 |---|---|---|---|
-| Lire les journaux | ✔ | ✔ | ✔ |
-| Catégories visibles | 16 (sans Administration, Whitelist, Serveur) | 19 | 19 |
-| Épingler / marquer traité | ✔ | ✔ | ✔ |
-| Voir les identifiants (license, Discord, Steam) | — | ✔ | ✔ |
-| Avertir, expulser | ✔ | ✔ | ✔ |
-| Bannir, lever un ban, rendre un bien | — | ✔ | ✔ |
-| Registre des bannissements (lecture) | ✔ | ✔ | ✔ |
-| Journal du panneau | — | ✔ | ✔ |
-| Gérer les comptes staff | — | — | ✔ |
+| 100 | **Fondateur** | tout, y compris la liaison Discord et les comptes | 19 catégories |
+| 90 | **Administrateur** | tout sauf la liaison Discord | 19 |
+| 80 | **Développeur** | lecture et journal du panneau | 19 |
+| 70 | **Gérant Brigade Anti-Cheat** | avertir, expulser, bannir, lever, identifiants | 12 |
+| 65 | **Responsable Remboursement** | rendre un bien, avertir, identifiants | 10 |
+| 60 | **Gérant Légal** | avertir | 13 |
+| 60 | **Gérant Illégal** | avertir | 13 |
+| 60 | **Gérant Animation** | rendre un bien | 10 |
+| 60 | **Gérant Communication** | lecture | 5 |
+| 50 | **Modérateur** | avertir, expulser | 16 |
+| 45 | **Brigade Anti-Cheat** | avertir, expulser, bannir *(sans lever)* | 6 |
+| 30 | **Helper** | avertir | 4 |
+| 25 | **Animateur** | lecture | 8 |
+| 25 | **Communication** | lecture | 5 |
+
+Un rôle ne se contente pas de masquer des boutons : il **restreint les
+catégories**. Un Gérant Animation n'a rien à faire dans les journaux
+d'anticheat, et un Brigade Anti-Cheat n'a pas à lire les coffres
+d'organisations.
 
 ⚠️ **Les restrictions sont appliquées par l'API, pas par l'interface.** Un
 modérateur qui demanderait explicitement la catégorie `admin` ne l'obtient
@@ -109,7 +149,8 @@ dossier ou viser une sanction demande un identifiant : sans le droit
 `players.identifiers`, l'API renvoie un **alias** dérivé de la clé serveur
 (`k:…`), utilisable pour agir mais impossible à remonter jusqu'à la licence.
 
----
+Les 13 droits atomiques (`logs.view`, `actions.ban`, `settings.discord`…)
+sont définis dans `api/catalogue.js`, avec la composition de chaque rôle.
 
 ## Les trois étages
 
