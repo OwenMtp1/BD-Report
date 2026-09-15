@@ -1241,6 +1241,221 @@ async function route(req, res) {
     if (p.startsWith('/api/platform')) {
       if (!me.platform) return fail(res, 403, 'Réservé à l’administration de la plateforme.');
 
+      /* ---- tableau de bord de la plateforme ----
+         L'administration ne modère pas un serveur de jeu : elle SUIT
+         des espaces. Ce qu'elle regarde, ce sont des signes de vie,
+         pas des messages de proximité. */
+      if (p === '/api/platform/overview' && method === 'GET') {
+        const spaces = db.prepare('SELECT * FROM spaces ORDER BY state, name').all().map(DB.row);
+        const d24 = now() - 86400000;
+        const parEspace = spaces.map(sp => {
+          const un = (sql, ...a) => DB.row(db.prepare(sql).get(sp.id, ...a)).n;
+          const dernier = DB.row(db.prepare('SELECT MAX(ts) t FROM events WHERE space_id = ?').get(sp.id));
+          const relies = ROLESVC.list(db, sp.id).filter(r => r.discordRoleId).length;
+          return {
+            id: sp.id, nom: sp.name, etat: sp.state,
+            evenements24: un('SELECT COUNT(*) n FROM events WHERE space_id = ? AND ts >= ?', d24),
+            evenements: un('SELECT COUNT(*) n FROM events WHERE space_id = ?'),
+            membres: un('SELECT COUNT(*) n FROM staff WHERE space_id = ? AND disabled = 0'),
+            suspendus: un('SELECT COUNT(*) n FROM staff WHERE space_id = ? AND disabled = 1'),
+            bannis: un(`SELECT COUNT(*) n FROM sanctions WHERE space_id = ? AND type='ban' AND active=1
+                        AND (expires_at IS NULL OR expires_at > ?)`, now()),
+            alertes: DB.row(db.prepare(`SELECT COUNT(*) n FROM events e
+              LEFT JOIN marks md ON md.event_id = e.id AND md.kind = 'done'
+              WHERE e.space_id = ? AND e.sev IN ('critique','alerte') AND md.at IS NULL AND e.ts >= ?`)
+              .get(sp.id, d24)).n,
+            actionsEnAttente: un(`SELECT COUNT(*) n FROM actions WHERE space_id = ? AND status IN ('pending','sent')`),
+            dernierEvenement: dernier ? dernier.t : null,
+            rolesRelies: relies, proprietaire: sp.owner_id
+              ? (DB.row(db.prepare('SELECT pseudo FROM staff WHERE id = ?').get(sp.owner_id)) || {}).pseudo : null,
+            discordPret: !!(sp.guild_id && sp.staff_role_id), retention: sp.retention || CFG.retention
+          };
+        });
+        const somme = k => parEspace.reduce((a, x) => a + (x[k] || 0), 0);
+        return ok(res, {
+          espaces: parEspace,
+          total: {
+            espaces: spaces.length, actifs: spaces.filter(x => x.state === 'actif').length,
+            fermes: spaces.filter(x => x.state !== 'actif').length,
+            evenements24: somme('evenements24'), evenements: somme('evenements'),
+            membres: somme('membres'), bannis: somme('bannis'), alertes: somme('alertes')
+          },
+          // Activité cumulée des 24 h, pour voir d'un coup si l'ensemble
+          // de la plateforme respire.
+          serie: (() => {
+            const n = 24, taille = 3600000, debut = now() - n * taille;
+            const t = new Array(n).fill(0);
+            for (const r of db.prepare(`SELECT CAST((ts - ?) / ? AS INTEGER) b, COUNT(*) n
+                                        FROM events WHERE ts >= ? GROUP BY b`).all(debut, taille, debut)) {
+              const i = Number(r.b); if (i >= 0 && i < n) t[i] = Number(r.n);
+            }
+            return { debut, taille, valeurs: t };
+          })(),
+          discordGlobal: discordGlobalOk()
+        });
+      }
+
+      /* ---- journal d'administration ----
+         Pas les journaux du jeu : QUI A CHANGÉ QUOI dans les panneaux.
+         C'est la seule trace qui explique pourquoi un espace ne se
+         comporte plus comme la veille. */
+      if (p === '/api/platform/journal' && method === 'GET') {
+        const w = [], a = [];
+        if (N(Q.space)) { w.push('a.space_id = ?'); a.push(N(Q.space)); }
+        if (Q.action)   { w.push('a.action LIKE ?'); a.push(String(Q.action) + '%'); }
+        if (Q.q) { w.push('(a.pseudo LIKE ? OR a.detail LIKE ? OR a.action LIKE ?)');
+                   const t = '%' + String(Q.q) + '%'; a.push(t, t, t); }
+        const where = w.length ? 'WHERE ' + w.join(' AND ') : '';
+        const limite = Math.min(500, Math.max(1, N(Q.limit) || 200));
+        const rows = db.prepare(`SELECT a.*, s.name AS espace FROM audit a
+          LEFT JOIN spaces s ON s.id = a.space_id ${where}
+          ORDER BY a.ts DESC LIMIT ?`).all(...a, limite).map(DB.row);
+        return ok(res, {
+          entrees: rows,
+          total: DB.row(db.prepare(`SELECT COUNT(*) n FROM audit a ${where}`).get(...a)).n,
+          // Les familles d'action servent de filtres : elles disent ce
+          // qu'on peut chercher sans le deviner.
+          familles: db.prepare(`SELECT substr(action, 1, instr(action || '.', '.') - 1) f, COUNT(*) n
+                                FROM audit GROUP BY f ORDER BY n DESC`).all().map(DB.row),
+          espaces: db.prepare('SELECT id, name FROM spaces ORDER BY name').all().map(DB.row)
+        });
+      }
+
+      /* ============================================================
+         VÉRIFICATION DE TOUS LES PANNEAUX
+         Un espace tombe en panne de plusieurs façons, et chacune se
+         répare autrement : le serveur de jeu n'écrit plus, le bot n'est
+         plus sur le Discord, aucun rôle n'est relié… On les distingue,
+         et chaque constat porte SON remède. Sans cela, « il y a un
+         problème » envoie chercher au mauvais endroit.
+         ============================================================ */
+      if (p === '/api/platform/check' && method === 'GET') {
+        const delai = (pr, ms) => Promise.race([pr,
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Discord n’a pas répondu en ' + (ms / 1000) + ' s.')), ms))]);
+        const C = (niveau, titre, detail, remede) => ({ niveau, titre, detail, remede });
+        const pire = l => l.some(x => x.niveau === 'probleme') ? 'probleme'
+                        : l.some(x => x.niveau === 'attention') ? 'attention' : 'ok';
+
+        /* ---- plateforme ---- */
+        const plat = [];
+        const c0 = dconf();
+        if (!c0.clientId || !c0.clientSecret || !c0.botToken)
+          plat.push(C('probleme', 'Application Discord incomplète',
+            [!c0.clientId && 'identifiant d’application', !c0.clientSecret && 'DISCORD_CLIENT_SECRET',
+             !c0.botToken && 'DISCORD_BOT_TOKEN'].filter(Boolean).join(', ') + ' manquant.',
+            'Renseignez-les dans api/.env (les deux secrets) et dans « Liaison Discord » (l’identifiant), puis relancez l’API.'));
+        else plat.push(C('ok', 'Application Discord', 'Identifiant et secrets en place.', null));
+
+        try {
+          const q = db.prepare('PRAGMA quick_check').get();
+          const v = Object.values(q)[0];
+          plat.push(v === 'ok' ? C('ok', 'Intégrité de la base', 'Aucune anomalie détectée.', null)
+            : C('probleme', 'Base de données abîmée', String(v),
+                'Arrêtez l’API et restaurez la dernière sauvegarde du fichier .db.'));
+        } catch (e) { plat.push(C('attention', 'Intégrité de la base', e.message, null)); }
+
+        try {
+          const t = fs.statSync(CFG.dbFile).size;
+          plat.push(C(t > 4e9 ? 'attention' : 'ok', 'Taille de la base',
+            (t / 1048576).toFixed(0) + ' Mo.',
+            t > 4e9 ? 'Réduisez la rétention des espaces les plus bavards, ou archivez.' : null));
+        } catch (e) {}
+
+        const admins = DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE platform_admin = 1 AND disabled = 0').get()).n;
+        plat.push(admins >= 2 ? C('ok', 'Administration de la plateforme', admins + ' administrateurs.', null)
+          : C('attention', 'Un seul administrateur de plateforme',
+              'Si ce compte est perdu, plus personne ne peut créer ni rouvrir un espace.',
+              'Ajoutez-en un second : node staff.js platform <pseudo> on'));
+
+        /* ---- espaces ---- */
+        const espaces = db.prepare('SELECT * FROM spaces ORDER BY state, name').all().map(DB.row);
+        const rapport = [];
+        for (const sp of espaces) {
+          const l = [];
+          const actif = sp.state === 'actif';
+          const dernier = (DB.row(db.prepare('SELECT MAX(ts) t FROM events WHERE space_id = ?').get(sp.id)) || {}).t;
+
+          if (actif) {
+            const age = dernier ? now() - dernier : null;
+            if (!dernier) l.push(C('probleme', 'Aucun journal reçu',
+              'Cet espace n’a jamais rien reçu du serveur de jeu.',
+              'Vérifiez que Config.ServerKey dans resource/config.lua vaut la clé de CET espace, et que « ensure origin_logs » est bien dans server.cfg.'));
+            else if (age > 6 * 3600000) l.push(C('probleme', 'Le serveur de jeu n’écrit plus',
+              'Dernier évènement il y a ' + Math.round(age / 3600000) + ' h.',
+              'La ressource est arrêtée, l’API est injoignable depuis le serveur de jeu, ou la clé d’ingestion a changé sans être recopiée.'));
+            else if (age > 45 * 60000) l.push(C('attention', 'Journaux clairsemés',
+              'Dernier évènement il y a ' + Math.round(age / 60000) + ' min.',
+              'Normal si le serveur est vide ; à surveiller sinon.'));
+            else l.push(C('ok', 'Ingestion', 'Journaux reçus il y a ' + Math.round((age || 0) / 60000) + ' min.', null));
+          } else {
+            l.push(C('ok', 'Espace fermé', 'Ni entrée ni ingestion — c’est voulu.', null));
+          }
+
+          if (!sp.guild_id || !sp.staff_role_id)
+            l.push(C(actif ? 'probleme' : 'attention', 'Liaison Discord incomplète',
+              !sp.guild_id ? 'Aucun serveur Discord renseigné.' : 'Aucun rôle staff renseigné.',
+              'Écran « Liaison Discord », après être entré dans cet espace.'));
+          else if (c0.botToken) {
+            try {
+              const roles = await delai(DISCORD.guildRoles(dconfFor(sp)), 6000);
+              const staff = roles.find(r => r.id === sp.staff_role_id);
+              if (!staff) l.push(C('probleme', 'Rôle staff introuvable sur Discord',
+                'L’identifiant renseigné ne correspond à aucun rôle du serveur.',
+                'Le rôle a été supprimé ou recréé : choisissez-le à nouveau dans « Liaison Discord ».'));
+              else l.push(C('ok', 'Discord', 'Le bot voit le serveur ; rôle staff « ' + staff.name +' ».', null));
+            } catch (e) {
+              l.push(C('probleme', 'Le bot ne voit pas ce serveur Discord', e.message,
+                'Invitez le bot sur ce serveur, ou corrigez l’identifiant du serveur.'));
+            }
+          }
+
+          const roles = ROLESVC.list(db, sp.id);
+          const relies = roles.filter(r => r.discordRoleId);
+          if (!relies.length) l.push(C(actif ? 'probleme' : 'attention', 'Aucun rôle relié à Discord',
+            'Le staff aura le rôle staff mais aucun rôle du panneau : il sera refusé à la connexion.',
+            'Reliez au moins un rôle dans « Liaison Discord ».'));
+          else l.push(C('ok', 'Rôles reliés', relies.length + ' rôle(s) sur ' + roles.length + '.', null));
+
+          if (!sp.owner_id) l.push(C('attention', 'Aucun propriétaire',
+            'Personne ne peut nommer un second fondateur dans cet espace.',
+            'Désignez-en un depuis « Espaces de logs » → Changer le propriétaire.'));
+
+          const membres = DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE space_id = ? AND disabled = 0').get(sp.id)).n;
+          if (actif && !membres) l.push(C('probleme', 'Aucun membre actif',
+            'Plus personne ne peut ouvrir cet espace.',
+            'Ajoutez un compte, ou reliez les rôles Discord pour que le staff entre de lui-même.'));
+
+          const bloquees = DB.row(db.prepare(`SELECT COUNT(*) n FROM actions
+            WHERE space_id = ? AND status IN ('pending','sent') AND created_at < ?`).get(sp.id, now() - 900000)).n;
+          if (bloquees) l.push(C('probleme', bloquees + ' sanction(s) non exécutée(s)',
+            'Déposées depuis plus de 15 minutes, jamais reprises par le serveur de jeu.',
+            'La ressource origin_logs ne tourne plus, ou n’atteint plus l’API : les bannissements décidés ici ne s’appliquent pas en jeu.'));
+
+          const vieilles = DB.row(db.prepare(`SELECT COUNT(*) n FROM events e
+            LEFT JOIN marks md ON md.event_id = e.id AND md.kind = 'done'
+            WHERE e.space_id = ? AND e.sev IN ('critique','alerte') AND md.at IS NULL AND e.ts < ?`)
+            .get(sp.id, now() - 7 * 86400000)).n;
+          if (vieilles > 20) l.push(C('attention', vieilles + ' alertes jamais traitées',
+            'Ouvertes depuis plus de sept jours.',
+            'La file d’alertes n’est pas suivie : rappelez la consigne, ou soldez-les.'));
+
+          if (String(sp.server_key || '').length < 24) l.push(C('attention', 'Clé d’ingestion courte',
+            'Elle protège l’écriture des journaux de cet espace.',
+            'Régénérez-la depuis « Espaces de logs », puis recopiez-la dans config.lua.'));
+
+          rapport.push({ id: sp.id, nom: sp.name, etat: sp.state, verdict: pire(l), controles: l });
+        }
+
+        const tous = plat.concat(...rapport.map(r => r.controles));
+        return ok(res, {
+          fait: now(), verdict: pire(tous),
+          resume: { ok: tous.filter(x => x.niveau === 'ok').length,
+                    attention: tous.filter(x => x.niveau === 'attention').length,
+                    probleme: tous.filter(x => x.niveau === 'probleme').length },
+          plateforme: plat, espaces: rapport
+        });
+      }
+
       if (p === '/api/platform/spaces' && method === 'GET') {
         const rows = db.prepare('SELECT * FROM spaces ORDER BY state, name').all().map(DB.row);
         const compte = (t, id) => DB.row(db.prepare(`SELECT COUNT(*) n FROM ${t} WHERE space_id = ?`).get(id)).n;

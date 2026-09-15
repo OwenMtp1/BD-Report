@@ -11,6 +11,7 @@
     "setup": "node setup.js",
     "start": "node server.js",
     "staff": "node staff.js",
-    "demo": "node seed-demo.js"
+    "demo": "node seed-demo.js",
+    "test": "node test/run.js"
   }
 }

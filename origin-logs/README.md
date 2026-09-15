@@ -61,6 +61,8 @@ d'œil à la strie de couleur en début de ligne.
   panneau (réservé aux fondateurs).
 - **Journal du panneau** — qui a consulté quel dossier, qui a exporté, qui a
   sanctionné. La surveillance est elle-même surveillée.
+- **Supervision** et **Journal d'administration** — les deux écrans de
+  l'administrateur de plateforme, décrits plus bas.
 
 ### Au quotidien
 
@@ -114,6 +116,68 @@ repartent jamais vers le navigateur.
 La connexion par mot de passe reste disponible pour le premier fondateur —
 c'est elle qui permet d'aller configurer la liaison, et de rentrer si Discord
 est en panne.
+
+## Supervision de la plateforme
+
+L'administrateur de plateforme n'a **pas de panneau par défaut**. Il surveille
+des espaces, il n'en habite aucun : à la connexion il arrive sur la
+**supervision**, pas sur un flux d'évènements. Entrer dans un espace reste
+possible — c'est un geste explicite, et la barre affiche alors « visite ».
+
+### Vue d'ensemble de tous les espaces
+
+Une ligne d'état pour la plateforme entière (évènements sur 24 h, espaces
+actifs, membres, bannis en cours, alertes ouvertes), le graphique d'activité
+**cumulé** des 24 dernières heures, puis **une carte par espace**.
+
+Chaque carte porte ce qui permet de dire en un regard si cet espace va bien :
+volume reçu, dernier évènement, membres actifs et suspendus, bannis, alertes
+non traitées, sanctions en attente d'exécution, propriétaire, rôles reliés à
+Discord, rétention. La santé est résumée en tête de carte — *en ligne*,
+*liaison incomplète*, *plus de journaux*, *fermé*.
+
+### Journal d'administration
+
+Le journal du panneau répond à « qui a consulté quel dossier ». Celui-ci
+répond à une autre question : **qui a modifié quoi dans les espaces**. On y
+lit les créations et fermetures d'espaces, les changements de propriétaire,
+les régénérations de clé, les rôles créés, renommés, re-rangés ou supprimés,
+les rubriques accordées ou retirées, les rôles attribués à la main, les accès
+révoqués et les membres retirés — avec leur auteur, leur date et l'espace
+concerné. Un filtre par famille d'action isole ce qu'on cherche.
+
+Les deux journaux sont séparés parce qu'ils ne se lisent pas au même moment :
+l'un sert à enquêter sur une bavure de modération, l'autre à comprendre
+pourquoi un espace s'est mis à se comporter autrement.
+
+### Le bouton « Vérifier »
+
+Un clic, et la plateforme **se teste elle-même** : un bloc de contrôles pour
+la plateforme, un par espace, chacun avec son verdict.
+
+Côté plateforme : application Discord complète, intégrité de la base
+(`PRAGMA quick_check`), taille du fichier, et le fait qu'il existe **au moins
+deux** administrateurs de plateforme — un seul compte perdu, et plus personne
+ne crée ni ne rouvre d'espace.
+
+Par espace : le serveur de jeu écrit-il encore (et depuis quand), le bot
+voit-il le serveur Discord, le rôle staff existe-t-il toujours là-bas, des
+rôles du panneau sont-ils reliés, l'espace a-t-il un propriétaire et des
+membres actifs, des sanctions décidées ici sont-elles restées sans effet en
+jeu, des alertes traînent-elles depuis plus d'une semaine, la clé d'ingestion
+est-elle assez longue.
+
+⚠️ **Un constat qui ne dit pas quoi faire ne sert à rien** : chaque problème
+porte son **remède**, à l'endroit où on le lit. « Le serveur de jeu n'écrit
+plus » est suivi des trois causes possibles ; « rôle staff introuvable sur
+Discord » explique qu'il a été recréé et où le choisir à nouveau. Les niveaux
+sont distingués (✓ / ! / ✕) parce qu'un espace fermé qui n'ingère plus est
+normal, alors qu'un espace actif dans le même état ne l'est pas.
+
+⚠️ **La vérification ne part jamais toute seule** : elle interroge Discord
+pour de vrai, une fois par espace. C'est un geste, pas une horloge.
+
+---
 
 ## Espaces de logs
 
@@ -283,6 +347,37 @@ pas seul — le moment où le joueur tire — et la position est relue côté se
 **Les logs partent groupés** (40 évènements ou 3 secondes). Une requête HTTP
 par ligne mettrait le serveur à genoux un soir de forte affluence. Si l'API
 tombe, la file est gardée en mémoire jusqu'à 3 000 évènements.
+
+---
+
+## Vérifier l'installation
+
+Deux niveaux, et ils ne répondent pas à la même question.
+
+**Le bouton « Vérifier »** de la supervision teste **votre** installation :
+le bot est-il encore sur ce serveur Discord, le serveur de jeu écrit-il
+toujours, les sanctions partent-elles. C'est le contrôle du jour.
+
+**`npm test`** teste **le code** : 82 contrôles HTTP sur l'API — ingestion,
+cloisonnement des espaces, rôles et rangs, permissions refusées, parcours
+Discord complet (avec un faux Discord local, aucun réseau).
+
+```bash
+cd api
+npm test              # les trois suites
+npm test discord      # une seule
+```
+
+⚠️ **Chaque suite part d'une base neuve**, et c'est le point. Ces tests
+écrivent : ils créent des espaces, ferment, bannissent, relient des rôles.
+Rejoués sur la base laissée par la fois précédente, ils échouaient sur des
+faits qui n'étaient plus vrais — « 14 rôles d'origine » quand il y en avait
+seize, un espace déjà fermé, une liaison Discord déjà posée. Une suite qu'on
+ne peut pas relancer ne dit rien le jour où on en aurait besoin.
+
+Aucune dépendance n'est installée pour autant : le lanceur (`api/test/run.js`)
+sème la base, démarre l'API, lance la suite, arrête tout. Le faux Discord
+(`api/test/faux-discord.js`) répond exactement ce que la liaison interroge.
 
 ---
 

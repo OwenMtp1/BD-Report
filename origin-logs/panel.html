@@ -551,6 +551,59 @@ select.input{height:36px}
 }
 .keybox code{font-family:var(--mono);font-size:11px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 
+/* ---------- supervision de la plateforme ---------- */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.pcard{
+  border:1px solid var(--edge);border-radius:11px;background:var(--panel);
+  padding:14px 15px;display:grid;gap:11px;align-content:start;min-width:0;
+}
+.pcard.ferme{opacity:.6;border-style:dashed}
+.pcard.alerte{border-color:rgba(255,67,101,.4)}
+.ptop{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center}
+.ptop > *{min-width:0}
+.pname{font-size:14.5px;font-weight:700;font-variation-settings:'wdth' 88;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psub{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.pulse-dot{width:9px;height:9px;border-radius:50%;background:var(--c);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 20%,transparent)}
+.pnums{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pnum b{display:block;font-variation-settings:'wdth' 84;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums;line-height:1.1}
+.pnum span{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.pnum.crit b{color:var(--crit)}
+
+/* ---------- résultat de vérification ---------- */
+.chk-group{border:1px solid var(--edge);border-radius:10px;background:var(--panel);overflow:hidden}
+.chk-group + .chk-group{margin-top:10px}
+.chk-head{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:center;
+  padding:11px 14px;border-bottom:1px solid var(--edge-soft);
+}
+.chk{display:grid;grid-template-columns:auto minmax(0,1fr);gap:11px;padding:10px 14px;border-bottom:1px solid var(--edge-soft)}
+.chk:last-child{border-bottom:none}
+.chk > *{min-width:0}
+.chk-t{font-size:13px;color:var(--ink);font-weight:500}
+.chk-d{font-size:12px;color:var(--ink-2);margin-top:2px}
+.chk-r{font-size:12px;color:var(--muted);margin-top:4px;padding-left:11px;border-left:2px solid var(--edge)}
+.chk-mark{
+  width:20px;height:20px;border-radius:50%;display:grid;place-items:center;flex:none;
+  font-size:11px;font-weight:700;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--c);
+  border:1px solid color-mix(in srgb,var(--c) 45%,transparent);margin-top:1px;
+}
+.verdict{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+
+/* ---------- journal d'administration ---------- */
+.jrn{width:100%;border-collapse:collapse;min-width:700px}
+.jrn thead th{
+  position:sticky;top:0;z-index:5;background:var(--panel-2);
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;text-align:left;padding:9px 13px;
+  border-bottom:1px solid var(--edge);white-space:nowrap;
+}
+.jrn tbody tr{border-bottom:1px solid var(--edge-soft)}
+.jrn tbody tr:hover{background:var(--vio-wash)}
+.jrn td{padding:9px 13px;vertical-align:top;font-size:12.5px}
+.jrn .j-t{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.jrn .j-a{font-family:var(--mono);font-size:11.5px;color:var(--vio-hi);white-space:nowrap}
+.jrn .j-d{color:var(--ink-2)}
+
 /* ---------- note de démonstration ---------- */
 .demo{
   display:flex;align-items:flex-start;gap:10px;margin-top:16px;
@@ -828,6 +881,54 @@ select.input{height:36px}
         <div class="feed-foot">
           <span class="count" id="foot">—</span>
           <button class="btn sm" id="moreBtn" hidden>Charger 100 évènements de plus</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PLATEFORME ============ -->
+    <section class="view" id="viewPlatform" hidden aria-label="Supervision de la plateforme">
+      <div class="head">
+        <div>
+          <h1 class="title">Supervision</h1>
+          <div class="sub" id="platSub">Tous les espaces de logs du serveur, d’un coup d’œil.</div>
+        </div>
+        <button class="btn primary" id="checkBtn">Vérifier tous les panneaux</button>
+      </div>
+      <div class="status" id="platStatus"></div>
+      <div id="checkOut"></div>
+      <div class="grid">
+        <div class="panel">
+          <div class="panel-head">
+            <h2 class="eyebrow">Activité cumulée — 24 heures</h2>
+            <span class="count" id="platChartNote"></span>
+          </div>
+          <div class="panel-body">
+            <div class="chart-box"><svg class="chart" id="platChart" viewBox="0 0 800 160" role="img" aria-label="Évènements par heure, tous espaces"></svg></div>
+          </div>
+        </div>
+      </div>
+      <div class="grid"><div class="pgrid" id="platSpaces"></div></div>
+    </section>
+
+    <!-- ============ JOURNAL D'ADMINISTRATION ============ -->
+    <section class="view" id="viewPlatformLog" hidden aria-label="Journal d’administration">
+      <div class="head">
+        <div>
+          <h1 class="title">Journal d’administration</h1>
+          <div class="sub">Qui a changé quoi dans les panneaux — rôles, accès, liaisons, espaces.</div>
+        </div>
+        <div class="sub" id="jrnCount"></div>
+      </div>
+      <div class="filters" id="jrnFilters"></div>
+      <div class="feed">
+        <div class="reg-scroll">
+          <table class="jrn">
+            <thead><tr>
+              <th scope="col">Horodatage</th><th scope="col">Espace</th><th scope="col">Qui</th>
+              <th scope="col">Action</th><th scope="col">Détail</th>
+            </tr></thead>
+            <tbody id="jrnRows"></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -1526,6 +1627,10 @@ const visibleCats = () => (MODE === 'api' ? CATS.filter(c => ME.cats.includes(c.
 /* ---------- rafraîchissement ---------- */
 let refreshToken = 0;
 async function refresh() {
+  // La supervision ne lit pas les journaux d'un serveur de jeu : elle a
+  // ses propres sources, et n'a que faire des filtres de catégorie.
+  if (STATE.view === 'platform')    { renderNav(); renderActiveFilters(); return chargerPlateforme(); }
+  if (STATE.view === 'platformlog') { renderNav(); renderActiveFilters(); return chargerJournal(); }
   const token = ++refreshToken;
   const from = windowFrom(), to = Date.now();
   try {
@@ -1547,12 +1652,16 @@ async function refresh() {
 function render() {
   renderNav();
   renderActiveFilters();
-  $('#viewOverview').hidden = STATE.view !== 'overview';
-  $('#viewStream').hidden   = STATE.view !== 'stream';
-  $('#viewBans').hidden     = STATE.view !== 'bans';
+  $('#viewOverview').hidden    = STATE.view !== 'overview';
+  $('#viewStream').hidden      = STATE.view !== 'stream';
+  $('#viewBans').hidden        = STATE.view !== 'bans';
+  $('#viewPlatform').hidden    = STATE.view !== 'platform';
+  $('#viewPlatformLog').hidden = STATE.view !== 'platformlog';
   if (STATE.view === 'overview') renderOverview();
   else if (STATE.view === 'stream') renderStream();
-  else renderBans();
+  else if (STATE.view === 'bans') renderBans();
+  else if (STATE.view === 'platform') rendrePlateforme();
+  else rendreJournal();
 }
 
 /* ============================================================
@@ -1561,7 +1670,18 @@ function render() {
 function buildNav() {
   const host = $('#nav');
   const cats = visibleCats();
-  let html = `
+  let html = '';
+  if (ME.plateforme) {
+    // L'administration arrive sur SA vue : suivre les espaces, pas
+    // modérer un serveur de jeu.
+    html += `<div class="nav-group eyebrow">Plateforme</div>
+      <button class="nav-item" data-view="platform" style="--fam:var(--f-staff)">
+        <span class="nav-dot"></span><span class="nav-label">Supervision</span><span class="nav-n"></span></button>
+      <button class="nav-item" data-view="platformlog" style="--fam:var(--f-staff)">
+        <span class="nav-dot"></span><span class="nav-label">Journal d'administration</span><span class="nav-n"></span></button>
+      <div class="nav-group eyebrow">${esc((ME.espace && ME.espace.nom) || 'Espace courant')}</div>`;
+  }
+  html += `
     <button class="nav-item" data-view="overview" style="--fam:var(--vio-hi)">
       <span class="nav-dot"></span><span class="nav-label">Vue d'ensemble</span><span class="nav-n"></span></button>
     <button class="nav-item" data-cat="all" style="--fam:var(--ink-2)">
@@ -1588,7 +1708,8 @@ function renderNav() {
   });
   const all = $('#nAll'); if (all) all.textContent = total.toLocaleString('fr-FR');
   document.querySelectorAll('.nav-item').forEach(b => {
-    const on = (STATE.view === 'overview' && b.dataset.view === 'overview')
+    const on = (b.dataset.view && b.dataset.view === STATE.view)
+            || (STATE.view === 'overview' && b.dataset.view === 'overview')
             || (STATE.view === 'bans' && b.dataset.cat === 'bans')
             || (STATE.view === 'stream' && b.dataset.cat === STATE.cat);
     b.setAttribute('aria-current', on ? 'true' : 'false');
@@ -2073,6 +2194,102 @@ async function confirmAction() {
   finally { $('#dlgOk').disabled = false; }
 }
 
+/* ============================================================
+   Liaison Discord
+   L'identité vient de Discord, et ce sont les RÔLES DISCORD qui
+   accordent les droits. Tout se règle ici : aucun identifiant de rôle
+   ne vit dans le code, un serveur qui réorganise ses rôles n'a rien à
+   redéployer.
+   ============================================================ */
+let DROLES = null;     // rôles du serveur Discord, une fois chargés
+
+function champRole(id, valeur) {
+  if (DROLES) {
+    return `<select class="input" data-map="${esc(id)}">
+      <option value="">— non relié —</option>
+      ${DROLES.map(r => `<option value="${esc(r.id)}" ${r.id === valeur ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
+    </select>`;
+  }
+  return `<input class="input" data-map="${esc(id)}" value="${esc(valeur || '')}" placeholder="ID du rôle Discord" inputmode="numeric">`;
+}
+
+async function openDiscordSettings() {
+  let d;
+  try { d = await api('/api/discord/config'); } catch (e) { return toast(e.message); }
+  // L'état des deux secrets s'affiche TOUJOURS, liaison prête ou non : ils
+  // vivent dans .env, hors de portée de l'écran, et c'est la seule façon de
+  // savoir qu'ils sont posés sans aller lire le fichier sur le serveur.
+  const secret = (nom, pose) => `<code>${nom}</code> ` +
+    (pose ? '<span class="linked">✓ en place</span>' : '<span class="unlinked">manquant</span>');
+  const secrets = `Les deux secrets se posent dans <code>.env</code> : ` +
+    `${secret('DISCORD_CLIENT_SECRET', d.secrets.clientSecret)}, ${secret('DISCORD_BOT_TOKEN', d.secrets.botToken)}.`;
+  const etat = d.pret
+    ? `<div class="banner" style="--c:var(--ok)"><b>Liaison active.</b> Le staff se connecte avec Discord ; l’appartenance au serveur et le rôle staff sont vérifiés à chaque connexion, puis revérifiés toutes les 15 minutes. ${secrets}</div>`
+    : `<div class="banner" style="--c:var(--warn)"><b>Liaison incomplète.</b> Renseignez le serveur et le rôle staff ci-dessous. ${secrets}</div>`;
+
+  openSheet('Liaison Discord', 'Un rôle Discord = les droits correspondants — espace « ' + (d.espace ? d.espace.nom : '') + ' »',
+    { name:'Discord', hue:235 }, `
+    ${etat}
+    <div class="block">
+      <h3 class="eyebrow">Serveur et accès</h3>
+      <div class="field"><label for="dcClient">Identifiant de l’application Discord</label>
+        <input class="input" id="dcClient" value="${esc(d.clientId)}" inputmode="numeric" placeholder="Client ID"></div>
+      <div class="field"><label for="dcGuild">Identifiant du serveur Discord</label>
+        <input class="input" id="dcGuild" value="${esc(d.guildId)}" inputmode="numeric" placeholder="Guild ID"></div>
+      <div class="field"><label for="dcStaff">Rôle staff — obligatoire pour entrer</label>
+        ${DROLES ? `<select class="input" id="dcStaff">
+            <option value="">— non relié —</option>
+            ${DROLES.map(r => `<option value="${esc(r.id)}" ${r.id === d.staffRoleId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
+          </select>`
+          : `<input class="input" id="dcStaff" value="${esc(d.staffRoleId)}" inputmode="numeric" placeholder="ID du rôle staff">`}</div>
+      <div class="field"><label for="dcRedirect">URL de redirection (à déclarer dans l’application Discord)</label>
+        <input class="input" id="dcRedirect" value="${esc(d.redirectUri)}" placeholder="${esc(d.redirectUriParDefaut)}"></div>
+      <div class="tools" style="margin-top:10px">
+        <button class="btn sm" id="dcLoad">${DROLES ? 'Recharger les rôles du serveur' : 'Charger les rôles du serveur'}</button>
+        <button class="btn sm primary" id="dcSave">Enregistrer</button>
+      </div>
+    </div>
+    <div class="block">
+      <h3 class="eyebrow">Rôles du panneau — ${d.roles.length} au total</h3>
+      <span class="lite-m">Reliez chaque rôle du panneau à un rôle Discord. Une personne qui en cumule plusieurs obtient l’union de leurs droits.</span>
+      <div style="margin-top:6px">${d.roles.map(r => `
+        <div class="map-row">
+          <span><span class="map-name">${esc(r.label)} <span class="map-rank">rang ${r.rank}</span></span>
+            <span class="map-desc">${esc(r.desc || '')}</span></span>
+          ${champRole(r.id, d.roleMap[r.id] || '')}
+        </div>`).join('')}</div>
+    </div>`);
+}
+
+async function chargerRolesDiscord() {
+  const b = $('#dcLoad'); if (b) { b.disabled = true; b.textContent = 'Lecture du serveur…'; }
+  try {
+    // On enregistre d'abord : sans l'identifiant du serveur, le bot ne
+    // sait pas où regarder.
+    await enregistrerDiscord({ silencieux: true });
+    const d = await api('/api/discord/roles');
+    DROLES = d.roles;
+    toast(`${d.roles.length} rôles lus sur le serveur Discord`);
+    openDiscordSettings();
+  } catch (e) { toast(e.message); if (b) { b.disabled = false; b.textContent = 'Charger les rôles du serveur'; } }
+}
+
+async function enregistrerDiscord(o) {
+  const roleMap = {};
+  document.querySelectorAll('[data-map]').forEach(n => roleMap[n.dataset.map] = n.value.trim());
+  const corps = {
+    clientId: $('#dcClient').value.trim(), guildId: $('#dcGuild').value.trim(),
+    staffRoleId: $('#dcStaff').value.trim(), redirectUri: $('#dcRedirect').value.trim(), roleMap
+  };
+  const r = await api('/api/discord/config', { method:'POST', body: JSON.stringify(corps) });
+  if (!(o && o.silencieux)) {
+    toast(r.pret ? 'Liaison enregistrée — le staff peut se connecter avec Discord.'
+                 : 'Enregistré. La liaison reste incomplète.');
+    openDiscordSettings();
+  }
+  return r;
+}
+
 /* ---------- audit ---------- */
 async function openAudit() {
   let d;
@@ -2096,9 +2313,11 @@ async function openAudit() {
    Le bouton Retour du navigateur marche, on recharge sans perdre sa
    place, et un lien collé dans Discord ouvre exactement la même vue. */
 function syncHash(replace) {
-  const chemin = STATE.view === 'overview' ? '/vue'
-               : STATE.view === 'bans'     ? '/bans/' + STATE.banState
-               :                             '/flux/' + STATE.cat;
+  const chemin = STATE.view === 'overview'    ? '/vue'
+               : STATE.view === 'platform'    ? '/plateforme'
+               : STATE.view === 'platformlog' ? '/plateforme/journal'
+               : STATE.view === 'bans'        ? '/bans/' + STATE.banState
+               :                                '/flux/' + STATE.cat;
   const qp = [];
   if (STATE.q) qp.push('q=' + encodeURIComponent(STATE.q));
   if (STATE.range !== 24) qp.push('p=' + STATE.range);
@@ -2113,7 +2332,8 @@ function applyHash() {
   if (!brut) return false;
   const [chemin, requete] = brut.split('?');
   const seg = chemin.split('/').filter(Boolean);
-  if (seg[0] === 'flux')      { STATE.view = 'stream'; STATE.cat = seg[1] || 'all'; }
+  if (seg[0] === 'plateforme') STATE.view = seg[1] === 'journal' ? 'platformlog' : 'platform';
+  else if (seg[0] === 'flux') { STATE.view = 'stream'; STATE.cat = seg[1] || 'all'; }
   else if (seg[0] === 'bans') { STATE.view = 'bans'; STATE.cat = 'bans';
                                 STATE.banState = ['actifs','expires','tous'].includes(seg[1]) ? seg[1] : 'actifs'; }
   else                        { STATE.view = 'overview'; STATE.cat = 'all'; }
@@ -2382,9 +2602,12 @@ async function demoApi(path, opts) {
              roles: demoRolesCatalogue().map(r => ({ id:r.key, label:r.label, rank:r.rank })) };
   }
   if (path.startsWith('/api/platform')) {
-    if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true }; }
+    if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true, espace:'Origin Roleplay' }; }
     if (path.startsWith('/api/platform/members'))
       return { members: DEMO_EQUIPE.map(m => Object.assign({ spaceId:1, platform:m.id === 1 }, m)) };
+    if (path.startsWith('/api/platform/overview')) return demoOverview();
+    if (path.startsWith('/api/platform/check'))    return demoCheck();
+    if (path.startsWith('/api/platform/journal'))  return demoJournal();
     return { spaces: DEMO_ESPACES, monEspace: 1, discordGlobal: true };
   }
   if (path.startsWith('/api/discord/config')) {
@@ -2410,6 +2633,97 @@ async function demoApi(path, opts) {
   return { ok:true };
 }
 let DEMO_PERMS = [];
+
+/* ---------- supervision, en démonstration ----------
+   Trois espaces aux situations contrastées : un qui tourne, un jeune
+   qui n'a jamais rien reçu, un fermé. C'est ce que la vérification doit
+   savoir distinguer. */
+function demoOverview() {
+  const h = 3600000;
+  const esp = [
+    { id:1, nom:'Origin Roleplay', etat:'actif', evenements24:18422, evenements:1840233, membres:24,
+      suspendus:2, bannis:37, alertes:11, actionsEnAttente:0, dernierEvenement:Date.now()-2*60000,
+      rolesRelies:12, proprietaire:'Owen', discordPret:true, retention:30 },
+    { id:2, nom:'Origin RP — serveur test', etat:'actif', evenements24:0, evenements:9120, membres:6,
+      suspendus:0, bannis:2, alertes:0, actionsEnAttente:3, dernierEvenement:Date.now()-31*h,
+      rolesRelies:0, proprietaire:'Vortex', discordPret:false, retention:7 },
+    { id:3, nom:'Origin RP — ancienne saison', etat:'ferme', evenements24:0, evenements:441027, membres:0,
+      suspendus:0, bannis:0, alertes:0, actionsEnAttente:0, dernierEvenement:Date.now()-62*24*h,
+      rolesRelies:14, proprietaire:null, discordPret:true, retention:90 }
+  ];
+  const poids = [.55,.40,.25,.15,.10,.08,.10,.15,.22,.30,.38,.45,.50,.50,.55,.60,.68,.78,.90,1,1,.95,.85,.70];
+  const debut = Date.now() - 24 * h;
+  const dec = new Date().getHours();
+  return { espaces: esp,
+    total: { espaces:3, actifs:2, fermes:1, evenements24:18422, evenements:2290380,
+             membres:30, bannis:39, alertes:11 },
+    serie: { debut, taille:h, valeurs: poids.map((_, i) => Math.round(poids[(dec + i + 1) % 24] * 1180)) },
+    discordGlobal: true };
+}
+function demoCheck() {
+  const C = (n, t, d, r) => ({ niveau:n, titre:t, detail:d, remede:r });
+  const plat = [
+    C('ok', 'Application Discord', 'Identifiant et secrets en place.', null),
+    C('ok', 'Intégrité de la base', 'Aucune anomalie détectée.', null),
+    C('ok', 'Taille de la base', '1 284 Mo.', null),
+    C('attention', 'Un seul administrateur de plateforme',
+      'Si ce compte est perdu, plus personne ne peut créer ni rouvrir un espace.',
+      'Ajoutez-en un second : node staff.js platform <pseudo> on')
+  ];
+  const esp = [
+    { id:1, nom:'Origin Roleplay', etat:'actif', verdict:'ok', controles:[
+      C('ok', 'Ingestion', 'Journaux reçus il y a 2 min.', null),
+      C('ok', 'Discord', 'Le bot voit le serveur ; rôle staff « Staff ».', null),
+      C('ok', 'Rôles reliés', '12 rôle(s) sur 14.', null) ] },
+    { id:2, nom:'Origin RP — serveur test', etat:'actif', verdict:'probleme', controles:[
+      C('probleme', 'Le serveur de jeu n’écrit plus', 'Dernier évènement il y a 31 h.',
+        'La ressource est arrêtée, l’API est injoignable depuis le serveur de jeu, ou la clé d’ingestion a changé sans être recopiée.'),
+      C('probleme', 'Liaison Discord incomplète', 'Aucun rôle staff renseigné.',
+        'Écran « Liaison Discord », après être entré dans cet espace.'),
+      C('probleme', 'Aucun rôle relié à Discord',
+        'Le staff aura le rôle staff mais aucun rôle du panneau : il sera refusé à la connexion.',
+        'Reliez au moins un rôle dans « Liaison Discord ».'),
+      C('probleme', '3 sanction(s) non exécutée(s)',
+        'Déposées depuis plus de 15 minutes, jamais reprises par le serveur de jeu.',
+        'La ressource origin_logs ne tourne plus, ou n’atteint plus l’API : les bannissements décidés ici ne s’appliquent pas en jeu.') ] },
+    { id:3, nom:'Origin RP — ancienne saison', etat:'ferme', verdict:'attention', controles:[
+      C('ok', 'Espace fermé', 'Ni entrée ni ingestion — c’est voulu.', null),
+      C('ok', 'Rôles reliés', '14 rôle(s) sur 14.', null),
+      C('attention', 'Aucun propriétaire', 'Personne ne peut nommer un second fondateur dans cet espace.',
+        'Désignez-en un depuis « Espaces de logs » → Changer le propriétaire.') ] }
+  ];
+  const tous = plat.concat(...esp.map(e => e.controles));
+  return { fait: Date.now(), verdict:'probleme',
+    resume: { ok: tous.filter(x => x.niveau === 'ok').length,
+              attention: tous.filter(x => x.niveau === 'attention').length,
+              probleme: tous.filter(x => x.niveau === 'probleme').length },
+    plateforme: plat, espaces: esp };
+}
+function demoJournal() {
+  const m = 60000, h = 3600000;
+  const e = [
+    [2*m,  'Owen',   'roles.modification',  'Brigade Anti-Cheat', 'Origin Roleplay'],
+    [14*m, 'Nyx',    'action.ban',          'Rayan Reyes (license:4e28…) — Cheat détecté — menu illégal', 'Origin Roleplay'],
+    [38*m, 'Owen',   'discord.config',      'liaison mise à jour', 'Origin Roleplay'],
+    [1*h,  'Vortex', 'staff.roles',         'Kaleb → moderateur, animateur (manuel)', 'Origin Roleplay'],
+    [2*h,  'Owen',   'plateforme.espace.creation', 'Origin RP — serveur test (#2)', 'Origin RP — serveur test'],
+    [3*h,  'Kaleb',  'dossier.ouvert',      'license:06d6cda78d158144…', 'Origin Roleplay'],
+    [4*h,  'Nyx',    'staff.suspension',    'Orion', 'Origin Roleplay'],
+    [6*h,  'Owen',   'plateforme.cle',      'Origin RP — serveur test — clé régénérée', 'Origin RP — serveur test'],
+    [9*h,  'Sasha',  'export.csv',          'anticheat', 'Origin Roleplay'],
+    [14*h, 'Owen',   'roles.creation',      'Responsable Whitelist (rang 55)', 'Origin Roleplay'],
+    [22*h, 'Nyx',    'auth.discord',        'moderateur, animateur', 'Origin Roleplay'],
+    [30*h, 'Owen',   'plateforme.espace.fermeture', 'Origin RP — ancienne saison', 'Origin RP — ancienne saison'],
+    [40*h, 'Owen',   'plateforme.proprietaire', 'Origin RP — serveur test → Vortex', 'Origin RP — serveur test'],
+    [52*h, 'système','discord.revocation',  'Ilyes — pas_staff', 'Origin Roleplay']
+  ].map(([d, p, a, det, sp]) => ({ ts: Date.now() - d, pseudo:p, action:a, detail:det, espace:sp }));
+  const f = {};
+  e.forEach(x => { const k = x.action.split('.')[0]; f[k] = (f[k] || 0) + 1; });
+  const filtre = JRN_FILTRES.action ? e.filter(x => x.action.startsWith(JRN_FILTRES.action)) : e;
+  return { entrees: filtre, total: e.length,
+    familles: Object.entries(f).map(([ff, n]) => ({ f: ff, n })).sort((a, b) => b.n - a.n),
+    espaces: DEMO_ESPACES.map(x => ({ id: x.id, name: x.nom })) };
+}
 
 /* ============================================================
    RÔLES & ACCÈS
@@ -2799,6 +3113,196 @@ async function creerEspace() {
 
 <script>
 /* ============================================================
+   SUPERVISION DE LA PLATEFORME
+   L'administration ne modère pas un serveur de jeu : elle suit des
+   espaces. Son écran d'accueil n'est donc pas un flux de logs mais
+   l'état de tous les panneaux, et son journal dit qui a changé quoi.
+   ============================================================ */
+let PLAT = null, CHECK = null, JRN = null;
+const JRN_FILTRES = { space:'', action:'', q:'' };
+
+async function chargerPlateforme() {
+  try { PLAT = await api('/api/platform/overview'); } catch (e) { return toast(e.message); }
+  rendrePlateforme();
+}
+function sante(e) {
+  // Un espace « en bonne santé » n'est pas un espace silencieux : c'est
+  // un espace qui reçoit, qui a une liaison, et dont la file d'alertes
+  // ne déborde pas.
+  if (e.etat !== 'actif') return { c:'var(--muted)', mot:'fermé' };
+  const age = e.dernierEvenement ? Date.now() - e.dernierEvenement : null;
+  if (!e.discordPret || !e.rolesRelies) return { c:'var(--crit)', mot:'liaison incomplète' };
+  if (age === null || age > 6 * 3600000) return { c:'var(--crit)', mot:'n’écrit plus' };
+  if (e.actionsEnAttente) return { c:'var(--warn)', mot:'sanctions en attente' };
+  if (age > 45 * 60000) return { c:'var(--warn)', mot:'clairsemé' };
+  return { c:'var(--ok)', mot:'en ligne' };
+}
+function rendrePlateforme() {
+  const d = PLAT; if (!d) return;
+  const t = d.total;
+  $('#platSub').innerHTML = `<b>${t.espaces}</b> espace(s) · <b>${t.actifs}</b> actif(s)`
+    + (t.fermes ? ` · ${t.fermes} fermé(s)` : '')
+    + (d.discordGlobal ? '' : ' · <span style="color:var(--warn)">application Discord non configurée</span>');
+
+  $('#platStatus').innerHTML = `
+    <div class="status-cell"><span class="status-k">Évènements 24 h</span>
+      <span class="status-v">${t.evenements24.toLocaleString('fr-FR')}</span>
+      <span class="status-d">${t.evenements.toLocaleString('fr-FR')} au total conservés</span></div>
+    <div class="status-cell"><span class="status-k">Staff</span>
+      <span class="status-v">${t.membres}</span><span class="status-d">comptes actifs, tous espaces</span></div>
+    <div class="status-cell ${t.alertes ? 'crit' : ''}"><span class="status-k">Alertes ouvertes</span>
+      <span class="status-v">${t.alertes}</span><span class="status-d">non traitées sur 24 h</span></div>
+    <div class="status-cell"><span class="status-k">Bannis</span>
+      <span class="status-v">${t.bannis}</span><span class="status-d">bannissements en cours</span></div>
+    <div class="status-cell ${d.espaces.some(e => sante(e).c === 'var(--crit)') ? 'crit' : ''}">
+      <span class="status-k">Espaces en défaut</span>
+      <span class="status-v">${d.espaces.filter(e => sante(e).c === 'var(--crit)').length}</span>
+      <span class="status-d">à regarder en priorité</span></div>`;
+
+  dessinerPlatChart(d.serie);
+
+  $('#platSpaces').innerHTML = d.espaces.map(e => {
+    const s = sante(e);
+    return `<div class="pcard ${e.etat === 'actif' ? '' : 'ferme'} ${s.c === 'var(--crit)' ? 'alerte' : ''}">
+      <div class="ptop">
+        <span class="pulse-dot" style="--c:${s.c}"></span>
+        <span><span class="pname">${esc(e.nom)}</span>
+          <span class="psub">#${e.id} · ${esc(s.mot)}${e.proprietaire ? ' · ' + esc(e.proprietaire) : ' · sans propriétaire'}</span></span>
+        <button class="btn sm" data-enter="${e.id}">Entrer</button>
+      </div>
+      <div class="pnums">
+        <span class="pnum"><b>${(e.evenements24 || 0).toLocaleString('fr-FR')}</b><span>24 h</span></span>
+        <span class="pnum"><b>${e.membres}</b><span>staff</span></span>
+        <span class="pnum ${e.alertes ? 'crit' : ''}"><b>${e.alertes}</b><span>alertes</span></span>
+        <span class="pnum"><b>${e.bannis}</b><span>bannis</span></span>
+      </div>
+      <div class="psub">${e.dernierEvenement ? 'dernier journal ' + ago(e.dernierEvenement) : 'aucun journal reçu'}
+        · ${e.rolesRelies} rôle(s) relié(s) · rétention ${e.retention} j</div>
+    </div>`;
+  }).join('');
+}
+function dessinerPlatChart(serie) {
+  if (!serie) return;
+  const v = serie.valeurs || [], n = v.length || 24;
+  const max = Math.max(1, ...v);
+  const W = 800, H = 160, L = 40, R = 10, T = 12, B = 26, pw = W - L - R, ph = H - T - B;
+  const bw = pw / n, gap = Math.min(6, bw * .2), w = Math.max(2, bw - gap);
+  let out = '';
+  [0, .5, 1].forEach(f => { const y = T + ph - ph * f;
+    out += `<line class="rule" x1="${L}" y1="${y.toFixed(1)}" x2="${W - R}" y2="${y.toFixed(1)}"/>`;
+    out += `<text x="${L - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end">${Math.round(max * f)}</text>`; });
+  v.forEach((x, i) => {
+    const h = Math.max(x ? 2 : 0, ph * x / max), px = L + i * bw + gap / 2;
+    const t = serie.debut + i * serie.taille;
+    out += `<g><title>${pad(new Date(t).getHours())}h — ${x} évènement${x > 1 ? 's' : ''}</title>`;
+    out += `<rect x="${px.toFixed(1)}" y="${(T + ph - h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}"
+             rx="2" style="fill:var(--vio)" opacity="${x === max ? '1' : '.72'}"/></g>`;
+    if (i % 4 === 0) out += `<text x="${(px + w / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle">${pad(new Date(t).getHours())}h</text>`;
+  });
+  $('#platChart').innerHTML = out;
+  $('#platChartNote').textContent = `pic à ${max} évts · tous espaces confondus`;
+}
+
+/* ---------- vérification ---------- */
+const MARQUE = { ok:['✓','var(--ok)'], attention:['!','var(--warn)'], probleme:['✕','var(--crit)'] };
+async function lancerVerification() {
+  const b = $('#checkBtn'); b.disabled = true; b.textContent = 'Vérification…';
+  $('#checkOut').innerHTML = `<div class="banner" style="--c:var(--vio);margin-top:16px">Interrogation des espaces et de Discord…</div>`;
+  try { CHECK = await api('/api/platform/check'); rendreVerification(); }
+  catch (e) { toast(e.message); $('#checkOut').innerHTML = ''; }
+  finally { b.disabled = false; b.textContent = 'Vérifier tous les panneaux'; }
+}
+function rendreVerification() {
+  const c = CHECK; if (!c) return;
+  const r = c.resume;
+  const bloc = (titre, sous, liste, verdict) => {
+    const m = MARQUE[verdict] || MARQUE.ok;
+    return `<div class="chk-group">
+      <div class="chk-head">
+        <span class="chk-mark" style="--c:${m[1]}">${m[0]}</span>
+        <span><span class="chk-t">${esc(titre)}</span>${sous ? `<span class="chk-d">${esc(sous)}</span>` : ''}</span>
+        <span class="lite-m">${liste.length} contrôle(s)</span>
+      </div>
+      ${liste.map(x => { const mm = MARQUE[x.niveau] || MARQUE.ok;
+        return `<div class="chk">
+          <span class="chk-mark" style="--c:${mm[1]}">${mm[0]}</span>
+          <span><span class="chk-t">${esc(x.titre)}</span>
+            ${x.detail ? `<span class="chk-d">${esc(x.detail)}</span>` : ''}
+            ${x.remede ? `<div class="chk-r">${esc(x.remede)}</div>` : ''}</span>
+        </div>`; }).join('')}
+    </div>`;
+  };
+  const mot = c.verdict === 'ok' ? 'Tout va bien'
+            : c.verdict === 'attention' ? 'Rien de bloquant, mais des points à regarder'
+            : 'Des panneaux ne fonctionnent pas';
+  $('#checkOut').innerHTML = `
+    <div class="duty ${c.verdict === 'ok' ? 'clear' : ''}" style="border-color:${MARQUE[c.verdict][1]}">
+      <div class="duty-n" style="color:${MARQUE[c.verdict][1]}">${r.probleme || r.attention || '0'}</div>
+      <div>
+        <div class="duty-t">${esc(mot)}</div>
+        <div class="duty-s">${r.probleme} problème(s) · ${r.attention} point(s) de vigilance · ${r.ok} contrôle(s) au vert
+          — vérifié ${hhmmss(c.fait)}</div>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      ${bloc('Plateforme', 'Application Discord, base de données, administration', c.plateforme,
+             c.plateforme.some(x => x.niveau === 'probleme') ? 'probleme'
+             : c.plateforme.some(x => x.niveau === 'attention') ? 'attention' : 'ok')}
+      ${c.espaces.map(e => bloc(e.nom, e.etat === 'actif' ? 'espace actif' : 'espace fermé', e.controles, e.verdict)).join('')}
+    </div>`;
+}
+
+/* ---------- journal d'administration ---------- */
+async function chargerJournal() {
+  const qp = [];
+  if (JRN_FILTRES.space) qp.push('space=' + encodeURIComponent(JRN_FILTRES.space));
+  if (JRN_FILTRES.action) qp.push('action=' + encodeURIComponent(JRN_FILTRES.action));
+  if (JRN_FILTRES.q) qp.push('q=' + encodeURIComponent(JRN_FILTRES.q));
+  try { JRN = await api('/api/platform/journal' + (qp.length ? '?' + qp.join('&') : '')); }
+  catch (e) { return toast(e.message); }
+  rendreJournal();
+}
+const NOM_FAMILLE = { auth:'Connexions', action:'Sanctions', roles:'Rôles', staff:'Comptes',
+                      discord:'Liaison Discord', plateforme:'Plateforme', dossier:'Dossiers',
+                      export:'Exports' };
+function rendreJournal() {
+  const d = JRN; if (!d) return;
+  $('#jrnCount').innerHTML = `<b>${d.entrees.length}</b> entrée(s) sur ${d.total.toLocaleString('fr-FR')}`;
+  $('#jrnFilters').innerHTML = `
+    <select class="input" id="jrnSpace" style="height:28px;width:auto">
+      <option value="">Tous les espaces</option>
+      ${d.espaces.map(e => `<option value="${e.id}" ${String(JRN_FILTRES.space) === String(e.id) ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}
+    </select>
+    ${d.familles.filter(f => f.f).map(f => `<button class="chip" data-jrnfam="${esc(f.f)}"
+        style="--c:var(--vio)" aria-pressed="${JRN_FILTRES.action === f.f}"><i></i>${esc(NOM_FAMILLE[f.f] || f.f)}<b>${f.n}</b></button>`).join('')}
+    ${JRN_FILTRES.action || JRN_FILTRES.space || JRN_FILTRES.q ? `<button class="btn sm" id="jrnClear">Tout afficher</button>` : ''}`;
+
+  $('#jrnRows').innerHTML = d.entrees.map(e => `<tr>
+      <td class="j-t">${dayLabel(e.ts)} ${hhmmss(e.ts)}</td>
+      <td class="j-d">${esc(e.espace || '—')}</td>
+      <td class="j-d"><strong>${esc(e.pseudo || 'système')}</strong></td>
+      <td class="j-a">${esc(e.action)}</td>
+      <td class="j-d">${esc(e.detail || '')}</td>
+    </tr>`).join('')
+    || `<tr><td colspan="5"><div class="void"><b>Rien à afficher</b><span>Aucune action ne correspond à ces filtres.</span></div></td></tr>`;
+}
+
+document.addEventListener('click', ev => {
+  const id = ev.target.id;
+  if (id === 'checkBtn') { ev.stopImmediatePropagation(); return lancerVerification(); }
+  if (id === 'jrnClear') { JRN_FILTRES.action = ''; JRN_FILTRES.space = ''; JRN_FILTRES.q = ''; return chargerJournal(); }
+  const f = ev.target.closest('[data-jrnfam]');
+  if (f) { ev.stopImmediatePropagation();
+           JRN_FILTRES.action = JRN_FILTRES.action === f.dataset.jrnfam ? '' : f.dataset.jrnfam;
+           return chargerJournal(); }
+}, true);
+document.addEventListener('change', ev => {
+  if (ev.target.id === 'jrnSpace') { JRN_FILTRES.space = ev.target.value; chargerJournal(); }
+});
+</script>
+
+<script>
+/* ============================================================
    Interactions et démarrage
    ============================================================ */
 function goStream(cat) {
@@ -2810,11 +3314,14 @@ function goBans() {
   syncHash(); render(); refresh(); window.scrollTo({ top: 0 });
 }
 function goOverview() { STATE.view = 'overview'; syncHash(); render(); refresh(); }
+function goVue(v) { STATE.view = v; syncHash(); render(); refresh(); window.scrollTo({ top: 0 }); }
 
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-staff-toggle],[data-banstate]');
   if (!t) return;
 
+  if (t.dataset.view === 'platform')    return goVue('platform');
+  if (t.dataset.view === 'platformlog')  return goVue('platformlog');
   if (t.dataset.view === 'overview') return goOverview();
   if (t.dataset.act)    return askAction(t.dataset.act, t.dataset.key, t.dataset.name);
   if (t.dataset.player) { closeInspector(); return openDossier(t.dataset.player); }
@@ -3112,7 +3619,9 @@ async function startPanel() {
       $(b).hidden = false;
   }
   buildNav();
-  if (!applyHash()) syncHash(true);   // l'adresse fait foi au chargement
+  // Sans adresse précise, l'administration de plateforme atterrit sur sa
+  // supervision : un panneau de logs de jeu ne lui apprendrait rien.
+  if (!applyHash()) { if (ME.plateforme) STATE.view = 'platform'; syncHash(true); }
   render();
   await refresh();
   startStream();

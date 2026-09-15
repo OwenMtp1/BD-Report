@@ -86,7 +86,22 @@ node staff.js platform VotrePseudo on
 node staff.js spaces      # liste les espaces et leur clé d'ingestion
 ```
 
-Le bouton **Espaces de logs** apparaît alors dans la colonne de gauche.
+Ce compte-là n'arrive plus sur un flux d'évènements : il ouvre la
+**supervision**, qui montre l'état de tous les espaces à la fois. Le rail
+gagne deux entrées — *Supervision* et *Journal d'administration* — et le
+bouton **Espaces de logs** apparaît dans la colonne de gauche.
+
+### Vérifier l'installation d'un seul clic
+
+Le bouton **Vérifier** de la supervision teste la plateforme et chaque espace
+pour de vrai : secrets Discord en place, intégrité de la base, bot présent sur
+chaque serveur Discord, rôle staff toujours existant, ingestion encore reçue,
+sanctions effectivement exécutées en jeu. Chaque problème s'affiche avec le
+geste qui le corrige.
+
+C'est le premier réflexe après une mise en service ou un incident — plus sûr
+que de lire les tables une par une, et plus rapide que d'attendre qu'un membre
+du staff signale que « ça ne marche plus ».
 
 ### Ajouter un second serveur de jeu
 
@@ -295,3 +310,4 @@ sqlite3 /srv/origin-logs/api/data/origin-logs.db ".backup '/sauvegardes/logs-$(d
 | Le direct arrive par paquets | `proxy_buffering off;` manque côté Nginx. |
 | Déconnexion à chaque rechargement | `SECURE_COOKIE=1` sans HTTPS, ou l'inverse. |
 | Les sanctions ne partent pas | Vérifiez que la ressource tourne : elle vient chercher les tâches toutes les 5 s. |
+| Un espace semble en panne sans qu'on sache pourquoi | **Supervision → Vérifier** : le contrôle nomme la cause et le remède. |
