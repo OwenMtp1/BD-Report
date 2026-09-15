@@ -4009,6 +4009,10 @@ function rendreSauvegardes() {
     : '';
 }
 async function sauvegarderMaintenant() {
+  // En démonstration l'écriture est interceptée et ne rend aucun chiffre :
+  // annoncer « sauvegarde prise — 0 o » serait pire que de ne rien dire.
+  if (MODE !== 'api')
+    return toast('Mode démonstration : rien n’est enregistré, aucune sauvegarde n’est prise.');
   const b = $('#sauvNow'); b.disabled = true; b.textContent = 'Sauvegarde…';
   try {
     const r = await api('/api/platform/sauvegardes', { method:'POST' });
@@ -4020,11 +4024,18 @@ async function sauvegarderMaintenant() {
 }
 // Télécharger passe par le cookie de session : une balise <a download>
 // suffit, et c'est le serveur qui décide du nom.
+// ⚠️ En démonstration il n'y a RIEN à remettre — aucun fichier n'existe
+// derrière ces adresses. Un bouton qui ne fait rien passe pour cassé : on
+// dit pourquoi plutôt que de laisser le clic tomber dans le vide.
 function telecharger(url) {
+  if (MODE !== 'api')
+    return toast('Le téléchargement n’existe que sur un panneau installé : la démonstration n’a pas de fichier à remettre.');
   const a = document.createElement('a');
   a.href = url; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
 }
 async function restaurerEspace(f) {
+  if (MODE !== 'api')
+    return toast('Mode démonstration : rien n’est enregistré, l’espace ne serait restauré nulle part.');
   let doc;
   try { doc = JSON.parse(await f.text()); }
   catch (e) { return toast('Ce fichier n’est pas un export de panneau.'); }
