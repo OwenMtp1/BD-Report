@@ -58,7 +58,9 @@ if (!cle) {
 }
 
 const db = DB.open(DBF);
-const existe = DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE').get(pseudo));
+// L'espace 1 est celui que crée cette installation : le pseudo n'étant
+// unique que par espace, on ne cherche que là.
+const existe = DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE AND space_id = 1').get(pseudo));
 let mdp = null;
 if (existe) {
   console.log(`\n  Le compte « ${pseudo} » existe déjà — il est conservé tel quel.`);
@@ -90,10 +92,18 @@ L('');
 L('     1. Démarrer l\'API            npm start');
 L('        puis ouvrir               http://localhost:8080');
 L('');
-L('     2. Dans resource/config.lua, coller la clé ci-dessus :');
-L(`        Config.ServerKey = '${cle}'`);
-L('        puis, dans server.cfg :   ensure baseevents');
-L('                                  ensure origin_logs');
+L('     2. Copier le dossier « resource » dans les ressources du serveur');
+L('        de jeu, sous le nom origin_logs, puis dans server.cfg :');
+L('');
+L(`        set origin_logs_url "http://127.0.0.1:${process.env.PORT || 8080}"`);
+L(`        set origin_logs_key "${cle}"`);
+L('        ensure baseevents          # sinon pas de morts journalisées');
+L('        ensure screenshot-basic    # facultatif : captures d\'écran');
+L('        ensure origin_logs');
+L('');
+L('        ⚠ La clé va dans server.cfg, PAS dans config.lua : ce fichier');
+L('        est « shared », donc téléchargé par chaque joueur. Et « set »,');
+L('        pas « setr » — setr la répliquerait chez les clients.');
 L('');
 L('     Pour brancher la connexion Discord (facultatif) :');
 L('        a. Application sur discord.com/developers → OAuth2 : ajoutez');
