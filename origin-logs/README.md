@@ -351,6 +351,40 @@ rouge : sans lui, un staff qui perd son rôle garde son accès.
 
 ---
 
+## Cloisonnement : chaque espace est à lui
+
+Les rôles vivent en base **par espace** : les renommer, les recomposer ou en
+créer dans un serveur ne touche jamais l'autre, et deux espaces peuvent avoir
+un rôle portant la même clé sans se gêner.
+
+⚠️ **Deux défauts trouvés et corrigés à l'audit** — les COMPTES, eux, ne
+l'étaient pas :
+
+- `pseudo` était unique **globalement**. Un espace ne pouvait donc pas avoir
+  son « Nyx » si un autre en avait un — et le refus révélait au passage
+  l'existence d'un compte dans un espace qu'on n'administre pas.
+- l'index sur `discord_id` était global lui aussi : **la même personne ne
+  pouvait pas être staff sur deux serveurs**, la création de son second
+  compte échouait sur la contrainte.
+
+L'unicité porte désormais sur `(espace, pseudo)` et `(espace, discord_id)`,
+et la migration reconstruit la table sans perdre une ligne.
+
+⚠️ **La connexion doit alors départager les homonymes**, et elle n'accepte
+que si le mot de passe en désigne **exactement un**. Prendre le premier qui
+correspond ouvrirait la porte du mauvais espace à qui partage un pseudo ET un
+mot de passe ; deux comptes identiques sur les deux sont donc refusés, avec
+le message qui dit quoi changer. `staff.js add` prévient d'ailleurs quand le
+pseudo existe ailleurs.
+
+⚠️ **Plus de rôle de repli codé en dur.** Un compte créé sans rôle valide
+prenait `moderateur` : dans un espace qui l'avait renommé ou supprimé, le
+compte se retrouvait avec une clé inexistante, donc aucun droit, et un écran
+vide sans explication. Le repli est maintenant **le rôle le plus bas de CET
+espace** (`ROLESVC.basRole`).
+
+---
+
 ## Rôles et permissions
 
 **14 rôles de départ**, et rien n'est figé : un fondateur les renomme, change
@@ -564,7 +598,7 @@ Deux niveaux, et ils ne répondent pas à la même question.
 le bot est-il encore sur ce serveur Discord, le serveur de jeu écrit-il
 toujours, les sanctions partent-elles. C'est le contrôle du jour.
 
-**`npm test`** teste **le code** : 127 contrôles HTTP sur l'API — ingestion,
+**`npm test`** teste **le code** : 166 contrôles HTTP sur l'API — ingestion,
 cloisonnement des espaces, rôles et rangs, permissions refusées, parcours
 Discord complet, captures d'écran de bout en bout et **retrait automatique
 d'un accès** (avec un faux Discord local, aucun réseau).
@@ -575,7 +609,7 @@ tombe. Vérifier que la route répond n'aurait rien prouvé.
 
 ```bash
 cd api
-npm test              # les quatre suites
+npm test              # les six suites
 npm test discord      # une seule
 ```
 
@@ -589,6 +623,63 @@ ne peut pas relancer ne dit rien le jour où on en aurait besoin.
 Aucune dépendance n'est installée pour autant : le lanceur (`api/test/run.js`)
 sème la base, démarre l'API, lance la suite, arrête tout. Le faux Discord
 (`api/test/faux-discord.js`) répond exactement ce que la liaison interroge.
+
+---
+
+## Sécurité : ce qui est en place, ce qui reste à vous
+
+**En place** — mots de passe scrypt et comparaison à temps constant · sessions
+en base, donc révocables immédiatement · cookie `HttpOnly` + `SameSite=Lax`
+(+ `Secure` avec `SECURE_COOKIE=1`) · **SQL entièrement paramétré** · le texte
+venu du jeu est échappé avant affichage · en-têtes de sécurité sur **toutes**
+les réponses, JSON compris · traversée de chemin bloquée · clé d'ingestion
+comparée à temps constant, par espace · état OAuth signé HMAC · licences
+jamais envoyées aux rôles sans le droit (alias HMAC) · permissions appliquées
+**en SQL**, pas dans l'écran · journal de tout ce qui est consulté.
+
+**Corrigé à l'audit** (`npm test`, suite `securite`) :
+
+- ⚠️ **Le frein anti-force-brute était contournable.** `clientIp()` faisait
+  confiance à `X-Forwarded-For` sans condition : il suffisait de changer
+  l'en-tête à chaque tentative pour repartir de zéro. Il n'est lu que si
+  **`TRUST_PROXY=1`** le dit, et un second frein porte sur le **compte** visé,
+  pas seulement sur l'adresse.
+- ⚠️ **Le dépôt de journaux et de captures n'avait aucune limite.** Une clé
+  qui fuit pouvait remplir le disque ; seule la purge, toutes les six heures,
+  freinait. Plafond par espace et par minute (`MAX_INGEST_PER_MIN`,
+  `MAX_SCREENS_PER_MIN`), plus un **quota disque** par espace
+  (`SCREEN_QUOTA_MB`) qui **refuse** au lieu d'effacer d'anciennes captures —
+  ce sont peut-être celles d'une enquête.
+- ⚠️ **`SameSite=Lax` était la seule couche anti-CSRF.** Une écriture dont
+  l'`Origin` n'est pas la nôtre est refusée et inscrite au journal. Une
+  lecture, elle, n'est pas bloquée.
+- ⚠️ **`/api/catalogue` livrait vos rôles sans session** — grades, rangs et
+  droits, à tout visiteur. Sans session, il ne rend plus que les rubriques et
+  les gravités, dont la page de connexion a besoin.
+- ⚠️ **`Host` et `X-Forwarded-*` pouvaient influencer l'URL de retour OAuth.**
+  `PUBLIC_URL` tranche la question une fois pour toutes.
+- ⚠️ **Les captures étaient lisibles par tout compte de la machine.** Dossier
+  en `0700`, fichiers en `0600`, servis avec `nosniff`, en `inline` sous un nom
+  neutre et sans mise en cache.
+- ⚠️ **`origin_logs:tir` était appelable en boucle par n'importe quel client.**
+  Un tricheur noyait la rubrique Anticheat — une façon efficace d'y cacher une
+  vraie détection. Un signalement par joueur et par seconde.
+
+**Ce qui reste, et qui demande une décision de votre part :**
+
+- **Pas de HTTPS en propre** : reverse proxy obligatoire, puis
+  `SECURE_COOKIE=1` **et `TRUST_PROXY=1`** (le proxy du guide écrase
+  `X-Forwarded-For`, donc l'en-tête redevient fiable).
+- **CSP avec `'unsafe-inline'`** : le panneau est un fichier unique dont les
+  scripts sont en ligne. La retirer suppose de découper le panneau et de
+  poser un nonce à chaque réponse — faisable, mais c'est un autre chantier.
+  Conséquence à connaître : la CSP ne rattraperait pas un XSS s'il en
+  apparaissait un.
+- **Captures en clair sur le disque.** Les permissions les protègent d'un
+  autre service sur la machine, pas d'une sauvegarde qui fuite. Les chiffrer
+  suppose une clé à gérer, donc votre arbitrage.
+- **Pas de double authentification** — la connexion Discord la remplace en
+  pratique, puisque l'accès dépend d'un rôle que vous contrôlez.
 
 ---
 

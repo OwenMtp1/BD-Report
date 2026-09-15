@@ -57,8 +57,19 @@ end)
 
 -- Tir en zone protégée : signalé par le client, qui seul voit le tir,
 -- mais la POSITION est relue côté serveur — le client ne décide de rien.
+-- ⚠️ TOUT CLIENT PEUT DÉCLENCHER UN ÉVÈNEMENT RÉSEAU. Sans frein, un
+-- tricheur envoie « origin_logs:tir » mille fois par seconde et noie la
+-- rubrique Anticheat — ce qui est une façon très efficace de cacher une
+-- vraie détection. Un signalement par joueur et par seconde suffit :
+-- au-delà, ce n'est plus du jeu.
+local dernierTir = {}
+AddEventHandler('playerDropped', function() dernierTir[source] = nil end)
+
 RegisterNetEvent('origin_logs:tir', function()
   local src = source
+  local t = GetGameTimer()
+  if dernierTir[src] and (t - dernierTir[src]) < 1000 then return end
+  dernierTir[src] = t
   if #Config.ZonesProtegees == 0 then return end
   local ped = GetPlayerPed(src)
   if not ped then return end

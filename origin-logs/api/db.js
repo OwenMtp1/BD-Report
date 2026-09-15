@@ -179,7 +179,7 @@ CREATE TABLE IF NOT EXISTS marks(
 
 CREATE TABLE IF NOT EXISTS staff(
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  pseudo     TEXT UNIQUE NOT NULL,
+  pseudo     TEXT NOT NULL,   -- unicité PAR ESPACE (cf. idx_staff_pseudo)
   pass       TEXT NOT NULL,
   role       TEXT NOT NULL,
   discord    TEXT,
@@ -278,7 +278,55 @@ function open(file) {
   db.exec('CREATE INDEX IF NOT EXISTS idx_ac_space ON actions(space_id, status)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_st_space ON staff(space_id)');
 
-  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_discord ON staff(discord_id) WHERE discord_id IS NOT NULL');
+  /* ---------- DÉFAUT : les comptes staff n'étaient PAS cloisonnés ----------
+     `pseudo TEXT UNIQUE` et l'index unique sur `discord_id` étaient
+     GLOBAUX. Deux conséquences, toutes deux contraires à l'idée même
+     d'espaces indépendants :
+       · un espace ne pouvait pas avoir son « Nyx » si un autre en avait
+         un — et le refus révélait au passage l'existence d'un compte
+         dans un espace qu'on n'administre pas ;
+       · la MÊME personne ne pouvait pas être staff sur deux serveurs :
+         la création de son second compte Discord échouait sur l'index.
+     L'unicité devient donc (space_id, pseudo) et (space_id, discord_id).
+     SQLite ne sait pas retirer une contrainte de colonne en place : on
+     reconstruit la table en conservant toutes les lignes. */
+  const st = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='staff'").get();
+  if (st && /pseudo\s+TEXT\s+UNIQUE/i.test(String(st.sql))) {
+    const cols = db.prepare('PRAGMA table_info(staff)').all().map(c => c.name);
+    const liste = cols.join(',');
+    db.exec('BEGIN');
+    try {
+      db.exec(`CREATE TABLE staff_v2(
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        pseudo           TEXT NOT NULL,
+        pass             TEXT NOT NULL,
+        role             TEXT NOT NULL,
+        discord          TEXT,
+        disabled         INTEGER NOT NULL DEFAULT 0,
+        created_at       INTEGER NOT NULL,
+        last_login       INTEGER,
+        discord_id       TEXT,
+        avatar           TEXT,
+        roles            TEXT,
+        source           TEXT NOT NULL DEFAULT 'local',
+        roles_checked_at INTEGER,
+        space_id         INTEGER NOT NULL DEFAULT 1,
+        manual_roles     TEXT,
+        platform_admin   INTEGER NOT NULL DEFAULT 0)`);
+      db.exec(`INSERT INTO staff_v2(${liste}) SELECT ${liste} FROM staff`);
+      db.exec('DROP TABLE staff');
+      db.exec('ALTER TABLE staff_v2 RENAME TO staff');
+      db.exec('COMMIT');
+      console.log('[migration] comptes staff désormais propres à chaque espace');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_st_space ON staff(space_id)');
+  // COLLATE NOCASE : « Nyx » et « nyx » sont le même compte pour qui se
+  // connecte, donc le même compte pour l'index.
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_pseudo ON staff(space_id, pseudo COLLATE NOCASE)');
+  db.exec('DROP INDEX IF EXISTS idx_staff_discord');
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_discord
+           ON staff(space_id, discord_id) WHERE discord_id IS NOT NULL`);
   return db;
 }
 

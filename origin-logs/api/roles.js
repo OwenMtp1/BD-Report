@@ -41,6 +41,17 @@ function list(db, spaceId) {
 }
 const byKey = (db, spaceId, key) => list(db, spaceId).find(r => r.key === key) || null;
 
+/* ⚠️ Le rôle de repli d'un espace est LE SIEN — le plus bas de sa
+   hiérarchie — et jamais « moderateur » codé en dur. Un espace qui a
+   renommé ou supprimé ce rôle se serait retrouvé avec des comptes
+   portant une clé qui n'existe pas chez lui : `resolve` n'aurait alors
+   rendu aucun droit, et l'écran serait resté vide sans dire pourquoi. */
+function basRole(db, spaceId) {
+  const tous = list(db, spaceId);
+  if (!tous.length) return null;
+  return tous.slice().sort((a, b) => a.rank - b.rank)[0].key;
+}
+
 /* Cumul : une personne porte souvent plusieurs rôles. Les droits
    s'AJOUTENT, le rang retenu est le plus haut, et les rubriques sont
    rendues dans l'ordre du catalogue pour que le rail reste stable. */
@@ -77,4 +88,4 @@ function makeKey(db, spaceId, label) {
   return base + '_' + Date.now().toString(36);
 }
 
-module.exports = { seed, list, byKey, resolve, fromDiscord, makeKey, invalidate };
+module.exports = { seed, list, byKey, basRole, resolve, fromDiscord, makeKey, invalidate };

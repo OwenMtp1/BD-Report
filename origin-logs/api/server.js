@@ -42,6 +42,17 @@ const CFG = {
   screenDir:  process.env.SCREEN_DIR || path.join(__dirname, 'data', 'screens'),
   maxScreen:  Number(process.env.MAX_SCREEN_MB || 6) * 1024 * 1024,
   screenDays: Number(process.env.SCREEN_DAYS || 0),   // 0 = même rétention que les journaux
+  // Espace disque maximal occupé par les captures d'UN espace.
+  screenQuotaMb: Number(process.env.SCREEN_QUOTA_MB || 2048),
+  // Derrière le reverse proxy du guide : TRUST_PROXY=1. Sinon l'API lirait
+  // une adresse que le client choisit lui-même (cf. clientIp).
+  trustProxy: process.env.TRUST_PROXY === '1',
+  // Adresse publique du panneau, si vous la connaissez : elle fige l'URL
+  // de retour OAuth et la vérification d'origine (ex. https://logs.mon-rp.fr).
+  publicUrl: String(process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
+  // Plafonds de dépôt, par espace et par minute.
+  maxIngestMin: Number(process.env.MAX_INGEST_PER_MIN || 120),
+  maxScreenMin: Number(process.env.MAX_SCREENS_PER_MIN || 20),
   // Revérification automatique des accès Discord, en tâche de fond.
   sweepMin:   Number(process.env.ACCESS_SWEEP_MIN || 30)
 };
@@ -116,26 +127,76 @@ const spacesDiscord = () => db.prepare(`SELECT * FROM spaces WHERE state='actif'
 const discordGlobalOk = () => { const c = dconf(); return !!(c.clientId && c.clientSecret && c.botToken); };
 const discordPret = () => discordGlobalOk() && spacesDiscord().length > 0;
 
+/* ⚠️ `Host` et `X-Forwarded-*` viennent du CLIENT. On s'en sert pour
+   fabriquer l'URL de retour OAuth et pour vérifier l'origine d'une
+   écriture : un en-tête forgé pouvait donc influencer les deux.
+   · PUBLIC_URL, quand elle est renseignée, tranche la question une fois
+     pour toutes — c'est le réglage à privilégier en production ;
+   · les en-têtes du proxy ne sont lus que si TRUST_PROXY=1 ;
+   · à défaut, l'en-tête Host, qui reste ce que le navigateur envoie
+     réellement pour joindre la machine. */
 function originOf(req) {
-  const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0] || (CFG.secure ? 'https' : 'http');
-  const host = req.headers['x-forwarded-host'] || req.headers.host || ('localhost:' + CFG.port);
+  if (CFG.publicUrl) return CFG.publicUrl;
+  const proto = (CFG.trustProxy && String(req.headers['x-forwarded-proto'] || '').split(',')[0])
+             || (CFG.secure ? 'https' : 'http');
+  const host = (CFG.trustProxy && req.headers['x-forwarded-host'])
+            || req.headers.host || ('localhost:' + CFG.port);
   return proto + '://' + host;
 }
 const redirectUriOf = (c, req) => c.redirectUri || (originOf(req) + '/api/auth/discord/callback');
 
 /* ---------- réponses ---------- */
+const SEC_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'same-origin',
+  'x-frame-options': 'DENY',
+  'content-security-policy':
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+};
+
 const JSONH = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
 function send(res, code, obj, extra) {
   const body = JSON.stringify(obj);
-  res.writeHead(code, Object.assign({}, JSONH, extra || {}));
+  // Les en-têtes de sécurité ne servaient qu'aux fichiers : une réponse
+  // JSON ouverte directement dans un onglet repartait sans `nosniff` ni
+  // `frame-ancestors`. Ils s'appliquent partout — c'est une réponse de la
+  // même application.
+  res.writeHead(code, Object.assign({}, JSONH, SEC_HEADERS, extra || {}));
   res.end(body);
 }
 const ok   = (res, o) => send(res, 200, o);
 const fail = (res, code, msg) => send(res, code, { error: msg });
 
+/* ⚠️ `X-Forwarded-For` EST UN EN-TÊTE, donc une donnée fournie par le
+   client. S'y fier sans condition rendait le frein anti-force-brute
+   décoratif : il suffisait de changer l'en-tête à chaque tentative pour
+   repartir de zéro. On ne le lit donc QUE si TRUST_PROXY=1 le dit — à
+   mettre quand l'API est derrière le reverse proxy du guide, qui écrase
+   l'en-tête au lieu de le compléter. Par défaut : l'adresse de la
+   socket, la seule que le client ne choisit pas. */
 function clientIp(req) {
-  const f = req.headers['x-forwarded-for'];
-  return (f ? String(f).split(',')[0] : req.socket.remoteAddress || '').trim();
+  if (CFG.trustProxy) {
+    const f = req.headers['x-forwarded-for'];
+    if (f) return String(f).split(',')[0].trim();
+  }
+  return (req.socket.remoteAddress || '').trim();
+}
+
+/* ---------- limites de débit ----------
+   ⚠️ Une clé d'ingestion qui fuite ne doit pas pouvoir remplir le disque.
+   Le dépôt de journaux et celui des captures n'avaient AUCUNE limite :
+   la seule chose qui les freinait était la purge, toutes les six heures.
+   Compteur glissant par espace, en mémoire — il n'a pas à survivre à un
+   redémarrage, il a à tenir pendant une rafale. */
+const seaux = new Map();
+function debit(cle, max, fenetreMs) {
+  const t = now();
+  let e = seaux.get(cle);
+  if (!e || t - e.debut > fenetreMs) { e = { debut: t, n: 0 }; seaux.set(cle, e); }
+  e.n++;
+  if (seaux.size > 5000) for (const [k, v] of seaux) if (t - v.debut > fenetreMs) seaux.delete(k);
+  return e.n <= max ? 0 : Math.ceil((e.debut + fenetreMs - t) / 1000);
 }
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -382,11 +443,13 @@ async function balayerAcces(raison) {
 /* ---------- comptes issus de Discord ----------
    Le pseudo affiché vient de Discord ; en cas de collision avec un
    compte local, on suffixe plutôt que d'écraser le compte de quelqu'un. */
-function pseudoLibre(base, discordId) {
+function pseudoLibre(base, discordId, spaceId) {
   const propre = String(base || 'staff').replace(/\s+/g, ' ').trim().slice(0, 28) || 'staff';
-  const pris = p => DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE AND (discord_id IS NULL OR discord_id <> ?)').get(p, discordId));
-  // (l'unicité reste globale : deux espaces ne doivent pas se marcher
-  //  dessus dans la liste d'une administration de plateforme)
+  // ⚠️ La collision ne se juge que DANS L'ESPACE : suffixer parce qu'un
+  // autre serveur a déjà un « Nyx » affublerait quelqu'un d'un numéro à
+  // cause d'une équipe qu'il ne connaît pas — et le lui apprendrait.
+  const pris = p => DB.row(db.prepare(`SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE
+    AND space_id = ? AND (discord_id IS NULL OR discord_id <> ?)`).get(p, spaceId, discordId));
   if (!pris(propre)) return propre;
   return propre + '#' + String(discordId).slice(-4);
 }
@@ -398,7 +461,7 @@ function upsertDiscordStaff(user, v, spaceId) {
   if (existant) {
     db.prepare(`UPDATE staff SET pseudo=?, avatar=?, roles=?, role=?, disabled=0,
                                  roles_checked_at=?, last_login=?, discord=? WHERE id=?`)
-      .run(pseudoLibre(nom, user.id), S(user.avatar), roles, principal, now(), now(),
+      .run(pseudoLibre(nom, user.id, spaceId), S(user.avatar), roles, principal, now(), now(),
            'discord:' + user.id, existant.id);
     return DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(existant.id));
   }
@@ -406,7 +469,7 @@ function upsertDiscordStaff(user, v, spaceId) {
   // n'entre que par Discord, et AUTH.verify refuse cette valeur.
   const r = db.prepare(`INSERT INTO staff(pseudo,pass,role,roles,discord,discord_id,avatar,source,created_at,roles_checked_at,last_login,space_id)
                         VALUES(?,?,?,?,?,?,?, 'discord', ?,?,?,?)`)
-    .run(pseudoLibre(nom, user.id), 'discord', principal, roles,
+    .run(pseudoLibre(nom, user.id, spaceId), 'discord', principal, roles,
          'discord:' + user.id, user.id, S(user.avatar), now(), now(), now(), spaceId);
   return DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(DB.num(r.lastInsertRowid)));
 }
@@ -795,14 +858,6 @@ const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; chars
   '.css':'text/css; charset=utf-8', '.json':'application/json; charset=utf-8', '.svg':'image/svg+xml',
   '.png':'image/png', '.jpg':'image/jpeg', '.webp':'image/webp', '.ico':'image/x-icon', '.woff2':'font/woff2' };
 
-const SEC_HEADERS = {
-  'x-content-type-options': 'nosniff',
-  'referrer-policy': 'same-origin',
-  'x-frame-options': 'DENY',
-  'content-security-policy':
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-    "font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
-};
 
 async function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
@@ -845,7 +900,19 @@ async function route(req, res) {
   /* ---- dépôt des logs par la ressource FiveM ---- */
   if (p === '/api/ingest' && method === 'POST') {
     const esp = spaceFromKey(req);
-    if (!esp) return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
+    if (!esp) {
+      // Une clé fausse coûte quand même une lecture en base : on freine
+      // aussi celui qui en essaie beaucoup.
+      if (debit('cle:' + ip, 30, 60000)) return fail(res, 429, 'Trop de tentatives.');
+      return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
+    }
+    // ⚠️ AVANT de lire le corps : refuser après l'avoir absorbé aurait
+    // quand même fait passer deux mégaoctets par la machine à chaque coup.
+    const attente = debit('ingest:' + esp.id, CFG.maxIngestMin, 60000);
+    if (attente) {
+      res.setHeader('retry-after', String(attente));
+      return fail(res, 429, `Trop de dépôts pour cet espace. Réessayez dans ${attente} s.`);
+    }
     const b = await readBody(req);
     const list = Array.isArray(b) ? b : (b.events || []);
     if (!Array.isArray(list)) return fail(res, 400, 'Attendu : un tableau d’évènements.');
@@ -868,7 +935,23 @@ async function route(req, res) {
   /* ---- dépôt d'une capture par la ressource FiveM ---- */
   if (p === '/api/screens' && method === 'POST') {
     const esp = spaceFromKey(req);
-    if (!esp) return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
+    if (!esp) {
+      if (debit('cle:' + ip, 30, 60000)) return fail(res, 429, 'Trop de tentatives.');
+      return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
+    }
+    const att = debit('screens:' + esp.id, CFG.maxScreenMin, 60000);
+    if (att) {
+      res.setHeader('retry-after', String(att));
+      return fail(res, 429, `Trop de captures pour cet espace. Réessayez dans ${att} s.`);
+    }
+    // ⚠️ Un plafond par minute ne protège pas d'une accumulation lente :
+    // vingt captures par minute finissent par remplir un disque. Le quota,
+    // lui, borne le TOTAL — et il REFUSE plutôt que d'effacer d'anciennes
+    // captures, qui sont peut-être justement celles d'une enquête.
+    const occupe = DB.row(db.prepare('SELECT COALESCE(SUM(bytes),0) n FROM screens WHERE space_id = ?').get(esp.id)).n;
+    if (occupe >= CFG.screenQuotaMb * 1048576)
+      return fail(res, 507, `Quota de captures atteint pour cet espace (${CFG.screenQuotaMb} Mo). ` +
+                            `Baissez la rétention ou augmentez SCREEN_QUOTA_MB.`);
     let buf;
     try { buf = await readBinary(req, CFG.maxScreen); }
     catch (e) { return fail(res, 413, 'Capture trop volumineuse (plafond ' + Math.round(CFG.maxScreen / 1048576) + ' Mo).'); }
@@ -893,10 +976,15 @@ async function route(req, res) {
     const motif= a ? a.reason      : S(H('x-screen-reason'));
 
     const dossier = path.join(CFG.screenDir, String(esp.id));
-    try { fs.mkdirSync(dossier, { recursive: true }); } catch (e) {}
+    // ⚠️ L'écran d'un joueur est une donnée personnelle : le dossier et
+    // les fichiers sont lisibles par le SEUL compte qui fait tourner
+    // l'API. Par défaut, umask laisserait tout le monde les lire sur la
+    // machine — y compris un autre service mal isolé.
+    try { fs.mkdirSync(dossier, { recursive: true, mode: 0o700 }); } catch (e) {}
+    try { fs.chmodSync(dossier, 0o700); } catch (e) {}
     const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
     const nomFichier = now() + '-' + crypto.randomBytes(6).toString('hex') + '.' + ext;
-    try { fs.writeFileSync(path.join(dossier, nomFichier), buf); }
+    try { fs.writeFileSync(path.join(dossier, nomFichier), buf, { mode: 0o600 }); }
     catch (e) { return fail(res, 500, 'Écriture impossible : ' + e.message); }
 
     const r = db.prepare(`INSERT INTO screens(space_id,action_id,player_key,player_name,player_sid,
@@ -1026,17 +1114,39 @@ async function route(req, res) {
 
   /* ---- connexion ---- */
   if (p === '/api/auth/login' && method === 'POST') {
-    const wait = AUTH.throttle(ip);
-    if (wait) return send(res, 429, { error: `Trop de tentatives. Réessayez dans ${Math.ceil(wait / 1000)} s.` });
     const b = await readBody(req);
     const pseudo = String(b.pseudo || '').trim();
-    const row = DB.row(db.prepare('SELECT * FROM staff WHERE pseudo = ? COLLATE NOCASE').get(pseudo));
-    if (!row || row.disabled || row.source === 'discord' || !AUTH.verify(String(b.password || ''), row.pass)) {
-      AUTH.noteFail(ip);
-      audit(null, 'auth.echec', pseudo, ip, Number((row && row.space_id) || 1));
+    // ⚠️ Deux freins, pas un. Par IP seule, il suffit de changer d'adresse
+    // (ou, API exposée en direct, d'en-tête) pour repartir de zéro ; par
+    // COMPTE, l'essai en force sur un pseudo connu ralentit quoi qu'il
+    // arrive, d'où que viennent les tentatives.
+    const wait = Math.max(AUTH.throttle(ip), AUTH.throttle('compte:' + pseudo.toLowerCase()));
+    if (wait) return send(res, 429, { error: `Trop de tentatives. Réessayez dans ${Math.ceil(wait / 1000)} s.` });
+    // ⚠️ LE PSEUDO N'EST PLUS UNIQUE QUE DANS SON ESPACE : deux serveurs
+    // peuvent chacun avoir leur « Nyx ». La connexion doit donc départager
+    // les candidats — et n'accepter QUE si le mot de passe en désigne
+    // exactement un. Prendre le premier qui correspond ouvrirait la porte
+    // du mauvais espace à qui partage un pseudo ET un mot de passe.
+    const candidats = db.prepare(`SELECT * FROM staff WHERE pseudo = ? COLLATE NOCASE
+                                  ORDER BY id LIMIT 8`).all(pseudo).map(DB.row);
+    const bons = candidats.filter(c => !c.disabled && c.source !== 'discord'
+                                       && AUTH.verify(String(b.password || ''), c.pass));
+    if (bons.length > 1) {
+      AUTH.noteFail(ip); AUTH.noteFail('compte:' + pseudo.toLowerCase());
+      audit(null, 'auth.ambigu', pseudo, ip, Number(bons[0].space_id || 1));
+      return fail(res, 409, 'Ce pseudo existe dans plusieurs espaces avec ce mot de passe. ' +
+                            'Demandez à votre administration un pseudo ou un mot de passe distinct.');
+    }
+    const row = bons[0];
+    if (!row) {
+      AUTH.noteFail(ip); AUTH.noteFail('compte:' + pseudo.toLowerCase());
+      // On ne dit pas si le pseudo existe : un refus qui distingue
+      // « inconnu » de « mauvais mot de passe » énumère les comptes — et,
+      // entre espaces, révèle qui est staff ailleurs.
+      audit(null, 'auth.echec', pseudo, ip, Number((candidats[0] && candidats[0].space_id) || 1));
       return fail(res, 401, 'Pseudo ou mot de passe incorrect.');
     }
-    AUTH.clearFails(ip);
+    AUTH.clearFails(ip); AUTH.clearFails('compte:' + pseudo.toLowerCase());
     const token = AUTH.newToken(), exp = now() + CFG.sessionDays * 86400000;
     db.prepare('INSERT INTO sessions(token,staff_id,created_at,expires_at,ua) VALUES(?,?,?,?,?)')
       .run(token, row.id, now(), exp, String(req.headers['user-agent'] || '').slice(0, 200));
@@ -1085,9 +1195,11 @@ async function route(req, res) {
       perms: me.perms, cats: me.cats });
   }
   if (p === '/api/catalogue') {
-    // Hors espace, il n'y a pas de rôles à lister : ceux de l'espace 1 ne
-    // décrivent que l'espace 1.
-    const sp = me ? me.spaceId : 1;
+    // ⚠️ SANS SESSION, AUCUN RÔLE. La page de connexion a besoin des
+    // rubriques et des gravités pour s'afficher, pas de votre
+    // organigramme : livrer les rôles de l'espace 1 à un visiteur
+    // anonyme lui apprenait vos grades, leurs droits et leurs rangs.
+    const sp = me ? me.spaceId : 0;
     return ok(res, {
       cats: CAT.CATS, sevs: CAT.SEVS, groups: CAT.GROUPS, perms: CAT.PERMS,
       roles: sp ? ROLESVC.list(db, sp).map(r => ({ id: r.key, label: r.label, rank: r.rank,
@@ -1098,6 +1210,19 @@ async function route(req, res) {
 
   if (p.startsWith('/api/')) {
     if (!me) return fail(res, 401, 'Connexion requise.');
+    // ⚠️ `SameSite=Lax` bloque déjà l'écriture depuis un autre site, mais
+    // c'était la SEULE couche : un navigateur ancien, une extension, un
+    // sous-domaine compromis, et la protection tombait avec elle. Une
+    // écriture doit venir de notre propre page — l'origine le dit, et
+    // elle ne peut pas être forgée par un script tiers.
+    if (method !== 'GET' && method !== 'HEAD') {
+      const o = req.headers.origin;
+      const attendu = originOf(req);
+      if (o && o !== attendu) {
+        audit(me, 'securite.origine', `${method} ${p} depuis ${o}`, ip);
+        return fail(res, 403, 'Origine refusée.');
+      }
+    }
     // ⚠️ SANS ESPACE COURANT, LES ROUTES D'ESPACE N'ONT PAS DE RÉPONSE.
     // Un administrateur de plateforme qui n'est entré nulle part n'a ni
     // flux, ni joueurs, ni registre : ce ne sont pas des données vides,
@@ -1325,8 +1450,14 @@ async function route(req, res) {
       // Consulter l'écran de quelqu'un se trace, même en lecture : c'est
       // le seul moyen de répondre à « qui a regardé, et quand ? ».
       audit(me, 'screen.vue', `capture #${id} — ${r.player_name}`, ip);
-      res.writeHead(200, { 'content-type': r.mime, 'content-length': buf.length,
-                           'cache-control': 'private, max-age=600' });
+      // ⚠️ On sert une image DÉPOSÉE PAR UN TIERS : `nosniff` empêche le
+      // navigateur de la réinterpréter comme autre chose, et
+      // `Content-Disposition: inline` avec un nom neutre évite qu'un nom
+      // de fichier choisi ailleurs se retrouve dans le téléchargement.
+      res.writeHead(200, Object.assign({}, SEC_HEADERS, {
+        'content-type': r.mime, 'content-length': buf.length,
+        'content-disposition': `inline; filename="capture-${id}.${(r.mime.split('/')[1] || 'jpg')}"`,
+        'cache-control': 'private, no-store' }));
       return res.end(buf);
     }
     if (p === '/api/bans' && method === 'GET') {
@@ -1434,12 +1565,15 @@ async function route(req, res) {
         const b = await readBody(req);
         const pseudo = String(b.pseudo || '').trim();
         const pass = String(b.password || '');
-        const role = ROLESVC.byKey(db, me.spaceId, b.role) ? b.role : 'moderateur';
+        const role = ROLESVC.byKey(db, me.spaceId, b.role) ? b.role : ROLESVC.basRole(db, me.spaceId);
+        if (!role) return fail(res, 409, 'Cet espace n’a aucun rôle : créez-en un avant d’ajouter un compte.');
         if (pseudo.length < 3) return fail(res, 400, 'Pseudo trop court (3 caractères minimum).');
         if (pass.length < 10) return fail(res, 400, 'Mot de passe trop court (10 caractères minimum).');
         const r = ROLESVC.byKey(db, me.spaceId, role);
         if (r.rank >= me.plafond) return fail(res, 403, 'Vous ne pouvez pas créer un rôle supérieur ou égal au vôtre.');
-        if (DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE').get(pseudo))) return fail(res, 409, 'Ce pseudo existe déjà.');
+        if (DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE AND space_id = ?')
+              .get(pseudo, me.spaceId)))
+          return fail(res, 409, 'Ce pseudo existe déjà dans cet espace.');
         db.prepare(`INSERT INTO staff(pseudo,pass,role,roles,created_at,space_id,source)
                     VALUES(?,?,?,?,?,?, 'local')`)
           .run(pseudo, AUTH.hash(pass), role, JSON.stringify([role]), now(), me.spaceId);

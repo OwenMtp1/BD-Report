@@ -40,7 +40,11 @@ const SUITES = [
     comptes: [['Nyx', 'fondateur', 'motdepassetest123'],
               ['Sup', 'fondateur', 'motdepassesup12345', { plateforme: true }]] },
   { nom: 'captures', fichier: 'captures.test.mjs', port: 8904, discord: true,
-    comptes: [['Nyx', 'fondateur', 'motdepassetest123', { plateforme: true }]] }
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123', { plateforme: true }]] },
+  { nom: 'cloisonnement', fichier: 'cloisonnement.test.mjs', port: 8905, discord: false,
+    comptes: [['Sup', 'fondateur', 'motdepassesup12345', { plateforme: true }]] },
+  { nom: 'securite', fichier: 'securite.test.mjs', port: 8906, discord: false,
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] }
 ];
 
 const filtre = process.argv.slice(2).filter(a => !a.startsWith('-'));

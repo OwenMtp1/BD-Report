@@ -38,6 +38,21 @@ ajuster :
 | `RETENTION_DAYS` | durée de conservation des journaux | `30` |
 | `SECURE_COOKIE` | `1` dès que le site est en HTTPS | `0` |
 | `SESSION_DAYS` | durée d'une session staff | `7` |
+| `TRUST_PROXY` | `1` **derrière le reverse proxy ci-dessous** | `0` |
+| `PUBLIC_URL` | adresse publique, ex. `https://logs.mon-rp.fr` | déduite |
+| `ACCESS_SWEEP_MIN` | revérification des accès Discord, en minutes | `30` |
+| `MAX_INGEST_PER_MIN` | dépôts de journaux par espace et par minute | `120` |
+| `MAX_SCREENS_PER_MIN` | captures par espace et par minute | `20` |
+| `SCREEN_QUOTA_MB` | disque maximal des captures, par espace | `2048` |
+| `MAX_SCREEN_MB` | poids maximal d'une capture | `6` |
+| `SCREEN_DAYS` | rétention propre aux captures (`0` = celle des journaux) | `0` |
+
+⚠️ **`TRUST_PROXY` n'est pas un détail de confort.** `X-Forwarded-For` est un
+en-tête, donc une donnée que le client choisit : sans ce réglage, l'API ne le
+lit pas et s'en tient à l'adresse de la socket — la seule qu'on ne peut pas
+forger. Mettez-le à `1` **seulement** derrière le proxy ci-dessous, qui
+écrase l'en-tête au lieu de le compléter. À l'envers (API exposée en direct
+avec `TRUST_PROXY=1`), le frein anti-force-brute redevient décoratif.
 
 Pour ajouter des membres ensuite : depuis le panneau (bouton **Gérer
 l'équipe**) ou `node staff.js add <pseudo> moderateur`.
@@ -58,6 +73,8 @@ WorkingDirectory=/srv/origin-logs/api
 Environment=SERVER_KEY=votre-cle
 Environment=PORT=8080
 Environment=SECURE_COOKIE=1
+Environment=TRUST_PROXY=1
+Environment=PUBLIC_URL=https://logs.mon-serveur.fr
 Environment=RETENTION_DAYS=60
 ExecStart=/usr/bin/node server.js
 Restart=always
@@ -208,7 +225,8 @@ server {
 }
 ```
 
-Passez ensuite `SECURE_COOKIE=1` et redémarrez le service.
+Passez ensuite `SECURE_COOKIE=1`, **`TRUST_PROXY=1`** et
+`PUBLIC_URL=https://votre-domaine`, puis redémarrez le service.
 
 ---
 
@@ -376,4 +394,8 @@ tar czf /sauvegardes/screens-$(date +%F).tgz -C /srv/origin-logs/api/data screen
 | « ressource screenshot-basic absente » | `ensure screenshot-basic` manque dans `server.cfg`, avant `origin_logs`. |
 | Une capture reste « en attente » | Le joueur s'est déconnecté entre la demande et la prise, ou son client n'a pas répondu. |
 | Un ancien staff se connecte encore | Le balayage tourne toutes les 30 min : lancez-le à la main depuis Supervision. |
+| « Trop de dépôts pour cet espace » | Votre serveur envoie plus de 120 lots/min : groupez davantage (`Config.BatchSize`) ou montez `MAX_INGEST_PER_MIN`. |
+| « Quota de captures atteint » | `SCREEN_QUOTA_MB` est plein : baissez `SCREEN_DAYS` ou augmentez le quota. |
+| « Origine refusée » | Le panneau est ouvert depuis une autre adresse que `PUBLIC_URL`. |
+| Un staff ne peut plus se connecter | Un homonyme dans un autre espace partage son mot de passe : changez-en un des deux. |
 | Un espace semble en panne sans qu'on sache pourquoi | **Supervision → Vérifier** : le contrôle nomme la cause et le remède. |

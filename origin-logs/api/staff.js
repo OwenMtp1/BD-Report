@@ -46,7 +46,12 @@ if (db.prepare('SELECT COUNT(*) n FROM spaces').get().n === 0) {
 ROLESVC.seed(db, SPACE);
 const ROLES = ROLESVC.list(db, SPACE).map(r => r.key);
 const labelOf = k => { const r = ROLESVC.byKey(db, SPACE, k); return r ? r.label : k; };
-const find = p => DB.row(db.prepare('SELECT * FROM staff WHERE pseudo = ? COLLATE NOCASE').get(p));
+// ⚠️ Le pseudo n'est unique que DANS SON ESPACE : on cherche donc dans
+// l'espace visé (--space=N), sans quoi `staff.js role Nyx …` toucherait
+// le Nyx d'un autre serveur.
+const find = p => DB.row(db.prepare('SELECT * FROM staff WHERE pseudo = ? COLLATE NOCASE AND space_id = ?').get(p, SPACE));
+// Pour les commandes qui doivent parler de TOUS les espaces (list).
+const findPartout = p => db.prepare('SELECT * FROM staff WHERE pseudo = ? COLLATE NOCASE').all(p).map(DB.row);
 const genPass = () => crypto.randomBytes(12).toString('base64url');
 
 function usage(msg) {
@@ -75,13 +80,18 @@ switch (cmd) {
     if (!pseudo || !role) usage('Pseudo et rôle obligatoires.');
     if (!ROLES.includes(role)) usage(`Rôle inconnu : ${role}`);
     if (pseudo.length < 3) usage('Pseudo trop court (3 caractères minimum).');
-    if (find(pseudo)) usage('Ce pseudo existe déjà.');
+    if (find(pseudo)) usage(`Ce pseudo existe déjà dans l'espace ${SPACE}.`);
     const mdp = pass || genPass();
     if (mdp.length < 10) usage('Mot de passe trop court (10 caractères minimum).');
     db.prepare(`INSERT INTO staff(pseudo,pass,role,roles,created_at,space_id,source)
                 VALUES(?,?,?,?,?,?, 'local')`)
       .run(pseudo, AUTH.hash(mdp), role, JSON.stringify([role]), Date.now(), SPACE);
     console.log(`\n  Compte créé : ${pseudo} (${labelOf(role)}) — espace ${SPACE}`);
+    const ailleurs = findPartout(pseudo).filter(x => Number(x.space_id) !== Number(SPACE));
+    if (ailleurs.length)
+      console.log(`  ⚠ Ce pseudo existe aussi dans l'espace ${ailleurs.map(x => x.space_id).join(', ')} :\n` +
+                  `    donnez-lui un mot de passe DIFFÉRENT, sinon la connexion ne saura pas\n` +
+                  `    lequel des deux comptes ouvrir et les refusera tous les deux.`);
     if (!pass) console.log(`  Mot de passe : ${mdp}\n  Notez-le maintenant, il n'est stocké nulle part en clair.\n`);
     else console.log('');
     break;
