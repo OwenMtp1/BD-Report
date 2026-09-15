@@ -4,15 +4,11 @@
 -- ============================================================
 Config = {}
 
--- Adresse de l'API (le service Node du dossier api/). Depuis la machine
--- du serveur de jeu, c'est souvent 127.0.0.1 : n'exposez pas le port.
-Config.ApiUrl    = 'http://127.0.0.1:8080'
-
--- MÊME valeur que SERVER_KEY côté API. Sans elle, rien n'est accepté.
-Config.ServerKey = 'CHANGEZ-MOI'
-
--- Nom de ce serveur, utile si vous en faites tourner plusieurs.
-Config.ServerName = 'origin-1'
+-- ⚠️ CE FICHIER EST « SHARED » : IL PART CHEZ CHAQUE JOUEUR.
+-- Tout ce qu'on écrit ici finit dans le cache de tous les clients. On
+-- n'y met donc RIEN de secret — l'adresse de l'API, la clé d'ingestion
+-- et le nom du serveur vivent dans `server/config_serveur.lua`, qui ne
+-- s'exécute que côté serveur.
 
 -- 'auto' détecte ESX, QBCore ou QBox. Mettez 'standalone' pour n'utiliser
 -- que les évènements natifs de FiveM (qui marchent partout).

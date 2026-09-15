@@ -286,12 +286,33 @@ comptes sont comptés à part.
 cp -r origin-logs/resource /chemin/vers/votre-serveur/resources/origin_logs
 ```
 
-Éditez **`resources/origin_logs/config.lua`** — deux lignes suffisent :
+**C'est tout ce qui se copie.** Une ressource FiveM est un dossier : elle
+n'ajoute rien aux autres, ne modifie aucun de leurs fichiers, et ne demande
+aucune passerelle. Si vos `resources/` viennent du dépôt de quelqu'un
+d'autre — une base publique, un template partagé — posez `origin_logs` **à
+côté** de leur arborescence (beaucoup de serveurs ont un dossier `[local]`
+ou `[perso]` pour cela) : leurs mises à jour ne toucheront jamais la vôtre,
+et vous n'avez rien à leur demander.
 
-```lua
-Config.ApiUrl    = 'http://127.0.0.1:8080'   -- ou https://logs.origin-rp.fr
-Config.ServerKey = 'la-cle-generee-a-etape-1'
+### La clé se met dans `server.cfg`, jamais dans la ressource
+
+```cfg
+## secrets.cfg — à NE PAS versionner, chargé depuis server.cfg par « exec secrets.cfg »
+set origin_logs_url  "http://127.0.0.1:8080"   # ou https://logs.origin-rp.fr
+set origin_logs_key  "la-cle-generee-a-etape-1"
+set origin_logs_name "origin-1"
 ```
+
+⚠️ **`set`, surtout pas `setr`.** `setr` réplique la valeur chez les
+clients : la clé repartirait exactement là où on ne veut pas d'elle.
+
+⚠️ **Et surtout : ne remettez pas la clé dans `config.lua`.** Ce fichier est
+déclaré `shared_script`, donc **téléchargé par chaque joueur et gardé dans
+son cache**. Une clé posée là est une clé publique : n'importe qui peut
+alors écrire dans vos journaux, ou les noyer pour y cacher autre chose. Les
+trois réglages ci-dessus vivent dans `server/config_serveur.lua`, qui ne
+quitte jamais la machine — et même lui les lit d'abord dans les convars,
+pour que le dossier entier puisse être versionné sans rien révéler.
 
 Si le serveur de jeu et le site sont sur la même machine, gardez
 `127.0.0.1:8080` : la clé ne sort jamais du serveur.
@@ -299,7 +320,9 @@ Si le serveur de jeu et le site sont sur la même machine, gardez
 Dans `server.cfg` :
 
 ```cfg
+exec secrets.cfg      # les trois « set » ci-dessus
 ensure baseevents     # sans lui, pas de morts ni d'éliminations journalisées
+ensure screenshot-basic   # facultatif : sans lui, pas de captures d'écran
 ensure origin_logs
 ```
 
@@ -309,9 +332,9 @@ Redémarrez, puis dans la console du serveur de jeu :
 origin_logs_test
 ```
 
-Un évènement doit apparaître dans le panneau, catégorie **Serveur**. S'il
-n'arrive pas, la console dit laquelle des trois causes est en jeu : clé
-refusée, API injoignable, ou catégorie désactivée dans `config.lua`.
+Un évènement doit apparaître dans le panneau, rubrique **Action staff**. S'il
+n'arrive pas, la console dit laquelle des causes est en jeu : clé absente,
+clé refusée, API injoignable, ou rubrique désactivée dans `config.lua`.
 
 ---
 

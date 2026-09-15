@@ -490,8 +490,26 @@ La base est un fichier : la sauvegarder, c'est le copier.
 ### 3. La ressource FiveM (`resource/`)
 
 À copier dans `resources/origin_logs`, puis `ensure origin_logs` dans
-`server.cfg`. Un seul fichier à éditer : `config.lua` (adresse de l'API et
-`ServerKey`, identique à celle du serveur).
+`server.cfg`. **Rien d'autre à toucher** : une ressource FiveM est un
+dossier, elle ne modifie aucun fichier des autres et ne demande aucune
+passerelle. Elle peut donc cohabiter avec une base venue du dépôt de
+quelqu'un d'autre, sans fork et sans rien leur demander.
+
+⚠️ **L'adresse de l'API et la clé se posent dans `server.cfg`**, pas dans la
+ressource :
+
+```cfg
+set origin_logs_url "http://127.0.0.1:8080"
+set origin_logs_key "la clé affichée par npm run setup"
+```
+
+Parce que `config.lua` est un `shared_script` : **son contenu est téléchargé
+par chaque joueur et reste dans son cache**. Une clé d'ingestion posée là est
+une clé publique — n'importe qui peut écrire dans vos journaux, ou les noyer
+pour y cacher autre chose. Les secrets vivent donc dans
+`server/config_serveur.lua`, qui ne quitte jamais la machine, et même lui les
+lit d'abord dans les convars : le dossier entier peut être versionné sans
+rien révéler.
 
 Elle fonctionne **sans framework** : les connexions, les déconnexions, les
 morts et les détections passent par les évènements natifs de FiveM. ESX,

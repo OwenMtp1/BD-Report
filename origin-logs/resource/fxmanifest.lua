@@ -10,6 +10,9 @@ description 'Journalisation serveur vers le panneau de logs Origin'
 shared_script 'config.lua'
 
 server_scripts {
+  -- D'abord les réglages qui ne doivent pas partir chez les joueurs :
+  -- tout le reste s'appuie dessus.
+  'server/config_serveur.lua',
   'server/framework.lua',
   'server/logger.lua',
   'server/connexions.lua',
