@@ -60,6 +60,15 @@ const pend=await(await fetch(B+'/api/actions/pending',{headers:{'x-origin-key':K
 t('action déposée pour le serveur de jeu', pend.actions.length===1 && pend.actions[0].type==='ban');
 // Un bannissement se range dans « bans », sa propre rubrique depuis la
 // refonte : « sanctions » ne garde que les expulsions et avertissements.
+// La recherche du registre se fait en SQL, au-delà des 300 lignes rendues.
+const regTout=await(await call('/api/bans?state=tous')).json();
+t('le registre se cherche', regTout.bans.length>0, regTout.bans.length+' ligne(s)');
+const regQ=await(await call('/api/bans?state=tous&q='+encodeURIComponent('Rayan'))).json();
+t('et la recherche le filtre', regQ.bans.length<=regTout.bans.length && regQ.recherche==='Rayan'
+  && regQ.bans.every(b=>/Rayan/i.test([b.name,b.reason,b.by_name,b.player_key].join(' '))),
+  regQ.bans.length+' pour « '+regQ.recherche+' »');
+t('les compteurs restent ceux du registre entier', regQ.counts.tous===regTout.counts.tous,
+  'tous='+regQ.counts.tous);
 const evAfter=await(await call('/api/events?cat=bans')).json();
 t('la sanction est aussi un évènement du journal', evAfter.total===1 && /a banni Rayan Reyes définitivement/.test(evAfter.events[0].msg), evAfter.events[0]?.msg);
 

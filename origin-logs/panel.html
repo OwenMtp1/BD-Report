@@ -44,6 +44,11 @@
 
   --rail:250px;
   --bar-h:58px;
+
+  /* Une seule courbe pour tout ce qui bouge : deux accélérations
+     différentes dans le même écran se remarquent, et mal. */
+  --ease:cubic-bezier(.22,1,.36,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
 }
 *{box-sizing:border-box}
 html{background:var(--ground)}
@@ -94,19 +99,65 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .brand-name{font-variation-settings:'wdth' 88;font-weight:700;font-size:14.5px;line-height:1.1}
 .brand-sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-top:2px}
 
-.nav{padding:10px 10px 18px;display:flex;flex-direction:column;gap:1px;flex:1}
-.nav-group{padding:14px 8px 5px}
-.nav-item{
-  display:grid;grid-template-columns:8px 1fr auto;align-items:center;gap:10px;
-  padding:6px 9px;border-radius:6px;color:var(--ink-2);
-  transition:background .12s,color .12s;
+/* ---------- le rail ----------
+   ⚠️ L'onglet actif est marqué par UN SEUL bloc qui glisse, pas par un
+   fond posé sur l'élément. Un fond qui s'allume ici pendant qu'un autre
+   s'éteint là ne relie pas les deux : on ne voit pas d'où l'on vient.
+   Le repère, lui, trace le chemin — et il coûte une transformation, pas
+   deux repeints. */
+.nav{
+  position:relative;padding:10px 10px 18px;display:flex;flex-direction:column;gap:1px;flex:1;
 }
-.nav-item:hover{background:var(--vio-wash);color:var(--ink)}
-.nav-item[aria-current="true"]{background:var(--raise);color:var(--ink);box-shadow:inset 2px 0 0 var(--vio-hi)}
-.nav-dot{width:7px;height:7px;border-radius:50%;background:var(--fam,var(--muted))}
-.nav-item[aria-current="true"] .nav-dot{box-shadow:0 0 0 3px color-mix(in srgb,var(--fam,var(--vio)) 22%,transparent)}
+.nav-slide{
+  position:absolute;left:10px;right:10px;top:0;height:0;border-radius:7px;
+  background:var(--raise);
+  box-shadow:inset 2px 0 0 var(--vio-hi), 0 4px 16px -8px rgba(0,0,0,.8);
+  opacity:0;pointer-events:none;
+  transition:transform .34s var(--ease), height .34s var(--ease), opacity .2s;
+  will-change:transform;
+}
+.nav-slide.on{opacity:1}
+.nav-group{
+  padding:14px 8px 5px;
+  animation:railIn .3s var(--ease) both;
+}
+.nav-item{
+  position:relative;z-index:1;
+  display:grid;grid-template-columns:8px 1fr auto;align-items:center;gap:10px;
+  padding:6px 9px;border-radius:7px;color:var(--ink-2);
+  transition:color .16s var(--ease), transform .16s var(--ease), background .16s var(--ease);
+  animation:railIn .34s var(--ease) both;
+}
+.nav-item:hover{background:var(--vio-wash);color:var(--ink);transform:translateX(2px)}
+.nav-item:active{transform:translateX(1px) scale(.995)}
+.nav-item[aria-current="true"]{color:var(--ink);background:none}
+/* Le repère glissant porte le fond ; si le JS n'a pas encore mesuré
+   (premier rendu, ou mouvement coupé), l'élément le porte lui-même. */
+.nav-slide:not(.on) ~ .nav-item[aria-current="true"]{background:var(--raise);box-shadow:inset 2px 0 0 var(--vio-hi)}
+.nav-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--fam,var(--muted));
+  transition:box-shadow .26s var(--ease), transform .26s var(--ease);
+}
+.nav-item:hover .nav-dot{transform:scale(1.25)}
+.nav-item[aria-current="true"] .nav-dot{
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--fam,var(--vio)) 26%,transparent);
+  transform:scale(1.1);
+}
 .nav-label{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nav-n{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.nav-n{
+  font-family:var(--mono);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;
+  transition:color .2s var(--ease);
+}
+.nav-item[aria-current="true"] .nav-n{color:var(--ink-2)}
+/* Un compteur qui vient de bouger se signale une fois — sinon un nombre
+   qui change dans un coin du rail passe inaperçu. */
+.nav-n.bump{animation:bump .5s var(--ease)}
+@keyframes bump{
+  0%{transform:scale(1)}
+  28%{transform:scale(1.4);color:var(--vio-hi)}
+  100%{transform:scale(1)}
+}
+@keyframes railIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
 .nav-item[aria-current="true"] .nav-n{color:var(--vio-hi)}
 .nav-item.flagged .nav-n{color:var(--crit)}
 
@@ -138,19 +189,35 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
   font-family:var(--mono);font-size:10px;color:var(--muted);
   border:1px solid var(--edge);border-radius:3px;padding:0 4px;
 }
-.seg{display:flex;height:34px;background:var(--panel);border:1px solid var(--edge);border-radius:7px;padding:3px;gap:2px}
+/* ---------- sélecteur de période ----------
+   Même principe que le rail : un seul bloc qui glisse. Ici les boutons
+   ont la même largeur, donc la position se calcule sans mesurer. */
+.seg{
+  position:relative;display:flex;height:34px;
+  background:var(--panel);border:1px solid var(--edge);border-radius:8px;padding:3px;gap:2px;
+}
+.seg::before{
+  content:'';position:absolute;top:3px;bottom:3px;left:3px;
+  width:calc((100% - 6px) / var(--n,4));border-radius:6px;background:var(--raise);
+  transform:translateX(calc(var(--i,0) * 100%));
+  transition:transform .3s var(--ease);
+  box-shadow:0 2px 8px -4px rgba(0,0,0,.9);
+}
 .seg button{
-  padding:0 11px;border-radius:5px;font-family:var(--mono);font-size:11.5px;color:var(--muted);
-  display:grid;place-items:center;transition:background .12s,color .12s;
+  position:relative;z-index:1;flex:1;
+  padding:0 11px;border-radius:6px;font-family:var(--mono);font-size:11.5px;color:var(--muted);
+  display:grid;place-items:center;transition:color .2s var(--ease);white-space:nowrap;
 }
 .seg button:hover{color:var(--ink-2)}
-.seg button[aria-pressed="true"]{background:var(--raise);color:var(--ink)}
+.seg button[aria-pressed="true"]{color:var(--ink);background:none}
 .btn{
   display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;
   border-radius:7px;font-size:12.5px;font-weight:500;
   background:var(--panel);border:1px solid var(--edge);color:var(--ink-2);
-  transition:border-color .12s,color .12s,background .12s;
+  transition:border-color .18s var(--ease), color .18s var(--ease),
+             background .18s var(--ease), transform .12s var(--ease);
 }
+.btn:active{transform:scale(.97)}
 .btn:hover{border-color:var(--vio);color:var(--ink)}
 .btn.live{border-color:rgba(52,211,153,.4);color:#8FEBD3;background:rgba(52,211,153,.08)}
 .btn.primary{background:var(--vio);border-color:var(--vio-hi);color:#fff}
@@ -190,7 +257,18 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
   font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
   color:var(--muted);background:linear-gradient(transparent,rgba(0,0,0,.72));
 }
-.shot-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));margin-top:4px}
+/* ⚠️ Une BANDE, pas une grille : en grille, vingt captures repoussaient
+   les lignes du journal sous la ligne de flottaison — on ouvrait la
+   rubrique et on ne voyait plus le flux qu'elle sert à lire. Sur une
+   seule rangée qui défile, les captures restent à portée sans prendre
+   la place de ce qu'elles accompagnent. */
+.shot-grid{
+  display:grid;grid-auto-flow:column;grid-auto-columns:214px;gap:10px;
+  margin-top:4px;padding-bottom:8px;
+  overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;
+}
+.shot-grid > *{scroll-snap-align:start}
+.shot-grid:not(:has(.shot-card)){grid-auto-flow:row;grid-auto-columns:auto}
 .shot-card{
   display:block;text-align:left;padding:0;overflow:hidden;cursor:pointer;
   border:1px solid var(--edge);border-radius:10px;background:var(--card);color:inherit;
@@ -247,8 +325,31 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
    CONTENU
    ============================================================ */
 .main{min-width:0;display:flex;flex-direction:column}
+/* ---------- passage d'une vue à l'autre ----------
+   ⚠️ L'animation part du CONTENU, pas du conteneur : faire glisser toute
+   la vue déplacerait aussi le titre et les filtres, qui ne changent
+   parfois pas. Ici seul ce qui est neuf entre en scène.
+   Et elle est COURTE : au-delà de ~250 ms, changer d'onglet donne
+   l'impression d'attendre l'interface au lieu de la conduire. */
 .view{padding:0 22px 44px;min-width:0}
 .view[hidden]{display:none}
+.view.entre > .head,
+.view.entre > .cat-find,
+.view.entre > .filters,
+.view.entre > .feed,
+.view.entre > .panel,
+.view.entre > .block,
+.view.entre > .pgrid,
+.view.entre > .jrn,
+.view.entre > .cards{animation:vueIn .26s var(--ease-out) both}
+.view.entre > .cat-find{animation-delay:.03s}
+.view.entre > .filters{animation-delay:.05s}
+.view.entre > .feed,
+.view.entre > .panel,
+.view.entre > .pgrid,
+.view.entre > .jrn,
+.view.entre > .cards{animation-delay:.07s}
+@keyframes vueIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
 
 .head{
   display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;
@@ -347,21 +448,73 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
    FLUX — une timeline, pas un tableau
    ============================================================ */
 .filters{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding-bottom:14px}
+/* ---------- pastilles de filtre ----------
+   Elles portent la couleur de ce qu'elles filtrent : le fond ne peut donc
+   pas glisser d'une pastille à l'autre comme dans le rail (il changerait
+   de teinte en route). C'est le CONTOUR et l'échelle qui animent. */
 .chip{
-  display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 11px;border-radius:999px;
+  display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:999px;
   border:1px solid var(--edge);background:var(--panel);font-size:11.5px;color:var(--muted);
+  transition:border-color .2s var(--ease), color .2s var(--ease),
+             background .2s var(--ease), transform .16s var(--ease), box-shadow .2s var(--ease);
 }
-.chip:hover{border-color:color-mix(in srgb,var(--c) 55%,transparent);color:var(--ink-2)}
-.chip[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 14%,transparent);border-color:color-mix(in srgb,var(--c) 50%,transparent);color:var(--ink)}
-.chip i{width:7px;height:7px;border-radius:2px;background:var(--c);display:block}
-.chip b{font-family:var(--mono);font-size:10.5px;font-weight:500}
+.chip:hover{
+  border-color:color-mix(in srgb,var(--c) 55%,transparent);color:var(--ink-2);
+  transform:translateY(-1px);
+}
+.chip:active{transform:translateY(0) scale(.97)}
+.chip[aria-pressed="true"]{
+  background:color-mix(in srgb,var(--c) 14%,transparent);
+  border-color:color-mix(in srgb,var(--c) 50%,transparent);color:var(--ink);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 12%,transparent);
+}
+.chip i{
+  width:7px;height:7px;border-radius:2px;background:var(--c);display:block;
+  transition:transform .26s var(--ease), border-radius .26s var(--ease);
+}
+.chip[aria-pressed="true"] i{transform:scale(1.2);border-radius:50%}
+.chip b{
+  font-family:var(--mono);font-size:10.5px;font-weight:500;
+  font-variant-numeric:tabular-nums;
+}
+.filters{gap:8px}
+.filters > *{animation:chipIn .32s var(--ease) both}
+.filters > *:nth-child(2){animation-delay:.03s}
+.filters > *:nth-child(3){animation-delay:.06s}
+.filters > *:nth-child(4){animation-delay:.09s}
+.filters > *:nth-child(5){animation-delay:.12s}
+@keyframes chipIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 
 .feed{border:1px solid var(--edge);border-radius:10px;background:var(--panel);overflow:hidden}
 .feed-scroll{min-width:0;overflow:auto;max-height:calc(100dvh - 250px);overscroll-behavior:contain}
+/* ⚠️ La cascade s'arrête aux douze premières lignes : au-delà elle
+   n'apprend plus rien et une page de 120 lignes mettrait une seconde à
+   se poser. Les suivantes apparaissent simplement. */
+.feed-scroll .ev:nth-child(-n+12){animation:evIn .3s var(--ease-out) both}
+.feed-scroll .ev:nth-child(2){animation-delay:.02s}
+.feed-scroll .ev:nth-child(3){animation-delay:.04s}
+.feed-scroll .ev:nth-child(4){animation-delay:.06s}
+.feed-scroll .ev:nth-child(5){animation-delay:.08s}
+.feed-scroll .ev:nth-child(6){animation-delay:.1s}
+.feed-scroll .ev:nth-child(7){animation-delay:.12s}
+.feed-scroll .ev:nth-child(8){animation-delay:.14s}
+.feed-scroll .ev:nth-child(9){animation-delay:.16s}
+.feed-scroll .ev:nth-child(10){animation-delay:.18s}
+.feed-scroll .ev:nth-child(11){animation-delay:.2s}
+.feed-scroll .ev:nth-child(12){animation-delay:.22s}
+@keyframes evIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+/* Une ligne qui ARRIVE en direct vient du haut et se signale : c'est un
+   évènement neuf, pas un rendu de plus. */
+.ev.neuf{animation:evLive .55s var(--ease-out) both}
+@keyframes evLive{
+  0%{opacity:0;transform:translateY(-10px);background:color-mix(in srgb,var(--vio) 16%,transparent)}
+  60%{background:color-mix(in srgb,var(--vio) 9%,transparent)}
+  100%{opacity:1;transform:none;background:transparent}
+}
 .ev{
   display:grid;grid-template-columns:76px 3px minmax(0,1fr);
   border-bottom:1px solid var(--edge-soft);cursor:pointer;
-  transition:background .1s;
+  transition:background .14s var(--ease);
 }
 .ev:last-child{border-bottom:none}
 .ev:hover{background:var(--vio-wash)}
@@ -765,6 +918,12 @@ select.input{height:36px}
   .nav-group{display:none}
   .nav-item{grid-template-columns:auto auto;padding:6px 11px;flex:none}
   .nav-item .nav-label{display:none}
+  /* ⚠️ Le rail est HORIZONTAL ici : le repère glissant, qui se déplace en
+     hauteur sur toute la largeur, deviendrait une barre posée en travers
+     des onglets. L'onglet actif reprend donc son propre fond. */
+  .nav-slide{display:none}
+  .nav-item[aria-current="true"]{background:var(--raise);box-shadow:inset 0 -2px 0 var(--vio-hi)}
+  .nav-item:hover{transform:none}
   .main{min-width:0}
   .view{padding:0 16px 36px}
   .head{padding:18px 0 14px}
@@ -1015,6 +1174,21 @@ select.input{height:36px}
           <div class="sub" id="bansDesc">Le registre fait foi : c'est lui que le serveur interroge à chaque connexion.</div>
         </div>
         <div class="sub" id="bansCount"></div>
+      </div>
+      <!-- Le registre se cherche comme les rubriques : c'est la même
+           question (« où est cette ligne ? »), elle mérite le même geste.
+           La recherche porte sur le joueur, le motif, qui a prononcé la
+           sanction et la licence — et elle se fait en SQL, donc au-delà
+           des 300 lignes affichées. -->
+      <div class="cat-find">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10.6 10.6 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input id="banQ" type="search" autocomplete="off"
+               placeholder="Rechercher au registre — joueur, motif, staff, licence…"
+               aria-label="Rechercher dans le registre des bannissements">
+        <button class="btn sm" id="banQClear" hidden>Effacer</button>
       </div>
       <div class="filters" id="bansFilters" role="group" aria-label="Filtrer le registre">
         <button class="chip" data-banstate="actifs" style="--c:var(--crit)" aria-pressed="true"><i></i>En cours <b id="nActifs">·</b></button>
@@ -1367,9 +1541,9 @@ anticheat:[
  {s:'info',w:3,f:(a)=>({msg:`Contrôle automatique passé — ${who(a)}`,d:{detection:'scan_ok',verifications:int(12,40),duree:int(200,900)+' ms'}})}
 ],
 bans:[
- {s:'critique',w:5,f:(a,b,st)=>({t:st,msg:`${who(st)} a banni ${who(a)} définitivement`,d:{type:'ban',cible:a.name,cibleKey:a.license,motif:pick(MOTIFS_SANCTION),duree:'permanent',preuve:pick(['clip Medal','capture anticheat','témoignages']),banId:'#'+int(1000,9999)}})},
- {s:'alerte',w:5,f:(a,b,st)=>{const j=int(1,30);return{t:st,msg:`${who(st)} a banni ${who(a)} pour ${j} jour(s)`,d:{type:'ban',cible:a.name,cibleKey:a.license,motif:pick(MOTIFS_SANCTION),duree:j+' jours',expire:new Date(Date.now()+j*86400000).toLocaleDateString('fr-FR'),banId:'#'+int(1000,9999)}};}},
- {s:'info',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a levé le bannissement de ${who(a)}`,d:{type:'unban',cible:a.name,cibleKey:a.license,motifLevee:pick(['appel accepté','erreur de modération','peine purgée']),banId:'#'+int(1000,9999)}})},
+ {s:'critique',w:5,f:(a,b,st)=>({t:st,msg:`${who(st)} a banni ${who(a)} définitivement`,d:{type:'ban',cible:a.name,cibleKey:a.license,motif:pick(MOTIFS_SANCTION),duree:'permanent',expireAt:null,staff:st.name,preuve:pick(['clip Medal','capture anticheat','témoignages']),banId:'#'+int(1000,9999)}})},
+ {s:'alerte',w:5,f:(a,b,st)=>{const j=int(1,30);return{t:st,msg:`${who(st)} a banni ${who(a)} pour ${j} jour(s)`,d:{type:'ban',cible:a.name,cibleKey:a.license,motif:pick(MOTIFS_SANCTION),duree:j+' jours',expireAt:Date.now()+j*86400000,staff:st.name,banId:'#'+int(1000,9999)}};}},
+ {s:'info',w:3,f:(a,b,st)=>({t:st,msg:`${who(st)} a levé le bannissement de ${who(a)}`,d:{type:'unban',cible:a.name,cibleKey:a.license,staff:st.name,motifLevee:pick(['appel accepté','erreur de modération','peine purgée']),banId:'#'+int(1000,9999)}})},
  {s:'notice',w:3,f:(a)=>({msg:`Connexion refusée — <strong>${a.name}</strong> est banni`,d:{type:'refus',cible:a.name,cibleKey:a.license,banId:'#'+int(1000,9999),restant:pick(['permanent',int(1,29)+' jours'])}})},
  {s:'alerte',w:2,f:(a,b,st)=>({t:st,msg:`Contournement détecté — <strong>${a.name}</strong> revient sous un autre compte`,d:{type:'evasion',cible:a.name,licenceBannie:'license:'+hex(40),nouvelleLicence:a.license,correlation:pick(['même IP','même Steam','même matériel'])}})}
 ],
@@ -1620,12 +1794,20 @@ const Demo = {
       encours: b.active === 1 && (!b.expires_at || b.expires_at > maintenant)
     })).sort((a, b) => b.created_at - a.created_at);
   },
-  async bans(state) {
+  async bans(state, q) {
     await this.init();
     const tous = this.registre();
-    const liste = state === 'actifs' ? tous.filter(b => b.encours)
-                : state === 'expires' ? tous.filter(b => !b.encours) : tous;
-    return { bans: liste, counts: { actifs: tous.filter(b => b.encours).length,
+    let liste = state === 'actifs' ? tous.filter(b => b.encours)
+              : state === 'expires' ? tous.filter(b => !b.encours) : tous;
+    // Mêmes champs que l'API, pour que la démonstration ne promette pas
+    // une recherche plus large que la vraie.
+    const t = String(q || '').trim().toLowerCase();
+    if (t) liste = liste.filter(b => [b.name, b.reason, b.by_name, b.player_key]
+      .some(v => String(v || '').toLowerCase().includes(t)));
+    // On rend le terme TEL QU'IL A ÉTÉ TAPÉ : le relire en minuscules
+    // dans « 1 ligne pour « noah » » donne l'impression d'une correction.
+    return { bans: liste, recherche: String(q || '').trim() || null, trouves: liste.length,
+             counts: { actifs: tous.filter(b => b.encours).length,
              expires: tous.filter(b => !b.encours).length, tous: tous.length } };
   },
   async mark(id, kind, on) {
@@ -1669,7 +1851,7 @@ const Api = {
   },
   stats(from, to, buckets) { return api('/api/stats?' + qs({ from, to, buckets })); },
   player(key) { return api('/api/players/' + encodeURIComponent(key)); },
-  bans(state) { return api('/api/bans?state=' + encodeURIComponent(state || 'actifs')); },
+  bans(state, q) { return api('/api/bans?' + qs({ state: state || 'actifs', q })); },
   screens(q) { return api('/api/screens?' + qs({ q, limit: 24 })); },
   mark(id, kind, on) { return api('/api/marks', { method: 'POST', body: JSON.stringify({ id, kind, on }) }); },
   action(b) { return api('/api/actions', { method: 'POST', body: JSON.stringify(b) }); },
@@ -1690,7 +1872,7 @@ let EVENTS = [];
    État et rendu
    ============================================================ */
 const STATE = { view:'overview', cat:'all', range:24, q:'', sevs:new Set(),
-                limit:120, live:true, sel:null, banState:'actifs',
+                limit:120, live:true, sel:null, banState:'actifs', banQ:'',
                 list:[], total:0, cursor:null, sevCounts:{}, stats:null, bans:null };
 
 const CHART_CFG = {
@@ -1719,7 +1901,7 @@ async function refresh() {
     const jobs = [DS.stats(from, to, CHART_CFG[STATE.range].n)];
     if (STATE.view === 'stream') jobs.push(DS.query({
       cats: catsParam(), sevs: [...STATE.sevs], from, to, q: STATE.q, limit: STATE.limit }));
-    else if (STATE.view === 'bans') jobs.push(DS.bans(STATE.banState));
+    else if (STATE.view === 'bans') jobs.push(DS.bans(STATE.banState, STATE.banQ));
     const [stats, extra] = await Promise.all(jobs);
     if (token !== refreshToken) return;
     STATE.stats = stats;
@@ -1731,6 +1913,7 @@ async function refresh() {
     if (String(e.message) !== '401') toast(e.message || 'Impossible de charger les journaux.');
   }
 }
+let _vueVue = null;
 function render() {
   renderNav();
   renderActiveFilters();
@@ -1739,6 +1922,15 @@ function render() {
   $('#viewBans').hidden        = STATE.view !== 'bans';
   $('#viewPlatform').hidden    = STATE.view !== 'platform';
   $('#viewPlatformLog').hidden = STATE.view !== 'platformlog';
+  // ⚠️ L'entrée ne se rejoue qu'au CHANGEMENT de vue. `render()` est
+  // rappelé à chaque rafraîchissement, à chaque marque posée, à chaque
+  // évènement reçu en direct : rejouer l'animation à chaque fois ferait
+  // clignoter l'écran sous les yeux de qui lit.
+  const vue = document.querySelector('.view:not([hidden])');
+  if (vue && STATE.view !== _vueVue) {
+    _vueVue = STATE.view;
+    vue.classList.remove('entre'); void vue.offsetWidth; vue.classList.add('entre');
+  }
   if (STATE.view === 'overview') renderOverview();
   else if (STATE.view === 'stream') { renderStream(); chargerCaptures(); }
   else if (STATE.view === 'bans') renderBans();
@@ -1784,13 +1976,23 @@ function buildNav() {
         <span class="nav-n" data-n="${c.id}">—</span></button>`).join('');
   }
   host.innerHTML = html;
+  _repereVu = false;          // rail reconstruit : on repart d'une mesure neuve
 }
 function renderNav() {
   const split = (STATE.stats && STATE.stats.split) || {};
   let total = 0;
   document.querySelectorAll('[data-n]').forEach(n => {
     const v = split[n.dataset.n] || 0; total += v;
-    n.textContent = v ? v.toLocaleString('fr-FR') : '·';
+    const texte = v ? v.toLocaleString('fr-FR') : '·';
+    // Un compteur qui BOUGE se signale une fois. Le repeindre à
+    // l'identique à chaque rendu ferait clignoter tout le rail pour rien.
+    if (n.textContent !== texte) {
+      const avant = n.textContent;
+      n.textContent = texte;
+      if (avant && avant !== '·' && avant !== '—') {
+        n.classList.remove('bump'); void n.offsetWidth; n.classList.add('bump');
+      }
+    }
     n.parentElement.classList.toggle('flagged', n.dataset.n === 'anticheat' && v > 0);
   });
   const all = $('#nAll'); if (all) all.textContent = total.toLocaleString('fr-FR');
@@ -1801,7 +2003,39 @@ function renderNav() {
             || (STATE.view === 'stream' && b.dataset.cat === STATE.cat);
     b.setAttribute('aria-current', on ? 'true' : 'false');
   });
+  placerRepere();
 }
+
+/* ---------- le repère glissant du rail ----------
+   ⚠️ Il est MESURÉ, pas deviné : les rubriques varient d'un rôle à
+   l'autre, et les groupes n'ont pas tous la même hauteur. On lit la
+   position réelle de l'onglet actif, et le bloc s'y rend en glissant.
+   Sans onglet actif (supervision hors espace, par exemple) il s'efface
+   plutôt que de rester accroché au dernier endroit connu. */
+let _repereVu = false;
+function placerRepere() {
+  const nav = $('#nav'); if (!nav) return;
+  let bloc = nav.querySelector('.nav-slide');
+  if (!bloc) { bloc = document.createElement('div'); bloc.className = 'nav-slide';
+               bloc.setAttribute('aria-hidden', 'true'); nav.prepend(bloc); }
+  const actif = nav.querySelector('.nav-item[aria-current="true"]');
+  if (!actif) { bloc.classList.remove('on'); _repereVu = false; return; }
+  const y = actif.offsetTop - nav.clientTop;
+  // Au tout premier placement on ne fait pas glisser depuis le haut de
+  // l'écran : le repère se pose là où il doit être, puis il glissera.
+  if (!_repereVu) {
+    const t = bloc.style.transition; bloc.style.transition = 'none';
+    bloc.style.transform = `translateY(${y}px)`; bloc.style.height = actif.offsetHeight + 'px';
+    void bloc.offsetWidth; bloc.style.transition = t;
+    _repereVu = true;
+  } else {
+    bloc.style.transform = `translateY(${y}px)`;
+    bloc.style.height = actif.offsetHeight + 'px';
+  }
+  bloc.classList.add('on');
+}
+// Le rail se replie sous 900px : les positions changent, le repère aussi.
+addEventListener('resize', () => { _repereVu = false; placerRepere(); });
 
 /* ============================================================
    Vue d'ensemble
@@ -2049,11 +2283,18 @@ function renderBans() {
   $('#nTous').textContent = c.tous != null ? c.tous : '·';
   document.querySelectorAll('[data-banstate]').forEach(b =>
     b.setAttribute('aria-pressed', b.dataset.banstate === STATE.banState));
-  $('#bansCount').innerHTML = `<b>${(d.bans || []).length}</b> ligne(s) au registre`;
+  $('#bansCount').innerHTML = d.recherche
+    ? `<b>${(d.bans || []).length}</b> ligne(s) pour « ${esc(d.recherche)} »`
+    : `<b>${(d.bans || []).length}</b> ligne(s) au registre`;
+  const champBan = $('#banQ');
+  if (champBan && document.activeElement !== champBan) champBan.value = STATE.banQ;
+  $('#banQClear').hidden = !STATE.banQ;
 
   if (!d.bans.length) {
     $('#bansRows').innerHTML = `<tr><td colspan="7"><div class="void"><b>Registre vide</b>
-      <span>${STATE.banState === 'actifs' ? 'Aucun bannissement en cours.' : 'Rien à afficher pour ce filtre.'}</span></div></td></tr>`;
+      <span>${STATE.banQ ? `Rien ne correspond à « ${esc(STATE.banQ)} » dans ce filtre.`
+        : STATE.banState === 'actifs' ? 'Aucun bannissement en cours.' : 'Rien à afficher pour ce filtre.'}</span>
+      ${STATE.banQ ? '<span><button class="btn sm" id="banQReset">Effacer la recherche</button></span>' : ''}</div></td></tr>`;
     return;
   }
   $('#bansRows').innerHTML = d.bans.map(b => {
@@ -2434,7 +2675,8 @@ function syncHash(replace) {
                : STATE.view === 'bans'        ? '/bans/' + STATE.banState
                :                                '/flux/' + STATE.cat;
   const qp = [];
-  if (STATE.q) qp.push('q=' + encodeURIComponent(STATE.q));
+  if (STATE.view === 'bans') { if (STATE.banQ) qp.push('q=' + encodeURIComponent(STATE.banQ)); }
+  else if (STATE.q) qp.push('q=' + encodeURIComponent(STATE.q));
   if (STATE.range !== 24) qp.push('p=' + STATE.range);
   if (STATE.sevs.size) qp.push('s=' + [...STATE.sevs].join(','));
   const h = '#' + chemin + (qp.length ? '?' + qp.join('&') : '');
@@ -2462,16 +2704,32 @@ function applyHash() {
   if (sansEspace() && STATE.view !== 'platform' && STATE.view !== 'platformlog')
     STATE.view = 'platform';
   const p = new URLSearchParams(requete || '');
-  STATE.q = p.get('q') || '';
+  // Le registre a sa propre recherche : la confondre avec celle des
+  // rubriques ferait qu'ouvrir les bans effacerait le filtre du flux, et
+  // réciproquement.
+  if (STATE.view === 'bans') { STATE.banQ = p.get('q') || ''; }
+  else { STATE.q = p.get('q') || ''; }
   const per = Number(p.get('p'));
   STATE.range = [1, 6, 24, 168].includes(per) ? per : 24;
   STATE.sevs = new Set((p.get('s') || '').split(',').filter(Boolean));
   STATE.limit = 120; STATE.list = [];
   const champ = $('#q'); if (champ) champ.value = STATE.q;
   const champCat = $('#catQ'); if (champCat) champCat.value = STATE.q;
+  const champBan = $('#banQ'); if (champBan) champBan.value = STATE.banQ;
   document.querySelectorAll('[data-range]').forEach(b =>
     b.setAttribute('aria-pressed', String(Number(b.dataset.range) === STATE.range)));
+  placerPeriode();
   return true;
+}
+
+/* Le bloc glissant du sélecteur de période : son rang suffit, les
+   boutons ayant tous la même largeur. */
+function placerPeriode() {
+  const seg = $('#rangeSeg'); if (!seg) return;
+  const b = [...seg.querySelectorAll('[data-range]')];
+  const i = Math.max(0, b.findIndex(x => Number(x.dataset.range) === STATE.range));
+  seg.style.setProperty('--n', b.length);
+  seg.style.setProperty('--i', i);
 }
 window.addEventListener('popstate', () => { if (applyHash()) { render(); refresh(); } });
 
@@ -2500,6 +2758,7 @@ function clearFilter(quoi) {
   STATE.limit = 120;
   document.querySelectorAll('[data-range]').forEach(b =>
     b.setAttribute('aria-pressed', String(Number(b.dataset.range) === STATE.range)));
+  placerPeriode();
   syncHash(); render(); refresh();
 }
 
@@ -2634,6 +2893,19 @@ function ouvrirCapture(id, nom) {
   window.open('/api/screens/' + Number(id), '_blank', 'noopener');
 }
 
+/* ---------- recherche au registre des bannissements ----------
+   Elle est SÉPARÉE de celle des rubriques (`STATE.banQ`) : le registre et
+   le flux ne répondent pas à la même question, et partager un champ
+   ferait qu'ouvrir l'un effacerait le filtre de l'autre. */
+let _banQTimer = null;
+function chercherAuRegistre(t) {
+  const v = String(t || '').trim();
+  if (v === STATE.banQ) return;
+  STATE.banQ = v;
+  $('#banQClear').hidden = !v;
+  syncHash(); refresh();
+}
+
 /* ---------- recherche dans la rubrique ouverte ----------
    ⚠️ Elle ne passe PAS par `lancerRecherche` : celle-là bascule sur le
    flux et peut changer de rubrique (c'est ce qu'on veut depuis la barre
@@ -2734,6 +3006,7 @@ document.addEventListener('click', ev => {
       ev.stopImmediatePropagation();
       STATE.range = 168;
       document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.range === '168')));
+      placerPeriode();
       syncHash(); return refresh();
     }
     return;
@@ -2766,6 +3039,20 @@ $('#catQ').addEventListener('keydown', e => {
 });
 $('#catQClear').addEventListener('click', () => {
   $('#catQ').value = ''; clearTimeout(_catQTimer); chercherDansRubrique(''); $('#catQ').focus();
+});
+
+$('#banQ').addEventListener('input', e => {
+  clearTimeout(_banQTimer);
+  const v = e.target.value;
+  $('#banQClear').hidden = !v.trim();
+  _banQTimer = setTimeout(() => chercherAuRegistre(v), 260);
+});
+$('#banQ').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { clearTimeout(_banQTimer); chercherAuRegistre(e.target.value); }
+  if (e.key === 'Escape') { e.target.value = ''; clearTimeout(_banQTimer); chercherAuRegistre(''); }
+});
+$('#banQClear').addEventListener('click', () => {
+  $('#banQ').value = ''; clearTimeout(_banQTimer); chercherAuRegistre(''); $('#banQ').focus();
 });
 </script>
 <script>
@@ -3576,6 +3863,7 @@ document.addEventListener('click', async ev => {
   if (t.dataset.range) {
     STATE.range = Number(t.dataset.range); STATE.limit = 120;
     document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-pressed', b === t));
+    placerPeriode();
     syncHash(); return refresh();
   }
   if (t.dataset.staffToggle) {
@@ -3607,6 +3895,7 @@ document.addEventListener('change', async ev => {
 document.addEventListener('click', async ev => {
   const id = ev.target.id;
   if (id === 'sevClear')      { STATE.sevs.clear(); syncHash(); refresh(); }
+  if (id === 'banQReset') { $('#banQ').value = ''; chercherAuRegistre(''); }
   if (id === 'bansToEvents')  goStream('bans');
   if (id === 'resetFilters')  clearFilter('tout');
   if (id === 'moreBtn')  loadMore();
@@ -3705,6 +3994,11 @@ function onLive(e) {
     STATE.sevCounts[e.sev] = (STATE.sevCounts[e.sev] || 0) + 1;
     if (STATE.list.length > STATE.limit) STATE.list.pop();
     renderStream();
+    // La ligne qui vient d'arriver se signale UNE fois. Sans cela, le
+    // direct pousse le contenu vers le bas sans qu'on sache ce qui est
+    // neuf : on relit le haut de l'écran à chaque battement.
+    const ligne = $('#rows .ev');
+    if (ligne) { ligne.classList.add('neuf'); setTimeout(() => ligne.classList.remove('neuf'), 600); }
   }
   if (!softTimer) softTimer = setTimeout(() => { softTimer = null; if (STATE.live) refresh(); }, 15000);
 }
@@ -3891,6 +4185,7 @@ async function startPanel() {
       $(b).hidden = false;
   }
   buildNav();
+  placerPeriode();   // sinon le bloc glissant démarre sous « 1 h » alors que « 24 h » est actif
   // Sans adresse précise, l'administration de plateforme atterrit sur sa
   // supervision : un panneau de logs de jeu ne lui apprendrait rien.
   if (!applyHash()) { if (ME.plateforme) STATE.view = 'platform'; syncHash(true); }

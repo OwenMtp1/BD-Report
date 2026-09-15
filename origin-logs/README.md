@@ -60,7 +60,12 @@ d'œil à la strie de couleur en début de ligne.
 - **Bannissement** — un **registre**, pas une relecture du flux : qui est
   banni *maintenant*, pour quoi, par qui, jusqu'à quand. C'est cette table
   que le serveur de jeu interroge à chaque connexion. Filtres en cours /
-  terminés / tous, et levée en un clic pour qui en a le droit.
+  terminés / tous, **sa propre recherche** (joueur, motif, staff, licence)
+  et levée en un clic pour qui en a le droit. La recherche se fait en SQL,
+  donc au-delà des 300 lignes affichées — c'est justement quand le registre
+  est long qu'on y cherche quelqu'un. Les compteurs des filtres restent ceux
+  du registre entier : ils disent combien de bannissements existent, pas
+  combien la recherche laisse passer.
 - **Flux** — une timeline : gouttière d'horodatage, barre de gravité, code
   de catégorie, auteur et message. Recherche plein texte (nom, licence,
   plaque, item, montant, ID serveur), filtres par catégorie, gravité et
@@ -72,6 +77,9 @@ d'œil à la strie de couleur en début de ligne.
   sortir de la rubrique — en sortir à la première lettre tapée serait le
   contraire de ce qu'on demande — et l'adresse la porte, donc un lien collé
   rouvre la même recherche.
+  ⚠️ Celle du **registre des bannissements** est SÉPARÉE (`STATE.banQ`) :
+  le registre et le flux ne répondent pas à la même question, et partager
+  un champ ferait qu'ouvrir l'un effacerait le filtre de l'autre.
 - **Inspecteur** — payload brut de l'évènement, identifiants, ressource
   émettrice, contexte des évènements voisins du même joueur, épingle et
   marquage « traité » **partagés entre le staff**.
@@ -480,6 +488,49 @@ conteste. Le `msg` sert à lire, le `data` sert à prouver.
 
 ---
 
+## Ce qui bouge, et pourquoi
+
+Le mouvement sert à **relier deux états**, pas à décorer. Trois endroits
+seulement en portent.
+
+**Le repère du rail glisse.** Un fond qui s'allume sur un onglet pendant
+qu'un autre s'éteint ne relie pas les deux : on ne voit pas d'où l'on vient.
+Un seul bloc se déplace donc d'un onglet à l'autre — et il est **mesuré**,
+pas deviné : les rubriques varient d'un rôle à l'autre et les groupes n'ont
+pas la même hauteur. Sans onglet actif (supervision hors espace) il s'efface
+plutôt que de rester accroché au dernier endroit connu.
+
+⚠️ **Sur téléphone le rail est horizontal** : un repère qui se déplace en
+hauteur sur toute la largeur y deviendrait une barre posée en travers des
+onglets. Il disparaît, et l'onglet actif reprend son propre fond.
+
+**Le sélecteur de période glisse aussi**, pour la même raison. Les boutons
+ayant la même largeur, sa position se calcule sans mesurer.
+
+**Une ligne qui arrive en direct se signale une fois** : elle vient du haut
+avec un halo qui s'éteint. Sans cela le direct pousse le contenu vers le bas
+sans qu'on sache ce qui est neuf, et on relit le haut de l'écran à chaque
+battement. Même idée pour un compteur du rail qui change.
+
+⚠️ **L'entrée d'une vue ne se rejoue qu'au CHANGEMENT de vue.** `render()`
+est rappelé à chaque rafraîchissement, à chaque marque posée, à chaque
+évènement reçu : rejouer l'animation à chaque fois ferait clignoter l'écran
+sous les yeux de qui lit.
+
+⚠️ **La cascade des lignes s'arrête à la douzième.** Au-delà elle n'apprend
+plus rien, et une page de 120 lignes mettrait une seconde à se poser.
+
+⚠️ **Tout est en `transform` et `opacity`** — jamais en largeur, hauteur ou
+position — pour que l'animation reste sur le compositeur et ne redessine pas
+la page. Une seule courbe (`--ease`) pour tout : deux accélérations
+différentes dans le même écran se remarquent, et mal.
+
+⚠️ **`prefers-reduced-motion: reduce` coupe tout**, d'une règle. Le panneau
+reste entièrement utilisable sans une seule animation — c'est la condition
+pour s'autoriser à en mettre.
+
+---
+
 ## Choix qui méritent une explication
 
 **Le bannissement vit dans l'API, pas dans le serveur de jeu.** C'est elle que
@@ -513,7 +564,7 @@ Deux niveaux, et ils ne répondent pas à la même question.
 le bot est-il encore sur ce serveur Discord, le serveur de jeu écrit-il
 toujours, les sanctions partent-elles. C'est le contrôle du jour.
 
-**`npm test`** teste **le code** : 124 contrôles HTTP sur l'API — ingestion,
+**`npm test`** teste **le code** : 127 contrôles HTTP sur l'API — ingestion,
 cloisonnement des espaces, rôles et rangs, permissions refusées, parcours
 Discord complet, captures d'écran de bout en bout et **retrait automatique
 d'un accès** (avec un faux Discord local, aucun réseau).

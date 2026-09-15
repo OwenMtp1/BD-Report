@@ -1339,7 +1339,15 @@ async function route(req, res) {
       const filtre = etat === 'actifs' ? `WHERE space_id=? AND type='ban' AND ${encours}`
                    : etat === 'expires' ? `WHERE space_id=? AND type='ban' AND NOT ${encours}`
                    : `WHERE space_id=? AND type='ban'`;
-      const rows = db.prepare(`SELECT * FROM sanctions ${filtre} ORDER BY created_at DESC LIMIT 300`).all(me.spaceId).map(DB.row);
+      // ⚠️ La recherche se fait en SQL, pas sur les 300 lignes rendues :
+      // un registre plus long que la fenêtre d'affichage laisserait
+      // introuvable ce qui n'y tient pas — et c'est justement quand il est
+      // long qu'on cherche.
+      const terme = String(Q.q || '').trim().slice(0, 120);
+      const rech = terme ? ` AND (name LIKE ? OR reason LIKE ? OR by_name LIKE ? OR player_key LIKE ?)` : '';
+      const argsRech = terme ? Array(4).fill('%' + terme + '%') : [];
+      const rows = db.prepare(`SELECT * FROM sanctions ${filtre}${rech} ORDER BY created_at DESC LIMIT 300`)
+                     .all(me.spaceId, ...argsRech).map(DB.row);
       const ids = me.perms.includes('players.identifiers');
       const compte = k => DB.row(db.prepare(`SELECT COUNT(*) n FROM sanctions WHERE space_id=? AND type='ban' AND ${k}`).get(me.spaceId)).n;
       return ok(res, {
@@ -1347,7 +1355,11 @@ async function route(req, res) {
           player_key: keyFor(me, b.player_key),
           encours: b.active === 1 && (!b.expires_at || b.expires_at > t)
         })),
-        counts: { actifs: compte(encours), expires: compte('NOT ' + encours), tous: compte('1=1') }
+        // Les compteurs des onglets restent ceux du REGISTRE ENTIER : ils
+        // disent combien de bannissements existent, pas combien la
+        // recherche en cours laisse passer. `trouves` porte le second.
+        counts: { actifs: compte(encours), expires: compte('NOT ' + encours), tous: compte('1=1') },
+        recherche: terme || null, trouves: rows.length
       });
     }
     if (p === '/api/marks' && method === 'POST') {
