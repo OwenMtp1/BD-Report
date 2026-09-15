@@ -358,19 +358,24 @@ plus rien d'utile.
 
 ## Journaliser vos propres scripts
 
-Les évènements natifs couvrent connexions, chat, morts, explosions et
-détections. Le reste — braquages, drogue, garages, coffres d'organisation —
-vit dans **vos** ressources, qui seules savent ce qui s'y passe :
+La ressource couvre seule ce que le serveur de jeu publie : connexions,
+déconnexions, morts, anticheat, bannissements, actions staff, et — quand le
+framework est reconnu — l'argent, les métiers et les coffres.
+
+**Sept rubriques ne peuvent venir que de vos scripts**, parce que rien de
+standard ne les émet : la boutique (caisse, monnaie, produits), le casino,
+les factures EMS, l'immobilier et les objets au sol. Elles appartiennent à
+des ressources que chaque serveur choisit, écrit ou achète.
 
 ```lua
 exports['origin_logs']:Log({
-  cat   = 'braquages',          -- voir Config.Categories
+  cat   = 'casino',             -- voir le tableau des 17 rubriques
   sev   = 'alerte',             -- critique | alerte | notice | info
   actor = source,               -- un id de joueur, ou une table
   target = autreSource,         -- facultatif
-  msg   = ('%s a ouvert le coffre du Pacific'):format(GetPlayerName(source)),
-  data  = { kind = 'loot', butin = 184200, sacs = 4 },
-  res   = 'mon_script_braquage'
+  msg   = ('%s gagne 84 000 $ au blackjack'):format(GetPlayerName(source)),
+  data  = { kind = 'gain', jeu = 'blackjack', gain = 84000 },
+  res   = 'mon_casino'
 })
 ```
 
@@ -378,24 +383,90 @@ exports['origin_logs']:Log({
 trancher un litige trois jours plus tard. `kind` sert aux compteurs du dossier
 joueur (`join`, `kill`, `death`).
 
+📋 **Un exemple prêt à copier pour chacune des sept** :
+**[resource/EXEMPLES.md](resource/EXEMPLES.md)**. Ils ne supposent aucun
+framework — ni ESX, ni QBCore : l'export ne demande qu'un `source` et une
+phrase. Le fichier dit aussi quelles rubriques **filtrer** avant de les
+brancher : les objets au sol et les ouvertures de menu se comptent par
+milliers sur une soirée, et tout remonter noie la rubrique.
+
+⚠️ Une rubrique inconnue n'est pas rejetée : elle est rattachée à **Action
+staff** et reste visible. Une faute de frappe dans un `cat` ne perd donc
+rien — mais elle range l'évènement au mauvais endroit, et c'est exactement
+ce qu'on découvre en ouvrant « Action staff » après avoir branché un script.
+
 ---
 
 ## Sauvegarde
 
-La base est un seul fichier. Avec le service arrêté, copiez-le ; à chaud,
-préférez :
+**Elle est automatique, et il n'y a rien à installer.** L'API prend une
+sauvegarde complète toutes les 24 heures dans `api/data/backups/` et garde
+les 14 dernières ; la plus ancienne est jetée à mesure. Deux réglages dans
+`api/.env` :
 
-```bash
-sqlite3 /srv/origin-logs/api/data/origin-logs.db ".backup '/sauvegardes/logs-$(date +%F).db'"
+```ini
+BACKUP_EVERY_HOURS=24     # 0 désactive (le contrôle de santé le signalera)
+BACKUP_KEEP=14            # nombre de sauvegardes gardées
+BACKUP_DIR=               # vide = api/data/backups
 ```
 
+Depuis **Supervision → Sauvegardes** : la liste avec les dates et les
+tailles, un bouton pour en prendre une tout de suite (avant une manœuvre),
+le téléchargement et la suppression. **Supervision → Vérifier** dit l'ÂGE de
+la dernière — une sauvegarde de trois semaines donne la tranquillité sans
+donner le moyen de repartir.
+
+⚠️ **Par « VACUUM INTO », jamais par copie du fichier `.db`.** La base tourne
+en mode WAL : le fichier seul est un instantané INCOMPLET, les dernières
+écritures vivant dans le `-wal` à côté. C'est la raison pour laquelle un
+`cp` à chaud produit une sauvegarde qui s'ouvre et qui ment.
+
 ⚠️ **Les captures d'écran ne sont PAS dans ce fichier** : elles vivent à côté,
-dans `api/data/screens/`. Sauvegarder la base seule laisserait des lignes qui
-désignent des images disparues.
+dans `api/data/screens/`. La sauvegarde automatique ne les emporte pas — une
+image de plus par joueur et par demande gonflerait chaque copie sans rien
+apprendre. À sauvegarder à part si elles comptent pour vous :
 
 ```bash
 tar czf /sauvegardes/screens-$(date +%F).tgz -C /srv/origin-logs/api/data screens
 ```
+
+### Sortir les sauvegardes de la machine
+
+Une sauvegarde posée sur le disque qu'elle protège ne protège que d'une
+fausse manœuvre, pas d'une panne. Recopiez-les ailleurs :
+
+```bash
+# Toutes les nuits, après l'heure de la sauvegarde automatique
+0 5 * * * rsync -a /srv/origin-logs/api/data/backups/ sauvegarde@ailleurs:/logs/
+```
+
+⚠️ **Une sauvegarde contient TOUS les journaux de TOUS vos clients.** Là où
+vous la copiez vaut l'accès au panneau : chiffrez-la si elle quitte votre
+infrastructure, et n'en mettez pas dans un dépôt Git — `api/data/` est déjà
+ignoré pour cette raison.
+
+### Rendre ses journaux à UN client
+
+La sauvegarde protège la plateforme ; elle ne sait rien rendre à un client en
+particulier. Pour cela : **Supervision → la carte du client → Exporter cet
+espace**. Un fichier JSON autonome avec ses journaux, ses joueurs, ses
+sanctions, ses rôles et ses comptes.
+
+Il se remet en service par **Supervision → Restaurer un espace…**, qui crée
+**toujours un espace neuf** : écraser un espace en service sur la foi d'un
+fichier est le geste le plus destructeur du panneau, et aucune confirmation
+ne le rendrait sûr. Un doublon se supprime en un clic ; des journaux effacés,
+non.
+
+⚠️ **Les comptes reviennent SUSPENDUS**, et c'est voulu. Restaurer un export
+dont l'original vit encore recrée ses comptes à l'identique ; la connexion,
+qui cherche dans tous les espaces, en trouverait alors deux et refuserait de
+choisir — plus personne ne se connecterait. Rendez la main aux comptes qui
+doivent revenir, un par un.
+
+⚠️ **Le fichier d'export vaut un accès** : il contient les empreintes de mots
+de passe et la clé d'ingestion de l'espace. Transmettez-le comme un mot de
+passe, pas comme une pièce jointe de plus.
 
 ---
 

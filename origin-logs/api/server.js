@@ -57,7 +57,14 @@ const CFG = {
   maxIngestMin: Number(process.env.MAX_INGEST_PER_MIN || 120),
   maxScreenMin: Number(process.env.MAX_SCREENS_PER_MIN || 20),
   // Revérification automatique des accès Discord, en tâche de fond.
-  sweepMin:   Number(process.env.ACCESS_SWEEP_MIN || 30)
+  sweepMin:   Number(process.env.ACCESS_SWEEP_MIN || 30),
+  // ⚠️ Le journal d'administration a SA durée, plus longue que celle des
+  // journaux de jeu : un audit porte sur la période écoulée, et l'effacer
+  // au bout d'un mois le priverait de matière. Il n'est pas éternel pour
+  // autant — ce serait le seul endroit du produit où une donnée ne
+  // partirait jamais. Réglable : le registre de conservation remis au
+  // client cite ce chiffre, et certaines obligations en imposent un autre.
+  auditDays:  Number(process.env.AUDIT_DAYS || 180)
 };
 if (!CFG.serverKey) {
   console.error('\n  SERVER_KEY est vide : la ressource FiveM ne pourrait pas déposer de logs.');
@@ -934,7 +941,7 @@ function purge() {
   db.prepare('DELETE FROM marks WHERE event_id NOT IN (SELECT id FROM events)').run();
   db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(now());
   db.prepare(`DELETE FROM actions WHERE status IN ('done','failed') AND created_at < ?`).run(now() - 7 * 86400000);
-  db.prepare('DELETE FROM audit WHERE ts < ?').run(now() - 180 * 86400000);
+  db.prepare('DELETE FROM audit WHERE ts < ?').run(now() - CFG.auditDays * 86400000);
   if (DB.num(n.changes) > 0) {
     db.exec(`INSERT INTO events_fts(events_fts) VALUES('optimize')`);
     console.log(`[purge] ${DB.num(n.changes)} évènement(s) au-delà de la rétention supprimés`);

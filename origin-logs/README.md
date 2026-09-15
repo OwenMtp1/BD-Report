@@ -373,6 +373,107 @@ cloisonnés en SQL, et sa clé n'ouvre que le sien.
 
 ---
 
+## Vendre : formules, échéances, et ce qui s'applique tout seul
+
+Un espace de logs se vend. La **formule** est la seule chose qui distingue
+commercialement un client d'un autre, et elle vit **en base** — pas dans le
+code : on ajuste un tarif ou un plafond bien plus souvent qu'on ne
+redéploie. Trois formules de départ, modifiables, et on en crée d'autres :
+
+| | Comptes staff | Rétention | Captures | Quota d'images | Dépôts/min |
+|---|---|---|---|---|---|
+| **Starter** | 5 | 7 j | non | — | 60 |
+| **Pro** | 25 | 30 j | oui | 512 Mo | 120 |
+| **Illimité** | sans limite | sans limite | oui | plafond du serveur | plafond du serveur |
+
+⚠️ **« Sans limite » n'est pas « zéro ».** Une formule sans plafond est le cas
+courant de l'offre haute ; confondre les deux aurait fait de l'offre la plus
+chère la plus bridée. En base, c'est `NULL`, jamais `0`.
+
+⚠️ **La formule BORNE, elle ne fixe pas.** Un client qui demande 7 jours de
+rétention en formule Illimitée garde 7 jours : c'est le plafond qui descend,
+jamais la demande qui monte.
+
+Les plafonds s'appliquent **là où le geste se fait**, pas dans l'écran qui le
+propose : créer un compte au-delà du quota renvoie un refus qui **nomme la
+formule et son plafond** (« Starter : 5 comptes »), déposer une capture sans
+l'option la refuse, et le débit d'ingestion est plafonné en SQL. Un plafond
+qui ne vivrait que dans l'interface ne serait pas un plafond.
+
+**Échéance.** Chaque espace porte une date de fin facultative. Quand elle
+tombe, l'espace se **ferme tout seul** : plus personne n'entre, et le serveur
+de jeu cesse d'être accepté. Fermer n'est pas supprimer — les journaux
+restent, et repousser la date rouvre. C'est ainsi qu'on coupe un client sans
+avoir à y penser, et qu'on le rétablit sans rien perdre.
+
+Écrans : **Supervision → Formules** (créer, modifier, supprimer — une formule
+utilisée ne se supprime pas), et la carte de chaque espace pour lui attribuer
+sa formule et sa date.
+
+---
+
+## Tenir la boutique : sauvegardes, poids, export
+
+**Les sauvegardes sont automatiques** — toutes les 24 h, les 14 dernières
+gardées, par `VACUUM INTO` (en WAL, une copie du `.db` seul est un
+instantané incomplet). **Supervision → Sauvegardes** les liste, en prend une
+à la demande, les télécharge ; **Vérifier** dit leur ÂGE, parce qu'une
+sauvegarde de trois semaines donne la tranquillité sans donner le moyen de
+repartir.
+
+**Le poids est affiché par espace** et pour la plateforme, avec un seuil
+d'alerte. Approximatif, et l'écran le dit : SQLite n'attribue pas ses pages à
+un locataire. On mesure ce qui est mesurable — la longueur des textes
+journalisés et la taille réelle des images — c'est l'essentiel du volume, et
+cela évolue juste.
+
+**Un espace s'exporte** en un fichier autonome (« rendez-moi mes journaux »
+est la demande d'un client qui part) et se **restaure**, toujours dans un
+espace NEUF. ⚠️ Ses comptes reviennent **suspendus** : restaurer un export
+dont l'original vit encore recrée ses comptes à l'identique, et la connexion,
+qui cherche dans tous les espaces, en trouverait deux et refuserait de
+choisir — plus personne ne se connecterait.
+
+Détail et commandes : **[DEPLOIEMENT.md § Sauvegarde](DEPLOIEMENT.md)**.
+
+---
+
+## Données personnelles
+
+Un identifiant FiveM désigne une personne : le panneau traite donc des
+données personnelles, et le vendre à un serveur fait de vous un
+**sous-traitant** au sens du RGPD.
+
+Ce qui est **dans l'outil**, droit `players.gdpr`, depuis le dossier joueur :
+
+- **Exporter** tout ce que le panneau détient sur une personne (art. 15) —
+  un fichier remis tel quel.
+- **Effacer** ses évènements (art. 17). ⚠️ Un bannissement en cours n'est pas
+  supprimé mais **pseudonymisé** (`effacé-xxxxxxxx`) : la mesure reste
+  opposable sans porter le nom de la personne. Le panneau exige une
+  confirmation explicite dans ce cas — deux intérêts s'opposent, c'est à un
+  humain de trancher, pas à un bouton.
+- L'effacement **laisse lui-même une trace** : « telles données ont été
+  effacées, par untel, à telle date » est précisément ce qui prouve qu'il a
+  eu lieu.
+
+Ce qui est **à côté**, dans **[juridique/](juridique/)** : un contrat de
+sous-traitance (art. 28) à signer avec le client, une mention d'information
+que le client affiche à ses joueurs, et un registre de conservation qui dit
+ce qui est gardé, où et combien de temps.
+
+⚠️ **Ce sont des MODÈLES, pas un avis juridique.** Ils sont écrits d'après ce
+que le code fait — et c'est leur limite : ils décrivent l'outil, pas votre
+situation. Faites-les relire par un juriste avant de les signer ou de les
+publier. Une suite de contrôle vérifie que les durées qu'ils annoncent sont
+bien celles que le code applique : un registre qui dit 30 jours quand le code
+en applique 90 est pire qu'absent, puisqu'il fait répondre faux à un joueur.
+
+⚠️ **Aucune adresse IP n'est collectée**, et aucun mot de passe en clair
+n'existe en base.
+
+---
+
 ## Cloisonnement : chaque espace est à lui
 
 Les rôles vivent en base **par espace** : les renommer, les recomposer ou en
