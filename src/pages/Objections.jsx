@@ -104,7 +104,7 @@ export default function Objections() {
           <div className="flex flex-wrap gap-1.5">
             {lostTop.map(([motif, n]) => (
               <button key={motif} className="chip bg-surface text-muted hover:bg-brand/10 hover:text-brand"
-                title="Créer une objection à partir de ce motif"
+                title="Créer une objection à partir de ce motif" aria-label="Créer une objection à partir de ce motif"
                 onClick={() => setEditing({ ...emptyObjection(), objection: motif })}>
                 {motif} · {n}
               </button>

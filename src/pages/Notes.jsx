@@ -131,11 +131,13 @@ function NotesTab({ onCreateRdvFromNote }) {
         </div>
       )}
 
-      {notes.length === 0 ? <Empty text="Aucune note. Créez-en une avec le bouton +." /> : (
+      {notes.length === 0 ? (
+        <Empty text="Aucune note." action="Nouvelle note" onAction={() => newNote()} />
+      ) : (
         <div className="space-y-2">
           {notes.map(n => (
             <div key={n.id} className="card p-4 flex items-start gap-3 fade-in">
-              <button onClick={() => setNotes(ns => ns.map(x => x.id === n.id ? { ...x, pinned: !x.pinned } : x))} title="Épingler">
+              <button onClick={() => setNotes(ns => ns.map(x => x.id === n.id ? { ...x, pinned: !x.pinned } : x))} title="Épingler" aria-label="Épingler">
                 {n.pinned ? <Pin size={16} className="text-amber-500" /> : <PinOff size={16} className="text-muted" />}
               </button>
               <div className="flex-1 cursor-pointer" onClick={() => setEditing({ ...n })}>
@@ -149,8 +151,8 @@ function NotesTab({ onCreateRdvFromNote }) {
                 <p className="text-sm text-muted line-clamp-2 mt-1 whitespace-pre-wrap">{n.content}</p>
               </div>
               <div className="flex gap-1">
-                <button className="p-1.5 rounded-lg hover:bg-surface" title="Exporter en Word" onClick={() => exportNote(n, 'docx')}><FileDown size={15} /></button>
-                <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer" onClick={() => setConfirmDel(n.id)}><Trash2 size={15} /></button>
+                <button className="p-1.5 rounded-lg hover:bg-surface" title="Exporter en Word" aria-label="Exporter en Word" onClick={() => exportNote(n, 'docx')}><FileDown size={15} /></button>
+                <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer" aria-label="Supprimer" onClick={() => setConfirmDel(n.id)}><Trash2 size={15} /></button>
               </div>
             </div>
           ))}

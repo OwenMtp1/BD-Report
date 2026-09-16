@@ -100,10 +100,10 @@ function ProfileCard({ profile, deals, global, data, companies, onSave, onDelete
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {onSplit && <button className="btn-ghost !py-1 text-xs" title="Séparer ce profil en deux" onClick={() => onSplit(profile)}><Scissors size={13} /> Séparer</button>}
+          {onSplit && <button className="btn-ghost !py-1 text-xs" title="Séparer ce profil en deux" aria-label="Séparer ce profil en deux" onClick={() => onSplit(profile)}><Scissors size={13} /> Séparer</button>}
           {profile.proposed
-            ? <button className="btn-ghost !py-1 text-xs" title="Enregistrer ce profil" onClick={() => onSave(profile)}><Save size={13} /> Enregistrer</button>
-            : onDelete && <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer" onClick={() => onDelete(profile.id)}><Trash2 size={14} /></button>}
+            ? <button className="btn-ghost !py-1 text-xs" title="Enregistrer ce profil" aria-label="Enregistrer ce profil" onClick={() => onSave(profile)}><Save size={13} /> Enregistrer</button>
+            : onDelete && <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer" aria-label="Supprimer" onClick={() => onDelete(profile.id)}><Trash2 size={14} /></button>}
         </div>
       </div>
 

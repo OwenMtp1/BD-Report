@@ -18,7 +18,7 @@ function Stars({ value, onChange, readOnly }) {
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map(n => (
-        <button key={n} type="button" disabled={readOnly} title={`${n}/5`}
+        <button key={n} type="button" disabled={readOnly} title={`${n}/5`} aria-label={`${n}/5`}
           onMouseEnter={() => !readOnly && setHover(n)} onMouseLeave={() => setHover(0)}
           onClick={() => !readOnly && onChange(n)} className={readOnly ? '' : 'cursor-pointer'}>
           <Star size={readOnly ? 14 : 22} className={(hover || value) >= n ? 'text-amber-400 fill-amber-400' : 'text-line'} />
@@ -93,7 +93,7 @@ function KbBrowser() {
     <div className="card p-4 space-y-3">
       <div className="flex items-center gap-2">
         {cat && !searching && (
-          <button className="btn-ghost !p-1" title="Toutes les catégories" onClick={() => { setCat(''); setOpenId('') }}>
+          <button className="btn-ghost !p-1" title="Toutes les catégories" aria-label="Toutes les catégories" onClick={() => { setCat(''); setOpenId('') }}>
             <ArrowLeft size={15} />
           </button>
         )}
@@ -109,7 +109,7 @@ function KbBrowser() {
         <Search size={14} className="text-muted" />
         <input className="input !py-1.5 border-0 !bg-transparent text-sm" placeholder="Rechercher par mot-clé…"
           value={q} onChange={e => { setQ(e.target.value); setOpenId('') }} />
-        {searching && <button className="btn-ghost !p-1 shrink-0" title="Effacer" onClick={() => setQ('')}>✕</button>}
+        {searching && <button className="btn-ghost !p-1 shrink-0" title="Effacer" aria-label="Effacer" onClick={() => setQ('')}>✕</button>}
       </div>
 
       {/* Grille des catégories : le point d'entrée par défaut. */}

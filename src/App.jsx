@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
   AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Radio, Trophy, ShieldCheck, Star, GraduationCap,
+  User as UserIcon,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER, isElevatedRole, ENV_MODULES, defaultEnvModules, STATEMENT_MODES } from './store.jsx'
 import { NAV_GROUPS, NAV, applyNavLayout } from './nav.jsx'
@@ -14,7 +15,7 @@ import { THEMES, applyTheme } from './themes.js'
 // Import statique : le déploiement inline l'app en un seul fichier, un import
 // dynamique local produirait un morceau séparé qui ne serait jamais publié.
 import { signInWithGoogle, getCurrentUser, signOut as signOutSupabase } from './supabaseAuth.js'
-import { Modal, Field, Toasts, Confetti, toast } from './ui.jsx'
+import { Modal, Field, Confirm, Toasts, Confetti, toast } from './ui.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Rdv from './pages/Rdv.jsx'
 import Leads from './pages/Leads.jsx'
@@ -149,7 +150,7 @@ function Login() {
       <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md fade-in">
         <div className="flex justify-end -mt-2 -mr-2 mb-1 gap-1">
           {LANGS.map(l => (
-            <button key={l.id} title={l.label} onClick={() => store.setUiLang(l.id)}
+            <button key={l.id} title={l.label} aria-label={l.label} onClick={() => store.setUiLang(l.id)}
               className={`text-base px-1.5 py-1 rounded-lg ${l.id === lang ? 'bg-gray-100' : 'opacity-50 hover:opacity-100'}`}>{l.flag}</button>
           ))}
         </div>
@@ -451,7 +452,7 @@ function SubEnvPicker() {
           const open = mine || canOpenOthers
           return (
             <button key={s.id} disabled={!open}
-              title={open ? '' : "Vous ne pouvez ouvrir que votre propre espace"}
+              title={open ? '' : "Vous ne pouvez ouvrir que votre propre espace"} aria-label={open ? '' : "Vous ne pouvez ouvrir que votre propre espace"}
               className={`card w-44 h-44 flex flex-col items-center justify-center gap-2 transition fade-in ${open ? 'hover:scale-105' : 'opacity-55 cursor-not-allowed'}`}
               onClick={() => { if (!open) return; (s.pin && !store.skipsPin()) ? setPinFor(s) : store.enterSubEnv(s.id) }}>
               {s.photo
@@ -523,7 +524,7 @@ function ProductSurvey() {
         </p>
         <div className="flex items-center gap-1 justify-center py-1">
           {[1, 2, 3, 4, 5].map(n => (
-            <button key={n} type="button" title={`${n}/5`}
+            <button key={n} type="button" title={`${n}/5`} aria-label={`${n}/5`}
               onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(0)} onClick={() => setScore(n)}>
               <Star size={30} className={(hover || score) >= n ? 'text-amber-400 fill-amber-400' : 'text-line'} />
             </button>
@@ -785,7 +786,7 @@ function MainApp() {
                       // Un attribut ne se découpe pas en nœuds : on traduit les deux morceaux
                       // avant de les assembler, sinon l'infobulle reste en français.
                       return (
-                        <button key={item.id} onClick={() => goto(item.id)} title={dimmed ? `${label} — ${trUI('lecture seule', lang)}` : label}
+                        <button key={item.id} onClick={() => goto(item.id)} title={dimmed ? `${label} — ${trUI('lecture seule', lang)}` : label} aria-label={dimmed ? `${label} — ${trUI('lecture seule', lang)}` : label}
                           className={`w-full flex items-center gap-2.5 pl-3 pr-2.5 ${itemCls} rounded-xl font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'} ${dimmed && page !== item.id ? 'opacity-40' : ''}`}>
                           <item.icon size={iconSz} className={`shrink-0 ${page === item.id ? '' : 'text-muted'}`} />
                           <span className="truncate">{label}</span>
@@ -818,38 +819,30 @@ function MainApp() {
       <div className="flex-1 min-w-0 z-10">
         <header className="h-14 px-3 sm:px-5 flex items-center justify-between bg-card/80 backdrop-blur border-b border-line sticky top-0 z-20">
           <div className="flex items-center gap-2 min-w-0">
-            <button className="p-2 rounded-xl hover:bg-surface lg:hidden" title="Menu" onClick={() => setSidebarOpen(o => !o)}>
+            <button className="p-2 rounded-xl hover:bg-surface lg:hidden" title="Menu" aria-label="Menu" onClick={() => setSidebarOpen(o => !o)}>
               {sidebarOpen ? <X size={19} /> : <Menu size={19} />}
             </button>
             {/* Titre affiché uniquement sur mobile (les pages ont déjà leur titre — micro 3) */}
             <span className="font-bold text-sm text-muted truncate lg:hidden">{tr(`page.${page}`, NAV.find(n => n.id === page)?.label || (page === 'settings' ? 'Paramètres' : page === 'org' ? 'Organigramme' : ''))}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <button title="Recherche (Ctrl+K)" className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-line text-muted text-xs hover:bg-surface"
+            <button title="Recherche (Ctrl+K)" aria-label="Recherche (Ctrl+K)" className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-line text-muted text-xs hover:bg-surface"
               onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}>
               <Search size={14} /> <span className="hidden sm:inline">{tr('common.search')}</span> <kbd className="hidden sm:inline text-[10px] border border-line rounded px-1">⌘K</kbd>
             </button>
             <LangPicker />
             <WhatsNew />
             <NotificationsBell />
-            <button title="Organigramme" className={`p-2 rounded-xl hover:bg-surface ${page === 'org' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('org')}>
-              <Network size={19} />
-            </button>
-            <button title="Paramètres" className={`p-2 rounded-xl hover:bg-surface ${page === 'settings' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('settings')}>
-              <SettingsIcon size={19} />
-            </button>
-            <button title={tr('common.changeSpace')} className="p-2 rounded-xl hover:bg-surface text-muted hidden sm:inline-flex" onClick={() => store.setSession(s => ({ ...s, subEnvId: null }))}>
-              <ArrowLeft size={19} />
-            </button>
-            <button title={tr('common.logout')} className="p-2 rounded-xl hover:bg-red-500/10 text-red-500" onClick={store.logout}>
-              <LogOut size={19} />
-            </button>
-            <button title="Mon profil et statut" onClick={() => setProfileOpen(true)} className="relative ml-1 rounded-full hover:ring-2 hover:ring-brand/30 transition">
-              {me.photo
-                ? <img src={me.photo} alt="" className="w-8 h-8 rounded-full object-cover" />
-                : <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-xs font-extrabold flex items-center justify-center">{me.pseudo?.slice(0, 2).toUpperCase()}</div>}
-              <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-card ${PRESENCE_META[store.myPresence()]?.dot || 'bg-slate-400'}`} />
-            </button>
+            {/* ⚠️ L'en-tête portait NEUF commandes, dont « Déconnexion » collée à
+                « Paramètres » et sans confirmation : un pouce qui glisse sur téléphone
+                et la session sautait. Profil, espace, organigramme, paramètres et
+                déconnexion vivent désormais sous l'avatar — le geste attendu partout
+                ailleurs — et la déconnexion demande un geste de plus qu'un réglage. */}
+            <AccountMenu
+              me={me} store={store} page={page} tr={tr}
+              onProfile={() => setProfileOpen(true)}
+              onPage={setPage}
+            />
           </div>
         </header>
         {profileOpen && <ProfileModal store={store} onClose={() => setProfileOpen(false)} />}
@@ -900,6 +893,67 @@ function MainApp() {
   )
 }
 
+/**
+ * Menu du compte, sous l'avatar. Regroupe ce qui relève de MOI et de ma session :
+ * profil, organigramme, paramètres, changement d'espace, déconnexion.
+ *
+ * ⚠️ La déconnexion demande une confirmation. Elle était une icône parmi neuf, à côté
+ * des paramètres ; ici elle est au bout d'un menu ET derrière un « oui » — parce que
+ * s'être trompé de bouton coûte une reconnexion complète, code PIN compris.
+ */
+function AccountMenu({ me, store, page, tr, onProfile, onPage }) {
+  const [open, setOpen] = useState(false)
+  const [askLogout, setAskLogout] = useState(false)
+  const box = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false) }
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc) }
+  }, [open])
+
+  const go = (fn) => { setOpen(false); fn() }
+  const Item = ({ icon: Icon, label, onClick, danger }) => (
+    <button onClick={onClick}
+      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-left ${danger ? 'text-red-500 hover:bg-red-500/10' : 'hover:bg-surface'}`}>
+      <Icon size={16} className={danger ? '' : 'text-muted'} /> {label}
+    </button>
+  )
+
+  return (
+    <div className="relative ml-1" ref={box}>
+      <button aria-label="Mon compte" title="Mon compte" aria-expanded={open} aria-haspopup="menu"
+        onClick={() => setOpen(o => !o)} className="relative rounded-full hover:ring-2 hover:ring-brand/30 transition block">
+        {me.photo
+          ? <img src={me.photo} alt="" className="w-8 h-8 rounded-full object-cover" />
+          : <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-xs font-extrabold flex items-center justify-center">{me.pseudo?.slice(0, 2).toUpperCase()}</div>}
+        <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-card ${PRESENCE_META[store.myPresence()]?.dot || 'bg-slate-400'}`} />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-40 mt-2 w-60 card p-1.5 shadow-lg fade-in">
+          <div className="px-2.5 py-2 border-b border-line mb-1">
+            <div className="font-bold text-sm truncate">{me.pseudo}</div>
+            <div className={`text-xs ${PRESENCE_META[store.myPresence()]?.text || 'text-muted'}`}>{PRESENCE_META[store.myPresence()]?.label}</div>
+          </div>
+          <Item icon={UserIcon} label="Mon profil et statut" onClick={() => go(onProfile)} />
+          <Item icon={Network} label="Organigramme" onClick={() => go(() => onPage('org'))} />
+          <Item icon={SettingsIcon} label={tr('common.settings', 'Paramètres')} onClick={() => go(() => onPage('settings'))} />
+          <Item icon={ArrowLeft} label={tr('common.changeSpace')} onClick={() => go(() => store.setSession(s => ({ ...s, subEnvId: null })))} />
+          <div className="border-t border-line mt-1 pt-1">
+            <Item icon={LogOut} label={tr('common.logout')} danger onClick={() => { setOpen(false); setAskLogout(true) }} />
+          </div>
+        </div>
+      )}
+      {askLogout && (
+        <Confirm message="Se déconnecter de BD Report ?" yesLabel="Se déconnecter"
+          onYes={() => { setAskLogout(false); store.logout() }} onNo={() => setAskLogout(false)} />
+      )}
+    </div>
+  )
+}
+
 // Sélecteur de langue (drapeau) — interface FR / EN / ES
 function LangPicker() {
   const store = useStore()
@@ -908,7 +962,7 @@ function LangPicker() {
   const cur = LANGS.find(l => l.id === lang) || LANGS[0]
   return (
     <div className="relative">
-      <button title="Langue / Language / Idioma" className="p-2 rounded-xl hover:bg-surface text-base leading-none" onClick={() => setOpen(o => !o)}>{cur.flag}</button>
+      <button title="Langue / Language / Idioma" aria-label="Langue / Language / Idioma" className="p-2 rounded-xl hover:bg-surface text-base leading-none" onClick={() => setOpen(o => !o)}>{cur.flag}</button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
@@ -1149,7 +1203,7 @@ function NotificationsBell() {
 
   return (
     <div className="relative">
-      <button title="Notifications" className={`p-2 rounded-xl hover:bg-surface relative ${open ? 'text-brand' : 'text-muted'}`} onClick={() => setOpen(o => !o)}>
+      <button title="Notifications" aria-label="Notifications" className={`p-2 rounded-xl hover:bg-surface relative ${open ? 'text-brand' : 'text-muted'}`} onClick={() => setOpen(o => !o)}>
         <Bell size={19} />
         {unread > 0 && <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-extrabold rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
       </button>
@@ -1241,7 +1295,7 @@ function WhatsNew() {
   const markSeen = () => { setSeen(latestKey); try { localStorage.setItem('bdr_changelog_seen', latestKey) } catch (e) {} }
   return (
     <div className="relative">
-      <button title="Nouveautés" className={`p-2 rounded-xl hover:bg-surface relative ${open ? 'text-brand' : 'text-muted'}`}
+      <button title="Nouveautés" aria-label="Nouveautés" className={`p-2 rounded-xl hover:bg-surface relative ${open ? 'text-brand' : 'text-muted'}`}
         onClick={() => { if (!open) markSeen(); setOpen(o => !o) }}>
         <Gift size={19} />
         {hasNew && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />}

@@ -157,7 +157,7 @@ export default function EnvAdmin({ envId, store }) {
                         concerné — sans lui, il fallait entrer, choisir un espace, puis
                         retrouver l'écran à la main, c'est-à-dire ne pas vérifier. */}
                     {on && m.where && (
-                      <button className="btn-ghost !py-1 !px-2 text-[11px] shrink-0" title="Ouvrir l'environnement sur cet écran"
+                      <button className="btn-ghost !py-1 !px-2 text-[11px] shrink-0" title="Ouvrir l'environnement sur cet écran" aria-label="Ouvrir l'environnement sur cet écran"
                         onClick={() => {
                           if (!store.previewFeature(envId, m.id)) toast("Aucun espace dans cet environnement — impossible d'ouvrir l'écran")
                         }}>
@@ -380,16 +380,16 @@ function NavLayoutEditor({ envId, store }) {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <input className="input !py-1 text-sm flex-1 min-w-[8rem]" value={g.label}
                     onChange={e => set(gi, { label: e.target.value })} placeholder="Nom de la catégorie" />
-                  <button className="btn-ghost !p-1" title="Monter la catégorie" onClick={() => moveGroup(gi, -1)}><ChevronUp size={13} /></button>
-                  <button className="btn-ghost !p-1" title="Descendre la catégorie" onClick={() => moveGroup(gi, 1)}><ChevronDown size={13} /></button>
-                  <button className="btn-ghost !p-1 !text-red-500" title="Supprimer la catégorie" onClick={() => removeGroup(gi)}><X size={13} /></button>
+                  <button className="btn-ghost !p-1" title="Monter la catégorie" aria-label="Monter la catégorie" onClick={() => moveGroup(gi, -1)}><ChevronUp size={13} /></button>
+                  <button className="btn-ghost !p-1" title="Descendre la catégorie" aria-label="Descendre la catégorie" onClick={() => moveGroup(gi, 1)}><ChevronDown size={13} /></button>
+                  <button className="btn-ghost !p-1 !text-red-500" title="Supprimer la catégorie" aria-label="Supprimer la catégorie" onClick={() => removeGroup(gi)}><X size={13} /></button>
                 </div>
                 {g.items.length === 0 && <div className="text-xs text-muted pl-1">Catégorie vide.</div>}
                 {g.items.map((id, ii) => (
                   <div key={id} className="flex items-center gap-1.5 flex-wrap pl-1">
                     <span className="text-xs flex-1 min-w-0 truncate">{labelOf(id)}</span>
-                    <button className="btn-ghost !p-1" title="Monter" onClick={() => moveItem(gi, ii, -1)}><ChevronUp size={12} /></button>
-                    <button className="btn-ghost !p-1" title="Descendre" onClick={() => moveItem(gi, ii, 1)}><ChevronDown size={12} /></button>
+                    <button className="btn-ghost !p-1" title="Monter" aria-label="Monter" onClick={() => moveItem(gi, ii, -1)}><ChevronUp size={12} /></button>
+                    <button className="btn-ghost !p-1" title="Descendre" aria-label="Descendre" onClick={() => moveItem(gi, ii, 1)}><ChevronDown size={12} /></button>
                     <select className="input !w-auto !py-0.5 !text-[11px]" value=""
                       onChange={e => { if (e.target.value) sendTo(gi, id, Number(e.target.value)) }}>
                       <option value="">Déplacer vers…</option>

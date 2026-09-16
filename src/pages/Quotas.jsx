@@ -46,7 +46,7 @@ function Settings({ store, q }) {
             {QUOTA_METRICS.map(m => {
               const on = (q.metrics || []).includes(m.id)
               return (
-                <button key={m.id} title={m.hint}
+                <button key={m.id} title={m.hint} aria-label={m.hint}
                   className={`chip cursor-pointer ${on ? 'bg-brand text-white' : 'bg-card border border-line text-muted'}`}
                   onClick={() => store.setQuotas({ metrics: on ? q.metrics.filter(x => x !== m.id) : [...(q.metrics || []), m.id] })}>
                   {m.label}
@@ -164,7 +164,7 @@ export default function Quotas() {
                     })}
                     <td className="pr-3">
                       {(m.startDate || Object.keys(m.targets || {}).length > 0) && (
-                        <button className="btn-ghost !p-1.5" title="Revenir au quota par défaut"
+                        <button className="btn-ghost !p-1.5" title="Revenir au quota par défaut" aria-label="Revenir au quota par défaut"
                           onClick={() => { store.setMemberQuota(s.id, { targets: {}, startDate: '' }); toast('Quota remis par défaut') }}>
                           <RotateCcw size={14} />
                         </button>

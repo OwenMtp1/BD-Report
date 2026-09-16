@@ -198,13 +198,15 @@ export default function Contacts() {
             </tr>
           </thead>
           <tbody>
-            {contacts.length === 0 && <tr><td colSpan={COLS.length + 1}><Empty text="Aucun contact. Créez-en un avec « Nouveau contact », importez un CSV, ou ils s'ajoutent automatiquement à chaque RDV." /></td></tr>}
+            {contacts.length === 0 && <tr><td colSpan={COLS.length + 1}><Empty text="Aucun contact."
+                hint="Ils s'ajoutent tout seuls à chaque rendez-vous — inutile de les saisir d'avance. Vous pouvez aussi importer un CSV."
+                action="Nouveau contact" onAction={() => setForm(emptyContact())} /></td></tr>}
             {contacts.map(c => (
               <tr key={c.id} className="border-t border-line hover:bg-surface/60">
                 <td className="py-2 pl-3"><input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} /></td>
                 <td className="font-semibold">{c.nom || '—'}</td>
                 <td className="text-muted">{c.poste || '—'}</td>
-                <td>{c.entreprise ? <button className="hover:text-brand hover:underline" title="Ouvrir la fiche entreprise" onClick={() => openCompany(c.entreprise)}>{c.entreprise}</button> : '—'}</td>
+                <td>{c.entreprise ? <button className="hover:text-brand hover:underline" title="Ouvrir la fiche entreprise" aria-label="Ouvrir la fiche entreprise" onClick={() => openCompany(c.entreprise)}>{c.entreprise}</button> : '—'}</td>
                 <td className="text-xs">{c.email || '—'}{c.consent && <span className="ml-1 text-emerald-600 font-bold" title={`Consentement RGPD recueilli${c.consentAt ? ' le ' + c.consentAt : ''}`}>✓</span>}</td>
                 <td className="text-xs">{c.tel || '—'}</td>
                 <td className="text-muted text-xs">{c.secteur || '—'}</td>

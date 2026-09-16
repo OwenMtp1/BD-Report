@@ -206,7 +206,7 @@ function PipelineKanban({ scope, title, intro }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         {title ? <h2 className="text-xl font-extrabold">{title}</h2> : <span />}
-        <button className="btn-ghost !py-1.5 text-xs" onClick={() => setShowQuality(q => !q)} title="Contrôler la qualité de vos données">
+        <button className="btn-ghost !py-1.5 text-xs" onClick={() => setShowQuality(q => !q)} title="Contrôler la qualité de vos données" aria-label="Contrôler la qualité de vos données">
           <ShieldCheck size={13} /> Qualité
         </button>
       </div>
@@ -267,7 +267,7 @@ function PipelineKanban({ scope, title, intro }) {
                       onTouchStart={() => setDragKey(g.key)} onTouchEnd={touchDrop}
                       className={`card !rounded-xl p-3 cursor-grab active:cursor-grabbing touch-none ${dragKey === g.key ? 'dragging' : ''} ${sel.has(g.key) ? 'ring-2 ring-brand' : ''}`}>
                       <div className="flex items-start justify-between gap-2">
-                        <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline min-w-0" title="Ouvrir la fiche entreprise"
+                        <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline min-w-0" title="Ouvrir la fiche entreprise" aria-label="Ouvrir la fiche entreprise"
                           onClick={() => openCompany(g.entreprise)}><Building2 size={13} className="text-muted shrink-0" /> <span className="truncate">{g.entreprise}</span></button>
                         <input type="checkbox" checked={sel.has(g.key)} onChange={() => toggleSel(g.key)}
                           onClick={e => e.stopPropagation()} onDragStart={e => e.preventDefault()}

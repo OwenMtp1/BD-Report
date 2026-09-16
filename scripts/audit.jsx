@@ -1125,6 +1125,60 @@ async function main() {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 6 septendecies. ERGONOMIE ET ACCESSIBILITÉ — les garanties transversales.
+  // Ce sont des règles de PRIMITIVES : elles se corrigent à un endroit et valent pour
+  // les 54 écrans. Elles se perdent donc aussi d'un seul geste, d'où ces contrôles.
+  {
+    const css = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'index.css'), 'utf8')
+    // ⚠️ L'anneau de focus n'existait QUE sur `.input` : au clavier, on ne voyait jamais
+    // où l'on se trouvait. Une seule règle couvre boutons, liens et onglets.
+    if (!/^button:focus-visible/m.test(css) || !/outline:\s*2px solid rgb\(var\(--brand\)\)/.test(css)) {
+      problems.push("index.css : plus d'anneau de focus sur les boutons — la navigation au clavier redevient invisible")
+    }
+
+    const ui = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'ui.jsx'), 'utf8')
+    // Un état vide qui ne sait rien proposer laisse l'utilisateur bloqué là où il l'est
+    // déjà le plus. `action` et `hint` sont facultatifs par écran, jamais absents du composant.
+    const sig = (ui.match(/export function Empty\(\{([^}]*)\}\)/) || [])[1] || ''
+    for (const prop of ['hint', 'action', 'onAction']) {
+      if (!sig.includes(prop)) problems.push(`ui.jsx : <Empty> ne sait plus porter « ${prop} » — les états vides redeviennent muets`)
+    }
+
+    // ⚠️ `title` est une infobulle de SOURIS : inexistante au tactile, peu fiable pour un
+    // lecteur d'écran. Un bouton qui n'a qu'un title n'a pas de nom pour la moitié des gens.
+    const jsx = fs.default.readdirSync(dir).filter(f => /\.jsx$/.test(f))
+      .map(f => ['pages/' + f, path.default.join(dir, f)])
+      .concat(['App.jsx', 'ui.jsx', 'GlobalSearch.jsx'].map(f => [f, path.default.join(process.cwd(), 'src', f)]))
+    const nus = []
+    jsx.forEach(([name, full]) => {
+      const txt = fs.default.readFileSync(full, 'utf8')
+      for (const m of txt.matchAll(/<button\b[^>]*?title=(?:"[^"]*"|\{[^}]*\})[^>]*?>/g)) {
+        if (!m[0].includes('aria-label')) nus.push(name)
+      }
+    })
+    if (nus.length) {
+      problems.push(`${nus.length} bouton(s) avec un title sans aria-label (${[...new Set(nus)].slice(0, 4).join(', ')}) — invisible au tactile et au lecteur d'écran`)
+    }
+
+    // La boîte native du navigateur n'est ni traduite ni mise au thème, et les deux qui
+    // restaient portaient les gestes les plus graves (effacement RGPD, vidage d'espace).
+    jsx.forEach(([name, full]) => {
+      const code = fs.default.readFileSync(full, 'utf8').split('\n').filter(l => !l.trim().startsWith('//')).join('\n')
+      if (/\bwindow\.confirm\(/.test(code)) {
+        problems.push(`${name} : window.confirm — utilisez <Confirm>, la boîte native n'est jamais traduite`)
+      }
+    })
+
+    // Un tableau large doit déborder dans SA boîte, jamais dans la page : sinon c'est
+    // tout l'écran qui défile latéralement sur téléphone.
+    const dash = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'pages', 'Dashboard.jsx'), 'utf8')
+    const det = dash.slice(dash.indexOf('function RdvDetailTable'))
+    if (!det.slice(0, 700).includes('overflow-x-auto')) {
+      problems.push('Dashboard : le tableau détaillé des RDV (6 colonnes) n\'a plus de conteneur de défilement — la page entière déborde sur mobile')
+    }
+  }
+
   process.stdout.write((problems.length ? 'PROBLÈMES:\n- ' + problems.join('\n- ') : 'AUDIT OK') + '\n')
 
 }

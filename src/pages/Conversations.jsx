@@ -192,7 +192,7 @@ function MuteMenu({ channel, store, muted }) {
   return (
     <div className="relative">
       <button className={`btn-ghost !p-1.5 ${muted ? 'text-red-500' : ''}`}
-        title={muted ? `Notifications coupées ${muteLabel(until)}` : 'Couper les notifications de ce canal'}
+        title={muted ? `Notifications coupées ${muteLabel(until)}` : 'Couper les notifications de ce canal'} aria-label={muted ? `Notifications coupées ${muteLabel(until)}` : 'Couper les notifications de ce canal'}
         onClick={() => setOpen(v => !v)}>
         {muted ? <BellOff size={16} /> : <Bell size={16} />}
       </button>
@@ -306,13 +306,13 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
           {channel.oneToOne && channel.oneToOne.managerSubId === meId && (
             <button className="btn-primary !py-1 text-xs" onClick={onReport}><ClipboardList size={14} /> Compte rendu</button>
           )}
-          <button className={`btn-ghost !p-1.5 ${searchOpen ? 'text-brand' : ''}`} title="Rechercher dans les messages" onClick={() => { setSearchOpen(v => !v); if (searchOpen) setQuery('') }}><Search size={16} /></button>
+          <button className={`btn-ghost !p-1.5 ${searchOpen ? 'text-brand' : ''}`} title="Rechercher dans les messages" aria-label="Rechercher dans les messages" onClick={() => { setSearchOpen(v => !v); if (searchOpen) setQuery('') }}><Search size={16} /></button>
           {!personal && <MuteMenu channel={channel} store={store} muted={muted} />}
           {canManage && !personal && !channel._general && !channel.dm && (
-            <button className="btn-ghost !p-1.5" title="Réglages du canal" onClick={onEdit}><Settings2 size={16} /></button>
+            <button className="btn-ghost !p-1.5" title="Réglages du canal" aria-label="Réglages du canal" onClick={onEdit}><Settings2 size={16} /></button>
           )}
           <div className="relative">
-            <button className="btn-ghost !p-1.5" title="Options de la conversation" onClick={() => setHeadMenu(v => !v)}><MoreVertical size={16} /></button>
+            <button className="btn-ghost !p-1.5" title="Options de la conversation" aria-label="Options de la conversation" onClick={() => setHeadMenu(v => !v)}><MoreVertical size={16} /></button>
             {headMenu && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setHeadMenu(false)} />
@@ -357,8 +357,8 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
               <Pin size={12} className="text-amber-500 shrink-0" />
               <span className="font-semibold shrink-0">{m.authorName} :</span>
               <span className="truncate text-muted flex-1">{m.text || (m.image ? '📷 image' : '📎 fichier')}</span>
-              {m.pinned && canManage && <button className="text-muted hover:text-red-500" title="Désépingler pour tous" onClick={() => store.pinMessageForAll(channel.id, m.id, false)}><PinOff size={12} /></button>}
-              {store.isPinnedForMe(m.id) && !m.pinned && <button className="text-muted hover:text-red-500" title="Retirer l'épingle" onClick={() => store.pinMessageForMe(m.id)}><PinOff size={12} /></button>}
+              {m.pinned && canManage && <button className="text-muted hover:text-red-500" title="Désépingler pour tous" aria-label="Désépingler pour tous" onClick={() => store.pinMessageForAll(channel.id, m.id, false)}><PinOff size={12} /></button>}
+              {store.isPinnedForMe(m.id) && !m.pinned && <button className="text-muted hover:text-red-500" title="Retirer l'épingle" aria-label="Retirer l'épingle" onClick={() => store.pinMessageForMe(m.id)}><PinOff size={12} /></button>}
             </div>
           ))}
         </div>
@@ -410,8 +410,8 @@ function ChannelThread({ channel, title, store, meId, canManage, onEdit, onDelet
           </div>
         )}
         <div className="flex items-end gap-2">
-          <button className="btn-ghost !p-2 shrink-0" disabled={busy} title={busy ? 'Envoi en cours…' : 'Joindre une image'} onClick={() => imgRef.current?.click()}><ImagePlus size={18} className={busy ? 'opacity-40' : ''} /></button>
-          <button className="btn-ghost !p-2 shrink-0" disabled={busy} title={busy ? 'Envoi en cours…' : 'Joindre un fichier'} onClick={() => fileRef.current?.click()}><Paperclip size={18} className={busy ? 'opacity-40' : ''} /></button>
+          <button className="btn-ghost !p-2 shrink-0" disabled={busy} title={busy ? 'Envoi en cours…' : 'Joindre une image'} aria-label={busy ? 'Envoi en cours…' : 'Joindre une image'} onClick={() => imgRef.current?.click()}><ImagePlus size={18} className={busy ? 'opacity-40' : ''} /></button>
+          <button className="btn-ghost !p-2 shrink-0" disabled={busy} title={busy ? 'Envoi en cours…' : 'Joindre un fichier'} aria-label={busy ? 'Envoi en cours…' : 'Joindre un fichier'} onClick={() => fileRef.current?.click()}><Paperclip size={18} className={busy ? 'opacity-40' : ''} /></button>
           <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={onImg} />
           <input ref={fileRef} type="file" className="hidden" onChange={onFile} />
           <textarea rows={1} className="input flex-1 resize-none max-h-32" placeholder={personal ? 'Écrivez une note…' : 'Écrivez un message…'} value={text}
@@ -589,9 +589,9 @@ function TemplateEditor({ store, onClose }) {
                 <select className="input !w-auto !py-1.5 text-sm" value={f.type} onChange={e => set(f.id, { type: e.target.value })}>
                   {ONE_TO_ONE_FIELD_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
-                <button className="btn-ghost !p-1.5" title="Monter" onClick={() => move(i, -1)}><ChevronUp size={14} /></button>
-                <button className="btn-ghost !p-1.5" title="Descendre" onClick={() => move(i, 1)}><ChevronDown size={14} /></button>
-                <button className="btn-ghost !p-1.5 !text-red-500" title="Retirer la rubrique"
+                <button className="btn-ghost !p-1.5" title="Monter" aria-label="Monter" onClick={() => move(i, -1)}><ChevronUp size={14} /></button>
+                <button className="btn-ghost !p-1.5" title="Descendre" aria-label="Descendre" onClick={() => move(i, 1)}><ChevronDown size={14} /></button>
+                <button className="btn-ghost !p-1.5 !text-red-500" title="Retirer la rubrique" aria-label="Retirer la rubrique"
                   onClick={() => setFields(l => l.filter(x => x.id !== f.id))}><X size={14} /></button>
               </div>
               <input className="input !py-1.5 text-xs" placeholder="Indication pour celui qui remplit (facultatif)"
@@ -774,7 +774,7 @@ function Reactions({ m, channel, store, meId, pickerFor, setPickerFor }) {
         </button>
       ))}
       <div className="relative">
-        <button onClick={() => setPickerFor(open ? null : m.id)} className="text-muted hover:text-brand p-0.5" title="Réagir"><Smile size={14} /></button>
+        <button onClick={() => setPickerFor(open ? null : m.id)} className="text-muted hover:text-brand p-0.5" title="Réagir" aria-label="Réagir"><Smile size={14} /></button>
         {open && (
           <div className="absolute z-20 bottom-6 left-0 card p-1.5 flex gap-1 flex-wrap w-44 shadow-lg">
             {EMOJIS.map(e => (

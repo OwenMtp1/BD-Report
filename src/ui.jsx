@@ -31,7 +31,7 @@ export function SlideOver({ title, subtitle, onClose, children, wide, footer }) 
             <h3 className="font-bold text-lg truncate">{title}</h3>
             {subtitle && <p className="text-xs text-muted truncate">{subtitle}</p>}
           </div>
-          <button className="p-1.5 rounded-lg hover:bg-surface shrink-0" onClick={onClose} title="Fermer (Échap)"><X size={18} /></button>
+          <button className="p-1.5 rounded-lg hover:bg-surface shrink-0" onClick={onClose} title="Fermer (Échap)" aria-label="Fermer (Échap)"><X size={18} /></button>
         </div>
         <div className="p-5 overflow-y-auto flex-1">{children}</div>
         {footer && <div className="px-5 py-3 border-t border-line shrink-0 bg-card">{footer}</div>}
@@ -179,7 +179,7 @@ export function EditableSelect({ value, onChange, options, onOptionsChange, plac
         <div className="absolute z-30 mt-1 w-full card p-1 max-h-72 overflow-y-auto shadow-lg">
           <div className="flex items-center justify-between px-2 py-1 border-b border-line mb-1">
             <span className="text-xs text-muted font-semibold">Choisir</span>
-            <button type="button" title={`Modifier les ${label}`} className="p-1 rounded hover:bg-surface" onClick={() => setEditing(e => !e)}>
+            <button type="button" title={`Modifier les ${label}`} aria-label={`Modifier les ${label}`} className="p-1 rounded hover:bg-surface" onClick={() => setEditing(e => !e)}>
               <Pencil size={13} className="text-muted" />
             </button>
           </div>
@@ -245,7 +245,7 @@ export function StatBubble({ title, value, tone = 'blue', icon, onDetails, sub }
         <span className="text-xs font-bold uppercase tracking-wide opacity-80">{title}</span>
         {icon}
       </div>
-      <button className="text-3xl font-extrabold text-left hover:underline decoration-2 underline-offset-4" onClick={onDetails} title="Voir le détail">
+      <button className="text-3xl font-extrabold text-left hover:underline decoration-2 underline-offset-4" onClick={onDetails} title="Voir le détail" aria-label="Voir le détail">
         {value}
       </button>
       {sub && <span className="text-xs opacity-75">{sub}</span>}
@@ -273,8 +273,51 @@ export function Gauge({ score, max = 10, label, color = '#ec4899' }) {
   )
 }
 
-export function Empty({ text }) {
-  return <div className="text-center text-muted text-sm py-10">{text}</div>
+/**
+ * État VIDE — et il doit faire quelque chose.
+ *
+ * ⚠️ Il ne portait qu'une phrase, dans 50 écrans : le moment où l'utilisateur est le
+ * plus bloqué était celui où l'application lui en disait le moins. « Aucun signal pour
+ * l'instant » — et ensuite ? Le bouton qui débloque vit ailleurs sur la page, quand il
+ * n'est pas sur un autre écran.
+ *
+ * `hint` explique POURQUOI c'est vide (une liste vide a toujours une cause : rien n'a
+ * encore été créé, ou les filtres excluent tout), `action` donne le geste qui débloque.
+ * Les deux sont facultatifs : `<Empty text="…" />` seul continue de marcher partout.
+ */
+export function Empty({ text, hint, icon: Icon, action, onAction }) {
+  return (
+    <div className="text-center py-10 px-4">
+      {Icon && <Icon size={26} className="mx-auto mb-3 text-muted opacity-50" />}
+      <p className="text-muted text-sm">{text}</p>
+      {hint && <p className="text-muted text-xs mt-1.5 max-w-md mx-auto opacity-90">{hint}</p>}
+      {action && onAction && (
+        <button className="btn-primary !py-1.5 text-sm mt-4" onClick={onAction}>{action}</button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Attente : des lignes grises à la forme du contenu à venir.
+ * ⚠️ Un écran figé sans rien est indiscernable d'un écran cassé — et certaines actions
+ * d'ici prennent cinq secondes (mesurées sur l'enrichissement). Mieux vaut une forme
+ * vide qui bouge qu'un blanc qui laisse croire à une panne.
+ */
+export function Skeleton({ rows = 3, className = '' }) {
+  return (
+    <div className={`space-y-2 ${className}`} aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="card p-3 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-surface animate-pulse shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 rounded bg-surface animate-pulse" style={{ width: `${70 - i * 8}%` }} />
+            <div className="h-2.5 rounded bg-surface animate-pulse" style={{ width: `${45 - i * 5}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------- Toasts de confirmation
@@ -362,7 +405,7 @@ export function DictateButton({ onText, className = '' }) {
     setListening(true)
   }
   return (
-    <button type="button" onClick={toggle} title={listening ? 'Arrêter la dictée' : 'Dicter une note vocale'}
+    <button type="button" onClick={toggle} title={listening ? 'Arrêter la dictée' : 'Dicter une note vocale'} aria-label={listening ? 'Arrêter la dictée' : 'Dicter une note vocale'}
       className={`btn ${listening ? 'bg-red-500 text-white animate-pulse' : 'btn-ghost'} !py-1.5 text-xs ${className}`}>
       {listening ? <MicOff size={14} /> : <Mic size={14} />}
       {listening ? 'Stop' : 'Dicter'}

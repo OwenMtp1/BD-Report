@@ -76,7 +76,7 @@ export function ChallengeBanner() {
     <div className="space-y-2">
       {active.map(ch => (
         <div key={ch.id} className="card p-4 border-l-4 !border-l-amber-400 relative overflow-hidden">
-          <button className="absolute top-2 right-2 p-1 rounded-lg hover:bg-surface text-muted" title="Masquer jusqu'à ma prochaine connexion" onClick={() => hide(ch.id)}>
+          <button className="absolute top-2 right-2 p-1 rounded-lg hover:bg-surface text-muted" title="Masquer jusqu'à ma prochaine connexion" aria-label="Masquer jusqu'à ma prochaine connexion" onClick={() => hide(ch.id)}>
             <X size={15} />
           </button>
           <div className="flex items-center gap-2 mb-1 pr-6 flex-wrap">
@@ -139,8 +139,8 @@ export default function Challenges() {
                     ? <span className="chip bg-surface text-muted">terminé</span>
                     : <span className="chip bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">à venir</span>}
                 {canRun && <>
-                  <button className="btn-ghost !p-1" title="Modifier" onClick={() => setEditing({ ...ch })}><Pencil size={13} /></button>
-                  <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" onClick={() => setConfirmDel(ch.id)}><Trash2 size={13} /></button>
+                  <button className="btn-ghost !p-1" title="Modifier" aria-label="Modifier" onClick={() => setEditing({ ...ch })}><Pencil size={13} /></button>
+                  <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" aria-label="Supprimer" onClick={() => setConfirmDel(ch.id)}><Trash2 size={13} /></button>
                 </>}
               </div>
               <div className="text-[11px] text-muted mt-0.5 flex items-center gap-2 flex-wrap">

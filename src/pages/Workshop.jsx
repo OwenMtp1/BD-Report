@@ -53,7 +53,7 @@ function RolePreview({ store, env, role }) {
             <div className="flex flex-wrap gap-1 mt-0.5">
               {tabs.filter(t => t.group === g).map(t => (
                 <button key={t.id} className="chip bg-surface text-muted hover:bg-brand hover:text-white transition"
-                  title={`Ouvrir « ${t.label} » dans l'environnement`} onClick={() => open(t)}>
+                  title={`Ouvrir « ${t.label} » dans l'environnement`} aria-label={`Ouvrir « ${t.label} » dans l'environnement`} onClick={() => open(t)}>
                   {t.label}
                 </button>
               ))}
@@ -106,7 +106,7 @@ function RoleEditor({ store, env, roles, setRoles }) {
             onChange={e => patch({ name: e.target.value })} />
           {role.builtin
             ? <span className="chip bg-surface text-muted">rôle intégré</span>
-            : <button className="btn-ghost !p-1.5 !text-red-500" title="Supprimer ce rôle"
+            : <button className="btn-ghost !p-1.5 !text-red-500" title="Supprimer ce rôle" aria-label="Supprimer ce rôle"
                 onClick={() => { setRoles(roles.filter(r => r.id !== role.id)); setSel(roles[0]?.id) }}><Trash2 size={14} /></button>}
         </div>
 
@@ -122,7 +122,7 @@ function RoleEditor({ store, env, roles, setRoles }) {
                       sans savoir ce qu'il montre, c'est composer à l'aveugle. Réservé aux
                       environnements DÉJÀ créés — pendant l'assistant, il n'y a rien à ouvrir. */}
                   {env?.id && (
-                    <button title={`Ouvrir « ${t.label} » dans l'environnement`} className="opacity-70 hover:opacity-100"
+                    <button title={`Ouvrir « ${t.label} » dans l'environnement`} aria-label={`Ouvrir « ${t.label} » dans l'environnement`} className="opacity-70 hover:opacity-100"
                       onClick={() => { if (!store.previewPage(env.id, t.id)) toast("Aucun espace dans cet environnement — impossible d'ouvrir l'écran") }}>
                       <Eye size={11} />
                     </button>
@@ -472,12 +472,12 @@ function Explorer({ store, initialEnvId }) {
                       <span className="text-[11px] text-muted">{[s.poste, s.service].filter(Boolean).join(' · ')}</span>
                       {r && <span className="chip bg-card border border-line text-muted !text-[10px]">{r.name}</span>}
                       {env.createdBy === s.ownerId && <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-500/15 !text-[10px]">propriétaire</span>}
-                      <button className="btn-ghost !py-1 text-xs ml-auto" title="Ouvrir cet espace"
+                      <button className="btn-ghost !py-1 text-xs ml-auto" title="Ouvrir cet espace" aria-label="Ouvrir cet espace"
                         onClick={() => { store.enterEnv(env.id); store.enterSubEnv(s.id) }}>
                         <LogIn size={12} /> Entrer
                       </button>
                       {acc && env.createdBy !== acc.id && (
-                        <button className="btn-ghost !py-1 text-xs" title="Désigner comme propriétaire"
+                        <button className="btn-ghost !py-1 text-xs" title="Désigner comme propriétaire" aria-label="Désigner comme propriétaire"
                           onClick={() => { store.setEnvOwner(env.id, acc.id); toast('Propriétaire mis à jour') }}>propriétaire</button>
                       )}
                     </div>

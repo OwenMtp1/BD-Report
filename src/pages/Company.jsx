@@ -97,7 +97,7 @@ function SignalsPanel({ name, info, store, onClose }) {
     <div className="rounded-xl border border-line bg-surface/60 p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <span className="font-bold text-sm flex items-center gap-1.5"><Radar size={15} className="text-brand" /> Signaux commerciaux</span>
-        <button className="btn-ghost !p-1" onClick={onClose} title="Fermer les signaux"><X size={14} /></button>
+        <button className="btn-ghost !p-1" onClick={onClose} title="Fermer les signaux" aria-label="Fermer les signaux"><X size={14} /></button>
       </div>
 
       {!relay && <p className="text-xs text-muted">Le relais n'est pas configuré. L'équipe BD Report doit publier son URL dans Paramètres → Intégrations.</p>}
@@ -236,7 +236,7 @@ function EnrichPanel({ name, info, store, onApply, onClose }) {
     <div className="rounded-xl border border-line bg-surface/60 p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <span className="font-bold text-sm flex items-center gap-1.5"><Sparkles size={15} className="text-brand" /> Enrichissement</span>
-        <button className="btn-ghost !p-1" onClick={onClose} title="Fermer l'enrichissement"><X size={14} /></button>
+        <button className="btn-ghost !p-1" onClick={onClose} title="Fermer l'enrichissement" aria-label="Fermer l'enrichissement"><X size={14} /></button>
       </div>
 
       {!relay && <p className="text-xs text-muted">Le relais n'est pas configuré. L'équipe BD Report doit publier son URL dans Paramètres → Intégrations.</p>}
@@ -388,7 +388,7 @@ function CommentThread({ name, store }) {
               <p className="text-sm whitespace-pre-wrap">{renderText(c.text)}</p>
             </div>
             {c.authorSubId === curSub?.id && (
-              <button className="p-1 rounded hover:bg-card text-red-400" title="Supprimer mon commentaire"
+              <button className="p-1 rounded hover:bg-card text-red-400" title="Supprimer mon commentaire" aria-label="Supprimer mon commentaire"
                 onClick={() => store.deleteCompanyComment(name, c.id)}><Trash2 size={12} /></button>
             )}
           </div>

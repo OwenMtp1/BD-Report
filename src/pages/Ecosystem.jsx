@@ -87,8 +87,8 @@ function Phases({ store, sub }) {
                       }} />
                     prime
                   </label>
-                  <button className="btn-ghost !p-1" title="Renommer" onClick={() => { setEditing(p); setName(p) }}><Pencil size={13} /></button>
-                  <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" onClick={() => setConfirmDel(p)}><Trash2 size={13} /></button>
+                  <button className="btn-ghost !p-1" title="Renommer" aria-label="Renommer" onClick={() => { setEditing(p); setName(p) }}><Pencil size={13} /></button>
+                  <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" aria-label="Supprimer" onClick={() => setConfirmDel(p)}><Trash2 size={13} /></button>
                 </>
               )}
             </div>
@@ -215,7 +215,7 @@ function Bareme({ store, sub }) {
                 </td>
                 <td className="pr-2"><input type="number" className="input !py-1 !w-24" value={r.montant} onChange={e => patch(r.id, { montant: Number(e.target.value) })} /></td>
                 <td>
-                  <button className="btn-ghost !p-1 !text-red-500" title="Supprimer la ligne"
+                  <button className="btn-ghost !p-1 !text-red-500" title="Supprimer la ligne" aria-label="Supprimer la ligne"
                     onClick={() => { store.setEcosystem({ bareme: rows.filter(x => x.id !== r.id) }); toast('Ligne supprimée') }}>
                     <Trash2 size={13} />
                   </button>
@@ -279,7 +279,7 @@ function ActivityBaremeCard({ store, sub, phaseOptions }) {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="chip bg-brand/10 text-brand font-bold shrink-0">Règle {ri + 1}</span>
                 <input className="input !py-1 text-sm flex-1 min-w-[140px]" placeholder={activityRuleTitle(rule)} value={rule.label || ''} onChange={e => patchRule(rule.id, { label: e.target.value })} />
-                <button className="btn-ghost !p-1.5 text-red-500 shrink-0" title="Supprimer la règle" onClick={() => removeRule(rule.id)}><Trash2 size={15} /></button>
+                <button className="btn-ghost !p-1.5 text-red-500 shrink-0" title="Supprimer la règle" aria-label="Supprimer la règle" onClick={() => removeRule(rule.id)}><Trash2 size={15} /></button>
               </div>
 
               {/* Ligne 2 : période + phases */}
@@ -312,7 +312,7 @@ function ActivityBaremeCard({ store, sub, phaseOptions }) {
                     <input type="number" min="0" className="input !w-24 !py-1 text-center font-bold" value={t.montant}
                       onChange={e => setTiers(rule.id, tiers.map(x => x === t ? { ...x, montant: e.target.value } : x))} />
                     <span className="text-muted">€</span>
-                    <button className="text-red-400 shrink-0" title="Retirer le palier" onClick={() => setTiers(rule.id, tiers.filter(x => x !== t))}><Trash2 size={13} /></button>
+                    <button className="text-red-400 shrink-0" title="Retirer le palier" aria-label="Retirer le palier" onClick={() => setTiers(rule.id, tiers.filter(x => x !== t))}><Trash2 size={13} /></button>
                   </div>
                 ))}
                 <button className="btn-ghost !py-1 text-xs" onClick={() => setTiers(rule.id, [...tiers, { id: uid(), min: (Number(tiers[tiers.length - 1]?.min) || 0) + 10, montant: 0 }])}><Plus size={13} /> Ajouter un palier</button>
@@ -491,7 +491,7 @@ function ClosingCard({ store, sub }) {
               <button className="btn-ghost !p-0.5" disabled={i === phases.length - 1} onClick={() => move(i, 1)}><ChevronDown size={13} /></button>
             </div>
             <span className="font-semibold text-sm flex-1">{p}</span>
-            <button className="btn-ghost !p-1 !text-red-500" title="Supprimer l'étape"
+            <button className="btn-ghost !p-1 !text-red-500" title="Supprimer l'étape" aria-label="Supprimer l'étape"
               disabled={phases.length <= 1}
               onClick={() => { store.setEcosystem({ closingPhases: phases.filter(x => x !== p) }); toast('Étape supprimée') }}>
               <Trash2 size={13} />
@@ -518,7 +518,7 @@ function ClosingCard({ store, sub }) {
           {reasons.map(r => (
             <span key={r} className="chip bg-surface text-muted flex items-center gap-1">
               {r}
-              <button className="text-red-400 hover:text-red-600" title="Retirer"
+              <button className="text-red-400 hover:text-red-600" title="Retirer" aria-label="Retirer"
                 onClick={() => store.setEcosystem({ closingLostReasons: reasons.filter(x => x !== r) })}>×</button>
             </span>
           ))}
@@ -580,7 +580,7 @@ function HandoffCard({ store, sub }) {
           {reasons.map(r => (
             <span key={r} className="chip bg-surface text-muted flex items-center gap-1">
               {r}
-              <button className="text-red-400 hover:text-red-600" title="Retirer ce motif"
+              <button className="text-red-400 hover:text-red-600" title="Retirer ce motif" aria-label="Retirer ce motif"
                 onClick={() => store.setEcosystem({ handoffReasons: reasons.filter(x => x !== r) })}>×</button>
             </span>
           ))}
@@ -676,8 +676,8 @@ function CadenceCard({ store, sub }) {
             <span className="text-[11px] text-muted">
               {c.steps.length} touche{c.steps.length > 1 ? 's' : ''} · sur {Math.max(...c.steps.map(s => Number(s.offset) || 0), 0)} jours
             </span>
-            <button className="btn-ghost !p-1" title="Modifier" onClick={() => setEditing(JSON.parse(JSON.stringify(c)))}><Pencil size={13} /></button>
-            <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" onClick={() => setConfirmDel(c)}><Trash2 size={13} /></button>
+            <button className="btn-ghost !p-1" title="Modifier" aria-label="Modifier" onClick={() => setEditing(JSON.parse(JSON.stringify(c)))}><Pencil size={13} /></button>
+            <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" aria-label="Supprimer" onClick={() => setConfirmDel(c)}><Trash2 size={13} /></button>
           </div>
         ))}
       </div>
@@ -703,7 +703,7 @@ function CadenceCard({ store, sub }) {
                   <input className="input !py-1 text-xs" placeholder="Consigne (facultatif)" value={s.note}
                     onChange={e => setStep(i, 'note', e.target.value)} />
                 </div>
-                <button className="btn-ghost !p-1 !text-red-500 mt-4" title="Retirer cette touche"
+                <button className="btn-ghost !p-1 !text-red-500 mt-4" title="Retirer cette touche" aria-label="Retirer cette touche"
                   disabled={editing.steps.length <= 1}
                   onClick={() => setEditing(c => ({ ...c, steps: c.steps.filter((_, j) => j !== i) }))}><Trash2 size={13} /></button>
               </div>

@@ -56,7 +56,7 @@ function RolesPanel({ envId, store, onClose }) {
                 title={current.builtin ? 'Un rôle intégré ne se renomme pas' : ''} />
               <div className="flex gap-1.5">
                 {ROLE_COLORS.filter(c => c.id).map(c => (
-                  <button key={c.id} title={c.label}
+                  <button key={c.id} title={c.label} aria-label={c.label}
                     className={`w-5 h-5 rounded-full ${c.dot} ${current.color === c.id ? 'ring-2 ring-offset-1 ring-brand' : ''}`}
                     onClick={() => patch(current.id, { color: c.id })} />
                 ))}

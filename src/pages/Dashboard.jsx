@@ -142,7 +142,7 @@ function RdvChart({ title, rdvs, dateKey, onDetails, pastOnly }) {
       <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
         <div>
           <h3 className="font-bold">{title}</h3>
-          <button className="text-3xl font-extrabold text-brand hover:underline" title="Voir le détail" onClick={() => onDetails(list, `${title} — détail`)}>{total}</button>
+          <button className="text-3xl font-extrabold text-brand hover:underline" title="Voir le détail" aria-label="Voir le détail" onClick={() => onDetails(list, `${title} — détail`)}>{total}</button>
         </div>
         <TimelinePicker value={tl} onChange={setTl} custom={custom} onCustomChange={setCustom} />
       </div>
@@ -191,7 +191,11 @@ function perfScore(rdvs, dateKey, mode, custom) {
 function RdvDetailTable({ list }) {
   if (!list.length) return <Empty text="Aucun rendez-vous sur cette période." />
   return (
-    <table className="w-full text-sm">
+    // ⚠️ Six colonnes : sans ce conteneur, c'est la PAGE ENTIÈRE qui défilait
+    // latéralement sur téléphone, et le reste du tableau de bord partait avec elle.
+    // Un tableau large doit déborder dans sa propre boîte, jamais dans la page.
+    <div className="overflow-x-auto">
+    <table className="w-full text-sm min-w-[640px]">
       <thead><tr className="text-left text-xs text-muted uppercase">
         <th className="py-1.5">Entreprise</th><th>Phase</th><th>Opportunité</th><th>Date RDV</th><th>Prise de RDV</th><th>Provenance</th>
       </tr></thead>
@@ -205,6 +209,7 @@ function RdvDetailTable({ list }) {
         ))}
       </tbody>
     </table>
+    </div>
   )
 }
 
@@ -623,13 +628,13 @@ export default function Dashboard() {
             <div key={w.id} className={`relative ${sizeClass(w.id)} ${!w.visible ? 'opacity-40' : ''}`}>
               {editMode && (
                 <div className="absolute -top-2 right-2 z-20 flex gap-1 card !rounded-lg px-1.5 py-1 shadow">
-                  <button title="Monter" className="p-1 hover:bg-surface rounded" onClick={() => move(i, -1)}>↑</button>
-                  <button title="Descendre" className="p-1 hover:bg-surface rounded" onClick={() => move(i, 1)}>↓</button>
-                  <button title="Taille" className="p-1 hover:bg-surface rounded text-xs font-bold"
+                  <button title="Monter" aria-label="Monter" className="p-1 hover:bg-surface rounded" onClick={() => move(i, -1)}>↑</button>
+                  <button title="Descendre" aria-label="Descendre" className="p-1 hover:bg-surface rounded" onClick={() => move(i, 1)}>↓</button>
+                  <button title="Taille" aria-label="Taille" className="p-1 hover:bg-surface rounded text-xs font-bold"
                     onClick={() => setWidgets(widgets.map(x => x.id === w.id ? { ...x, size: x.size === 'lg' ? 'md' : 'lg' } : x))}>
                     {w.size === 'lg' ? '½' : '1'}
                   </button>
-                  <button title={w.visible ? 'Masquer' : 'Afficher'} className="p-1 hover:bg-surface rounded"
+                  <button title={w.visible ? 'Masquer' : 'Afficher'} aria-label={w.visible ? 'Masquer' : 'Afficher'} className="p-1 hover:bg-surface rounded"
                     onClick={() => setWidgets(widgets.map(x => x.id === w.id ? { ...x, visible: !x.visible } : x))}>
                     {w.visible ? <EyeOff size={13} /> : <Eye size={13} />}
                   </button>

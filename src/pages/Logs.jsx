@@ -82,7 +82,10 @@ export default function Logs() {
         {(fType || fStart || fEnd || q) && <button className="text-brand underline" onClick={() => { setFType(''); setFStart(''); setFEnd(''); setQ('') }}>Réinitialiser</button>}
       </div>
 
-      {filtered.length === 0 ? <Empty text="Aucune action enregistrée sur ces critères." /> : (
+      {filtered.length === 0 ? (
+        <Empty text="Aucune action enregistrée sur ces critères."
+          hint="Le journal ne garde que ce qui s'est passé : élargissez la plage de dates ou retirez un filtre." />
+      ) : (
         <div className="card divide-y divide-line">
           {filtered.slice(0, 200).map(l => (
             <div key={l.id} className="flex items-center gap-3 px-4 py-2 text-sm">

@@ -24,7 +24,7 @@ function RoleMenu({ store, role }) {
   const key = role.roleKey || role.name
   return (
     <div className="relative">
-      <button type="button" className="btn-ghost !p-1" title="Gérer ce rôle" onClick={() => setOpen(o => !o)}>
+      <button type="button" className="btn-ghost !p-1" title="Gérer ce rôle" aria-label="Gérer ce rôle" onClick={() => setOpen(o => !o)}>
         <MoreHorizontal size={13} />
       </button>
       {open && (
@@ -35,7 +35,7 @@ function RoleMenu({ store, role }) {
               <p className="text-[10px] uppercase tracking-wide text-muted mb-1.5">Couleur</p>
               <div className="flex flex-wrap gap-1.5">
                 {ROLE_COLORS.map(c => (
-                  <button key={c.id || 'none'} type="button" title={c.label}
+                  <button key={c.id || 'none'} type="button" title={c.label} aria-label={c.label}
                     className={`w-5 h-5 rounded-full ${c.dot} ${(role.color || '') === c.id ? 'ring-2 ring-offset-1 ring-brand' : ''}`}
                     onClick={() => { store.setRoleColor(key, c.id); setOpen(false) }} />
                 ))}
@@ -91,7 +91,7 @@ function RoleHead({ role, store, memberCount, canManage, perms }) {
           <span className={`chip ${tintOfRole(role)} !text-[11px] font-bold gap-1 ${role.suspended ? 'line-through opacity-70' : ''}`}>
             {isFounder && <Crown size={11} />}{role.name}
             {!role.builtin && canManage && (
-              <button className="ml-0.5 opacity-70 hover:opacity-100" title="Renommer" onClick={() => setEditing(true)}><Pencil size={10} /></button>
+              <button className="ml-0.5 opacity-70 hover:opacity-100" title="Renommer" aria-label="Renommer" onClick={() => setEditing(true)}><Pencil size={10} /></button>
             )}
           </span>
         )}

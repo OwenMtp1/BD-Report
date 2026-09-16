@@ -79,7 +79,7 @@ export function ChipEditor({ label, values, onChange }) {
         {values.map(v => (
           <span key={v} className="chip bg-surface text-muted flex items-center gap-1">
             {v}
-            <button className="text-red-400 hover:text-red-600" title="Retirer" onClick={() => onChange(values.filter(x => x !== v))}>×</button>
+            <button className="text-red-400 hover:text-red-600" title="Retirer" aria-label="Retirer" onClick={() => onChange(values.filter(x => x !== v))}>×</button>
           </span>
         ))}
         {values.length === 0 && <span className="text-[11px] text-muted italic">Aucune valeur : le champ ne sera pas proposé.</span>}
@@ -440,17 +440,17 @@ export default function Projects({ embedded, onOpenWorkshop }) {
                           composer et livrer sont deux moments du même travail. Absente si le
                           droit `env.build` manque — fusionner deux écrans ne donne aucun droit. */}
                       {p.envId && onOpenWorkshop && (
-                        <button className="p-1.5 rounded-lg hover:bg-surface" title="Ouvrir dans l'atelier"
+                        <button className="p-1.5 rounded-lg hover:bg-surface" title="Ouvrir dans l'atelier" aria-label="Ouvrir dans l'atelier"
                           onClick={() => onOpenWorkshop(p.envId)}><Hammer size={14} /></button>
                       )}
-                      {p.envId && <button className="p-1.5 rounded-lg hover:bg-surface" title="Organigramme du projet" onClick={() => setOrgFor(p)}><Network size={14} /></button>}
+                      {p.envId && <button className="p-1.5 rounded-lg hover:bg-surface" title="Organigramme du projet" aria-label="Organigramme du projet" onClick={() => setOrgFor(p)}><Network size={14} /></button>}
                       {/* Modifier n'est proposé qu'à qui en a le droit : un bouton inerte ne
                           fait qu'expliquer trop tard. */}
                       {store.canEditProject(p) && (
                         <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setForm({ mode: 'edit', data: structuredClone(p) })}><Pencil size={14} /></button>
                       )}
                       {store.canEditProject(p) && (
-                        <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer le projet et son environnement"
+                        <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer le projet et son environnement" aria-label="Supprimer le projet et son environnement"
                           onClick={() => setConfirmDel({ projectId: p.id })}><Trash2 size={14} /></button>
                       )}
                     </div>

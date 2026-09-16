@@ -127,8 +127,8 @@ function Territories({ store, members }) {
             <span className="text-[11px] text-muted">
               {(t.companies || []).length} compte(s) · {(t.sectors || []).length} secteur(s)
             </span>
-            <button className="btn-ghost !p-1" title="Modifier" onClick={() => setEditing(JSON.parse(JSON.stringify(t)))}>✎</button>
-            <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" onClick={() => setConfirmDel(t)}>✕</button>
+            <button className="btn-ghost !p-1" title="Modifier" aria-label="Modifier" onClick={() => setEditing(JSON.parse(JSON.stringify(t)))}>✎</button>
+            <button className="btn-ghost !p-1 !text-red-500" title="Supprimer" aria-label="Supprimer" onClick={() => setConfirmDel(t)}>✕</button>
           </div>
         ))}
       </div>

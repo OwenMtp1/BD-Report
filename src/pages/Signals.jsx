@@ -246,7 +246,7 @@ export default function Signals() {
         <div className="card p-3 space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold">Dernier balayage</span>
-            <button className="btn-ghost !p-1 ml-auto" title="Fermer le compte rendu" onClick={() => setReport(null)}><X size={13} /></button>
+            <button className="btn-ghost !p-1 ml-auto" title="Fermer le compte rendu" aria-label="Fermer le compte rendu" onClick={() => setReport(null)}><X size={13} /></button>
           </div>
           {report.note && <p className="text-xs text-amber-700 dark:text-amber-300">{report.note}</p>}
           {report.lines.map((l, i) => (
@@ -259,11 +259,15 @@ export default function Signals() {
         </div>
       )}
 
-      {list.length === 0 ? (
-        <Empty text={rows.length
-          ? 'Aucun signal ne correspond à ces filtres.'
-          : "Aucun signal pour l'instant. Lancez un balayage de vos comptes."} />
+      {list.length === 0 ? (rows.length ? (
+        <Empty icon={Radar} text="Aucun signal ne correspond à ces filtres."
+          hint="Des signaux existent, mais ils sont exclus par l'état, le type, le score ou les comptes retenus."
+          action="Tout afficher" onAction={() => { setStatus(''); setType(''); setMinScore(0); setAccounts([]); setQ('') }} />
       ) : (
+        <Empty icon={Radar} text="Aucun signal pour l'instant."
+          hint="Le balayage interroge des sources publiques sur vos comptes, puis n'en retient que les faits qui donnent une raison d'appeler."
+          action="Balayer mes comptes" onAction={() => scan(20)} />
+      )) : (
         <div className="space-y-2">
           {list.map(s => {
             const t = signalType(s.type)
@@ -280,8 +284,8 @@ export default function Signals() {
                     <div className="text-xs text-muted">{t.emoji} {t.label}{s.date ? ` · ${fmtDate(String(s.date).slice(0, 10))}` : ''}</div>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    <button className="btn-ghost !p-1.5" title="Marquer traité" onClick={() => { store.setSignalStatus(s.id, 'done'); toast('Signal traité') }}><Check size={13} /></button>
-                    <button className="btn-ghost !p-1.5" title="Ignorer" onClick={() => { store.setSignalStatus(s.id, 'ignored'); toast('Signal ignoré') }}><EyeOff size={13} /></button>
+                    <button className="btn-ghost !p-1.5" title="Marquer traité" aria-label="Marquer traité" onClick={() => { store.setSignalStatus(s.id, 'done'); toast('Signal traité') }}><Check size={13} /></button>
+                    <button className="btn-ghost !p-1.5" title="Ignorer" aria-label="Ignorer" onClick={() => { store.setSignalStatus(s.id, 'ignored'); toast('Signal ignoré') }}><EyeOff size={13} /></button>
                   </div>
                 </div>
                 <div className="font-semibold text-sm">{s.title}</div>

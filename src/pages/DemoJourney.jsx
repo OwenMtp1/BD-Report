@@ -173,7 +173,7 @@ export default function DemoJourney({ onClose }) {
               : <button onClick={startTour} className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5" style={{ background: 'linear-gradient(135deg,#5EDCFF,#3b82f6)' }}><MousePointerClick size={13} /> Visite guidée</button>
           )}
           {phase === 'app' && (
-            <button onClick={restart} title="Repartir du formulaire pour un autre prospect" className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 flex items-center gap-1.5"><RotateCcw size={13} /> Nouveau prospect</button>
+            <button onClick={restart} title="Repartir du formulaire pour un autre prospect" aria-label="Repartir du formulaire pour un autre prospect" className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 flex items-center gap-1.5"><RotateCcw size={13} /> Nouveau prospect</button>
           )}
           <button onClick={close} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 flex items-center gap-1.5"><X size={14} /> Quitter</button>
         </div>
@@ -203,7 +203,7 @@ export default function DemoJourney({ onClose }) {
                   {step.role === 'manager' ? <><UserCog size={12} /> Manager</> : <><User size={12} /> Employé</>}
                 </span>
                 <span className="text-white/50 text-xs">Étape {tourIdx + 1} / {TOUR.length}</span>
-                <button onClick={() => setAutoplay(a => !a)} className="ml-auto p-1.5 rounded-lg bg-white/10 hover:bg-white/20" title={autoplay ? 'Pause' : 'Lecture auto'}>
+                <button onClick={() => setAutoplay(a => !a)} className="ml-auto p-1.5 rounded-lg bg-white/10 hover:bg-white/20" title={autoplay ? 'Pause' : 'Lecture auto'} aria-label={autoplay ? 'Pause' : 'Lecture auto'}>
                   {autoplay ? <Pause size={14} /> : <Play size={14} />}
                 </button>
               </div>

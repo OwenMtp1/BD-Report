@@ -426,6 +426,21 @@ async function main() {
     if (!text().includes(label)) throw new Error(`Page ${label} did not render`)
   }
 
+  /** Ouvre le menu du compte et clique une de ses entrées (Paramètres, Organigramme…). */
+  const accountMenu = async (label) => {
+    const avatar = container.querySelector('button[aria-label="Mon compte"]')
+    if (!avatar) throw new Error("Le menu du compte est introuvable dans l'en-tête")
+    await click(avatar)
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    const menu = container.querySelector('[role="menu"]')
+    if (!menu) throw new Error("Le menu du compte ne s'ouvre pas")
+    const entry = [...menu.querySelectorAll('button')].find(b => b.textContent.trim() === label)
+    if (!entry) throw new Error(`« ${label} » absent du menu du compte : ` + [...menu.querySelectorAll('button')].map(b => b.textContent.trim()).join(' | '))
+    await click(entry)
+    await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+  }
+
+
   // Journal d'audit : recherche plein texte + export. C'est ce qu'on demande en revue
   // de conformité — « qui a touché à quoi, entre telle et telle date ».
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Logs'))
@@ -1149,10 +1164,38 @@ async function main() {
       : { ok: true, status: 200, json: async () => ({ ok: true, gemini: true }) })
     try {
       await act(async () => { win.__bdrStore.setNewsRelay('https://relais.test') })
-      // ⚠️ Les Paramètres s'ouvrent par l'icône du header, pas par la barre latérale.
-      const gear = [...container.querySelectorAll('button[title="Paramètres"]')][0]
-      if (!gear) throw new Error("L'accès aux Paramètres est introuvable dans l'en-tête")
-      await click(gear)
+      // ⚠️ Les Paramètres vivent dans le MENU DU COMPTE (sous l'avatar), plus dans la
+      // barre d'icônes : « Déconnexion » y était collée à « Paramètres », sans
+      // confirmation — un pouce qui glisse sur téléphone et la session sautait.
+      const avatar = container.querySelector('button[aria-label="Mon compte"]')
+      if (!avatar) throw new Error("Le menu du compte est introuvable dans l'en-tête")
+      await click(avatar)
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const menu = container.querySelector('[role="menu"]')
+      if (!menu) throw new Error("Le menu du compte ne s'ouvre pas")
+      const gear = [...menu.querySelectorAll('button')].find(b => b.textContent.trim() === 'Paramètres')
+      if (!gear) throw new Error("L'accès aux Paramètres est introuvable dans le menu du compte")
+      // ⚠️ La déconnexion doit demander confirmation : s'être trompé de bouton coûte une
+      // reconnexion complète, code PIN compris.
+      const out = [...menu.querySelectorAll('button')].find(b => /connexion|connecter/i.test(b.textContent))
+      if (!out) throw new Error('La déconnexion a disparu du menu du compte : ' + [...menu.querySelectorAll('button')].map(b => b.textContent.trim()).join(' | '))
+      await click(out)
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      if (!text().includes('Se déconnecter de BD Report ?')) throw new Error('La déconnexion ne demande aucune confirmation')
+      const annuler = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Annuler')
+      if (!annuler) throw new Error('Pas de bouton Annuler dans la confirmation de déconnexion')
+      await click(annuler)
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      if (!container.querySelector('nav')) throw new Error('Annuler la déconnexion a tout de même fermé la session')
+      const avatar2 = container.querySelector('button[aria-label="Mon compte"]')
+      if (!avatar2) throw new Error("L'avatar a disparu après l'annulation de la déconnexion")
+      await click(avatar2)
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const menu2 = container.querySelector('[role="menu"]')
+      if (!menu2) throw new Error('Le menu du compte ne se rouvre pas')
+      const gear2 = [...menu2.querySelectorAll('button')].find(b => b.textContent.trim() === 'Paramètres')
+      if (!gear2) throw new Error('Menu rouvert, entrées : ' + [...menu2.querySelectorAll('button')].map(b => JSON.stringify(b.textContent.trim())).join(' | '))
+      await click(gear2)
       await act(async () => { await new Promise(r => setTimeout(r, 60)) })
       const integ = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Intégrations')
       if (integ) { await click(integ); await act(async () => { await new Promise(r => setTimeout(r, 50)) }) }
@@ -2051,12 +2094,35 @@ async function main() {
   }
 
   // 9. Organigramme + paramètres
-  await click(container.querySelector('button[title="Organigramme"]'))
+  // ---- UN ÉTAT VIDE DOIT AGIR, pas seulement constater.
+  // ⚠️ Il ne portait qu'une phrase dans 50 écrans, et quatre d'entre eux DÉCRIVAIENT le
+  // bouton (« Cliquez sur "Créer un RDV" ») au lieu de le donner. On vérifie ici sur
+  // « Mes tâches », qui est vide au départ : le bouton est là, et il ouvre le formulaire.
+  {
+    // On vide la liste pour éprouver l'état vide à coup sûr : à ce stade du parcours,
+    // des tâches ont pu être créées, et un test qui ne s'exécute qu'« au début » ne
+    // protège de rien.
+    await act(async () => { win.__bdrStore.setSub(d => ({ ...d, tasks: [] })) })
+    await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes tâches'))
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    if (!text().includes('Aucune tâche.')) throw new Error("L'état vide de Mes tâches ne s'affiche pas")
+    if (/Créez-en une avec/.test(text())) throw new Error("L'état vide DÉCRIT encore le bouton au lieu de le donner")
+    const zone = [...container.querySelectorAll('div')].find(d => d.textContent.trim().startsWith('Aucune tâche.'))
+    const cta = zone && [...zone.querySelectorAll('button')].find(b => b.textContent.trim() === 'Nouvelle tâche')
+    if (!cta) throw new Error("L'état vide de Mes tâches ne propose aucune action")
+    await click(cta)
+    await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+    if (!text().includes('Nouvelle tâche')) throw new Error("Le bouton de l'état vide n'ouvre pas le formulaire")
+    const annuler = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Annuler')
+    if (annuler) { await click(annuler); await act(async () => { await new Promise(r => setTimeout(r, 40)) }) }
+  }
+
+  await accountMenu('Organigramme')
   if (!text().includes('Organigramme')) throw new Error('OrgChart did not render')
   await click(find('button', "Modifier l'organigramme"))
   if (!text().includes('Réorganisation libre')) throw new Error('OrgChart edit mode did not open')
   await click(find('button', 'Terminer'))
-  await click(container.querySelector('button[title="Paramètres"]'))
+  await accountMenu('Paramètres')
   if (!text().includes('Thèmes de design')) throw new Error('Settings did not render')
   // Catalogue réduit à quatre thèmes, dont le nouveau design « Studio ».
   for (const th of ['BD Report', 'Sombre', 'Nuit profonde', 'BD Report Studio']) {
@@ -2070,7 +2136,7 @@ async function main() {
   if (!win.document.documentElement.classList.contains('skin-studio')) throw new Error('Studio skin class not applied')
 
   // 9a. Profil + statut de présence : la fiche récap s'ouvre et le statut est modifiable.
-  await click(container.querySelector('button[title="Mon profil et statut"]'))
+  await accountMenu('Mon profil et statut')
   if (!text().includes('Mon statut') || !text().includes('Manager direct')) throw new Error('Profile modal missing')
   await click(find('button', 'Hors ligne'))
   if (dbNow().accounts.find(a => a.id === '01').presence !== 'offline') throw new Error('Presence not updated')

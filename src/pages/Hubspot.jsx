@@ -197,7 +197,7 @@ function AdvancedConnection({ store, cfg, staff }) {
             <div className="flex items-center gap-1.5">
               <input className="input font-mono text-xs" type={shown ? 'text' : 'password'} placeholder="pat-eu1-…"
                 value={token} onChange={e => setToken(e.target.value)} onBlur={() => store.setHubspotToken(token.trim())} />
-              <button type="button" className="btn-ghost !p-2" title={shown ? 'Masquer' : 'Afficher'} onClick={() => setShown(s => !s)}>
+              <button type="button" className="btn-ghost !p-2" title={shown ? 'Masquer' : 'Afficher'} aria-label={shown ? 'Masquer' : 'Afficher'} onClick={() => setShown(s => !s)}>
                 {shown ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
@@ -534,7 +534,7 @@ export function HubspotPushButton({ entity, type = 'rdv', className = '' }) {
     setBusy(false)
   }
   return (
-    <button type="button" className={`btn-ghost !py-1 text-xs ${className}`} disabled={busy} onClick={send} title="Envoyer vers HubSpot">
+    <button type="button" className={`btn-ghost !py-1 text-xs ${className}`} disabled={busy} onClick={send} title="Envoyer vers HubSpot" aria-label="Envoyer vers HubSpot">
       {busy ? <RefreshCw size={13} className="animate-spin" /> : <Upload size={13} />} HubSpot
     </button>
   )

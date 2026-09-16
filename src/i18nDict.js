@@ -2012,4 +2012,30 @@ export const UI_DICT = [
   ['comptes choisis', 'accounts selected', 'cuentas seleccionadas'],
   ['Rechercher un compte', 'Search for an account', 'Buscar una cuenta'],
   ['Rechercher', 'Search', 'Buscar'],
+
+  // ---- Ergonomie : états vides qui agissent, menu du compte, confirmations ----
+  // ⚠️ Les libellés passés en props à <Empty> (`hint`, `action`) suivent la même règle
+  // que ceux de MultiSelect : l'extracteur ne visite pas ces props, seul le balayage
+  // anglais du smoke les voit manquer à l'exécution.
+  ['Aucun rendez-vous pour l\'instant.', 'No meetings yet.', 'Aún no hay citas.'],
+  ['Tout part d\'ici : un RDV crée l\'entreprise, le contact et l\'affaire qui vont avec.', 'Everything starts here: a meeting creates the company, the contact and the deal that go with it.', 'Todo empieza aquí: una cita crea la empresa, el contacto y la oportunidad correspondientes.'],
+  ['Aucune tâche.', 'No tasks.', 'Ninguna tarea.'],
+  ['Aucune note.', 'No notes.', 'Ninguna nota.'],
+  ['Aucun contact.', 'No contacts.', 'Ningún contacto.'],
+  ['Ils s\'ajoutent tout seuls à chaque rendez-vous — inutile de les saisir d\'avance. Vous pouvez aussi importer un CSV.', 'They are added automatically with every meeting — no need to enter them in advance. You can also import a CSV.', 'Se añaden solos con cada cita: no hace falta introducirlos por adelantado. También puedes importar un CSV.'],
+  ['Aucun signal pour l\'instant.', 'No signals yet.', 'Aún no hay señales.'],
+  ['Le balayage interroge des sources publiques sur vos comptes, puis n\'en retient que les faits qui donnent une raison d\'appeler.', 'The sweep queries public sources about your accounts, then keeps only the facts that give you a reason to call.', 'El barrido consulta fuentes públicas sobre tus cuentas y solo conserva los hechos que dan una razón para llamar.'],
+  ['Aucun signal ne correspond à ces filtres.', 'No signal matches these filters.', 'Ninguna señal coincide con estos filtros.'],
+  ['Des signaux existent, mais ils sont exclus par l\'état, le type, le score ou les comptes retenus.', 'Signals do exist, but the status, type, score or selected accounts exclude them all.', 'Existen señales, pero el estado, el tipo, la puntuación o las cuentas seleccionadas las excluyen todas.'],
+  ['Tout afficher', 'Show everything', 'Mostrar todo'],
+  ['Aucune entreprise pour l\'instant.', 'No companies yet.', 'Aún no hay empresas.'],
+  ['Des entreprises existent, mais les filtres en cours les excluent toutes.', 'Companies do exist, but the current filters exclude them all.', 'Existen empresas, pero los filtros actuales las excluyen todas.'],
+  ['Elles apparaissent toutes seules dès le premier rendez-vous — rien à saisir ici.', 'They appear on their own from the first meeting — nothing to enter here.', 'Aparecen solas desde la primera cita: no hay nada que introducir aquí.'],
+  ['Le journal ne garde que ce qui s\'est passé : élargissez la plage de dates ou retirez un filtre.', 'The journal only holds what actually happened: widen the date range or remove a filter.', 'El registro solo guarda lo que ha ocurrido: amplía el intervalo de fechas o quita un filtro.'],
+  ['Mon compte', 'My account', 'Mi cuenta'],
+  ['Mon profil et statut', 'My profile and status', 'Mi perfil y estado'],
+  ['Se déconnecter de BD Report ?', 'Sign out of BD Report?', '¿Cerrar sesión en BD Report?'],
+  ['Vider cet espace', 'Clear this space', 'Vaciar este espacio'],
+  ['Supprimer définitivement', 'Delete permanently', 'Eliminar definitivamente'],
+  ['Vider cet espace ? Tous les RDV, contacts et notes de CET espace seront supprimés (barème et objectifs conservés). Vos autres espaces ne sont pas touchés.', 'Clear this space? Every meeting, contact and note in THIS space will be deleted (rates and targets are kept). Your other spaces are untouched.', '¿Vaciar este espacio? Se eliminarán todas las citas, contactos y notas de ESTE espacio (se conservan el baremo y los objetivos). Tus demás espacios no se ven afectados.'],
 ]

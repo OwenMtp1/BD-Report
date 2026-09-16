@@ -158,7 +158,7 @@ export function StatementsManager() {
                   <button className="btn-ghost !py-1 text-xs" onClick={() => downloadStatement({ ...st, monthLabel: label }, `${s.prenom} ${s.nom}`, env?.name)}>
                     <Download size={13} /> Télécharger
                   </button>
-                  <button className="btn-ghost !py-1 text-xs !text-red-600" title="Le document figé est effacé et le relevé redevient un brouillon"
+                  <button className="btn-ghost !py-1 text-xs !text-red-600" title="Le document figé est effacé et le relevé redevient un brouillon" aria-label="Le document figé est effacé et le relevé redevient un brouillon"
                     onClick={() => { store.unsignStatement(s.id, mKey); toast('Signature retirée — le relevé redevient un brouillon') }}>
                     <RotateCcw size={13} /> Retirer la signature
                   </button>

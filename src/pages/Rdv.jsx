@@ -321,7 +321,7 @@ const dayISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 
 function RdvPill({ r, onOpen, full }) {
   return (
-    <button onClick={() => onOpen(r)} title={`${r.entreprise} — ${r.phase}`}
+    <button onClick={() => onOpen(r)} title={`${r.entreprise} — ${r.phase}`} aria-label={`${r.entreprise} — ${r.phase}`}
       className={`block w-full truncate text-left font-semibold rounded px-1.5 py-0.5 mt-0.5 ${full ? 'text-xs' : 'text-[10px]'} ${phaseColor(r.phase)}`}>
       {r.entreprise}{full ? ` · ${r.phase}` : ''}
     </button>
@@ -657,7 +657,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           {sub.opportunites.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </td>}
-      <td><button className="font-semibold hover:text-brand hover:underline text-left" title="Ouvrir la fiche entreprise" onClick={() => openCompany(r.entreprise)}>{r.entreprise}</button></td>
+      <td><button className="font-semibold hover:text-brand hover:underline text-left" title="Ouvrir la fiche entreprise" aria-label="Ouvrir la fiche entreprise" onClick={() => openCompany(r.entreprise)}>{r.entreprise}</button></td>
       {visible('effectif') && <td className="text-center">{r.effectif || '—'}</td>}
       {visible('contact') && <td>{(r.contacts || []).map(c => c.nom).filter(Boolean).join(', ') || '—'}</td>}
       {visible('poste') && <td className="text-muted">{(r.contacts || []).map(c => c.poste).filter(Boolean).join(', ') || '—'}</td>}
@@ -694,7 +694,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <button className="font-bold text-[15px] hover:text-brand hover:underline text-left flex items-center gap-1.5 max-w-full"
-            title="Ouvrir la fiche entreprise" onClick={() => openCompany(r.entreprise)}>
+            title="Ouvrir la fiche entreprise" aria-label="Ouvrir la fiche entreprise" onClick={() => openCompany(r.entreprise)}>
             {isChild && <CornerDownRight size={14} className="text-muted shrink-0" />}
             <span className="truncate">{r.entreprise || '— sans entreprise —'}</span>
           </button>
@@ -792,13 +792,13 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-line overflow-hidden">
             <button className={`px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 ${view === 'cards' ? 'bg-brand text-white' : 'bg-card text-muted'}`}
-              onClick={() => setView('cards')} title="Vue cartes"><LayoutList size={13} /> Cartes</button>
+              onClick={() => setView('cards')} title="Vue cartes" aria-label="Vue cartes"><LayoutList size={13} /> Cartes</button>
             <button className={`px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 ${view === 'table' ? 'bg-brand text-white' : 'bg-card text-muted'}`}
-              onClick={() => setView('table')} title="Vue tableau"><TableIcon size={13} /> Tableau</button>
+              onClick={() => setView('table')} title="Vue tableau" aria-label="Vue tableau"><TableIcon size={13} /> Tableau</button>
             <button className={`px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 ${view === 'calendar' ? 'bg-brand text-white' : 'bg-card text-muted'}`}
-              onClick={() => setView('calendar')} title="Vue calendrier"><CalendarDays size={13} /> Calendrier</button>
+              onClick={() => setView('calendar')} title="Vue calendrier" aria-label="Vue calendrier"><CalendarDays size={13} /> Calendrier</button>
           </div>
-          {view === 'table' && <button className="btn-ghost text-xs" title="Modifier les champs" onClick={() => setFieldsModal(true)}><Settings2 size={15} /> Modifier les champs</button>}
+          {view === 'table' && <button className="btn-ghost text-xs" title="Modifier les champs" aria-label="Modifier les champs" onClick={() => setFieldsModal(true)}><Settings2 size={15} /> Modifier les champs</button>}
           <button className="btn-primary" onClick={() => setForm({ mode: 'create', data: emptyForm() })}><Plus size={16} /> Créer un RDV</button>
         </div>
       </div>
@@ -834,7 +834,11 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
 
       {view === 'cards' && (
         <div className="space-y-2.5">
-          {roots.length === 0 && <Empty text="Aucun rendez-vous. Cliquez sur « Créer un RDV »." />}
+          {roots.length === 0 && (
+            <Empty text="Aucun rendez-vous pour l'instant."
+              hint="Tout part d'ici : un RDV crée l'entreprise, le contact et l'affaire qui vont avec."
+              action="Créer un RDV" onAction={() => setForm({ mode: 'create', data: emptyForm() })} />
+          )}
           {roots.map(r => {
             const children = childrenOf(r)
             return (
@@ -871,7 +875,11 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
             </tr>
           </thead>
           <tbody>
-            {roots.length === 0 && <tr><td colSpan={colCount}><Empty text="Aucun rendez-vous. Cliquez sur « Créer un RDV »." /></td></tr>}
+            {roots.length === 0 && <tr><td colSpan={colCount}>
+              <Empty text="Aucun rendez-vous pour l'instant."
+                hint="Tout part d'ici : un RDV crée l'entreprise, le contact et l'affaire qui vont avec."
+                action="Créer un RDV" onAction={() => setForm({ mode: 'create', data: emptyForm() })} />
+            </td></tr>}
             {roots.map(r => {
               const children = childrenOf(r)
               return (

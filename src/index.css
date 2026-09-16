@@ -44,6 +44,27 @@ body.animated-bg { animation: bgshift 18s ease infinite; }
 .label { @apply block text-xs font-semibold text-muted uppercase tracking-wide mb-1; }
 .chip { @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold; }
 
+/* ⚠️ ANNEAU DE FOCUS — il n'existait QUE sur `.input`. Au clavier, on ne voyait donc
+   jamais où l'on se trouvait dans l'application : ni sur un bouton, ni sur un onglet,
+   ni sur un lien. C'est le point le plus bloquant pour qui n'utilise pas la souris, et
+   une seule règle le corrige sur les 54 écrans d'un coup.
+   `:focus-visible` et non `:focus` : le navigateur ne le pose qu'à la navigation
+   clavier, donc un clic à la souris n'entoure pas le bouton de bleu.
+   `outline` et non `ring` : aucun décalage de mise en page, et la marque reste visible
+   par-dessus n'importe quel fond, thème sombre compris. */
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid rgb(var(--brand));
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+/* Le vert de Studio se voit mieux que le bleu de marque sur son fond quasi-noir. */
+.skin-studio button:focus-visible,
+.skin-studio a:focus-visible,
+.skin-studio [tabindex]:not([tabindex="-1"]):focus-visible { outline-color: rgb(52, 211, 153); }
+
 .fade-in { animation: fadein .4s ease both; }
 @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 

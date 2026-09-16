@@ -212,7 +212,7 @@ export default function TrainingJourney({ onClose }) {
                   <GraduationCap size={12} /> {chosen?.name || roleKey}
                 </span>
                 <span className="text-white/50 text-xs">Étape {tourIdx + 1} / {tour.length}</span>
-                <button onClick={() => setAutoplay(a => !a)} className="ml-auto p-1.5 rounded-lg bg-white/10 hover:bg-white/20" title={autoplay ? 'Pause' : 'Lecture auto'}>
+                <button onClick={() => setAutoplay(a => !a)} className="ml-auto p-1.5 rounded-lg bg-white/10 hover:bg-white/20" title={autoplay ? 'Pause' : 'Lecture auto'} aria-label={autoplay ? 'Pause' : 'Lecture auto'}>
                   {autoplay ? <Pause size={14} /> : <Play size={14} />}
                 </button>
               </div>

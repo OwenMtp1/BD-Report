@@ -108,12 +108,15 @@ export default function MyTasks() {
         </label>
       </div>
 
-      {list.length === 0 ? <Empty text="Aucune tâche. Créez-en une avec « Nouvelle tâche »." /> : (
+      {list.length === 0 ? (
+        <Empty text="Aucune tâche."
+          action="Nouvelle tâche" onAction={() => setForm({ mode: 'create', data: emptyTask() })} />
+      ) : (
         <div className="space-y-2">
           {list.map(t => (
             <div key={t.id} className="card p-3 fade-in">
               <div className="flex items-center gap-3">
-                <button onClick={() => toggleDone(t.id)} title={t.done ? 'Marquer à faire' : 'Marquer fait'}>
+                <button onClick={() => toggleDone(t.id)} title={t.done ? 'Marquer à faire' : 'Marquer fait'} aria-label={t.done ? 'Marquer à faire' : 'Marquer fait'}>
                   {t.done ? <CheckCircle2 size={18} className="text-emerald-500" /> : <Circle size={18} className="text-muted" />}
                 </button>
                 <button className="flex-1 min-w-0 text-left" onClick={() => setOpenId(openId === t.id ? '' : t.id)}>
@@ -130,14 +133,14 @@ export default function MyTasks() {
                   </div>
                 </button>
                 <div className="flex gap-1 shrink-0">
-                  <button className="p-1.5 rounded-lg hover:bg-surface" title="Épingler" onClick={() => togglePin(t.id)}>
+                  <button className="p-1.5 rounded-lg hover:bg-surface" title="Épingler" aria-label="Épingler" onClick={() => togglePin(t.id)}>
                     {t.pinned ? <Pin size={15} className="text-amber-500" /> : <PinOff size={15} className="text-muted" />}
                   </button>
-                  <button className="p-1.5 rounded-lg hover:bg-surface text-xs font-semibold" title="Modifier" onClick={() => setForm({ mode: 'edit', id: t.id, data: { ...t } })}>✎</button>
+                  <button className="p-1.5 rounded-lg hover:bg-surface text-xs font-semibold" title="Modifier" aria-label="Modifier" onClick={() => setForm({ mode: 'edit', id: t.id, data: { ...t } })}>✎</button>
                   {t.archived
-                    ? <button className="p-1.5 rounded-lg hover:bg-surface" title="Désarchiver" onClick={() => unarchive(t.id)}><Archive size={15} className="text-brand" /></button>
-                    : <button className="p-1.5 rounded-lg hover:bg-surface" title="Archiver" onClick={() => archive(t.id)}><Archive size={15} className="text-muted" /></button>}
-                  <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer" onClick={() => setConfirmDel(t.id)}><Trash2 size={15} /></button>
+                    ? <button className="p-1.5 rounded-lg hover:bg-surface" title="Désarchiver" aria-label="Désarchiver" onClick={() => unarchive(t.id)}><Archive size={15} className="text-brand" /></button>
+                    : <button className="p-1.5 rounded-lg hover:bg-surface" title="Archiver" aria-label="Archiver" onClick={() => archive(t.id)}><Archive size={15} className="text-muted" /></button>}
+                  <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer" aria-label="Supprimer" onClick={() => setConfirmDel(t.id)}><Trash2 size={15} /></button>
                 </div>
               </div>
               {openId === t.id && t.description && (

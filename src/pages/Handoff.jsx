@@ -99,7 +99,7 @@ function Line({ e, store, mine, canDecide, closers, onRefuse, members }) {
         </div>
       )}
       {canDecide && decided && (
-        <button className="btn-ghost !py-1 text-xs" title="Remettre le dossier en attente"
+        <button className="btn-ghost !py-1 text-xs" title="Remettre le dossier en attente" aria-label="Remettre le dossier en attente"
           onClick={() => { store.decideHandoff(e.subId, e.rdv.id, 'pending'); toast('Dossier remis en attente') }}>
           Rouvrir
         </button>

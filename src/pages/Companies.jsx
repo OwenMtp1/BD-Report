@@ -411,7 +411,7 @@ export default function Companies() {
         <div className="card p-3 space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold">Dernier enrichissement</span>
-            <button className="btn-ghost !p-1 ml-auto" title="Fermer le compte rendu" onClick={() => setReport(null)}><X size={13} /></button>
+            <button className="btn-ghost !p-1 ml-auto" title="Fermer le compte rendu" aria-label="Fermer le compte rendu" onClick={() => setReport(null)}><X size={13} /></button>
           </div>
           {report.note && <p className="text-xs text-amber-700 dark:text-amber-300">{report.note}</p>}
           {report.lines.map((l, i) => (
@@ -425,7 +425,11 @@ export default function Companies() {
       )}
 
       {list.length === 0 ? (
-        <Empty text={active ? 'Aucune entreprise ne correspond à ces filtres.' : "Aucune entreprise pour l'instant. Elles apparaissent dès le premier rendez-vous."} />
+        <Empty
+          text={active ? 'Aucune entreprise ne correspond à ces filtres.' : "Aucune entreprise pour l'instant."}
+          hint={active
+            ? 'Des entreprises existent, mais les filtres en cours les excluent toutes.'
+            : 'Elles apparaissent toutes seules dès le premier rendez-vous — rien à saisir ici.'} />
       ) : view === 'list' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {list.map(r => <Card key={r.name} r={r} />)}

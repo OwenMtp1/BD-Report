@@ -55,16 +55,25 @@ function RgpdTool({ store }) {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
     a.download = `rgpd-${e.replace(/[^a-z0-9]/g, '_')}-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href)
   }
+  // ⚠️ `window.confirm` était la boîte NATIVE du navigateur : hors thème, jamais
+  // traduite (elle reste en français en anglais comme en espagnol), et impossible à
+  // parcourir au test. Les 35 autres confirmations de l'app passent par <Confirm> ;
+  // les deux qui ne le faisaient pas portaient justement les gestes les plus graves —
+  // un effacement RGPD et le vidage d'un espace.
+  const [askErase, setAskErase] = useState(false)
   const erase = () => {
-    if (!e) return
-    if (window.confirm(`Supprimer définitivement les données personnelles de ${email} de cet espace (contacts + coordonnées dans les RDV) ? Action irréversible.`)) {
-      const r = store.erasePersonData(store.session.subEnvId, e)
-      toast(r?.error ? `Erreur : ${r.error}` : `${r.removed || 0} élément(s) personnel(s) supprimé(s)`)
-      if (!r?.error) setEmail('')
-    }
+    const r = store.erasePersonData(store.session.subEnvId, e)
+    toast(r?.error ? `Erreur : ${r.error}` : `${r.removed || 0} élément(s) personnel(s) supprimé(s)`)
+    if (!r?.error) setEmail('')
+    setAskErase(false)
   }
   return (
     <div className="card p-4 space-y-3">
+      {askErase && (
+        <Confirm
+          message={`Supprimer définitivement les données personnelles de ${email} de cet espace (contacts + coordonnées dans les RDV) ? Action irréversible.`}
+          yesLabel="Supprimer définitivement" onYes={erase} onNo={() => setAskErase(false)} />
+      )}
       <h3 className="font-bold flex items-center gap-2"><ShieldCheck size={17} className="text-brand" /> Conformité RGPD</h3>
       <p className="text-sm text-muted">Droit d'accès et droit à l'effacement : recherchez une personne par e‑mail pour exporter ou supprimer ses données personnelles de cet espace.</p>
       <div className="flex gap-2 flex-wrap items-center">
@@ -74,7 +83,7 @@ function RgpdTool({ store }) {
       {e && (
         <div className="flex gap-2 flex-wrap">
           <button className="btn-ghost text-xs" disabled={!count} onClick={exportJson}><Download size={14} /> Exporter ses données (JSON)</button>
-          <button className="btn-danger text-xs" disabled={!count} onClick={erase}><Trash2 size={14} /> Supprimer ses données</button>
+          <button className="btn-danger text-xs" disabled={!count} onClick={() => setAskErase(true)}><Trash2 size={14} /> Supprimer ses données</button>
         </div>
       )}
     </div>
@@ -249,6 +258,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
   const [tab, setTab] = useState('ux')
   const [pendingTheme, setPendingTheme] = useState(currentTheme)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const [askReset, setAskReset] = useState(false)
   const [importMsg, setImportMsg] = useState('')
   // Résout les liens de téléchargement directs (par OS) depuis la dernière release GitHub.
   const [dlUrls, setDlUrls] = useState(null)
@@ -447,7 +457,14 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
           <p className="text-sm text-muted">Remplissez cet espace de données fictives pour explorer l'app ou former un nouveau BDR, puis videz-le — sans jamais toucher à vos autres espaces.</p>
           <div className="flex gap-2 flex-wrap">
             <button className="btn-primary text-xs" onClick={() => { store.seedDemoSpace(store.session.subEnvId); toast('Données de démo ajoutées à cet espace ✓') }}><GraduationCap size={14} /> Remplir de données de démo</button>
-            <button className="btn-danger text-xs" onClick={() => { if (window.confirm('Vider cet espace ? Tous les RDV, contacts et notes de CET espace seront supprimés (barème et objectifs conservés). Vos autres espaces ne sont pas touchés.')) { store.resetSpace(store.session.subEnvId); toast('Espace réinitialisé') } }}><Trash2 size={14} /> Réinitialiser cet espace (vider)</button>
+            <button className="btn-danger text-xs" onClick={() => setAskReset(true)}><Trash2 size={14} /> Réinitialiser cet espace (vider)</button>
+            {askReset && (
+              <Confirm
+                message="Vider cet espace ? Tous les RDV, contacts et notes de CET espace seront supprimés (barème et objectifs conservés). Vos autres espaces ne sont pas touchés."
+                yesLabel="Vider cet espace"
+                onYes={() => { store.resetSpace(store.session.subEnvId); toast('Espace réinitialisé'); setAskReset(false) }}
+                onNo={() => setAskReset(false)} />
+            )}
           </div>
         </div>
         <RgpdTool store={store} />

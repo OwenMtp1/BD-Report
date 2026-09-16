@@ -168,7 +168,7 @@ export default function MessageTemplates() {
             <div className="flex flex-wrap gap-1.5">
               <span className="text-[11px] text-muted self-center">Variables :</span>
               {MESSAGE_VARS.map(v => (
-                <button key={v.key} className="chip bg-brand/10 text-brand hover:bg-brand/20" title={v.label}
+                <button key={v.key} className="chip bg-brand/10 text-brand hover:bg-brand/20" title={v.label} aria-label={v.label}
                   onClick={() => setEditing(x => ({ ...x, content: (x.content || '') + `{${v.key}}` }))}>
                   {'{' + v.key + '}'}
                 </button>

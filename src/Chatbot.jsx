@@ -145,7 +145,7 @@ export default function Chatbot() {
   return (
     <>
       <button className="fixed bottom-5 right-5 z-40 w-13 h-13 p-3.5 rounded-full bg-brand text-white shadow-lg hover:scale-105 transition"
-        onClick={() => setOpen(o => !o)} title="Assistant IA">
+        onClick={() => setOpen(o => !o)} title="Assistant IA" aria-label="Assistant IA">
         <Bot size={24} />
       </button>
       {open && (

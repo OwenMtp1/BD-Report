@@ -88,8 +88,8 @@ function ServiceChip({ svc, store }) {
   return (
     <span className="chip bg-surface text-ink flex items-center gap-1.5">
       {svc.name}
-      <button className="opacity-60 hover:opacity-100" title="Renommer" onClick={() => setEditing(true)}><Pencil size={11} /></button>
-      <button className="opacity-60 hover:opacity-100 text-red-500" title="Supprimer" onClick={() => setConfirmDel(true)}><Trash2 size={11} /></button>
+      <button className="opacity-60 hover:opacity-100" title="Renommer" aria-label="Renommer" onClick={() => setEditing(true)}><Pencil size={11} /></button>
+      <button className="opacity-60 hover:opacity-100 text-red-500" title="Supprimer" aria-label="Supprimer" onClick={() => setConfirmDel(true)}><Trash2 size={11} /></button>
       {confirmDel && (
         <Confirm message={`Supprimer le service « ${svc.name} » ? Les personnes qui y sont rattachées n'auront plus de service.`}
           onYes={() => { store.removeService(svc.id, 'staff'); setConfirmDel(false); toast('Service supprimé') }}
@@ -190,7 +190,7 @@ function Recruit({ store, roleKeys, services, staff }) {
           <Field label="Mot de passe" required>
             <div className="flex gap-1.5">
               <input className="input" type={showPw ? 'text' : 'password'} value={form.password} onChange={e => setF('password', e.target.value)} placeholder="Mot de passe provisoire" />
-              <button type="button" className="btn-ghost !py-1.5 shrink-0" title="Générer" onClick={() => { genPw(); setShowPw(true) }}><KeyRound size={14} /></button>
+              <button type="button" className="btn-ghost !py-1.5 shrink-0" title="Générer" aria-label="Générer" onClick={() => { genPw(); setShowPw(true) }}><KeyRound size={14} /></button>
             </div>
           </Field>
           <Field label="Service">

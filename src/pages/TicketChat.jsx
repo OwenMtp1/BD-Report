@@ -131,7 +131,7 @@ export default function TicketChat({ ticket, role }) {
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[11px] text-muted flex items-center gap-1"><MessageSquareText size={12} /> Réponses types :</span>
               {(store.db.cannedReplies || []).map(r => (
-                <button key={r.id} type="button" title={r.text}
+                <button key={r.id} type="button" title={r.text} aria-label={r.text}
                   className="chip bg-surface text-ink hover:bg-brand/10 hover:text-brand"
                   onClick={() => onType(text ? text + '\n' + r.text : r.text)}>{r.title}</button>
               ))}
@@ -145,7 +145,7 @@ export default function TicketChat({ ticket, role }) {
             <textarea className="input min-h-[42px] max-h-32 resize-none py-2" rows={1} placeholder="Votre message…"
               value={text} onChange={e => onType(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
-            <button className="btn-primary shrink-0 !px-3" onClick={send} title="Envoyer"><Send size={16} /></button>
+            <button className="btn-primary shrink-0 !px-3" onClick={send} title="Envoyer" aria-label="Envoyer"><Send size={16} /></button>
           </div>
         </div>
       )}
