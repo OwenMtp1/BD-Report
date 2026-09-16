@@ -98,9 +98,26 @@ d'œil à la strie de couleur en début de ligne.
   du registre entier : ils disent combien de bannissements existent, pas
   combien la recherche laisse passer.
 - **Flux** — une timeline : gouttière d'horodatage, barre de gravité, code
-  de catégorie, auteur et message. Recherche plein texte (nom, licence,
+  de catégorie (son nom complet au survol), auteur et message.
+  ⚠️ **En direct, la liste ne s'insère plus sous les yeux.** Chaque arrivée
+  poussait la ligne qu'on lisait de 65 px : un soir de rush, l'écran
+  devenait illisible au moment précis où il sert le plus. Un garde-fou
+  existait, mais il interrogeait `window.scrollY` — resté à zéro, puisque
+  c'est le FLUX qui défile, pas la page. Les nouvelles lignes attendent
+  désormais dans une pastille « **N nouveaux évènements ↑** » tant qu'on
+  est descendu ; et tout nouveau rendu, d'où qu'il vienne, compense le
+  défilement pour que la ligne lue ne bouge pas d'un pixel.
+  **Affichage compact** (65 px → 34 px par ligne, soit le double de lignes
+  à l'écran), retenu d'une session à l'autre. Recherche plein texte (nom, licence,
   plaque, item, montant, ID serveur), filtres par catégorie, gravité et
   période (1 h / 6 h / 24 h / 7 j), pagination, export CSV.
+- **Recherche** — ⚠️ **elle dit POURQUOI une ligne répond.** La recherche
+  porte aussi sur la charge utile : chercher « redengine » rendait une
+  ligne affichant « Injection de ressource détectée — Nathan Okonkwo », où
+  le mot n'apparaît nulle part — vingt résultats, vingt ouvertures
+  d'inspecteur pour comprendre. Ce qui se voit est surligné ; pour le
+  reste, le champ qui a répondu est nommé en bout de ligne
+  (« `ressource : redengine` »).
 - **Recherche par rubrique** — chaque rubrique porte sa propre barre, et
   l'invite NOMME la rubrique (« Rechercher dans « Casino »… »). La
   recherche du haut cherchait déjà dans la rubrique ouverte, mais rien ne
@@ -734,6 +751,47 @@ différentes dans le même écran se remarquent, et mal.
 ⚠️ **`prefers-reduced-motion: reduce` coupe tout**, d'une règle. Le panneau
 reste entièrement utilisable sans une seule animation — c'est la condition
 pour s'autoriser à en mettre.
+
+---
+
+## Audit d'interface — ce qui a changé, et pourquoi
+
+Un audit mesuré sur le panneau réel (900 évènements, cinq largeurs d'écran)
+a trouvé huit défauts qui ne cassaient aucun test : l'API répondait juste,
+les pages s'affichaient, et l'écran devenait pourtant pénible à tenir un
+soir de rush sur un portable de treize pouces.
+
+| Constat | Mesure | Correction |
+|---|---|---|
+| `--muted` sous le seuil AA **partout** | 3,55 – 4,21:1 | un jeton, `#7B6C95` → `#9084AC` (≥ 4,88:1) |
+| Le flux bouge sous les yeux en direct | **+65 px** par arrivée | pastille d'attente + compensation du défilement |
+| Le rail déborde sans le dire | 7 rubriques sur 22 hors champ en 1280×800 | liste défilante seule, pied épinglé, dégradé |
+| Mobile : le rail perd tous ses noms | **22 libellés, 0 visible** | le libellé reste |
+| Le bandeau change de hauteur | 78 → 130 px | hauteur fixe, éléments élastiques |
+| La recherche ne dit pas pourquoi ça répond | « redengine » → ligne sans le mot | surlignage + champ nommé |
+| Compteurs du rail en attente | 21 points sur 22 à l'entrée | chargés dès l'entrée |
+| File d'alertes : heure sans date | 12:26 · 09:36 · **23:14** | l'âge en évidence, l'heure au survol |
+
+Plus : le nom complet d'un code de rubrique au survol, un mode compact,
+plus de « charger plus » sous une liste vide, « Bannir » et « Effacer ses
+données » qui cessent d'être deux boutons rouges voisins, une cible de
+24 px pour la coche « traité », un repère `<main>` et un titre de région.
+
+⚠️ **Deux corrections en ont d'abord introduit une autre**, et c'est la
+mesure qui l'a dit : brider la largeur de l'étiquette de visite tronquait
+la **croix qui sert à ressortir de l'espace**. Le nom se coupe, la croix
+jamais.
+
+⚠️ **Deux constats de l'audit étaient faux, et ne sont pas corrigés** : le
+rail défilait déjà (c'est l'absence d'indice qui posait problème, pas
+l'impossibilité), et `--vio` n'est jamais employé comme couleur de texte.
+Une sonde de contraste naïve lit mal les fonds semi-transparents : les
+97 « échecs » restants, recomptés en composant l'alpha, valent 10,8:1.
+
+`node test/run.js interface` fige ces décisions — pas l'apparence, qui
+peut changer, mais le raisonnement : que le garde-fou du direct interroge
+le flux et non la fenêtre, que le libellé mobile ne soit pas masqué, que la
+croix ne se tronque pas.
 
 ---
 

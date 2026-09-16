@@ -53,6 +53,8 @@ const SUITES = [
   { nom: 'ressource', fichier: 'ressource.test.mjs', port: 8909, discord: false,
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
   { nom: 'reports', fichier: 'reports.test.mjs', port: 8910, discord: false,
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
+  { nom: 'interface', fichier: 'interface.test.mjs', port: 8912, discord: false,
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] }
 ];
 

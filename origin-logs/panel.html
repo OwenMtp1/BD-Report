@@ -20,7 +20,14 @@
 
   --ink:#F3EEFB;
   --ink-2:#B6A6D2;
-  --muted:#7B6C95;
+  /* ⚠️ --muted PORTE LA MOITIÉ DU TEXTE DE L'ÉCRAN — intitulés de groupe,
+     compteurs du rail, horodatages, sous-titres, en-têtes de tableau — et
+     il le porte à 9,5-11,5 px. L'ancienne valeur (#7B6C95) donnait 3,55 à
+     4,21:1 selon le fond, donc SOUS le seuil AA de 4,5 sur les quatre
+     fonds du panneau. À cette taille, c'est le texte qu'on lit en
+     plissant les yeux à deux heures du matin. Celle-ci tient 4,88:1 dans
+     le pire cas (sur --raise) en gardant la même teinte violette. */
+  --muted:#9084AC;
 
   --vio:#8B5CF6;
   --vio-hi:#D4B3FF;
@@ -81,13 +88,19 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .app[hidden]{display:none}
 
 /* ---------- rail ---------- */
+/* ⚠️ C'EST LA LISTE DES RUBRIQUES QUI DÉFILE, PAS LE RAIL ENTIER.
+   Quand le rail défilait d'un bloc, le pied — « Gérer l'équipe », « Rôles
+   & accès », « Liaison Discord » — partait vers le haut avec les
+   rubriques : sur un portable de 13 pouces, dix-huit rubriques suffisent
+   à emporter hors champ les cinq boutons d'administration. La marque
+   reste en haut, le pied reste en bas, et seule la liste bouge. */
 .rail{
-  position:sticky;top:0;height:100dvh;min-width:0;overflow-y:auto;
+  position:sticky;top:0;height:100dvh;min-width:0;overflow:hidden;
   background:var(--panel);border-right:1px solid var(--edge);
   display:flex;flex-direction:column;
 }
 .brand{
-  display:flex;align-items:center;gap:11px;
+  display:flex;align-items:center;gap:11px;flex:none;
   padding:16px 18px;border-bottom:1px solid var(--edge-soft);
 }
 .mark{
@@ -106,8 +119,29 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
    Le repère, lui, trace le chemin — et il coûte une transformation, pas
    deux repeints. */
 .nav{
-  position:relative;padding:10px 10px 18px;display:flex;flex-direction:column;gap:1px;flex:1;
+  position:relative;padding:10px 10px 18px;display:flex;flex-direction:column;gap:1px;
+  flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:var(--edge) transparent;
 }
+.nav::-webkit-scrollbar{width:9px}
+.nav::-webkit-scrollbar-track{background:transparent}
+.nav::-webkit-scrollbar-thumb{background:var(--edge);border-radius:99px;border:3px solid var(--panel)}
+.nav:hover::-webkit-scrollbar-thumb{background:var(--raise)}
+/* ⚠️ UNE LISTE QUI DÉBORDE SANS LE DIRE CACHE CE QU'ELLE CONTIENT.
+   Rien ne signalait que « Casino », « Facture EMS » et « Action staff »
+   existaient : la barre de défilement ne s'affiche qu'au survol, et on ne
+   survole pas ce qu'on ne sait pas là. Un dégradé en pied de liste dit
+   « ça continue », et il DISPARAÎT une fois en bas — sinon il annoncerait
+   toujours quelque chose de plus. */
+.rail-more{
+  position:absolute;left:0;right:0;bottom:0;height:46px;pointer-events:none;
+  background:linear-gradient(to top, var(--panel) 12%, transparent);
+  opacity:0;transition:opacity .2s var(--ease);z-index:2;
+  display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;
+}
+.rail-more.on{opacity:1}
+.rail-more svg{color:var(--muted)}
+.rail-wrap{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .nav-slide{
   position:absolute;left:10px;right:10px;top:0;height:0;border-radius:7px;
   background:var(--raise);
@@ -161,22 +195,30 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .nav-item[aria-current="true"] .nav-n{color:var(--vio-hi)}
 .nav-item.flagged .nav-n{color:var(--crit)}
 
-.rail-foot{padding:12px 18px 18px;border-top:1px solid var(--edge-soft);display:grid;gap:7px}
+.rail-foot{flex:none;padding:12px 18px 18px;border-top:1px solid var(--edge-soft);display:grid;gap:7px}
 .foot-line{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted)}
 .foot-line b{color:var(--ink-2);font-weight:500;font-family:var(--mono);font-size:10.5px}
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 3px rgba(52,211,153,.18)}
 .pulse.off{background:var(--muted);box-shadow:none}
 
 /* ---------- barre de commande ---------- */
+/* ⚠️ UNE BARRE QUI CHANGE DE HAUTEUR DÉPLACE TOUT L'ÉCRAN.
+   Elle se repliait sur deux lignes sous 1 366 px et à chaque ouverture de
+   l'inspecteur : 78 px devenaient 130, et la première ligne du flux
+   descendait d'autant, en plein milieu d'une lecture. Elle ne se replie
+   plus — ce sont ses éléments élastiques qui rétrécissent, et l'étiquette
+   de visite qui se tronque. Le repli reste en dessous de 900 px, où il
+   n'y a plus la place de faire autrement. */
 .bar{
-  position:sticky;top:0;z-index:40;min-height:var(--bar-h);
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  padding:10px 22px;
+  position:sticky;top:0;z-index:40;height:var(--bar-h);
+  display:flex;align-items:center;gap:10px;flex-wrap:nowrap;
+  padding:0 22px;
   background:color-mix(in srgb,var(--ground) 88%,transparent);
   backdrop-filter:blur(12px);
   border-bottom:1px solid var(--edge);
 }
-.find{position:relative;flex:1 1 180px;min-width:0}
+.bar > *{flex:none}
+.find{position:relative;flex:1 1 140px;min-width:80px}
 .find input{
   width:100%;height:34px;padding:0 34px 0 32px;border-radius:7px;
   background:var(--panel);border:1px solid var(--edge);color:var(--ink);font-size:13px;
@@ -224,6 +266,14 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .btn.primary:hover{background:#9D6EFF}
 .btn.danger{background:var(--crit);border-color:#FF7D95;color:#fff}
 .btn.danger:hover{filter:brightness(1.08)}
+/* ⚠️ DEUX ROUGES CÔTE À CÔTE NE DISENT PLUS RIEN.
+   « Bannir » et « Effacer ses données » se touchaient presque dans
+   l'inspecteur, pleins et rouges tous les deux — alors qu'ils n'ont rien
+   de commun : l'un sanctionne un joueur, l'autre exécute une obligation
+   légale et ne se rattrape jamais. L'effacement prend donc un rouge
+   CONTOURÉ : la gravité reste visible, la confusion part. */
+.btn.grave{background:transparent;border-color:color-mix(in srgb,var(--crit) 55%,transparent);color:#FF8FA3}
+.btn.grave:hover{background:color-mix(in srgb,var(--crit) 14%,transparent);border-color:var(--crit);color:#fff}
 .btn.sm{height:27px;padding:0 10px;font-size:11.5px;border-radius:6px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .icon-btn{
@@ -298,14 +348,19 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
   padding:4px 9px;border-radius:999px;white-space:nowrap;
   /* Le nom d'un espace peut être long : il se coupe plutôt que de pousser
      l'identité et la déconnexion à la ligne suivante. */
-  overflow:hidden;text-overflow:ellipsis;max-width:min(40vw,320px);
+  overflow:hidden;max-width:min(26vw,240px);
+  flex:0 1 auto;min-width:0;display:inline-flex;align-items:center;gap:7px;
 }
+.tag-nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.tag-x{flex:none;font-size:11px;opacity:.8}
+.tag-mode[role="button"]:hover .tag-x{opacity:1}
 .tag-mode[role="button"]{cursor:pointer}
 .tag-mode[role="button"]:hover{filter:brightness(1.18)}
 .tag-mode.demo{background:rgba(245,165,36,.12);border:1px solid rgba(245,165,36,.36);color:#FFC55C}
 .tag-mode.live{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.34);color:#8FEBD3}
-.who{display:flex;align-items:center;gap:9px;padding-left:4px;border-left:1px solid var(--edge);margin-left:2px;flex:none}
-.who-name{font-size:12.5px;font-weight:500;line-height:1.15}
+.who{display:flex;align-items:center;gap:9px;padding-left:8px;border-left:1px solid var(--edge);margin-left:2px;flex:0 1 auto;min-width:0}
+.who-name{font-size:12.5px;font-weight:500;line-height:1.15;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who > span:nth-child(2){min-width:0;overflow:hidden}
 .who-role{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--vio-hi)}
 
 /* ---------- pastilles ---------- */
@@ -325,6 +380,7 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
    CONTENU
    ============================================================ */
 .main{min-width:0;display:flex;flex-direction:column}
+.main > main{min-width:0;display:flex;flex-direction:column;flex:1}
 /* ---------- passage d'une vue à l'autre ----------
    ⚠️ L'animation part du CONTENU, pas du conteneur : faire glisser toute
    la vue déplacerait aussi le titre et les filtres, qui ne changent
@@ -487,6 +543,35 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 
 .feed{border:1px solid var(--edge);border-radius:10px;background:var(--panel);overflow:hidden}
 .feed-scroll{min-width:0;overflow:auto;max-height:calc(100dvh - 250px);overscroll-behavior:contain}
+/* La pastille flotte AU-DESSUS de la liste : pousser le contenu pour
+   annoncer qu'on ne pousse plus le contenu serait cocasse. */
+.feed{position:relative}
+.feed-new{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%) translateY(-6px);
+  z-index:5;display:flex;align-items:center;gap:7px;
+  padding:7px 14px;border-radius:99px;border:1px solid var(--vio);
+  background:color-mix(in srgb,var(--raise) 92%,transparent);backdrop-filter:blur(6px);
+  color:var(--ink);font-size:12.5px;font-family:var(--ui);cursor:pointer;
+  box-shadow:0 8px 24px -10px rgba(0,0,0,.9);
+  opacity:0;transition:opacity .22s var(--ease), transform .22s var(--ease);
+}
+.feed-new:not([hidden]){opacity:1;transform:translateX(-50%) translateY(0)}
+.feed-new:hover{border-color:var(--vio-hi);background:var(--raise)}
+mark{
+  background:color-mix(in srgb,var(--warn) 30%,transparent);
+  color:var(--ink);border-radius:3px;padding:0 1px;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--warn) 36%,transparent);
+}
+/* Quand le message visible ne porte pas le terme cherché, on nomme le
+   champ qui l'a fait remonter. Discret : c'est une explication, pas une
+   donnée de plus à lire. */
+.ev-why{
+  display:inline-flex;align-items:center;gap:5px;margin-left:9px;
+  padding:1px 7px;border-radius:5px;border:1px solid var(--edge);
+  background:var(--panel-2);color:var(--muted);
+  font-family:var(--mono);font-size:10.5px;vertical-align:1px;
+}
+.ev-why b{color:var(--ink-2);font-weight:500}
 /* ⚠️ La cascade s'arrête aux douze premières lignes : au-delà elle
    n'apprend plus rien et une page de 120 lignes mettrait une seconde à
    se poser. Les suivantes apparaissent simplement. */
@@ -529,7 +614,8 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .ev[aria-selected="true"] .ev-sev{opacity:1}
 .ev-body{padding:9px 16px 10px 14px;display:grid;gap:3px;min-width:0}
 .ev-meta{display:flex;align-items:center;gap:8px;min-width:0}
-.ev-actor{display:inline-flex;align-items:center;gap:6px;min-width:0}
+/* Le nom est cliquable : il doit se viser au trackpad comme un bouton. */
+.ev-actor{display:inline-flex;align-items:center;gap:6px;min-width:0;min-height:24px}
 .ev-name{font-size:12px;font-weight:500;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ev-sid{font-family:var(--mono);font-size:10px;color:var(--muted)}
 .ev-res{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
@@ -548,6 +634,28 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .count{font-family:var(--mono);font-size:11px;color:var(--muted)}
 .void{padding:52px 20px;text-align:center;display:grid;gap:8px;justify-items:center;color:var(--muted)}
 .void b{color:var(--ink-2);font-size:15px;font-weight:600;font-variation-settings:'wdth' 88}
+/* Un titre que seuls les lecteurs d'écran entendent : la page n'offrait
+   qu'un seul point de repère, il fallait la traverser en entier pour
+   passer de la navigation au contenu. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+         clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* ---------- mode compact ----------
+   ⚠️ 65 px par ligne, c'est dix lignes à l'écran sur un portable : on
+   trie une soirée à coups de molette. En compact, la ligne se réduit à
+   son horodatage, son code, son auteur et son message sur UNE ligne —
+   dix-huit tiennent alors à l'écran. Ce n'est pas le défaut : un journal
+   se lit d'abord, et le compact sacrifie l'aération pour la quantité.
+   Le choix se garde d'une session à l'autre. */
+.feed.compact .ev{grid-template-columns:66px 3px minmax(0,1fr)}
+.feed.compact .ev-time{padding:5px 8px 5px 14px}
+.feed.compact .ev-ago{display:none}
+.feed.compact .ev-body{padding:4px 14px 5px 12px;grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:10px}
+.feed.compact .ev-meta{gap:7px}
+.feed.compact .av.sm{display:none}
+.feed.compact .ev-msg{font-size:12.5px}
+.feed.compact .day-sep{padding:4px 16px}
+.feed.compact .ev-why{margin-left:7px}
 
 /* ============================================================
    REGISTRE DES BANNISSEMENTS
@@ -889,7 +997,8 @@ select.input{height:36px}
    Vider la file d'alertes ne devrait pas demander d'ouvrir chaque
    évènement : la coche est sur la ligne, au survol. */
 .ev-quick{
-  opacity:0;margin-left:8px;width:22px;height:22px;flex:none;border-radius:6px;
+  /* 24 px est le plancher : en dessous, la coche se rate au trackpad. */
+  opacity:0;margin-left:8px;width:24px;height:24px;flex:none;border-radius:6px;
   display:grid;place-items:center;border:1px solid var(--edge);color:var(--muted);
   background:var(--panel-2);transition:opacity .12s,color .12s,border-color .12s;
 }
@@ -923,14 +1032,21 @@ select.input{height:36px}
   .brand-text,.rail-foot{display:none}
   .nav{flex-direction:row;padding:8px 0;gap:4px;flex:none}
   .nav-group{display:none}
-  .nav-item{grid-template-columns:auto auto;padding:6px 11px;flex:none}
-  .nav-item .nav-label{display:none}
+  /* ⚠️ LE LIBELLÉ RESTE. Le rail replié en bandeau masquait les noms et
+     ne laissait qu'une rangée de pastilles colorées avec des compteurs :
+     vingt-deux rubriques, aucune identifiable. Une couleur de famille
+     dit le métier, jamais la rubrique — « Boutique : caisse » et
+     « Boutique : produits » partagent exactement la même. Le bandeau
+     défile déjà horizontalement : il a la place de les nommer. */
+  .nav-item{grid-template-columns:auto auto auto;padding:6px 12px;flex:none}
+  .nav-item .nav-label{display:block;font-size:12.5px;max-width:none}
   /* ⚠️ Le rail est HORIZONTAL ici : le repère glissant, qui se déplace en
      hauteur sur toute la largeur, deviendrait une barre posée en travers
      des onglets. L'onglet actif reprend donc son propre fond. */
   .nav-slide{display:none}
   .nav-item[aria-current="true"]{background:var(--raise);box-shadow:inset 0 -2px 0 var(--vio-hi)}
   .nav-item:hover{transform:none}
+  .bar{height:auto;min-height:var(--bar-h);flex-wrap:wrap;padding:10px 16px}
   .main{min-width:0}
   .view{padding:0 16px 36px}
   .head{padding:18px 0 14px}
@@ -995,7 +1111,14 @@ select.input{height:36px}
         <div class="brand-sub">Journal serveur</div>
       </div>
     </div>
-    <div class="nav" id="nav"></div>
+    <div class="rail-wrap">
+      <div class="nav" id="nav"></div>
+      <div class="rail-more" id="railMore" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M4 6.5 8 10.5l4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
     <div class="rail-foot">
       <div id="railLive">
         <div class="foot-line"><span class="pulse" id="pulse"></span><span>Flux <b id="liveState">en direct</b></span></div>
@@ -1043,6 +1166,11 @@ select.input{height:36px}
     </header>
 
     <div class="afilters" id="afilters" hidden aria-label="Filtres actifs"></div>
+
+    <!-- ⚠️ Un lecteur d'écran n'avait qu'UN point de repère sur toute la
+         page : un seul <h1>, aucun <main>. Passer de la navigation au
+         contenu supposait de tout traverser. -->
+    <main id="contenu">
 
     <!-- ============ VUE D'ENSEMBLE ============ -->
     <section class="view" id="viewOverview" aria-label="Vue d'ensemble">
@@ -1116,11 +1244,28 @@ select.input{height:36px}
         <h3 class="eyebrow" id="shotHead">Captures d’écran</h3>
         <div class="shot-grid" id="shotGrid"></div>
       </div>
-      <div class="feed">
+      <h2 class="sr-only" id="feedHead">Évènements</h2>
+      <div class="feed" role="region" aria-labelledby="feedHead">
+        <!-- ⚠️ EN DIRECT, LA LISTE NE S'INSÈRE PLUS SOUS LES YEUX.
+             Chaque arrivée poussait la ligne qu'on lisait de 65 px vers le
+             bas ; un soir de rush, c'est illisible au moment précis où
+             l'écran sert le plus. Les nouvelles lignes attendent ici tant
+             qu'on est descendu dans la liste, et c'est le lecteur qui
+             décide de les prendre. -->
+        <button class="feed-new" id="feedNew" hidden>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 13V3m0 0L4 7m4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="feedNewN">1 nouvel évènement</span>
+        </button>
         <div class="feed-scroll" id="feedScroll"><div id="rows"></div></div>
         <div class="feed-foot">
           <span class="count" id="foot">—</span>
-          <button class="btn sm" id="moreBtn" hidden>Charger 100 évènements de plus</button>
+          <span style="display:flex;gap:8px;align-items:center;margin-left:auto">
+            <button class="btn sm" id="densityBtn" aria-pressed="false"
+              title="Réduire la hauteur des lignes pour en voir davantage">Affichage compact</button>
+            <button class="btn sm" id="moreBtn" hidden>Charger 100 évènements de plus</button>
+          </span>
         </div>
       </div>
     </section>
@@ -1254,6 +1399,7 @@ select.input{height:36px}
         </div>
       </div>
     </section>
+    </main>
   </div>
 </div>
 
@@ -1719,11 +1865,50 @@ const initials = p => String((p && p.name) || '?').split(' ').map(w => w[0]).joi
 // Les évènements venus du serveur sont du TEXTE : on les échappe, puis
 // on relève montants et quantités. Ceux de la démo portent déjà leur
 // mise en forme (html:true) et ne repassent pas par là.
-function fmtMsg(e) {
-  if (e.html) return e.msg;
-  return esc(e.msg)
+/* ⚠️ UNE RECHERCHE DOIT DIRE POURQUOI UNE LIGNE RÉPOND.
+   La recherche porte aussi sur la charge utile : chercher « redengine »
+   rendait une ligne affichant « Injection de ressource détectée — Nathan
+   Okonkwo », où le mot n'apparaît nulle part. Sur vingt résultats, c'était
+   vingt ouvertures d'inspecteur pour comprendre. On surligne donc ce qui
+   se voit, et pour le reste on NOMME le champ qui a répondu. */
+const sansAccents = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+function surligner(html, terme) {
+  const q = String(terme || '').trim();
+  if (q.length < 2) return html;
+  const cible = sansAccents(q);
+  // On travaille sur le HTML déjà échappé : on ne touche qu'au texte,
+  // jamais à l'intérieur d'une balise, sinon on casserait le balisage.
+  return html.replace(/>([^<]+)</g, (tout, texte) => {
+    const plat = sansAccents(texte);
+    let out = '', i = 0, j;
+    while ((j = plat.indexOf(cible, i)) !== -1) {
+      out += texte.slice(i, j) + '<mark>' + texte.slice(j, j + q.length) + '</mark>';
+      i = j + q.length;
+    }
+    return out ? '>' + out + texte.slice(i) + '<' : tout;
+  });
+}
+
+// Le champ de la charge utile qui contient le terme, quand le message
+// visible ne le contient pas. Rendu tel quel : « ressource: redengine ».
+function indiceCharge(e, terme) {
+  const q = sansAccents(String(terme || '').trim());
+  if (q.length < 2 || !e.d) return '';
+  if (sansAccents(strip(e.msg) + ' ' + (e.actor && e.actor.name || '')).includes(q)) return '';
+  for (const [k, v] of Object.entries(e.d)) {
+    if (v == null || typeof v === 'object') continue;
+    if (sansAccents(String(v)).includes(q))
+      return `<span class="ev-why" title="C’est ce champ de la charge utile qui répond à votre recherche">${esc(k)} : <b>${esc(String(v))}</b></span>`;
+  }
+  return '';
+}
+
+function fmtMsg(e, terme) {
+  const base = e.html ? e.msg : esc(e.msg)
     .replace(/(\d[\d  ]*(?:[.,]\d+)?\s?\$)/g, '<span class="amount">$1</span>')
     .replace(/(\d+×\s?[\wÀ-ÿ'’-]+)/g, '<span class="item">$1</span>');
+  return terme ? surligner('>' + base + '<', terme).slice(1, -1) : base;
 }
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -1952,7 +2137,9 @@ let EVENTS = [];
    ============================================================ */
 const STATE = { view:'overview', cat:'all', range:24, q:'', sevs:new Set(),
                 limit:120, live:true, sel:null, banState:'actifs', banQ:'',
-                list:[], total:0, cursor:null, sevCounts:{}, stats:null, bans:null };
+                list:[], total:0, cursor:null, sevCounts:{}, stats:null, bans:null,
+                // Les évènements arrivés pendant qu'on lisait plus bas.
+                enAttente:[], compact:false };
 
 const CHART_CFG = {
   1:  { n:12, fmt:t => pad(new Date(t).getHours())+':'+pad(new Date(t).getMinutes()), every:3, title:'60 dernières minutes' },
@@ -1966,11 +2153,40 @@ const visibleCats = () => (MODE === 'api' ? CATS.filter(c => ME.cats.includes(c.
 
 /* ---------- rafraîchissement ---------- */
 let refreshToken = 0;
-async function refresh() {
+// Les compteurs du rail pour eux-mêmes, quand l'écran ouvert ne les
+// apporte pas. Une seule requête, et pas de rendu de liste.
+let _comptesEnVol = false;
+async function chargerComptesRail() {
+  if (_comptesEnVol) return;
+  _comptesEnVol = true;
+  try {
+    STATE.stats = await DS.stats(windowFrom(), Date.now(), CHART_CFG[STATE.range].n);
+    renderNav();
+  } catch (e) { /* le rail gardera ses tirets : mieux qu'un faux zéro */ }
+  finally { _comptesEnVol = false; }
+}
+/* ⚠️ Deux rafraîchissements très différents portent le même nom.
+   Celui de FOND (toutes les 15 s, mêmes filtres) rapporte les lignes qui
+   attendaient : la pastille doit SURVIVRE, sinon le signal s'efface à
+   l'instant où il devient vrai. Celui qui suit un CHANGEMENT DE FILTRE
+   montre une autre liste : une pastille qui promettrait des évènements
+   d'une rubrique qu'on vient de quitter mentirait. */
+async function refresh(opts) {
+  if (!(opts && opts.fond) && STATE.enAttente.length) {
+    STATE.enAttente.length = 0; majPastilleNeufs();
+  }
   // La supervision ne lit pas les journaux d'un serveur de jeu : elle a
   // ses propres sources, et n'a que faire des filtres de catégorie.
-  if (STATE.view === 'platform')    { renderNav(); renderActiveFilters(); return chargerPlateforme(); }
-  if (STATE.view === 'platformlog') { renderNav(); renderActiveFilters(); return chargerJournal(); }
+  // ⚠️ MAIS LE RAIL, LUI, EST TOUJOURS LÀ. Tant que les statistiques
+  // n'étaient chargées que par les écrans de journaux, entrer dans un
+  // espace depuis la supervision laissait vingt et un compteurs sur
+  // vingt-deux à « · » : le rail promettait un chiffre par rubrique et
+  // n'en donnait aucun, jusqu'à ce qu'on ouvre un autre écran.
+  if (STATE.view === 'platform' || STATE.view === 'platformlog') {
+    if (!sansEspace()) chargerComptesRail();
+    renderNav(); renderActiveFilters();
+    return STATE.view === 'platform' ? chargerPlateforme() : chargerJournal();
+  }
   // Hors espace, l'API répond 409 à tout le reste : lui poser la question
   // ne ferait qu'afficher une erreur là où il n'y a rien à afficher.
   if (sansEspace()) { renderNav(); renderActiveFilters(); return; }
@@ -2112,9 +2328,30 @@ function placerRepere() {
     bloc.style.height = actif.offsetHeight + 'px';
   }
   bloc.classList.add('on');
+  // Le repère a bougé : l'onglet actif peut être hors champ si la liste a
+  // défilé. On l'y ramène — sans à-coup, et sans emporter la page.
+  if (typeof actif.scrollIntoView === 'function') {
+    const n = actif.getBoundingClientRect(), c = nav.getBoundingClientRect();
+    if (n.top < c.top + 4 || n.bottom > c.bottom - 4)
+      actif.scrollIntoView({ block: 'nearest', behavior: _repereVu ? 'smooth' : 'auto' });
+  }
+  jaugerRail();
+}
+
+/* ⚠️ Dire que la liste continue, et le dire SEULEMENT quand c'est vrai.
+   Sans ce dégradé, dix-huit rubriques sur un écran de 800 px en cachaient
+   sept sans le moindre signe : la barre de défilement ne paraît qu'au
+   survol, et on ne survole pas ce dont on ignore l'existence. */
+function jaugerRail() {
+  const nav = $('#nav'), more = $('#railMore');
+  if (!nav || !more) return;
+  const reste = nav.scrollHeight - nav.clientHeight - nav.scrollTop;
+  more.classList.toggle('on', reste > 8);
 }
 // Le rail se replie sous 900px : les positions changent, le repère aussi.
-addEventListener('resize', () => { _repereVu = false; placerRepere(); });
+addEventListener('resize', () => { _repereVu = false; placerRepere(); jaugerRail(); });
+// Le dégradé suit le défilement de la liste, pas celui de la page.
+document.addEventListener('scroll', e => { if (e.target && e.target.id === 'nav') jaugerRail(); }, true);
 
 /* ============================================================
    Vue d'ensemble
@@ -2167,9 +2404,15 @@ function renderOverview() {
              ${liste.map(e => `<div class="row-lite" data-ev="${e.id}" role="button" tabindex="0">
                <span class="sev-sq" style="--c:${(SEV[e.sev] || {}).c || 'var(--muted)'}"></span>
                <span><span class="lite-t">${esc(strip(e.msg))}</span>
-                 <span class="lite-m">${(CAT[e.cat] || {}).label || e.cat} · ${ago(e.t)}</span></span>
+                 <span class="lite-m">${(CAT[e.cat] || {}).label || e.cat}</span></span>
                <span style="display:flex;align-items:center;gap:8px">
-                 <span class="lite-m">${hhmmss(e.t)}</span>
+                 <!-- ⚠️ L'HEURE SEULE PARAISSAIT DÉSORDONNÉE. Sur vingt-quatre
+                      heures, la liste franchit minuit : 12:26, puis 09:36, puis
+                      23:14 — trié par ancienneté, illisible à l'œil, parce
+                      qu'aucune date ne le disait. L'ÂGE est ce qu'on lit dans
+                      une file d'alertes (« il y a 3 h »), il décroît toujours,
+                      et l'heure exacte reste au survol. -->
+                 <span class="lite-m" title="${new Date(e.t).toLocaleString('fr-FR')}">${ago(e.t)}</span>
                  ${can('logs.mark') ? `<button class="ev-quick" data-mark="${e.id}" title="Marquer comme traité">
                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4 6.4 12 13 4.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                  </button>` : ''}
@@ -2284,7 +2527,29 @@ function renderSevBar() {
       <i></i>${esc(x.label)}<b>${by[x.id] || 0}</b></button>`).join('')
     + (STATE.sevs.size ? `<button class="btn sm" id="sevClear">Tout afficher</button>` : '');
 }
+/* Le choix de densité se garde : le refaire à chaque connexion serait le
+   pire des deux mondes — un réglage qu'on remarque sans le conserver.
+   ⚠️ localStorage peut lever (navigation privée) : on ne le laisse jamais
+   empêcher l'affichage. */
+function basculerDensite(silencieux) {
+  if (!silencieux) STATE.compact = !STATE.compact;
+  const f = document.querySelector('#viewStream .feed');
+  if (f) f.classList.toggle('compact', STATE.compact);
+  const b = $('#densityBtn');
+  if (b) { b.setAttribute('aria-pressed', String(STATE.compact));
+           b.textContent = STATE.compact ? 'Affichage aéré' : 'Affichage compact'; }
+  if (!silencieux) { try { localStorage.setItem('origin_densite', STATE.compact ? 'compact' : 'aere'); } catch (e) {} }
+}
+try { STATE.compact = localStorage.getItem('origin_densite') === 'compact'; } catch (e) {}
+
 function renderStream() {
+  // ⚠️ ANCRAGE. La pastille retient les arrivées du direct, mais le
+  // rafraîchissement de fond (toutes les 15 s) refait la liste ENTIÈRE :
+  // si des lignes se sont ajoutées en tête, tout ce qu'on lisait descend
+  // d'autant. On mesure avant, on compense après — la ligne lue reste où
+  // elle est, quelle que soit la raison du nouveau rendu.
+  const f = $('#feedScroll');
+  const ancre = (f && f.scrollTop > 40) ? { haut: f.scrollTop, total: f.scrollHeight } : null;
   remember(STATE.list);
   const c = STATE.cat === 'all' ? null : CAT[STATE.cat];
   $('#streamTitle').textContent = c ? c.label : 'Flux complet';
@@ -2309,10 +2574,20 @@ function renderStream() {
         <button class="btn sm" id="resetFilters">Tout réinitialiser</button>
       </span></div>`;
     $('#foot').textContent = '0 résultat';
+    // ⚠️ « Charger 100 évènements de plus » sous une liste vide : le
+    // bouton restait affiché parce que le curseur, lui, existait encore.
+    // Proposer d'en charger davantage quand il n'y en a aucun fait douter
+    // du « 0 » qu'on vient d'annoncer.
     $('#moreBtn').hidden = true;
+    $('#feedNew').hidden = true;
     return;
   }
   let jour = '';
+  const poserAncre = () => {
+    if (!ancre || !f) return;
+    const delta = f.scrollHeight - ancre.total;
+    if (delta) f.scrollTop = ancre.haut + delta;
+  };
   host.innerHTML = STATE.list.map(e => {
     const d = dayLabel(e.t);
     const sep = d !== jour ? `<div class="day-sep">${d}</div>` : '';
@@ -2324,12 +2599,15 @@ function renderStream() {
       <div class="ev-sev"></div>
       <div class="ev-body">
         <div class="ev-meta">
-          <span class="code" style="--fam:${cat.fam}">${cat.code}</span>
+          <!-- ⚠️ « BQC », « ECR », « EMS » n'apprenaient rien à qui arrive :
+               trois lettres et une couleur de famille, partagée par trois
+               rubriques. Le nom complet est à un survol. -->
+          <span class="code" style="--fam:${cat.fam}" title="${esc(cat.label)}">${cat.code}</span>
           ${e.actor.key && can('players.view')
             ? `<button class="ev-actor" data-player="${esc(e.actor.key)}" title="Ouvrir le dossier de ${esc(e.actor.name)}">`
             : `<span class="ev-actor">`}
             <span class="av sm" style="${avatarStyle(e.actor)}">${initials(e.actor)}</span>
-            <span class="ev-name">${esc(e.actor.name)}</span>
+            <span class="ev-name">${fmtMsg({ msg: e.actor.name }, STATE.q)}</span>
             <span class="ev-sid">${e.actor.sid != null ? '[' + e.actor.sid + ']' : ''}${e.actor.staff ? ' staff' : ''}</span>
           ${e.actor.key && can('players.view') ? '</button>' : '</span>'}
           <span class="ev-res">${esc(e.res || '')}</span>
@@ -2342,12 +2620,14 @@ function renderStream() {
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4 6.4 12 13 4.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>` : ''}
         </div>
-        <div class="ev-msg">${fmtMsg(e)}<span class="ev-flags">${e.pin ? '<span class="pin-f" title="Épinglé">◆</span>' : ''}${e.done ? '<span class="done-f" title="Traité">✓</span>' : ''}</span></div>
+        <div class="ev-msg">${fmtMsg(e, STATE.q)}${indiceCharge(e, STATE.q)}<span class="ev-flags">${e.pin ? '<span class="pin-f" title="Épinglé">◆</span>' : ''}${e.done ? '<span class="done-f" title="Traité">✓</span>' : ''}</span></div>
       </div>
     </div>`;
   }).join('');
   $('#foot').textContent = `${STATE.list.length} sur ${STATE.total} affichés`;
   $('#moreBtn').hidden = !STATE.cursor;
+  basculerDensite(true);
+  poserAncre();
 }
 
 /* ============================================================
@@ -2430,11 +2710,13 @@ function actionBar(key, name, banni) {
   // ce que vous avez sur moi » ou « effacez-le » n'est pas une sanction,
   // c'est une obligation. Les mélanger ferait chercher l'un dans l'autre.
   if (!can('players.gdpr')) return mod;
-  return mod + `<div class="block">
+  // Et on les ÉLOIGNE : la séparation logique ne servait à rien tant que
+  // les deux boutons rouges restaient à trente pixels l'un de l'autre.
+  return mod + `<div class="block" style="margin-top:6px;padding-top:14px;border-top:1px solid var(--edge)">
     <h3 class="eyebrow">Données personnelles</h3>
     <div class="tools">
       <button class="btn sm" data-rgpd="export" data-key="${esc(key)}" data-name="${esc(name)}">Exporter ses données</button>
-      <button class="btn sm danger" data-rgpd="effacer" data-key="${esc(key)}" data-name="${esc(name)}">Effacer ses données</button>
+      <button class="btn sm grave" data-rgpd="effacer" data-key="${esc(key)}" data-name="${esc(name)}">Effacer ses données</button>
     </div>
     <span class="lite-m">L’export rend un fichier remettable au joueur. L’effacement retire
     ses évènements, son dossier et ses captures ; un bannissement en cours est conservé
@@ -4273,11 +4555,14 @@ document.addEventListener('change', async ev => {
 
 document.addEventListener('click', async ev => {
   const id = ev.target.id;
+  // La pastille porte une icône : le clic peut tomber dessus.
+  if (ev.target.closest && ev.target.closest('#feedNew')) return prendreNeufs();
   if (id === 'sevClear')      { STATE.sevs.clear(); syncHash(); refresh(); }
   if (id === 'banQReset') { $('#banQ').value = ''; chercherAuRegistre(''); }
   if (id === 'bansToEvents')  goStream('bans');
   if (id === 'resetFilters')  clearFilter('tout');
   if (id === 'moreBtn')  loadMore();
+  if (id === 'densityBtn') basculerDensite();
   if (id === 'teamBtn')    openTeam();
   if (id === 'discordBtn') { DROLES = null; openDiscordSettings(); }
   if (id === 'dcLoad')     chargerRolesDiscord();
@@ -4364,22 +4649,69 @@ function matchesFilters(e) {
   }
   return true;
 }
+/* ⚠️ LE FLUX A SON PROPRE DÉFILEMENT, et c'est ce qui rendait le
+   garde-fou décoratif : il interrogeait `window.scrollY`, resté à zéro
+   pendant qu'on était descendu de 1 400 px DANS la liste. La condition
+   n'était donc jamais fausse, et chaque arrivée poussait la ligne qu'on
+   lisait de 65 px. On interroge l'élément qui défile vraiment. */
+const feedAuHaut = () => { const f = $('#feedScroll'); return !f || f.scrollTop < 40; };
+
+// Remonter soi-même au sommet vaut acceptation : garder la pastille
+// ferait promettre des lignes qui sont déjà à l'écran.
+document.addEventListener('scroll', e => {
+  if (!e.target || e.target.id !== 'feedScroll') return;
+  if (STATE.enAttente.length && e.target.scrollTop < 40) prendreNeufs();
+}, true);
+
+function majPastilleNeufs() {
+  const b = $('#feedNew'); if (!b) return;
+  const n = STATE.enAttente.length;
+  b.hidden = !n;
+  if (n) $('#feedNewN').textContent = n > 1 ? `${n} nouveaux évènements` : '1 nouvel évènement';
+}
+
+// Prendre ce qui attend : les lignes rejoignent la liste et l'on remonte.
+function prendreNeufs() {
+  if (!STATE.enAttente.length) return;
+  const arrives = STATE.enAttente.splice(0);
+  // ⚠️ Le rafraîchissement de fond a pu les rapporter entre-temps : les
+  // remettre en tête les afficherait DEUX fois, et le doublon ferait
+  // douter de tout le reste du journal.
+  const deja = new Set(STATE.list.map(e => e.id));
+  const neufs = arrives.filter(e => !deja.has(e.id));
+  if (neufs.length) STATE.list = neufs.concat(STATE.list).slice(0, STATE.limit);
+  majPastilleNeufs();
+  renderStream();
+  const f = $('#feedScroll'); if (f) f.scrollTo({ top: 0, behavior: 'smooth' });
+  for (const l of [...document.querySelectorAll('#rows .ev')].slice(0, Math.max(neufs.length, arrives.length))) {
+    l.classList.add('neuf'); setTimeout(() => l.classList.remove('neuf'), 700);
+  }
+}
+
 function onLive(e) {
   if (!STATE.live) return;
   SEEN.set(e.id, e);
   $('#lastTick').textContent = hhmmss(e.t);
-  if (STATE.view === 'stream' && matchesFilters(e) && window.scrollY < 200) {
-    STATE.list.unshift(e); STATE.total++;
+  if (STATE.view === 'stream' && matchesFilters(e)) {
+    STATE.total++;
     STATE.sevCounts[e.sev] = (STATE.sevCounts[e.sev] || 0) + 1;
-    if (STATE.list.length > STATE.limit) STATE.list.pop();
-    renderStream();
-    // La ligne qui vient d'arriver se signale UNE fois. Sans cela, le
-    // direct pousse le contenu vers le bas sans qu'on sache ce qui est
-    // neuf : on relit le haut de l'écran à chaque battement.
-    const ligne = $('#rows .ev');
-    if (ligne) { ligne.classList.add('neuf'); setTimeout(() => ligne.classList.remove('neuf'), 600); }
+    if (feedAuHaut()) {
+      STATE.list.unshift(e);
+      if (STATE.list.length > STATE.limit) STATE.list.pop();
+      renderStream();
+      // La ligne qui vient d'arriver se signale UNE fois. Sans cela, le
+      // direct pousse le contenu vers le bas sans qu'on sache ce qui est
+      // neuf : on relit le haut de l'écran à chaque battement.
+      const ligne = $('#rows .ev');
+      if (ligne) { ligne.classList.add('neuf'); setTimeout(() => ligne.classList.remove('neuf'), 600); }
+    } else {
+      // On lit plus bas : la ligne attend, et la pastille le dit.
+      STATE.enAttente.unshift(e);
+      if (STATE.enAttente.length > 500) STATE.enAttente.length = 500;
+      majPastilleNeufs();
+    }
   }
-  if (!softTimer) softTimer = setTimeout(() => { softTimer = null; if (STATE.live) refresh(); }, 15000);
+  if (!softTimer) softTimer = setTimeout(() => { softTimer = null; if (STATE.live) refresh({ fond:true }); }, 15000);
 }
 /* ---------- ressortir d'un espace ----------
    Le pendant d'« Entrer ». L'administration n'habite aucun espace : y
@@ -4520,7 +4852,12 @@ async function startPanel() {
       // autre serveur en croyant être chez soi. Et elle se quitte d'un
       // clic — entrer sans pouvoir ressortir serait un aller simple.
       $('#modeTag').className = 'tag-mode demo';
-      $('#modeTag').textContent = 'visite — ' + ME.espace.nom + ' ✕';
+      // ⚠️ LA CROIX NE SE TRONQUE JAMAIS. Le nom d'un espace peut être
+      // long, et l'étiquette se coupe pour ne pas pousser l'identité à la
+      // ligne : quand tout était un seul texte, c'est la croix — la seule
+      // façon de RESSORTIR de l'espace — qui disparaissait la première.
+      $('#modeTag').innerHTML =
+        `<span class="tag-nom">visite — ${esc(ME.espace.nom)}</span><span class="tag-x" aria-hidden="true">✕</span>`;
       $('#modeTag').title = 'Administration de plateforme : vous passez avant le fondateur de cet espace. Cliquez pour ressortir.';
       $('#modeTag').setAttribute('role', 'button');
       $('#modeTag').setAttribute('tabindex', '0');
