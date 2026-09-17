@@ -73,7 +73,8 @@ function embed(e, rubrique, espace) {
    ⚠️ Discord plafonne à 10 embeds par message. Au-delà du seuil, on
    RÉSUME au lieu de détailler : trente embeds pour trente ouvertures
    d'inventaire n'apprennent rien et coûtent six messages. */
-function messages(lot, rubrique, espace, cfg) {
+function messages(lot, rubrique, espace, opts) {
+  const cfg = Object.assign({ rolePing:'', pingSur:['critique'], maxParSalon:8 }, opts || {});
   if (!lot.length) return [];
   const ping = cfg.rolePing && lot.some(e => cfg.pingSur.includes(e.sev))
     ? `<@&${cfg.rolePing}> ` : '';

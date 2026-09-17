@@ -108,6 +108,53 @@ t('⚠️ et le relais ne sait QUE lire',
 t('une session de staff ne suffit pas non plus',
   (await J('/api/relay/hello')).status===401);
 
+sect('Un bot Discord PAR ESPACE');
+let b0 = await J('/api/discord/bot');
+t('au départ, aucun bot', b0.body.enPlace === false);
+t('⚠️ le serveur Discord est HÉRITÉ de la liaison — on ne le redemande pas',
+  b0.body.guildeHeritee === true || b0.body.guilde === '', 'guilde=' + b0.body.guilde);
+const JETON = 'MTk4NjIyNDgzNDcxOTI1MjQ4.faux.jeton-de-controle-pour-lessai-0123';
+t('un jeton trop court est refusé',
+  (await J('/api/discord/bot', {method:'POST', body:JSON.stringify({jeton:'trop-court'})})).status === 400);
+t('le client branche son bot depuis SON panneau',
+  (await J('/api/discord/bot', {method:'POST', body:JSON.stringify({
+     jeton: JETON, guilde: '123456789012345678',
+     options: { rolePing:'987654321098765432', pingSur:['critique'], maxParSalon: 5 } })})).body.ok === true);
+b0 = await J('/api/discord/bot');
+t('il est en place', b0.body.enPlace === true);
+t('⚠️ et le JETON ne redescend JAMAIS au navigateur',
+  !JSON.stringify(b0.body).includes('faux') && !JSON.stringify(b0.body).includes('jeton-de-controle'),
+  JSON.stringify(b0.body).includes('faux') ? 'FUITE' : 'jamais rendu');
+t('les réglages sont gardés', b0.body.options.maxParSalon === 5 && b0.body.options.rolePing === '987654321098765432');
+t('⚠️ un réglage aberrant est ramené dans les bornes',
+  (await J('/api/discord/bot', {method:'POST', body:JSON.stringify({options:{maxParSalon: 9999, rolePing:'pasunid'}})}))
+    .body.ok === true &&
+  (await J('/api/discord/bot')).body.options.maxParSalon === 50 &&
+  (await J('/api/discord/bot')).body.options.rolePing === '');
+t('⚠️ la clé de LECTURE est délivrée avec le bot — pas une pièce à réclamer',
+  (await J('/api/discord/bot')).body.relaisPret === true);
+t('un champ vide GARDE le jeton en place — on ne l’efface pas par distraction',
+  (await J('/api/discord/bot', {method:'POST', body:JSON.stringify({guilde:'123456789012345678'})})).body.ok === true
+  && (await J('/api/discord/bot')).body.enPlace === true);
+
+sect('L’inventaire, pour un seul processus');
+const INV = h => fetch(B + '/api/relay/spaces', { headers: h }).then(async r => ({ status:r.status, body: await r.json().catch(()=>null) }));
+t('⚠️ sans la clé de l’éditeur, la route refuse', (await INV({})).status === 401);
+t('la clé d’un CLIENT ne l’ouvre pas non plus',
+  (await INV({ 'x-origin-relay': 'relais-de-test-0123456789abcd' })).status === 401);
+const inv = await INV({ 'x-origin-bot': 'cle-du-bot-de-test-0123456789' });
+t('avec la clé de l’éditeur, l’espace apparaît', inv.status === 200 && inv.body.espaces.length === 1,
+  (inv.body.espaces || []).map(x => x.nom).join(', '));
+const e0 = (inv.body.espaces || [])[0] || {};
+t('⚠️ il porte les DEUX clés : lire le panneau, écrire dans Discord',
+  !!e0.relais && !!e0.jeton && e0.relais !== e0.jeton);
+t('et ses réglages, tels que le client les a posés', e0.options && e0.options.maxParSalon === 50);
+t('retirer le bot le retire de l’inventaire',
+  (await J('/api/discord/bot', {method:'POST', body:JSON.stringify({jeton:''})})).body.ok === true
+  && (await INV({ 'x-origin-bot': 'cle-du-bot-de-test-0123456789' })).body.espaces.length === 0);
+t('⚠️ mais la clé de LECTURE, elle, reste — retirer le bot ne coupe pas les journaux',
+  (await J('/api/discord/bot')).body.relaisPret === true);
+
 sect('Réservé à qui en a le droit');
 const r1 = await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},
   body:JSON.stringify({pseudo:'Kaleb',password:'motdepassetest456'})});
@@ -117,6 +164,8 @@ t('mais il écrit une note (c’est son métier)',
   (await J('/api/notes/' + encodeURIComponent('license:p1'), {method:'POST',
     body:JSON.stringify({texte:'Vu en jeu, comportement correct ce soir.'})},ck2)).body.ok===true);
 t('il voit qui est en ligne', (await J('/api/online',{},ck2)).status===200);
+t('⚠️ un modérateur ne branche PAS le bot Discord de l’espace',
+  (await J('/api/discord/bot',{method:'POST',body:JSON.stringify({jeton:JETON})},ck2)).status===403);
 
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);

@@ -3272,7 +3272,128 @@ async function openDiscordSettings() {
             <span class="map-desc">${esc(r.desc || '')}</span></span>
           ${champRole(r.id, d.roleMap[r.id] || '')}
         </div>`).join('')}</div>
+    </div>
+    <div class="block" id="botBloc" style="border-top:1px solid var(--edge);padding-top:16px;margin-top:6px">
+      <h3 class="eyebrow">Bot Discord — les journaux dans vos salons</h3>
+      <div id="botCorps"><span class="lite-m">Chargement…</span></div>
     </div>`);
+  chargerBot();
+}
+
+/* ============================================================
+   Bot Discord de l'espace
+   ⚠️ MISE EN PLACE BASIQUE, EN TROIS GESTES : coller un jeton, tester,
+   inviter. Rien à écrire dans un fichier, rien à demander au support —
+   et c'est le CLIENT qui le fait, sur son propre serveur Discord.
+   ⚠️ Le jeton ne redescend JAMAIS ici : on dit qu'il est en place, on ne
+   le réaffiche pas. Un écran d'administration se laisse ouvert, et un
+   jeton de bot vaut le contrôle du serveur Discord.
+   ============================================================ */
+let BOT = null;
+async function chargerBot() {
+  try { BOT = await api('/api/discord/bot'); } catch (e) { BOT = null; }
+  rendreBot();
+}
+function rendreBot() {
+  const h = $('#botCorps'); if (!h) return;
+  if (!BOT) { h.innerHTML = '<span class="lite-m">Indisponible.</span>'; return; }
+  const o = BOT.options || {};
+  const vu = BOT.vu;
+  const etat = !BOT.enPlace
+    ? `<div class="banner" style="--c:var(--muted)"><b>Aucun bot.</b> Collez le jeton de votre application Discord ci-dessous : les journaux arriveront dans vos salons, un par rubrique.</div>`
+    : vu && vu.serveur
+    ? `<div class="banner" style="--c:var(--ok)"><b>Bot « ${esc(vu.bot)} » relié à « ${esc(vu.serveur)} ».</b> Vérifié ${ago(vu.le)}.</div>`
+    : `<div class="banner" style="--c:var(--warn)"><b>Jeton enregistré, jamais vérifié.</b> Cliquez « Tester » : c’est la seule façon de savoir si le bot est bien invité sur votre serveur.</div>`;
+
+  h.innerHTML = `${etat}
+    ${!BOT.relaisPret && BOT.enPlace ? `<div class="banner" style="--c:var(--warn)">La clé de lecture sera délivrée à l’enregistrement.</div>` : ''}
+    <div class="field"><label for="botJeton">Jeton du bot</label>
+      <input class="input" id="botJeton" type="password" autocomplete="off"
+             placeholder="${BOT.enPlace ? '•••••••••• (en place — laissez vide pour le garder)' : 'Portail développeur → votre application → Bot → Reset Token'}">
+      <span class="lite-m">Portail développeur Discord → <b>New Application</b> → onglet <b>Bot</b> → <b>Reset Token</b>.
+      Aucun « intent privilégié » n’est nécessaire : le bot n’écoute rien, il écrit.</span>
+    </div>
+    <div class="field"><label for="botGuilde">Serveur Discord</label>
+      <input class="input" id="botGuilde" inputmode="numeric" value="${esc(BOT.guilde || '')}"
+             placeholder="Identifiant du serveur">
+      <span class="lite-m">${BOT.guildeHeritee
+        ? 'Repris du serveur relié plus haut — laissez tel quel si les journaux vont au même endroit.'
+        : 'Clic droit sur votre serveur → Copier l’identifiant (mode développeur activé).'}</span>
+    </div>
+    <div class="grid two" style="gap:12px">
+      <div class="field"><label for="botPing">Rôle mentionné</label>
+        <input class="input" id="botPing" inputmode="numeric" value="${esc(o.rolePing || '')}" placeholder="Aucun">
+        <span class="lite-m">⚠️ Mentionner sur tout revient à ne mentionner sur rien.</span>
+      </div>
+      <div class="field"><label for="botSev">Mentionner sur</label>
+        <select class="input" id="botSev">
+          ${(BOT.gravites || []).map(g => `<option value="${esc(g.id)}" ${(o.pingSur || []).includes(g.id) ? 'selected' : ''}>${esc(g.label)} et au-dessus</option>`).join('')}
+          <option value="" ${!(o.pingSur || []).length ? 'selected' : ''}>— jamais —</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid two" style="gap:12px">
+      <div class="field"><label for="botPrefixe">Préfixe des salons</label>
+        <input class="input" id="botPrefixe" value="${esc(o.prefixe || '')}" placeholder="aucun — ex. « logs- »" maxlength="12">
+      </div>
+      <div class="field"><label for="botMax">Résumer au-delà de</label>
+        <input class="input" id="botMax" type="number" min="1" max="50" value="${Number(o.maxParSalon) || 8}">
+        <span class="lite-m">Une rubrique bavarde noie un salon : au-delà, le bot résume.</span>
+      </div>
+    </div>
+    <div class="tools" style="margin-top:12px">
+      <button class="btn sm primary" id="botSave">Enregistrer</button>
+      <button class="btn sm" id="botTest" ${BOT.enPlace ? '' : 'disabled'}>Tester la liaison</button>
+      ${BOT.enPlace ? `<button class="btn sm danger" id="botOff">Retirer le bot</button>` : ''}
+    </div>
+    <div id="botResultat"></div>`;
+}
+
+async function enregistrerBot() {
+  const jeton = $('#botJeton').value.trim();
+  const sev = $('#botSev').value;
+  const corps = {
+    guilde: $('#botGuilde').value.trim(),
+    options: {
+      rolePing: $('#botPing').value.trim(),
+      pingSur: sev ? [sev] : [],
+      prefixe: $('#botPrefixe').value.trim(),
+      maxParSalon: Number($('#botMax').value) || 8,
+      rubriques: (BOT.options || {}).rubriques || [],
+      gravites: (BOT.options || {}).gravites || [],
+      creerSalons: true
+    }
+  };
+  // ⚠️ Champ vide = on GARDE le jeton en place. L'effacer parce que
+  // l'utilisateur n'a rien retapé serait le pire des automatismes.
+  if (jeton) corps.jeton = jeton;
+  await api('/api/discord/bot', { method:'POST', body: JSON.stringify(corps) });
+  toast('Bot enregistré.');
+  await chargerBot();
+  if (BOT && BOT.enPlace) testerBot();
+}
+
+async function testerBot() {
+  const b = $('#botTest'); if (b) { b.disabled = true; b.textContent = 'Vérification…'; }
+  const h = $('#botResultat');
+  try {
+    const r = await api('/api/discord/bot/test', { method:'POST' });
+    BOT.vu = r.vu; rendreBot();
+    const sortie = $('#botResultat');
+    if (r.ok) {
+      sortie.innerHTML = `<div class="banner" style="--c:var(--ok);margin-top:10px">
+        <b>Tout est en place.</b> « ${esc(r.vu.bot)} » écrit dans « ${esc(r.vu.serveur)} ».
+        Les salons manquants seront créés au prochain passage du bot.</div>`;
+    } else {
+      sortie.innerHTML = `<div class="banner" style="--c:var(--warn);margin-top:10px">
+        <b>${esc(r.souci || 'Liaison incomplète.')}</b>
+        ${r.invitation ? `<div style="margin-top:8px">
+          <a class="btn sm primary" href="${esc(r.invitation)}" target="_blank" rel="noopener">Inviter le bot sur mon serveur</a>
+          <span class="lite-m" style="display:block;margin-top:6px">Ce lien demande exactement les permissions nécessaires : voir et écrire dans les salons, publier des liens, et gérer les salons pour créer ceux qui manquent.</span>
+        </div>` : ''}</div>`;
+    }
+  } catch (e) { if (h) h.innerHTML = `<div class="banner" style="--c:var(--crit);margin-top:10px">${esc(e.message)}</div>`; }
+  finally { const x = $('#botTest'); if (x) { x.disabled = false; x.textContent = 'Tester la liaison'; } }
 }
 
 async function chargerRolesDiscord() {
@@ -4936,6 +5057,14 @@ document.addEventListener('click', async ev => {
   if (id === 'discordBtn') { DROLES = null; openDiscordSettings(); }
   if (id === 'dcLoad')     chargerRolesDiscord();
   if (id === 'dcSave')     enregistrerDiscord().catch(e => toast(e.message));
+  if (id === 'botSave')    enregistrerBot().catch(e => toast(e.message));
+  if (id === 'botTest')    testerBot();
+  if (id === 'botOff') {
+    if (!confirm('Retirer le bot Discord ?\n\nIl cessera de reporter dans vos salons. Les salons et leur historique restent — c’est à vous d’en décider.')) return;
+    api('/api/discord/bot', { method:'POST', body: JSON.stringify({ jeton: '' }) })
+      .then(() => { toast('Bot retiré.'); chargerBot(); })
+      .catch(e => toast(e.message));
+  }
   if (id === 'auditBtn') openAudit();
   if (id === 'nsGo') {
     try {

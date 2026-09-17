@@ -56,6 +56,10 @@ const CFG = {
   // Plafonds de dépôt, par espace et par minute.
   maxIngestMin: Number(process.env.MAX_INGEST_PER_MIN || 120),
   maxScreenMin: Number(process.env.MAX_SCREENS_PER_MIN || 20),
+  // ⚠️ La clé du PROCESSUS du bot, qui lui fait voir tous les espaces à
+  // servir. Celle de l'éditeur, jamais celle d'un client. Vide = la route
+  // d'inventaire n'existe pas, et le bot ne sert qu'un espace à la fois.
+  botKey: process.env.BOT_KEY || '',
   // Revérification automatique des accès Discord, en tâche de fond.
   sweepMin:   Number(process.env.ACCESS_SWEEP_MIN || 30),
   // ⚠️ Le journal d'administration a SA durée, plus longue que celle des
@@ -1087,6 +1091,44 @@ function spaceFromKey(req) {
   return null;
 }
 
+/* ---------- réglages du bot d'un espace ----------
+   ⚠️ LES RÉGLAGES VIVENT DANS LE PANNEAU, PAS DANS UN FICHIER. Un client
+   qui veut changer le rôle mentionné, ou couper une rubrique trop bavarde,
+   ne doit pas écrire à son hébergeur : il le fait depuis son écran, et
+   le bot le prend au tour suivant. */
+const OPTIONS_BOT_DEFAUT = {
+  prefixe: '',            // préfixe des salons créés, ex. « logs- »
+  rolePing: '',           // rôle mentionné
+  pingSur: ['critique'],  // ⚠️ mentionner sur tout revient à ne mentionner sur rien
+  rubriques: [],          // vide = toutes
+  gravites: [],           // vide = toutes
+  maxParSalon: 8,         // au-delà : un résumé, pas un mur
+  creerSalons: true
+};
+
+function nettoyerOptionsBot(o) {
+  const v = o && typeof o === 'object' ? o : {};
+  const liste = (x, permis) => Array.isArray(x)
+    ? [...new Set(x.map(String).filter(y => !permis || permis.includes(y)))].slice(0, 40) : [];
+  return {
+    prefixe: String(v.prefixe || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 12),
+    rolePing: /^[0-9]{5,25}$/.test(String(v.rolePing || '')) ? String(v.rolePing) : '',
+    pingSur: liste(v.pingSur, CAT.SEV_IDS),
+    rubriques: liste(v.rubriques, CAT.CAT_IDS),
+    gravites: liste(v.gravites, CAT.SEV_IDS),
+    maxParSalon: Math.max(1, Math.min(50, Number(v.maxParSalon) || 8)),
+    creerSalons: v.creerSalons !== false
+  };
+}
+
+function optionsBot(sp) {
+  let v = null; try { v = sp.bot_opts ? JSON.parse(sp.bot_opts) : null; } catch (e) {}
+  return Object.assign({}, OPTIONS_BOT_DEFAUT, nettoyerOptionsBot(v || {}),
+    // Un espace jamais réglé garde le défaut « critique », pas un tableau
+    // vide qui voudrait dire « ne mentionner sur rien ».
+    v && Array.isArray(v.pingSur) ? {} : { pingSur: OPTIONS_BOT_DEFAUT.pingSur });
+}
+
 /* ⚠️ FUITE TROUVÉE À L'ESSAI, ET ELLE ÉTAIT RÉELLE.
    Les clés d'acteur et de cible étaient bien aliasées — mais la CHARGE
    UTILE passait telle quelle, et un évènement de bannissement y porte
@@ -1237,6 +1279,44 @@ async function route(req, res) {
      demande « ce qui est arrivé APRÈS l'id N » ; s'il tombe, il reprend au
      même endroit, et rien ne manque.
      ============================================================ */
+  /* ---- l'inventaire des espaces, pour UN SEUL processus ----
+     ⚠️ UN PROCESSUS PAR CLIENT NE TIENT PAS À CINQUANTE. Chacun aurait son
+     fichier de configuration, son service, son redémarrage — et brancher
+     un nouveau client demanderait un accès au serveur. Le bot demande donc
+     la liste, et la redemande de temps en temps : ajouter un client dans
+     le panneau suffit à le faire apparaître, sans rien relancer.
+     ⚠️ CETTE ROUTE REND DES JETONS DISCORD, donc elle a sa propre clé —
+     celle de l'ÉDITEUR, dans api/.env, jamais celle d'un client. Sans
+     elle, la route n'existe pas. */
+  if (p === '/api/relay/spaces' && method === 'GET') {
+    if (!CFG.botKey) return fail(res, 404, 'Route inconnue.');
+    const k = req.headers['x-origin-bot'];
+    const attendu = Buffer.from(CFG.botKey);
+    const donne = Buffer.from(typeof k === 'string' ? k : '');
+    if (attendu.length !== donne.length || !crypto.timingSafeEqual(attendu, donne)) {
+      if (debit('botkey:' + ip, 20, 60000)) return fail(res, 429, 'Trop de tentatives.');
+      return fail(res, 401, 'Clé de bot invalide.');
+    }
+    const espaces = db.prepare(`SELECT * FROM spaces WHERE state = 'actif'
+                                AND bot_token IS NOT NULL AND bot_token <> ''`).all().map(DB.row);
+    return ok(res, {
+      espaces: espaces.map(sp => ({
+        id: sp.id, nom: sp.name,
+        // Le bot a besoin des deux : la clé de relais pour LIRE, le jeton
+        // pour ÉCRIRE dans Discord. Elles ne se remplacent pas.
+        relais: sp.relay_key || null,
+        jeton: sp.bot_token,
+        guilde: sp.bot_guild || sp.guild_id || '',
+        options: optionsBot(sp)
+      })).filter(x => x.relais && x.guilde),
+      // Ceux qu'on ne peut pas servir, et POURQUOI : sans cela, un client
+      // qui a collé son jeton attendrait sans jamais savoir ce qui manque.
+      incomplets: espaces.filter(sp => !sp.relay_key || !(sp.bot_guild || sp.guild_id))
+        .map(sp => ({ id: sp.id, nom: sp.name,
+                      manque: !sp.relay_key ? 'clé de relais' : 'serveur Discord' }))
+    });
+  }
+
   if (p.startsWith('/api/relay/')) {
     const esp = spaceFromRelay(req);
     if (!esp) {
@@ -1825,6 +1905,114 @@ async function route(req, res) {
         roles: ROLESVC.list(db, me.spaceId).map(r => ({ id: r.key, label: r.label, rank: r.rank, desc: r.desc }))
       });
     }
+    /* ============================================================
+       BOT DISCORD DE L'ESPACE
+       ⚠️ C'EST LE CLIENT QUI LE BRANCHE, depuis son propre panneau. Passer
+       par un fichier de configuration chez l'éditeur aurait voulu dire un
+       aller-retour par le support pour chaque serveur, à chaque
+       changement de jeton — et un éditeur qui détient les clés de dix
+       Discord sans que personne puisse les reprendre.
+       ⚠️ LE JETON NE REDESCEND JAMAIS AU NAVIGATEUR. On dit qu'il est en
+       place, on ne le redonne pas : un écran d'administration se laisse
+       ouvert, et un jeton de bot vaut le contrôle du serveur Discord.
+       ============================================================ */
+    if (p === '/api/discord/bot' && method === 'GET') {
+      if (!need('settings.discord')) return;
+      const sp = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(me.spaceId));
+      let vu = null; try { vu = sp.bot_seen ? JSON.parse(sp.bot_seen) : null; } catch (e) {}
+      return ok(res, {
+        enPlace: !!sp.bot_token,
+        guilde: sp.bot_guild || sp.guild_id || '',
+        guildeHeritee: !sp.bot_guild && !!sp.guild_id,
+        options: optionsBot(sp),
+        vu,
+        rubriques: CAT.CATS.map(c => ({ id: c.id, label: c.label, groupe: c.group })),
+        gravites: CAT.SEVS.map(x => ({ id: x.id, label: x.label })),
+        roles: ROLESVC.list(db, me.spaceId).map(r => ({ id: r.key, label: r.label })),
+        relaisPret: !!sp.relay_key
+      });
+    }
+    if (p === '/api/discord/bot' && method === 'POST') {
+      if (!need('settings.discord')) return;
+      const b = await readBody(req);
+      const sets = [], args = [];
+      const idOk = v => v === '' || /^[0-9]{5,25}$/.test(String(v));
+      if (b.jeton !== undefined) {
+        const j = String(b.jeton || '').trim();
+        // ⚠️ Un jeton de bot n'a pas de format public garanti, mais il est
+        // long et sans espace : refuser ce qui n'y ressemble pas évite
+        // d'enregistrer un identifiant d'application collé par erreur.
+        if (j && (j.length < 50 || /\s/.test(j)))
+          return fail(res, 400, 'Cela ne ressemble pas à un jeton de bot. Portail développeur → votre application → Bot → Reset Token.');
+        sets.push('bot_token = ?'); args.push(j || null);
+        sets.push('bot_seen = ?');  args.push(null);   // à revérifier
+        audit(me, j ? 'discord.bot.jeton' : 'discord.bot.retrait', me.space.name, ip);
+      }
+      if (b.guilde !== undefined) {
+        if (!idOk(b.guilde)) return fail(res, 400, 'L’identifiant du serveur Discord doit être numérique.');
+        sets.push('bot_guild = ?'); args.push(String(b.guilde || '') || null);
+      }
+      if (b.options !== undefined) {
+        sets.push('bot_opts = ?'); args.push(JSON.stringify(nettoyerOptionsBot(b.options)));
+        audit(me, 'discord.bot.reglages', me.space.name, ip);
+      }
+      if (!sets.length) return ok(res, { ok: true });
+      db.prepare(`UPDATE spaces SET ${sets.join(', ')} WHERE id = ?`).run(...args, me.spaceId);
+      // ⚠️ Sans clé de relais, le bot ne pourra RIEN lire : on la délivre
+      // en même temps plutôt que de laisser le client découvrir, une fois
+      // tout branché, qu'il manquait une pièce dont on ne lui a pas parlé.
+      const apres = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(me.spaceId));
+      if (apres.bot_token && !apres.relay_key) {
+        db.prepare('UPDATE spaces SET relay_key = ? WHERE id = ?')
+          .run(crypto.randomBytes(24).toString('hex'), me.spaceId);
+        audit(me, 'discord.bot.relais', `${me.space.name} — clé de relais délivrée avec le bot`, ip);
+      }
+      return ok(res, { ok: true });
+    }
+    /* Vérifier POUR DE VRAI, et le dire en clair.
+       ⚠️ « Enregistré » ne veut pas dire « ça marche ». Un jeton régénéré,
+       un bot jamais invité, un mauvais identifiant de serveur : trois
+       pannes qui se ressemblent et ne se corrigent pas pareil. On
+       interroge Discord et on rend le nom du bot, celui du serveur, et
+       l'URL d'invitation quand il n'y est pas encore. */
+    if (p === '/api/discord/bot/test' && method === 'POST') {
+      if (!need('settings.discord')) return;
+      if (debit('bottest:' + me.spaceId, 10, 60000)) return fail(res, 429, 'Trop d’essais — patientez une minute.');
+      const sp = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(me.spaceId));
+      if (!sp.bot_token) return fail(res, 400, 'Aucun jeton enregistré.');
+      const guilde = sp.bot_guild || sp.guild_id || '';
+      const entete = { authorization: 'Bot ' + sp.bot_token, 'user-agent': 'OriginLogs (panneau)' };
+      const base = DISCORD.API;
+      let moi = null, g = null, souci = null, invitation = null;
+      try {
+        const r = await fetch(base + '/users/@me', { headers: entete });
+        if (r.status === 401) souci = 'Discord refuse ce jeton. Il a peut-être été régénéré : reprenez-le dans le portail développeur.';
+        else if (!r.ok) souci = `Discord répond ${r.status}.`;
+        else moi = await r.json();
+      } catch (e) { souci = 'Discord est injoignable depuis le serveur du panneau : ' + e.message; }
+      if (moi && moi.id) {
+        // ⚠️ L'URL d'invitation se CALCULE, elle ne se demande pas au
+        // client : c'est l'étape où l'on se trompe de permissions, et une
+        // permission manquante donne un bot qui se connecte et ne peut
+        // rien faire. 1024 (voir) + 2048 (écrire) + 16384 (liens) + 16 (gérer les salons).
+        invitation = `https://discord.com/oauth2/authorize?client_id=${moi.id}&scope=bot&permissions=19472`;
+        if (guilde) {
+          try {
+            const rg = await fetch(base + '/guilds/' + guilde, { headers: entete });
+            if (rg.status === 403 || rg.status === 404)
+              souci = 'Le bot n’est pas encore sur ce serveur Discord — invitez-le avec le lien ci-dessous.';
+            else if (rg.ok) g = await rg.json();
+            else souci = souci || `Discord répond ${rg.status} pour ce serveur.`;
+          } catch (e) { souci = souci || e.message; }
+        } else souci = 'Aucun serveur Discord indiqué : reliez-en un, ou renseignez-le ici.';
+      }
+      const vu = moi ? { bot: moi.username, botId: moi.id, serveur: g ? g.name : null,
+                         guilde: guilde || null, le: now() } : null;
+      db.prepare('UPDATE spaces SET bot_seen = ? WHERE id = ?').run(vu ? JSON.stringify(vu) : null, me.spaceId);
+      audit(me, 'discord.bot.test', souci ? 'échec — ' + souci : `ok — ${moi.username}`, ip);
+      return ok(res, { ok: !souci, souci, vu, invitation, guilde });
+    }
+
     if (p === '/api/discord/config' && method === 'POST') {
       if (!need('settings.discord')) return;
       const b = await readBody(req);

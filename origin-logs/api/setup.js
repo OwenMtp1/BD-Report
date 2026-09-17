@@ -53,6 +53,13 @@ if (!cle) {
     '# pour qu\'un fondateur puisse les changer sans toucher au fichier.',
     '#DISCORD_CLIENT_SECRET=',
     '#DISCORD_BOT_TOKEN=',
+    '',
+    '# --- Bot Discord des clients (facultatif) ---',
+    '# ⚠️ Ce n\'est PAS un jeton Discord : c\'est la clé qui permet AU',
+    '# PROCESSUS du bot de voir la liste des espaces à servir. Chaque client',
+    '# branche SON application Discord depuis son propre panneau ; celle-ci',
+    '# n\'appartient qu\'à vous. Recopiez-la dans bot/.env (BOT_KEY).',
+    'BOT_KEY=' + crypto.randomBytes(24).toString('hex'),
     ''
   ].join('\n'), { mode: 0o600 });
 }

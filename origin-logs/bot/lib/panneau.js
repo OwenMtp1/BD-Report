@@ -15,22 +15,31 @@ class ErreurPanneau extends Error {
   constructor(code, msg) { super(msg); this.code = code; }
 }
 
-async function lire(cfg, route) {
-  const r = await fetch(cfg.panneau + route, { headers: { 'x-origin-relay': cfg.cleRelais } });
+async function lire(cfg, route, entete) {
+  const r = await fetch(cfg.panneau + route, { headers: entete });
   const j = await r.json().catch(() => null);
   if (!r.ok) throw new ErreurPanneau(r.status, (j && j.error) || ('HTTP ' + r.status));
   return j;
 }
 
+const avecRelais = cle => ({ 'x-origin-relay': cle });
+
+/* L'inventaire des espaces à servir — le mode « tous les espaces ».
+   ⚠️ Il rend les JETONS DISCORD de chaque client : c'est la seule route
+   du produit qui le fasse, elle a sa propre clé, et cette clé est celle de
+   l'éditeur — jamais celle d'un client. */
+const inventaire = cfg => lire(cfg, '/api/relay/spaces', { 'x-origin-bot': cfg.cleBot });
+
 // Ce que le bot a besoin de savoir pour préparer ses salons : le nom de
 // l'espace et le catalogue des rubriques. Il n'en invente aucune.
-const bonjour = cfg => lire(cfg, '/api/relay/hello');
+const bonjour = (cfg, cleRelais) => lire(cfg, '/api/relay/hello', avecRelais(cleRelais));
 
-function evenements(cfg, depuis) {
+function evenements(cfg, cleRelais, depuis, options) {
+  const o = options || {};
   const q = new URLSearchParams({ since: String(depuis), limit: String(cfg.parLot) });
-  if (cfg.rubriques.length) q.set('cat', cfg.rubriques.join(','));
-  if (cfg.gravites.length)  q.set('sev', cfg.gravites.join(','));
-  return lire(cfg, '/api/relay/events?' + q.toString());
+  if ((o.rubriques || []).length) q.set('cat', o.rubriques.join(','));
+  if ((o.gravites || []).length)  q.set('sev', o.gravites.join(','));
+  return lire(cfg, '/api/relay/events?' + q.toString(), avecRelais(cleRelais));
 }
 
-module.exports = { bonjour, evenements, ErreurPanneau };
+module.exports = { bonjour, evenements, inventaire, ErreurPanneau };

@@ -309,6 +309,21 @@ function open(file) {
   // en lecture seule, qu'on peut lui retirer sans couper l'arrivée des
   // logs. Nulle par défaut : un espace sans bot n'a pas de porte ouverte.
   ensureColumn(db, 'spaces', 'relay_key', 'TEXT');
+  /* ⚠️ UN BOT DISCORD PAR ESPACE, et son jeton vit DANS L'ESPACE.
+     Un jeton unique dans un fichier de configuration aurait voulu dire un
+     seul bot pour tous les clients : le même nom, le même avatar, et
+     surtout la même application Discord dans dix serveurs différents. Un
+     client qui la révoque les coupe tous. Chacun le sien, chacun son
+     interrupteur. */
+  ensureColumn(db, 'spaces', 'bot_token', 'TEXT');
+  // Vide = le serveur Discord déjà relié pour la connexion (guild_id).
+  // C'est le cas courant : on ne demande pas deux fois la même chose.
+  ensureColumn(db, 'spaces', 'bot_guild', 'TEXT');
+  ensureColumn(db, 'spaces', 'bot_opts',  'TEXT');
+  // Ce que le bot a réellement trouvé en se présentant : son nom, celui du
+  // serveur. Affiché au client pour qu'il VOIE que c'est branché, plutôt
+  // que de le déduire d'une absence d'erreur.
+  ensureColumn(db, 'spaces', 'bot_seen',  'TEXT');
   // DÉFAUT TROUVÉ À L'AUDIT : la clé d'un joueur était unique GLOBALEMENT.
   // Deux espaces partageant un même joueur (même licence) se seraient
   // écrasés l'un l'autre à l'ingestion. La clé primaire devient

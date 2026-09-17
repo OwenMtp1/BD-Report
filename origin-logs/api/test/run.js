@@ -57,6 +57,7 @@ const SUITES = [
   { nom: 'interface', fichier: 'interface.test.mjs', port: 8912, discord: false,
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
   { nom: 'equipe', fichier: 'equipe.test.mjs', port: 8913, discord: false,
+    botKey: 'cle-du-bot-de-test-0123456789',
     comptes: [['Nyx', 'fondateur', 'motdepassetest123', { discord: '777000111222333444' }],
               ['Kaleb', 'moderateur', 'motdepassetest456']] }
 ];
@@ -123,6 +124,7 @@ function lancer(cmd, args, env, silencieux) {
       PORT: String(s.port), SERVER_KEY: CLE, DB_FILE: fichierDb,
       PANEL_DIR: path.join(RACINE, '..'),
       SCREEN_DIR: path.join(TRAVAIL, s.nom + '-screens'),
+      ...(s.botKey ? { BOT_KEY: s.botKey } : {}),
       ...(s.discord ? {
         FAUX_DISCORD: 'http://127.0.0.1:' + FAUX_PORT,
         DISCORD_SITE: 'http://127.0.0.1:' + FAUX_PORT,

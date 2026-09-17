@@ -12,12 +12,21 @@ function creer() {
       const rep = (code, o) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
       if (!/^Bot /.test(req.headers.authorization || '')) return rep(401, { message: 'Unauthorized' });
       const u = req.url;
-      if (u === '/api/v10/users/@me') return rep(200, { id: '1', username: 'OriginLogs' });
+      if (u === '/api/v10/users/@me') {
+        const j = String(req.headers.authorization || '').slice(4);
+        return rep(200, { id: j.slice(0, 6), username: 'Bot-' + j.slice(13, 16) });
+      }
       if (/^\/api\/v10\/guilds\/\d+$/.test(u)) return rep(200, { id: u.split('/').pop(), name: 'Origin RP' });
-      if (/^\/api\/v10\/guilds\/\d+\/channels$/.test(u) && req.method === 'GET') return rep(200, etat.salons);
-      if (/^\/api\/v10\/guilds\/\d+\/channels$/.test(u) && req.method === 'POST') {
+      // ⚠️ LES SALONS APPARTIENNENT À UN SERVEUR. Sans cette séparation, le
+      // second client aurait retrouvé les salons du premier PAR LEUR NOM et
+      // s'en serait servi : deux serveurs Discord partageant #anticheat,
+      // c'est-à-dire la fuite que le cloisonnement doit empêcher.
+      const mg = u.match(/^\/api\/v10\/guilds\/(\d+)\/channels$/);
+      if (mg && req.method === 'GET') return rep(200, etat.salons.filter(c => c.guild_id === mg[1]));
+      if (mg && req.method === 'POST') {
         const b = JSON.parse(corps || '{}');
-        const c = { id: String(1000 + etat.prochain++), name: b.name, type: b.type, parent_id: b.parent_id || null, topic: b.topic };
+        const c = { id: String(1000 + etat.prochain++), guild_id: mg[1], name: b.name, type: b.type,
+                    parent_id: b.parent_id || null, topic: b.topic };
         etat.salons.push(c); return rep(201, c);
       }
       const m = u.match(/^\/api\/v10\/channels\/(\d+)\/messages$/);

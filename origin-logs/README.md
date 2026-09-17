@@ -535,11 +535,26 @@ panneau. Il crée les salons manquants au démarrage, ne supprime jamais rien,
 et mentionne un rôle sur les gravités qu'on lui désigne — `critique` par
 défaut. ⚠️ **Mentionner sur tout revient à ne mentionner sur rien.**
 
-🔑 **Il a sa PROPRE clé, en lecture seule.** Celle du serveur de jeu *écrit*
-des journaux ; celle du bot ne sait que les *lire*. Les confondre donnerait
-à un bot le pouvoir de fabriquer des preuves, et la retirer couperait
-l'arrivée des vraies. Elle se délivre et se retire depuis
-**Supervision → la carte de l'espace**, indépendamment.
+🔑 **UN BOT PAR ESPACE, UN SEUL PROCESSUS.** Chaque client branche SA propre
+application Discord depuis son panneau — **Liaison Discord → Bot Discord** —
+en trois gestes : coller le jeton, tester, inviter avec le lien que le
+panneau compose. Son nom, son avatar, son interrupteur. Un jeton partagé
+aurait voulu dire le même bot dans dix serveurs, et un client qui le révoque
+les couperait tous.
+
+Le processus, lui, les sert tous : brancher un client ne demande ni fichier,
+ni redémarrage, ni accès au serveur — il apparaît de lui-même dans les deux
+minutes. Un serveur qui héberge son propre panneau tourne en mode « un seul
+espace » et n'a besoin d'aucune clé d'éditeur.
+
+🔑 **Deux clés, jamais une.** Celle du serveur de jeu *écrit* des journaux ;
+celle du bot ne sait que les *lire*, et se délivre toute seule quand on
+branche un bot. Les confondre donnerait à un bot le pouvoir de fabriquer des
+preuves, et retirer l'une ne doit jamais couper l'autre.
+
+⚠️ **Le jeton ne redescend jamais à l'écran.** On dit qu'il est en place, on
+ne le réaffiche pas : un écran d'administration se laisse ouvert, et un
+jeton de bot vaut le contrôle du serveur Discord.
 
 ⚠️ **Il sonde, il ne s'abonne pas.** Un flux temps réel se coupe sans
 prévenir et reprend en ayant PERDU ce qui est passé pendant la coupure. Le
