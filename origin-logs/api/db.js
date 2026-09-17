@@ -191,6 +191,39 @@ CREATE TABLE IF NOT EXISTS screens(
 );
 CREATE INDEX IF NOT EXISTS idx_sc_space ON screens(space_id, taken_at DESC);
 
+-- PRÉSENCE. Qui est sur le serveur EN CE MOMENT.
+-- ⚠️ On ne la DÉDUIT PAS des évènements de connexion : un redémarrage du
+-- serveur de jeu ne produit aucun « playerDropped », et tout le monde
+-- resterait « en ligne » pour l'éternité. La ressource envoie donc la
+-- liste complète à intervalle régulier, et ce qui n'a pas été revu depuis
+-- deux battements est parti. Une photo, pas un journal.
+CREATE TABLE IF NOT EXISTS presence(
+  space_id   INTEGER NOT NULL,
+  key        TEXT    NOT NULL,
+  name       TEXT,
+  sid        INTEGER,
+  job        TEXT,
+  ping       INTEGER,
+  staff      INTEGER NOT NULL DEFAULT 0,   -- reconnu par son Discord
+  staff_name TEXT,
+  since      INTEGER,                      -- début de la session en cours
+  seen_at    INTEGER NOT NULL,
+  PRIMARY KEY(space_id, key)
+);
+CREATE INDEX IF NOT EXISTS idx_pr_seen ON presence(space_id, seen_at DESC);
+
+-- NOTES DU STAFF SUR UN JOUEUR. « Déjà averti deux fois pour ça. »
+CREATE TABLE IF NOT EXISTS player_notes(
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  space_id   INTEGER NOT NULL,
+  player_key TEXT    NOT NULL,
+  body       TEXT    NOT NULL,
+  by_id      INTEGER,
+  by_name    TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pn_player ON player_notes(space_id, player_key, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS marks(
   event_id INTEGER NOT NULL,
   kind     TEXT    NOT NULL,          -- pin | done
@@ -271,6 +304,11 @@ function open(file) {
   // Un administrateur de plateforme visite un espace sans changer le
   // sien : la visite vit sur la SESSION, pas sur le compte.
   ensureColumn(db, 'sessions', 'space_id', 'INTEGER');
+  // ⚠️ Le bot Discord n'est PAS le serveur de jeu : lui donner la clé
+  // d'ingestion l'autoriserait à ÉCRIRE des journaux. Il a sa propre clé,
+  // en lecture seule, qu'on peut lui retirer sans couper l'arrivée des
+  // logs. Nulle par défaut : un espace sans bot n'a pas de porte ouverte.
+  ensureColumn(db, 'spaces', 'relay_key', 'TEXT');
   // DÉFAUT TROUVÉ À L'AUDIT : la clé d'un joueur était unique GLOBALEMENT.
   // Deux espaces partageant un même joueur (même licence) se seraient
   // écrasés l'un l'autre à l'ingestion. La clé primaire devient

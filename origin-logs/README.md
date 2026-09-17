@@ -7,7 +7,9 @@ fonctionnent ensemble mais s'installent séparément :
 origin-logs/
 ├── panel.html · index.html · build.sh   le panneau (interface)
 ├── api/                                 l'API + la base (Node 22, zéro dépendance)
-└── resource/                            la ressource FiveM qui émet les logs
+├── resource/                            la ressource FiveM qui émet les logs
+├── bot/                                 le bot Discord (facultatif)
+└── juridique/                           les modèles RGPD
 ```
 
 Le panneau **fonctionne seul**, sans rien installer : ouvert en fichier, il
@@ -82,6 +84,29 @@ d'œil à la strie de couleur en début de ligne.
 
 ### Écrans
 
+- **En ligne** — qui est sur le serveur **en ce moment** : ID serveur,
+  métier, ping, temps de session, et le clic ouvre la fiche du joueur. Sa
+  propre recherche (nom, ID, métier).
+  ⚠️ **Le staff est SÉPARÉ des joueurs**, et reconnu par son **Discord** —
+  celui de son compte du panneau. Un modérateur cherche « qui dois-je
+  surveiller », pas « qui est connecté » : ses collègues dans la même liste
+  allongent la recherche sans jamais être la réponse.
+  ⚠️ **La présence ne se DÉDUIT PAS du flux.** Un serveur de jeu qui
+  redémarre n'émet aucun départ : tout le monde resterait « en ligne » pour
+  l'éternité. La ressource envoie la liste **entière** toutes les 45 s, et
+  ce qui n'y est plus est parti. Sans battement récent, l'écran dit que la
+  liste est **inconnue** — pas qu'elle est vide : conclure que le serveur
+  est désert alors que c'est la ressource qui s'est tue ferait chercher le
+  problème du mauvais côté.
+- **Vue d'équipe** (droit `team.stats`, au Fondateur et à l'Administrateur
+  par défaut) — ce que **chacun traite** : reports pris, refusés, clos,
+  attente moyenne avant prise, sanctions, évènements marqués traités,
+  dernière activité. Sur 24 h, 7 j ou 30 j.
+  ⚠️ **Les chiffres viennent des journaux, pas d'une déclaration.**
+  ⚠️ **« Sans réponse » est compté À PART** : un report que personne n'a
+  pris ne figure dans la colonne de personne, et c'est pourtant le seul
+  chiffre qui dise si l'équipe suit.
+
 - **Vue d'ensemble** — une ligne d'état (volume et écart avec la période
   précédente, joueurs distincts, anticheat, sanctions, bannis en cours), puis
   la file des alertes ouvertes en tête d'écran : c'est la seule question que
@@ -132,7 +157,19 @@ d'œil à la strie de couleur en début de ligne.
   émettrice, contexte des évènements voisins du même joueur, épingle et
   marquage « traité » **partagés entre le staff**.
 - **Dossier joueur** — identifiants FiveM, sessions, éliminations, décès,
-  détections, sanctions, historique.
+  détections, sanctions, historique, **comptes liés** et **notes d'équipe**.
+  ⚠️ **Les comptes liés répondent à la deuxième question d'un modérateur**,
+  juste après « a-t-il triché ? » : *« est-ce son double compte ? »*. Le
+  rapprochement existait déjà — mais seulement à la CONNEXION, pour refuser
+  l'entrée d'un banni revenu sous une autre licence ; personne ne pouvait le
+  voir à l'écran. ⚠️ **Un lien n'est pas une preuve**, et le dire est la
+  moitié du travail : on rend le MOTIF du rapprochement (même Steam, même
+  Discord), jamais un verdict. Deux frères sur la même machine existent
+  aussi.
+  ⚠️ **Les notes d'équipe** (« déjà repris deux fois, prochaine = ban »)
+  vivaient jusque-là dans un salon Discord ou un tableur, et se perdaient au
+  premier changement de staff. Signées, datées, et retirables par leur
+  auteur ou un responsable — jamais en silence par un collègue.
 - **Écran du joueur** — la rubrique montre en tête un **bandeau de captures**
   (vignettes), et les lignes qui en portent une le signalent. Une vignette
   ouvre l'évènement, pas seulement l'image : c'est là que vivent le motif,
@@ -483,6 +520,46 @@ qui cherche dans tous les espaces, en trouverait deux et refuserait de
 choisir — plus personne ne se connecterait.
 
 Détail et commandes : **[DEPLOIEMENT.md § Sauvegarde](DEPLOIEMENT.md)**.
+
+---
+
+## Bot Discord — les journaux là où vit le serveur
+
+Le panneau attendait qu'on vienne le voir. Un serveur GTA RP vit sur
+**Discord** : une détection critique à trois heures du matin s'empilait dans
+une file que personne ne regardait avant le lendemain.
+
+Le bot (**[bot/](bot/)**, Node 22, aucune dépendance) reporte les journaux
+dans Discord, **un salon par rubrique**, rangés en catégories comme dans le
+panneau. Il crée les salons manquants au démarrage, ne supprime jamais rien,
+et mentionne un rôle sur les gravités qu'on lui désigne — `critique` par
+défaut. ⚠️ **Mentionner sur tout revient à ne mentionner sur rien.**
+
+🔑 **Il a sa PROPRE clé, en lecture seule.** Celle du serveur de jeu *écrit*
+des journaux ; celle du bot ne sait que les *lire*. Les confondre donnerait
+à un bot le pouvoir de fabriquer des preuves, et la retirer couperait
+l'arrivée des vraies. Elle se délivre et se retire depuis
+**Supervision → la carte de l'espace**, indépendamment.
+
+⚠️ **Il sonde, il ne s'abonne pas.** Un flux temps réel se coupe sans
+prévenir et reprend en ayant PERDU ce qui est passé pendant la coupure. Le
+bot demande « ce qui est arrivé après l'évènement n° N » : s'il tombe, il
+reprend au même N, et rien ne manque. Il retient son repère sur disque, et
+**part du dernier évènement au premier lancement** — repartir de zéro
+déverserait des mois de journaux dans Discord.
+
+⚠️ **Aucune licence ne part dans Discord.** Un salon se lit à plus de monde
+qu'on ne croit. Le relais remplace tout identifiant par un alias stable — y
+compris **dans la charge utile**, où un bannissement porte la licence de sa
+cible. C'est une fuite réelle, trouvée par le contrôle qui la fige
+aujourd'hui.
+
+⚠️ **Il n'accepte aucune commande.** Un bot qui ferait `!ban` devrait
+authentifier chaque personne dans Discord et refaire tout le système de
+rôles du panneau — qui existe déjà et qui, lui, journalise chaque geste.
+Le bot rapporte ; le panneau décide.
+
+Installation et réglages : **[bot/README.md](bot/README.md)**.
 
 ---
 

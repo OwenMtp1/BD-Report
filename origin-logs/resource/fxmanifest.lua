@@ -20,7 +20,8 @@ server_scripts {
   'server/framework_hooks.lua',
   'server/anticheat.lua',
   'server/actions.lua',
-  'server/captures.lua'
+  'server/captures.lua',
+  'server/presence.lua'
 }
 
 client_script 'client/main.lua'

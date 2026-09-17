@@ -68,6 +68,8 @@ const PERMS = [
   { id:'actions.give',         label:'Rendre un item ou de l’argent' },
   { id:'screens.request',      label:'Demander une capture de l’écran d’un joueur' },
   { id:'players.gdpr',         label:'Exporter et effacer les données d’un joueur (RGPD)' },
+  { id:'team.stats',           label:'Voir l’activité de l’équipe (qui traite quoi)' },
+  { id:'players.notes',        label:'Écrire une note d’équipe sur un joueur' },
   { id:'audit.view',           label:'Consulter le journal du panneau' },
   { id:'accounts.manage',      label:'Gérer les comptes staff' },
   { id:'settings.discord',     label:'Configurer la liaison Discord et les rôles' },
@@ -118,7 +120,7 @@ const ROLES = {
   },
   gerant_anticheat: {
     label:'Gérant Brigade Anti-Cheat', rank:70,
-    perms: u(P.lire, P.moderer, P.bannir, ['players.identifiers', 'audit.view', 'screens.request']),
+    perms: u(P.lire, P.moderer, P.bannir, ['players.identifiers', 'audit.view', 'screens.request', 'players.notes']),
     cats: u(G.moderation, G.joueurs, G.rp),
     desc:'Pilote la lutte contre la triche : détections, bannissements, appels.'
   },
@@ -154,7 +156,7 @@ const ROLES = {
   },
   moderateur: {
     label:'Modérateur', rank:50,
-    perms: u(P.lire, P.moderer),
+    perms: u(P.lire, P.moderer, ['players.notes']),
     cats: u(G.moderation, G.joueurs, G.rp, G.biens),
     desc:'Traite les signalements du quotidien : avertir, expulser.'
   },

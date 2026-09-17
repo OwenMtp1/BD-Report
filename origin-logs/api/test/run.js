@@ -55,7 +55,10 @@ const SUITES = [
   { nom: 'reports', fichier: 'reports.test.mjs', port: 8910, discord: false,
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
   { nom: 'interface', fichier: 'interface.test.mjs', port: 8912, discord: false,
-    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] }
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
+  { nom: 'equipe', fichier: 'equipe.test.mjs', port: 8913, discord: false,
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123', { discord: '777000111222333444' }],
+              ['Kaleb', 'moderateur', 'motdepassetest456']] }
 ];
 
 const filtre = process.argv.slice(2).filter(a => !a.startsWith('-'));
@@ -76,13 +79,16 @@ function semer(fichierDb, comptes) {
   const AUTH = require(path.join(RACINE, 'auth.js'));
   const ROLESVC = require(path.join(RACINE, 'roles.js'));
   const db = DB.open(fichierDb);
-  db.prepare(`INSERT INTO spaces(id,name,server_key,state,created_at,created_by)
-              VALUES(1,'Origin Roleplay',?, 'actif', ?, 'test')`).run(CLE, Date.now());
+  db.prepare(`INSERT INTO spaces(id,name,server_key,relay_key,state,created_at,created_by)
+              VALUES(1,'Origin Roleplay',?,?, 'actif', ?, 'test')`)
+    .run(CLE, 'relais-de-test-0123456789abcd', Date.now());
   ROLESVC.seed(db, 1);
   for (const [pseudo, role, mdp, o] of comptes) {
-    db.prepare(`INSERT INTO staff(pseudo,pass,role,roles,created_at,space_id,source,platform_admin)
-                VALUES(?,?,?,?,?,1,'local',?)`)
-      .run(pseudo, AUTH.hash(mdp), role, JSON.stringify([role]), Date.now(), o && o.plateforme ? 1 : 0);
+    // Un Discord pour chacun : c'est lui qui fait reconnaître le staff EN JEU.
+    db.prepare(`INSERT INTO staff(pseudo,pass,role,roles,created_at,space_id,source,platform_admin,discord_id)
+                VALUES(?,?,?,?,?,1,'local',?,?)`)
+      .run(pseudo, AUTH.hash(mdp), role, JSON.stringify([role]), Date.now(),
+           o && o.plateforme ? 1 : 0, (o && o.discord) || null);
   }
   db.close();
 }

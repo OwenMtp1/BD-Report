@@ -855,6 +855,58 @@ function statsOf(me, from, to, buckets) {
            bansActifs, series, seriesBySev, split, top, alertList: alertRows };
 }
 
+/* ---------- comptes liés ----------
+   ⚠️ LA DEUXIÈME QUESTION D'UN MODÉRATEUR, juste après « a-t-il triché ? »,
+   est « est-ce son double compte ? ». Le rapprochement existait déjà — mais
+   seulement à la CONNEXION, dans `/api/ban-check`, pour refuser l'entrée
+   d'un banni revenu sous une autre licence. Personne ne pouvait le voir à
+   l'écran, alors que la table des joueurs porte le Discord, le Steam et le
+   FiveM de chacun.
+
+   ⚠️ Un lien N'EST PAS UNE PREUVE, et le dire est la moitié du travail. Un
+   Steam partagé désigne presque sûrement la même personne ; une IP le
+   dirait beaucoup moins, et c'est pourquoi on n'en collecte aucune. On rend
+   donc le MOTIF du rapprochement avec chaque compte, jamais un verdict —
+   c'est au staff de conclure, pas au panneau.
+
+   ⚠️ Sans le droit de voir les identifiants, les comptes liés sont quand
+   même rendus (le fait qu'il y ait un double compte n'est pas un secret),
+   mais leur clé est masquée comme partout ailleurs. */
+const CHAMPS_LIENS = [['discord', 'même Discord'], ['steam', 'même Steam'], ['fivem', 'même compte FiveM']];
+
+function comptesLies(me, key) {
+  const moi = DB.row(db.prepare('SELECT * FROM players WHERE space_id = ? AND key = ?').get(me.spaceId, key));
+  if (!moi) return [];
+  const trouves = new Map();
+  for (const [champ, motif] of CHAMPS_LIENS) {
+    const v = moi[champ];
+    if (!v) continue;
+    for (const r of db.prepare(`SELECT * FROM players WHERE space_id = ? AND ${champ} = ? AND key <> ?`)
+                      .all(me.spaceId, v, key).map(DB.row)) {
+      const e = trouves.get(r.key) || { p: r, motifs: [] };
+      e.motifs.push(motif);
+      trouves.set(r.key, e);
+    }
+  }
+  if (!trouves.size) return [];
+  const ids = me.perms.includes('players.identifiers');
+  const t = now();
+  return [...trouves.values()].map(({ p: r, motifs }) => {
+    const ban = DB.row(db.prepare(`SELECT * FROM sanctions WHERE space_id=? AND player_key=? AND type='ban'
+      AND active=1 AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT 1`)
+      .get(me.spaceId, r.key, t));
+    return {
+      key: ids ? r.key : aliasOf(r.key), keyMasquee: !ids,
+      nom: r.name, sid: r.sid, vuLe: r.last_seen, premiereFois: r.first_seen,
+      evenements: r.events,
+      motifs,
+      banni: !!ban, banMotif: ban ? ban.reason : null, banDefinitif: !!(ban && !ban.expires_at),
+      sanctions: DB.row(db.prepare('SELECT COUNT(*) n FROM sanctions WHERE space_id=? AND player_key=?')
+                   .get(me.spaceId, r.key)).n
+    };
+  }).sort((a, b) => (b.banni - a.banni) || (b.vuLe || 0) - (a.vuLe || 0));
+}
+
 function playerFile(me, key) {
   const p = DB.row(db.prepare('SELECT * FROM players WHERE key = ? AND space_id = ?').get(key, me.spaceId));
   if (!p) return null;
@@ -869,6 +921,10 @@ function playerFile(me, key) {
   };
   const sanctions = db.prepare(`SELECT * FROM sanctions WHERE space_id=? AND player_key=? ORDER BY created_at DESC LIMIT 20`)
                       .all(me.spaceId, key).map(DB.row);
+  const liens = comptesLies(me, key);
+  const notes = db.prepare(`SELECT * FROM player_notes WHERE space_id=? AND player_key=?
+                            ORDER BY created_at DESC LIMIT 30`).all(me.spaceId, key).map(DB.row)
+                  .map(n => ({ id:n.id, texte:n.body, par:n.by_name, le:n.created_at }));
   const last = db.prepare(`SELECT e.* ${MARKCOLS} FROM events e ${MARKJOIN}
       WHERE e.space_id=? AND e.cat IN ${IN} AND (e.actor_key=? OR e.target_key=?) ORDER BY e.ts DESC LIMIT 20`)
       .all(me.spaceId, ...me.cats, key, key).map(r => outEvent(DB.row(r), me));
@@ -877,7 +933,7 @@ function playerFile(me, key) {
     player: { key: ids ? p.key : aliasOf(p.key), keyMasquee: !ids, name: p.name, sid: p.sid, job: p.job, grade: p.grade,
               discord: ids ? p.discord : null, steam: ids ? p.steam : null, fivem: ids ? p.fivem : null,
               firstSeen: p.first_seen, lastSeen: p.last_seen, playtime: p.playtime, events: p.events },
-    stats, sanctions, last,
+    stats, sanctions, last, liens, notes,
     ban: DB.row(db.prepare(`SELECT * FROM sanctions WHERE space_id=? AND player_key=? AND type='ban' AND active=1
                             AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT 1`).get(me.spaceId, key, now()))
   };
@@ -1031,6 +1087,72 @@ function spaceFromKey(req) {
   return null;
 }
 
+/* ⚠️ FUITE TROUVÉE À L'ESSAI, ET ELLE ÉTAIT RÉELLE.
+   Les clés d'acteur et de cible étaient bien aliasées — mais la CHARGE
+   UTILE passait telle quelle, et un évènement de bannissement y porte
+   `cibleKey: "license:…"`. Les exemples qu'on donne aux clients en
+   mettent d'autres. Un salon Discord se lit à plus de monde qu'on ne
+   croit : y déverser les licences aurait fait du bot la plus grosse fuite
+   du produit, et personne ne l'aurait vue passer.
+   On nettoie donc EN PROFONDEUR : tout ce qui ressemble à un identifiant
+   FiveM devient son alias, et la rubrique « identifiants » disparaît
+   entièrement — elle n'existe que pour ça. */
+const IDENT = /^(license2?|steam|discord|fivem|live|xbl|ip):/i;
+function laverPourRelais(v, profondeur) {
+  if (profondeur > 6) return null;
+  if (typeof v === 'string') return IDENT.test(v) ? aliasOf(v) : v;
+  if (Array.isArray(v)) return v.slice(0, 40).map(x => laverPourRelais(x, profondeur + 1));
+  if (v && typeof v === 'object') {
+    const out = {};
+    for (const [k, x] of Object.entries(v)) {
+      // Une rubrique entière d'identifiants n'a rien à faire dans Discord.
+      if (/^identifiants?$/i.test(k)) continue;
+      out[k] = laverPourRelais(x, profondeur + 1);
+    }
+    return out;
+  }
+  return v;
+}
+
+/* ⚠️ LE BOT DISCORD N'EST PAS LE SERVEUR DE JEU, et il ne doit surtout pas
+   partager sa clé : celle du jeu ÉCRIT des journaux, celle-ci ne fait que
+   les lire. Les confondre donnerait à un bot le pouvoir de fabriquer des
+   preuves, et retirer l'un couperait l'autre. Comparaison à temps
+   constant, comme pour l'ingestion — une clé se devine caractère par
+   caractère quand on mesure le temps de réponse. */
+function spaceFromRelay(req) {
+  const k = req.headers['x-origin-relay'];
+  if (typeof k !== 'string' || !k) return null;
+  const donne = Buffer.from(k);
+  for (const sp of db.prepare("SELECT * FROM spaces WHERE state = 'actif' AND relay_key IS NOT NULL").all()) {
+    const attendu = Buffer.from(String(sp.relay_key));
+    if (attendu.length === donne.length && crypto.timingSafeEqual(attendu, donne)) return DB.row(sp);
+  }
+  return null;
+}
+
+/* ---------- présence ----------
+   ⚠️ « Qui est en ligne » ne se DÉDUIT PAS du flux. Un serveur de jeu qui
+   redémarre n'émet aucun départ : tout le monde resterait connecté pour
+   l'éternité. La ressource envoie donc la liste ENTIÈRE à chaque
+   battement, et ce qu'on n'a pas revu depuis deux battements est parti. */
+const PRESENCE_TTL = 95000;                 // deux battements de 45 s, plus une marge
+
+// Un membre du staff en jeu se reconnaît à son Discord : c'est le seul
+// identifiant que le panneau et le serveur de jeu partagent.
+function marquerStaff(spaceId, joueurs) {
+  const parDiscord = new Map();
+  for (const st of db.prepare('SELECT pseudo, discord_id FROM staff WHERE space_id = ? AND disabled = 0').all(spaceId))
+    if (st.discord_id) parDiscord.set(String(st.discord_id), st.pseudo);
+  for (const j of joueurs) {
+    const d = String(j.discord || '').replace(/^discord:/, '');
+    const nom = d && parDiscord.get(d);
+    j._staff = nom ? 1 : 0;
+    j._staffNom = nom || null;
+  }
+  return joueurs;
+}
+
 async function route(req, res) {
   const u = url.parse(req.url, true);
   const p = u.pathname.replace(/\/+$/, '') || '/';
@@ -1062,6 +1184,115 @@ async function route(req, res) {
     const n = ingest(list.slice(0, 500), S(b.server) || esp.name, esp.id);
     return ok(res, { recus: n, espace: esp.name });
   }
+  /* ---- battement de présence, envoyé par la ressource ----
+     La liste ENTIÈRE à chaque fois : c'est ce qui permet de conclure un
+     départ sans qu'aucun évènement de départ ne soit émis. */
+  if (p === '/api/presence' && method === 'POST') {
+    const esp = spaceFromKey(req);
+    if (!esp) {
+      if (debit('cle:' + ip, 30, 60000)) return fail(res, 429, 'Trop de tentatives.');
+      return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
+    }
+    if (debit('presence:' + esp.id, 40, 60000)) return fail(res, 429, 'Trop de battements.');
+    const b = await readBody(req);
+    const liste = Array.isArray(b) ? b : (b.joueurs || b.players || []);
+    if (!Array.isArray(liste)) return fail(res, 400, 'Attendu : un tableau de joueurs.');
+    const t = now();
+    const joueurs = marquerStaff(esp.id, liste.slice(0, 1024).map(j => ({
+      key: S(j.key) || S(j.license), name: S(j.name), sid: N(j.sid),
+      job: S(j.job), ping: N(j.ping), discord: S(j.discord), since: N(j.since)
+    })).filter(j => j.key));
+    const up = db.prepare(`INSERT INTO presence(space_id,key,name,sid,job,ping,staff,staff_name,since,seen_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(space_id,key) DO UPDATE SET
+        name=COALESCE(excluded.name,presence.name), sid=excluded.sid, job=excluded.job,
+        ping=excluded.ping, staff=excluded.staff, staff_name=excluded.staff_name,
+        since=COALESCE(presence.since, excluded.seen_at), seen_at=excluded.seen_at`);
+    db.exec('BEGIN');
+    try {
+      for (const j of joueurs)
+        up.run(esp.id, j.key, j.name, j.sid, j.job, j.ping, j._staff, j._staffNom, j.since || t, t);
+      // Ce qui n'est plus dans la liste est parti : on le retire tout de
+      // suite plutôt que d'attendre l'expiration, sinon un joueur qui se
+      // déconnecte resterait affiché une minute et demie.
+      if (joueurs.length) {
+        const q = joueurs.map(() => '?').join(',');
+        db.prepare(`DELETE FROM presence WHERE space_id = ? AND key NOT IN (${q})`)
+          .run(esp.id, ...joueurs.map(j => j.key));
+      } else db.prepare('DELETE FROM presence WHERE space_id = ?').run(esp.id);
+      db.exec('COMMIT');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+    return ok(res, { enLigne: joueurs.length, espace: esp.name });
+  }
+
+  /* ============================================================
+     RELAIS — la porte du bot Discord
+     ⚠️ EN LECTURE SEULE, ET AVEC SA PROPRE CLÉ. Le bot ne dépose rien : lui
+     donner la clé du serveur de jeu l'autoriserait à FABRIQUER des
+     journaux, et la retirer couperait l'arrivée des vrais. Deux clés, deux
+     pouvoirs, deux interrupteurs.
+     ⚠️ ON SONDE, ON NE POUSSE PAS. Un flux SSE se coupe sans prévenir et
+     redémarre en ayant perdu ce qui est passé pendant la coupure — sur un
+     journal de modération, c'est exactement ce qu'il ne faut pas. Le bot
+     demande « ce qui est arrivé APRÈS l'id N » ; s'il tombe, il reprend au
+     même endroit, et rien ne manque.
+     ============================================================ */
+  if (p.startsWith('/api/relay/')) {
+    const esp = spaceFromRelay(req);
+    if (!esp) {
+      if (debit('relay:' + ip, 30, 60000)) return fail(res, 429, 'Trop de tentatives.');
+      return fail(res, 401, 'Clé de relais invalide ou espace fermé.');
+    }
+    if (method !== 'GET') return fail(res, 405, 'Le relais ne fait que lire.');
+    if (debit('relayq:' + esp.id, 120, 60000)) return fail(res, 429, 'Trop d’appels.');
+
+    // De quoi le bot a besoin pour préparer ses salons : le nom de
+    // l'espace, les rubriques et leurs familles. Il n'invente rien.
+    if (p === '/api/relay/hello') {
+      return ok(res, {
+        espace: { id: esp.id, nom: esp.name },
+        rubriques: CAT.CATS.map(c => ({ id:c.id, code:c.code, label:c.label, groupe:c.group })),
+        groupes: CAT.GROUPS.map(g => ({ id:g.id, label:g.label })),
+        gravites: CAT.SEVS.map(x => ({ id:x.id, label:x.label })),
+        // Là où le bot doit reprendre s'il n'a pas d'état : le dernier id
+        // connu. Repartir de zéro rejouerait des mois de journaux dans
+        // Discord, ce qui est le pire démarrage possible.
+        dernierId: DB.num((db.prepare('SELECT MAX(id) m FROM events WHERE space_id = ?').get(esp.id) || {}).m) || 0
+      });
+    }
+
+    if (p === '/api/relay/events') {
+      const depuis = Math.max(0, N(Q.since) || 0);
+      const limite = Math.max(1, Math.min(200, N(Q.limit) || 100));
+      const cats = Q.cat ? String(Q.cat).split(',').filter(c => CAT.CAT_IDS.includes(c)) : null;
+      const sevs = Q.sev ? String(Q.sev).split(',').filter(x => CAT.SEV_IDS.includes(x)) : null;
+      const w = ['space_id = ?', 'id > ?'], a = [esp.id, depuis];
+      if (cats && cats.length) { w.push(`cat IN (${cats.map(() => '?').join(',')})`); a.push(...cats); }
+      if (sevs && sevs.length) { w.push(`sev IN (${sevs.map(() => '?').join(',')})`); a.push(...sevs); }
+      const rows = db.prepare(`SELECT * FROM events WHERE ${w.join(' AND ')} ORDER BY id LIMIT ${limite}`)
+                     .all(...a).map(DB.row);
+      return ok(res, {
+        // ⚠️ Le relais rend la LICENCE MASQUÉE, toujours. Un salon Discord
+        // est lisible par tout le staff, parfois par plus de monde qu'on ne
+        // croit : y déverser les identifiants de chaque joueur ferait du
+        // bot la plus grosse fuite du produit.
+        evenements: rows.map(e => ({
+          id: e.id, ts: e.ts, cat: e.cat, sev: e.sev, res: e.res,
+          acteur: { nom: e.actor_name, sid: e.actor_sid, staff: !!e.actor_staff, ref: aliasOf(e.actor_key) },
+          cible: e.target_name ? { nom: e.target_name, ref: aliasOf(e.target_key) } : null,
+          msg: e.msg,
+          data: (() => {
+            try { return laverPourRelais(JSON.parse(e.data || '{}'), 0); } catch (x) { return {}; }
+          })()
+        })),
+        dernierId: rows.length ? rows[rows.length - 1].id : depuis,
+        reste: DB.num(db.prepare(`SELECT COUNT(*) n FROM events WHERE ${w.join(' AND ')}`)
+                 .get(...a).n) - rows.length
+      });
+    }
+    return fail(res, 404, 'Route de relais inconnue.');
+  }
+
   if (p === '/api/actions/pending' && method === 'GET') {
     const esp = spaceFromKey(req);
     if (!esp) return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
@@ -1405,6 +1636,159 @@ async function route(req, res) {
       const to = N(Q.to) || now(), from = N(Q.from) || to - 86400000;
       return ok(res, statsOf(me, from, to, Math.min(48, Math.max(6, N(Q.buckets) || 24))));
     }
+    /* ---- qui est en ligne ----
+       L'écran qu'on ouvre en premier en prenant son service. Le staff est
+       SÉPARÉ des joueurs : un modérateur cherche « qui dois-je surveiller »,
+       pas « qui est connecté », et ses collègues dans la même liste
+       allongent la recherche sans jamais être la réponse. */
+    /* ---- notes d'équipe sur un joueur ----
+       « Déjà repris deux fois pour ça, la prochaine est un ban. » Chaque
+       équipe garde cela quelque part — un salon Discord, un tableur — et
+       le perd au premier changement de staff. */
+    if (p.startsWith('/api/notes/')) {
+      const brut = decodeURIComponent(p.slice('/api/notes/'.length));
+      const key = resolveKey(brut, me.spaceId);
+      if (method === 'GET') {
+        if (!need('players.view')) return;
+        return ok(res, { notes: db.prepare(`SELECT * FROM player_notes WHERE space_id=? AND player_key=?
+            ORDER BY created_at DESC LIMIT 50`).all(me.spaceId, key).map(DB.row)
+            .map(n => ({ id:n.id, texte:n.body, par:n.by_name, le:n.created_at })) });
+      }
+      if (method === 'POST') {
+        if (!need('players.notes')) return;
+        const b = await readBody(req);
+        const texte = String(b.texte || '').trim().slice(0, 1000);
+        if (texte.length < 2) return fail(res, 400, 'Note vide.');
+        const r = db.prepare(`INSERT INTO player_notes(space_id,player_key,body,by_id,by_name,created_at)
+                              VALUES(?,?,?,?,?,?)`).run(me.spaceId, key, texte, me.id, me.pseudo, now());
+        audit(me, 'joueur.note', `${key} — ${texte.slice(0, 60)}`, ip);
+        return ok(res, { ok:true, id: DB.num(r.lastInsertRowid) });
+      }
+      if (method === 'DELETE') {
+        if (!need('players.notes')) return;
+        const n = DB.row(db.prepare('SELECT * FROM player_notes WHERE id = ? AND space_id = ?')
+                    .get(Number(Q.id) || 0, me.spaceId));
+        if (!n) return fail(res, 404, 'Note introuvable.');
+        // ⚠️ On efface la note de quelqu'un d'autre seulement si l'on
+        // encadre l'équipe : une note est un avis signé, pas un brouillon
+        // commun, et l'effacer sans trace serait réécrire une décision.
+        if (n.by_id !== me.id && !me.perms.includes('accounts.manage'))
+          return fail(res, 403, 'Cette note est d’un collègue : seul son auteur ou un responsable la retire.');
+        db.prepare('DELETE FROM player_notes WHERE id = ?').run(n.id);
+        audit(me, 'joueur.note.suppression', `${n.player_key} — de ${n.by_name}`, ip);
+        return ok(res, { ok:true });
+      }
+      return fail(res, 405, 'Méthode non permise.');
+    }
+
+    if (p === '/api/online' && method === 'GET') {
+      if (!need('players.view')) return;
+      const limite = now() - PRESENCE_TTL;
+      const q = String(Q.q || '').trim().toLowerCase();
+      const lignes = db.prepare(`SELECT * FROM presence WHERE space_id = ? AND seen_at >= ?
+                                 ORDER BY staff DESC, name COLLATE NOCASE`).all(me.spaceId, limite).map(DB.row);
+      const ids = me.perms.includes('players.identifiers');
+      const bannis = new Set(db.prepare(`SELECT player_key FROM sanctions WHERE space_id = ? AND type='ban'
+        AND active=1 AND (expires_at IS NULL OR expires_at > ?)`).all(me.spaceId, now()).map(r => r.player_key));
+      const mis = lignes.map(r => ({
+        // ⚠️ Même règle que partout : sans le droit de voir les
+        // identifiants, on reçoit un alias, jamais la licence.
+        key: ids ? r.key : aliasOf(r.key), keyMasquee: !ids,
+        nom: r.name, sid: r.sid, job: r.job, ping: r.ping,
+        staff: !!r.staff, staffPseudo: r.staff_name,
+        depuis: r.since, vuA: r.seen_at, banni: bannis.has(r.key),
+        // Les avertissements déjà reçus : un joueur qu'on a déjà repris
+        // trois fois ne se regarde pas comme un inconnu.
+        sanctions: DB.row(db.prepare(`SELECT COUNT(*) n FROM sanctions WHERE space_id = ? AND player_key = ?`)
+                     .get(me.spaceId, r.key)).n
+      })).filter(j => !q || (j.nom || '').toLowerCase().includes(q)
+                        || String(j.sid || '').includes(q)
+                        || (j.job || '').toLowerCase().includes(q)
+                        || (j.staffPseudo || '').toLowerCase().includes(q));
+      const dernier = DB.row(db.prepare('SELECT MAX(seen_at) t FROM presence WHERE space_id = ?').get(me.spaceId));
+      return ok(res, {
+        staff: mis.filter(j => j.staff), joueurs: mis.filter(j => !j.staff),
+        total: lignes.length, recherche: q || null,
+        // ⚠️ Sans battement récent, la liste n'est pas « vide » : elle est
+        // INCONNUE. Le dire évite de conclure que le serveur est désert
+        // alors que c'est la ressource qui ne parle plus.
+        battement: dernier ? dernier.t : null,
+        frais: !!(dernier && dernier.t >= limite)
+      });
+    }
+
+    /* ---- stats d'équipe ----
+       Ce que le propriétaire d'un serveur veut savoir en premier : est-ce
+       que son staff travaille, et qui porte la charge. */
+    if (p === '/api/team/stats' && method === 'GET') {
+      if (!need('team.stats')) return;
+      const jours = Math.max(1, Math.min(90, N(Q.jours) || 7));
+      const depuis = now() - jours * 86400000;
+      const membres = db.prepare(`SELECT id, pseudo, role, roles, disabled, last_login, avatar
+                                  FROM staff WHERE space_id = ?`).all(me.spaceId).map(DB.row);
+      const parNom = new Map();
+      const prendre = nom => {
+        const k = String(nom || '').toLowerCase();
+        if (!parNom.has(k)) parNom.set(k, { pris:0, refuses:0, clos:0, attente:[], sanctions:0, actions:0, marques:0, dernier:0 });
+        return parNom.get(k);
+      };
+      // Les reports : la rubrique dit qui a pris, qui a refusé, et après
+      // combien de temps — c'est la seule mesure de réactivité qu'on ait.
+      for (const e of db.prepare(`SELECT actor_name, data, ts FROM events
+          WHERE space_id = ? AND cat = 'reports' AND ts >= ? AND actor_staff = 1`).all(me.spaceId, depuis)) {
+        let d = {}; try { d = JSON.parse(e.data || '{}'); } catch (x) {}
+        const m = prendre(e.actor_name);
+        if (d.kind === 'prise')   { m.pris++;   const v = parseInt(d.attenteAvantPrise, 10); if (Number.isFinite(v)) m.attente.push(v); }
+        if (d.kind === 'refus')   m.refuses++;
+        if (d.kind === 'cloture') m.clos++;
+        m.dernier = Math.max(m.dernier, Number(e.ts) || 0);
+      }
+      for (const r of db.prepare(`SELECT by_name, COUNT(*) n, MAX(created_at) t FROM sanctions
+          WHERE space_id = ? AND created_at >= ? GROUP BY by_name`).all(me.spaceId, depuis)) {
+        const m = prendre(r.by_name); m.sanctions = Number(r.n); m.dernier = Math.max(m.dernier, Number(r.t) || 0);
+      }
+      for (const r of db.prepare(`SELECT pseudo, COUNT(*) n, MAX(ts) t FROM audit
+          WHERE space_id = ? AND ts >= ? GROUP BY pseudo`).all(me.spaceId, depuis)) {
+        const m = prendre(r.pseudo); m.actions = Number(r.n); m.dernier = Math.max(m.dernier, Number(r.t) || 0);
+      }
+      for (const r of db.prepare(`SELECT m.by_name, COUNT(*) n FROM marks m
+          JOIN events e ON e.id = m.event_id
+          WHERE e.space_id = ? AND m.at >= ? AND m.kind = 'done' GROUP BY m.by_name`).all(me.spaceId, depuis)) {
+        prendre(r.by_name).marques = Number(r.n);
+      }
+      const moy = l => (l.length ? Math.round(l.reduce((a, x) => a + x, 0) / l.length) : null);
+      const equipe = membres.map(st => {
+        const m = parNom.get(String(st.pseudo).toLowerCase()) || { pris:0, refuses:0, clos:0, attente:[], sanctions:0, actions:0, marques:0, dernier:0 };
+        return {
+          id: st.id, pseudo: st.pseudo, avatar: st.avatar, suspendu: !!st.disabled,
+          roles: ROLESVC.resolve(db, me.spaceId, (parseRoles(st.roles).length ? parseRoles(st.roles) : [CAT.canon(st.role)])).labels,
+          reportsPris: m.pris, reportsRefuses: m.refuses, reportsClos: m.clos,
+          attenteMoyenne: moy(m.attente), sanctions: m.sanctions,
+          marquesTraite: m.marques, actionsPanneau: m.actions,
+          derniereActivite: m.dernier || st.last_login || null,
+          derniereConnexion: st.last_login || null
+        };
+      }).sort((a, b) => (b.reportsPris + b.sanctions + b.marquesTraite) - (a.reportsPris + a.sanctions + a.marquesTraite));
+      const somme = k => equipe.reduce((a, x) => a + (x[k] || 0), 0);
+      const attentes = equipe.map(x => x.attenteMoyenne).filter(x => x != null);
+      // ⚠️ Les reports SANS RÉPONSE ne sont imputables à personne : c'est
+      // justement ce que la vue doit montrer, et aucun total par membre ne
+      // le ferait apparaître.
+      const sansReponse = DB.row(db.prepare(`SELECT COUNT(*) n FROM events
+        WHERE space_id = ? AND cat = 'reports' AND ts >= ?
+          AND json_extract(data,'$.kind') = 'sans_reponse'`).get(me.spaceId, depuis)).n;
+      return ok(res, {
+        jours, depuis, equipe,
+        total: {
+          membres: equipe.length, actifs: equipe.filter(x => x.derniereActivite >= depuis).length,
+          reportsPris: somme('reportsPris'), reportsRefuses: somme('reportsRefuses'),
+          reportsClos: somme('reportsClos'), sanctions: somme('sanctions'),
+          marquesTraite: somme('marquesTraite'), sansReponse,
+          attenteMoyenne: attentes.length ? Math.round(attentes.reduce((a, x) => a + x, 0) / attentes.length) : null
+        }
+      });
+    }
+
     if (p === '/api/players' && method === 'GET') {
       if (!need('players.view')) return;
       const terme = String(Q.q || '').trim();
@@ -2336,7 +2720,8 @@ async function route(req, res) {
             formule: sp.plan_key || '', formuleLabel: PLANS.forSpace(db, sp).label,
             echeance: sp.plan_until || null, echeanceEtat: PLANS.echeance(sp),
             plafonds: PLANS.forSpace(db, sp),
-            cle: sp.server_key, creeLe: sp.created_at, creePar: sp.created_by,
+            cle: sp.server_key, relais: sp.relay_key || null,
+            creeLe: sp.created_at, creePar: sp.created_by,
             fermeLe: sp.closed_at, motifFermeture: sp.closed_reason,
             proprietaire: sp.owner_id
               ? DB.row(db.prepare('SELECT id,pseudo FROM staff WHERE id = ?').get(sp.owner_id)) : null,
@@ -2431,13 +2816,21 @@ async function route(req, res) {
             sets.push('server_key = ?'); args.push(crypto.randomBytes(24).toString('hex'));
             audit(me, 'plateforme.cle', `${sp.name} — clé régénérée`, ip, sid);
           }
+          // La clé du bot Discord : délivrée à la demande, retirable seule.
+          // ⚠️ La retirer ne coupe QUE le bot — les journaux continuent
+          // d'arriver, et c'est tout l'intérêt de deux clés séparées.
+          if (b.relais !== undefined) {
+            const k = b.relais ? crypto.randomBytes(24).toString('hex') : null;
+            sets.push('relay_key = ?'); args.push(k);
+            audit(me, k ? 'plateforme.relais.creation' : 'plateforme.relais.retrait', sp.name, ip, sid);
+          }
           if (!sets.length) return ok(res, { ok: true });
           db.prepare(`UPDATE spaces SET ${sets.join(', ')} WHERE id = ?`).run(...args, sid);
           // Une échéance déjà passée ferme l'espace sur-le-champ : c'est
           // ainsi qu'on coupe un client sans avoir à faire un second geste.
           appliquerEcheances();
           const apres = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(sid));
-          return ok(res, { ok: true, cle: apres.server_key });
+          return ok(res, { ok: true, cle: apres.server_key, relais: apres.relay_key || null });
         }
         if (method === 'DELETE') {
           if (Q.confirme !== sp.name)

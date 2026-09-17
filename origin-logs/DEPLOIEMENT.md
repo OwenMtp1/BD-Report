@@ -338,6 +338,28 @@ clé refusée, API injoignable, ou rubrique désactivée dans `config.lua`.
 
 ---
 
+## 4. Le bot Discord (facultatif)
+
+Les journaux dans vos salons, un par rubrique. Il vit à côté de l'API et
+peut tourner ailleurs — il n'a besoin que de joindre le panneau.
+
+```bash
+cd /srv/origin-logs/bot
+cp .env.example .env
+$EDITOR .env               # PANEL_URL, RELAY_KEY, DISCORD_TOKEN, DISCORD_GUILD_ID
+node index.js --verifier   # la configuration est-elle complète ?
+node index.js --salons     # crée les salons, puis s'arrête
+node index.js              # démarre
+```
+
+⚠️ **`RELAY_KEY` n'est PAS `SERVER_KEY`.** Elle se délivre dans
+**Supervision → la carte de l'espace → « Délivrer une clé de bot »**. Elle
+ne sait que LIRE : la retirer coupe le bot, jamais l'arrivée des journaux.
+
+Détail complet, permissions Discord et dépannage : **[bot/README.md](bot/README.md)**.
+
+---
+
 ## Ajouter votre équipe
 
 Depuis le panneau : bouton **Gérer l'équipe** (fondateurs uniquement), ou en

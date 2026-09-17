@@ -18,6 +18,14 @@ Config.Framework = 'auto'
 Config.BatchSize = 40        -- envoi dès que la file atteint ce nombre
 Config.FlushMs   = 3000      -- …ou au bout de ce délai
 Config.QueueMax  = 3000      -- file de secours si l'API est injoignable
+Config.Debug     = false     -- imprime les refus de l'API dans la console
+
+-- « Qui est en ligne » : la liste complète des joueurs, toutes les 45 s.
+-- ⚠️ À laisser allumé si vous voulez l'écran correspondant dans le
+-- panneau : il ne se déduit PAS du flux (un redémarrage du serveur n'émet
+-- aucun départ, et tout le monde resterait connecté pour toujours).
+-- Une requête toutes les 45 secondes, quel que soit le nombre de joueurs.
+Config.Presence  = true
 
 -- Catégories émises. Couper une catégorie ici arrête l'émission à la
 -- source : c'est plus efficace que de la masquer dans le panneau.
