@@ -1,6 +1,13 @@
 // Service worker : réseau d'abord pour la page (les mises à jour arrivent immédiatement),
 // cache en secours pour le hors-ligne.
-const CACHE = 'bdrflow-v2'
+// ⚠️ CHANGER CE NOM PURGE LES ANCIENNES VERSIONS. L'`activate` supprime toute clé de
+// cache différente de celle-ci : c'est le seul levier qui garantit qu'un navigateur
+// cesse de servir un bundle périmé. À incrémenter dès qu'une version livrée doit
+// remplacer la précédente sans attendre — typiquement après un correctif de sécurité,
+// où continuer à servir l'ancien fichier revient à ne pas avoir corrigé.
+// v3 : le bundle v2 contenait encore le code PIN de démarrage en clair et deux
+// identifiants nommant le fondateur. Il ne doit plus être servi à personne.
+const CACHE = 'bdrflow-v3'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./'])).catch(() => {}))
