@@ -96,7 +96,27 @@ if (/window\.__bdrStore\s*=/.test(code) && !/__BDR_TEST__[^;]{0,40}__bdrStore\s*
   console.error("  ✖ window.__bdrStore est exposé sans garde : la base entière se lit depuis la console")
   process.exit(1)
 }
-console.log('  ✓ aucune chaîne compromettante, porte de test fermée')
+console.log('  ✓ aucune chaîne compromettante, porte de test fermée, aucune source map')
+
+// ---------------------------------------------------------------------------
+//  AUCUN FICHIER DE CORRESPONDANCE (source map) PUBLIÉ.
+//
+//  ⚠️ C'est le pire cas, et il ne tient aujourd'hui qu'à un défaut de Vite. Avec une
+//  source map à côté du bundle, l'onglet « Sources » du navigateur n'affiche PAS du
+//  code minifié : il reconstitue les fichiers d'ORIGINE, commentaires compris — donc
+//  toute l'architecture, les raisons de chaque garde-fou, et où sont les points
+//  faibles. Un `sourcemap: true` ajouté un jour pour déboguer, et tout part en ligne
+//  sans que rien n'échoue.
+const maps = fs.readdirSync(ASSETS).filter(f => f.endsWith('.map'))
+if (maps.length) {
+  console.error(`  ✖ ${maps.length} fichier(s) de correspondance dans dist/ : le code source complet, commentaires compris, serait publié`)
+  for (const m of maps) console.error(`      - ${m}`)
+  process.exit(1)
+}
+if (/\/\/[#@]\s*sourceMappingURL=/.test(code)) {
+  console.error('  ✖ le bundle référence une source map — le navigateur ira chercher le code source d\'origine')
+  process.exit(1)
+}
 
 const ko = Math.round(fs.statSync(path.join(ASSETS, js[0])).size / 1024)
 console.log(`  ✓ un seul fichier JS (${ko} Ko), aucun CDN tiers dans le chemin critique`)
