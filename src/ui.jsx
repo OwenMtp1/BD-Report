@@ -95,6 +95,34 @@ export function Select({ value, onChange, options, placeholder = '—', classNam
 }
 
 /**
+ * Champ de CODE D'ACCÈS — en écriture seule.
+ *
+ * ⚠️ Les champs de code portaient la valeur en clair dans leur `value` : le code se
+ * lisait dans l'inspecteur du navigateur sans même avoir à ouvrir la base. Le code est
+ * maintenant haché comme un mot de passe : il n'y a plus rien à réafficher, seulement
+ * à remplacer. On montre donc s'il EXISTE, jamais ce qu'il vaut.
+ *
+ * Un manager n'a jamais eu besoin de lire le code de ses collaborateurs : il entre chez
+ * eux sans code. Même raisonnement que pour la purge des mots de passe en clair.
+ */
+export function PinField({ value, onSet, disabled }) {
+  const [v, setV] = useState('')
+  return (
+    <div className="flex items-center gap-2">
+      <input className="input !w-32 font-mono" maxLength={4} inputMode="numeric" disabled={disabled}
+        value={v} placeholder={value ? '••••' : 'Aucun'}
+        aria-label={value ? "Remplacer le code d'accès" : "Définir un code d'accès"}
+        onChange={e => setV(e.target.value.replace(/\D/g, ''))}
+        onBlur={() => { if (v) { onSet(v); setV('') } }}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }} />
+      {value && !disabled && (
+        <button type="button" className="btn-ghost !py-1 text-xs" onClick={() => onSet('')}>Retirer</button>
+      )}
+    </div>
+  )
+}
+
+/**
  * Filtre à CHOIX MULTIPLE : un bouton, un panneau de cases à cocher, une recherche.
  *
  * ⚠️ Pourquoi pas un `<select multiple>` : il impose Ctrl+clic (impossible au tactile),

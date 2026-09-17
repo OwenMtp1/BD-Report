@@ -6,7 +6,7 @@ import {
   AtSign, CalendarClock, AlertTriangle, Clock, Check, Gift, MessagesSquare, Radio, Trophy, ShieldCheck, Star, GraduationCap,
   User as UserIcon,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER, isElevatedRole, ENV_MODULES, defaultEnvModules, STATEMENT_MODES } from './store.jsx'
+import { useStore, checkPw, APP_VERSION, setCurrentCurrency, allowedBricks, hasTeamAccess, findOffer, PLANS, SUPPORT_ROLES, ticketHasUnread, slaInfo, todayISO, PRESENCE_META, PRESENCE_ORDER, isElevatedRole, ENV_MODULES, defaultEnvModules, STATEMENT_MODES } from './store.jsx'
 import { NAV_GROUPS, NAV, applyNavLayout } from './nav.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
@@ -232,7 +232,8 @@ function PinGate({ title, expected, onOk, onBack }) {
   const [err, setErr] = useState(false)
   useEffect(() => {
     if (pin.length === 4) {
-      if (pin === expected) onOk()
+      // ⚠️ Comparaison par HACHAGE : le code attendu n'existe plus en clair nulle part.
+      if (checkPw(pin, expected)) onOk()
       else { setErr(true); setPin('') }
     }
   }, [pin, expected, onOk])

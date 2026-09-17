@@ -2038,4 +2038,15 @@ export const UI_DICT = [
   ['Vider cet espace', 'Clear this space', 'Vaciar este espacio'],
   ['Supprimer définitivement', 'Delete permanently', 'Eliminar definitivamente'],
   ['Vider cet espace ? Tous les RDV, contacts et notes de CET espace seront supprimés (barème et objectifs conservés). Vos autres espaces ne sont pas touchés.', 'Clear this space? Every meeting, contact and note in THIS space will be deleted (rates and targets are kept). Your other spaces are untouched.', '¿Vaciar este espacio? Se eliminarán todas las citas, contactos y notas de ESTE espacio (se conservan el baremo y los objetivos). Tus demás espacios no se ven afectados.'],
+
+  // ---- Codes d'accès en écriture seule ----
+  // ⚠️ Libellés passés en props (PinField, Field) : l'extracteur ne les voit pas.
+  ['Aucun', 'None', 'Ninguno'],
+  ['Retirer', 'Remove', 'Quitar'],
+  ["Code d'accès — saisir pour le remplacer", 'Access code — type to replace it', 'Código de acceso: escribe para reemplazarlo'],
+  ['Code — saisir pour le remplacer', 'Code — type to replace it', 'Código: escribe para reemplazarlo'],
+  ["Remplacer le code d'accès", 'Replace the access code', 'Reemplazar el código de acceso'],
+  ["Définir un code d'accès", 'Set an access code', 'Definir un código de acceso'],
+  ['•••• — saisir pour remplacer', '•••• — type to replace', '•••• — escribe para reemplazar'],
+  ['Aucun code', 'No code', 'Sin código'],
 ]

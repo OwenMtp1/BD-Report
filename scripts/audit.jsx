@@ -205,6 +205,17 @@ async function main() {
         ok(a.passwordPlain === undefined, `${where} : ${a.pseudo || a.id} porte un ancien mot de passe en clair`)
         ok(!a.password || String(a.password).startsWith('sha256:'), `${where} : ${a.pseudo || a.id} n'a pas de hash`)
       })
+      // ⚠️ MÊME RÈGLE POUR LE CODE PIN, et pour la même raison. Il était stocké en clair
+      // — donc lisible dans l'état, dans chaque sauvegarde, dans chaque export — ET
+      // réaffiché dans trois écrans de réglages, où il se lisait dans l'inspecteur sans
+      // même ouvrir la base. Un manager n'en a jamais eu besoin : il entre chez ses
+      // collaborateurs sans code. On réinitialise, on ne lit pas.
+      ;(db.environments || []).forEach(e => {
+        ok(!e.pin || String(e.pin).startsWith('sha256:'), `${where} : l'environnement « ${e.name || e.id} » porte un code d'accès en clair`)
+      })
+      ;(db.subenvs || []).forEach(sb => {
+        ok(!sb.pin || String(sb.pin).startsWith('sha256:'), `${where} : l'espace de ${sb.prenom || sb.id} porte un code d'accès en clair`)
+      })
     }
     scan(s.buildDemoDb({}), 'Démo')
     scan(s.buildTrainingDb('Fondateur', []), 'Formation')
@@ -214,6 +225,8 @@ async function main() {
     legacy.accounts[0].passwordClear = 'motdepasse'
     legacy.accounts[0].passwordPlain = 'motdepasse'
     legacy.accounts[0].password = 'motdepasse'   // ancien format, non hashé
+    if (legacy.environments[0]) legacy.environments[0].pin = '4242'
+    if (legacy.subenvs[0]) legacy.subenvs[0].pin = '1234'
     s.migrate(legacy)
     scan(legacy, "Après migration d'une base héritée")
     // Le droit d'AFFICHER un mot de passe ne doit plus exister : un droit qui ne fait rien

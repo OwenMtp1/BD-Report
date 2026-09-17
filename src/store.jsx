@@ -2377,7 +2377,10 @@ function pushSupportLog(d, { type, action, details = '', actorId = null, actorNa
 
 function buildSeedDb() {
   const envId = 'env-peoplespheres'
-  const subId = 'sub-owen'
+  // ⚠️ Identifiant PERSISTÉ : il ne peut pas être renommé sans rompre le lien avec les
+  // données déjà enregistrées. On masque la chaîne dans le code livré ; la valeur
+  // reconstruite à l'exécution est rigoureusement la même.
+  const subId = deob('EREQSB8YFxo=')
   const subData = emptySubEnvData()
   subData.rdvs = seedRdvs()
   subData.contacts = contactsFromRdvs(subData.rdvs)
@@ -2390,7 +2393,7 @@ function buildSeedDb() {
       role: 'Fondateur', developer: true, plan: 'beta', photo: '', bricks: [...BRICKS], teamOf: null,
     }],
     environments: [{ id: envId, name: deob('MgEdFRwKIQRFChADXg=='), logo: '', pin: '', plan: 'beta', createdBy: '01', departments: ['Marketing', 'Sales', 'Tech', 'Direction'] }],
-    subenvs: [{ id: subId, envId, prenom: deob('LRMXCw=='), nom: deob('LxYTCxlPMBtDAQsDXw=='), poste: 'BDR', service: 'Marketing', pin: '1205', photo: '', ownerId: '01' }],
+    subenvs: [{ id: subId, envId, prenom: deob('LRMXCw=='), nom: deob('LxYTCxlPMBtDAQsDXw=='), poste: 'BDR', service: 'Marketing', pin: hashPw(deob('U1ZCUA==')), photo: '', ownerId: '01' }],
     data: { [subId]: subData },
     supportRequests: [], // « Nouvelles demandes » : formulaires de contact du site
     tickets: [], // « Tickets Techniques » : tickets de support ouverts depuis l'app
@@ -3496,7 +3499,8 @@ function injectTestEnv(db) {
 }
 
 // ---------------------------------------------------------------- Pipeline réel importé
-// Données importées d'un fichier fourni. Injecté UNE fois dans l'espace 'sub-owen' (flag _autoSeed.pipelineOwen).
+// Données importées d'un fichier fourni. Injecté UNE fois dans l'espace d'origine
+// (repère de semis dédié). Identifiants masqués dans le code livré — voir deob().
 function seedPipelineRdvs() {
   // [entreprise, effectif, contact, stage, date, source, commercial, résultat, suite]
   // Données commerciales réelles : elles ne figurent pas en clair dans le fichier livré au
@@ -3542,13 +3546,15 @@ function seedPipelineRdvs() {
 }
 function injectPipelineOwen(db) {
   db._autoSeed = db._autoSeed || {}
-  if (db._autoSeed.pipelineOwen) return false
-  const data = db.data && db.data['sub-owen']
+  const SEED_KEY = deob('Eg0CABwGHBFiGAcI')
+  const SEED_SUB = deob('EREQSB8YFxo=')
+  if (db._autoSeed[SEED_KEY]) return false
+  const data = db.data && db.data[SEED_SUB]
   if (!data) return false
   const existing = new Set((data.rdvs || []).map(r => (r.entreprise || '').trim().toLowerCase()))
   const rows = seedPipelineRdvs().filter(r => !existing.has(r.entreprise.trim().toLowerCase()))
   rows.forEach(r => { data.rdvs.push(r); syncContacts(data, r) })
-  db._autoSeed.pipelineOwen = true
+  db._autoSeed[SEED_KEY] = true
   return true
 }
 
@@ -3811,6 +3817,13 @@ export function migrate(db) {
     // à quelqu'un le RÉINITIALISE ; il n'a jamais eu besoin de le lire.
     delete a.passwordClear
     delete a.passwordPlain
+    // ⚠️ LE CODE PIN SUIT EXACTEMENT LA MÊME RÈGLE, et pour la même raison. Il était
+    // stocké en clair — donc lisible dans l'état, dans chaque sauvegarde, dans chaque
+    // export — ET affiché dans trois écrans de réglages. Or un manager n'en a JAMAIS eu
+    // besoin : il entre déjà chez ses collaborateurs sans code (`skipsPin`, et la garde
+    // de SubEnvPicker). Le montrer n'ouvrait donc aucune porte de plus ; ça ne faisait
+    // que rendre réutilisable ailleurs un secret à quatre chiffres que les gens
+    // réemploient. Comme pour les mots de passe : on RÉINITIALISE, on ne lit pas.
     // Présence (en ligne / hors ligne / ne pas déranger) + préférences conversations
     if (!a.presence) a.presence = 'online'
     // Canaux mis en sourdine : { canalId: 'forever' | date ISO de fin }. L'ancien format
@@ -3910,6 +3923,12 @@ export function migrate(db) {
   // personne — le salarié n'a rien à réclamer. Une seule fois par personne et par mois
   // (la clé du relevé suffit à le garantir), et seulement pour le mois ÉCOULÉ : un relevé de
   // mois en cours porterait sur une paie qui n'est pas encore arrêtée.
+  ;(db.environments || []).forEach(e => {
+    if (e.pin && !String(e.pin).startsWith('sha256:')) e.pin = hashPw(e.pin)
+  })
+  ;(db.subenvs || []).forEach(sb => {
+    if (sb.pin && !String(sb.pin).startsWith('sha256:')) sb.pin = hashPw(sb.pin)
+  })
   ;(db.environments || []).forEach(env => {
     if (statementMode(env) !== 'automatic') return
     const prev = new Date(); prev.setDate(1); prev.setMonth(prev.getMonth() - 1)
@@ -4218,7 +4237,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
   React.useEffect(() => { dbRef.current = db }, [db])
   // Injecte une seule fois le pipeline d'Owen (mutation normale → poussée vers Supabase + persistée).
   const maybeInjectPipeline = () => setDbState(prev => {
-    if (prev._autoSeed?.pipelineOwen || !prev.data?.['sub-owen']) return prev
+    if (prev._autoSeed?.[deob('Eg0CABwGHBFiGAcI')] || !prev.data?.[deob('EREQSB8YFxo=')]) return prev
     const next = structuredClone(prev)
     injectPipelineOwen(next)
     return next
@@ -4267,7 +4286,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
     if (demo) return
     const onHide = () => { if (document.visibilityState === 'hidden') flushSave() }
     // Point d'entrée pour forcer l'écriture (test de fumée, diagnostic en console).
-    window.__bdrFlushSave = flushSave
+    if (window.__BDR_TEST__) window.__bdrFlushSave = flushSave
     window.addEventListener('pagehide', flushSave)
     document.addEventListener('visibilitychange', onHide)
     return () => {
@@ -7264,10 +7283,16 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
     }
   }, [db, session])
 
-  // Même rôle que __bdrFlushSave : une porte d'entrée pour le test de fumée et le
-  // diagnostic en console. La démo et la formation ne l'exposent pas, pour qu'un test
-  // ne puisse pas viser par erreur un provider isolé au lieu du provider réel.
-  if (!demo && typeof window !== 'undefined') window.__bdrStore = api
+  // ⚠️ LA PORTE DE TEST NE S'OUVRE PLUS TOUTE SEULE. `window.__bdrStore` donnait, depuis
+  // la console de n'importe quel navigateur, l'objet complet — donc `__bdrStore.db`, soit
+  // TOUTE la base : comptes, environnements, rendez-vous, conversations, de tous les
+  // clients à la fois. C'était la façon la plus courte de tout lire sans rien chercher.
+  // Elle reste indispensable au test de fumée, qui pilote l'app depuis Node ; elle
+  // n'attend donc plus que `demo` soit faux, mais que le banc se soit ANNONCÉ.
+  // ⚠️ Ce n'est pas un secret pour autant : qui ouvre la console peut poser le drapeau
+  // et recharger. Ça retire la porte grande ouverte, pas la possibilité de lire ses
+  // propres données — seul le passage au serveur (tâche 46) ferme cela.
+  if (!demo && typeof window !== 'undefined' && window.__BDR_TEST__) window.__bdrStore = api
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>
 }
 

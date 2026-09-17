@@ -45,5 +45,58 @@ if (code.includes('esm.sh')) {
   process.exit(1)
 }
 
+// ---------------------------------------------------------------------------
+//  RIEN DE COMPROMETTANT DANS LE CODE LIVRÉ.
+//
+//  ⚠️ Ce contrôle lit le BUNDLE, pas les sources : c'est ce que voit qui fait
+//  « inspecter » sur l'application. Une chaîne peut disparaître d'un fichier et
+//  revenir par un autre, ou par une dépendance — seule la sortie fait foi.
+//
+//  Ce qui s'y trouvait vraiment avant ce contrôle : le code PIN de démarrage en
+//  clair (`pin:"1205"`), et deux identifiants nommant le fondateur (`sub-owen`,
+//  `pipelineOwen`). Les valeurs sont conservées à l'identique — seules les chaînes
+//  sont masquées (deob), car ces identifiants sont persistés dans les bases.
+//
+//  ⚠️ Ce n'est PAS du chiffrement, et ça ne prétend pas l'être : la valeur est
+//  reconstruite dans le navigateur. Ça retire ce qui se lit d'un coup d'œil ou se
+//  trouve par une recherche de texte. La confidentialité réelle vient du passage au
+//  serveur (RLS, tâche 46), pas d'ici.
+const INTERDIT = [
+  { motif: 'pin:"1205"', why: "le code PIN de démarrage, en clair dans le code livré" },
+  { motif: 'sub-owen', why: "un identifiant qui nomme le fondateur" },
+  { motif: 'pipelineOwen', why: "un repère de semis qui nomme le fondateur" },
+]
+// ⚠️ Deux règles ont été RETIRÉES après vérification, et c'est instructif :
+//  · `passwordClear` / `passwordPlain` sont bien dans le bundle — uniquement dans des
+//    `delete`. C'est la PURGE des clairs hérités, elle doit continuer de tourner. Ce
+//    qu'il faut interdire, c'est d'en ÉCRIRE un, pas d'en effacer un (règle ci-dessous).
+//  · le sel d'obscurcissement y est par nécessité : `deob()` s'en sert à l'exécution.
+//    Le masquer n'apporterait rien — qui ouvre la console peut appeler `deob` lui-même.
+//    C'est la limite assumée de l'obscurcissement, déjà écrite dans obf.js.
+const ECRITURE_CLAIR = /password(?:Clear|Plain)\s*[:=](?!=)/
+if (ECRITURE_CLAIR.test(code)) {
+  console.error("  ✖ le bundle ÉCRIT un mot de passe en clair (passwordClear/passwordPlain) — seule leur purge est permise")
+  process.exit(1)
+}
+const trouves = INTERDIT.filter(x => code.includes(x.motif))
+if (trouves.length) {
+  console.error('  ✖ chaînes compromettantes dans le bundle livré :')
+  for (const t of trouves) console.error(`      « ${t.motif} » — ${t.why}`)
+  process.exit(1)
+}
+
+// La porte de test ne doit pas s'ouvrir toute seule : `window.__bdrStore` donnait, depuis
+// la console, la base ENTIÈRE de tous les clients. Elle n'est posée que si le banc d'essai
+// s'est annoncé (`__BDR_TEST__`).
+// ⚠️ Contrôle d'abord écrit trop faible : il se contentait de chercher `__BDR_TEST__`
+// QUELQUE PART dans le fichier — or le drapeau sert aussi à `__bdrFlushSave`. Retirer la
+// garde sur `__bdrStore` laissait donc le test au vert. On exige que le drapeau précède
+// IMMÉDIATEMENT l'affectation (forme minifiée : `window.__BDR_TEST__&&(window.__bdrStore=…`).
+if (/window\.__bdrStore\s*=/.test(code) && !/__BDR_TEST__[^;]{0,40}__bdrStore\s*=/.test(code)) {
+  console.error("  ✖ window.__bdrStore est exposé sans garde : la base entière se lit depuis la console")
+  process.exit(1)
+}
+console.log('  ✓ aucune chaîne compromettante, porte de test fermée')
+
 const ko = Math.round(fs.statSync(path.join(ASSETS, js[0])).size / 1024)
 console.log(`  ✓ un seul fichier JS (${ko} Ko), aucun CDN tiers dans le chemin critique`)

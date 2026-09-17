@@ -4,6 +4,10 @@ import { JSDOM } from 'jsdom'
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/', pretendToBeVisual: true })
 const win = dom.window
+// ⚠️ LE BANC D'ESSAI DOIT S'ANNONCER. `window.__bdrStore` donnait, depuis la console de
+// n'importe quel navigateur, la base ENTIÈRE de tous les clients. Elle n'est désormais
+// posée que si ce drapeau existe — le test la réclame explicitement, l'utilisateur non.
+win.__BDR_TEST__ = true
 globalThis.window = win
 globalThis.document = win.document
 globalThis.localStorage = win.localStorage

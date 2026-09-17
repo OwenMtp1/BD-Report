@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect } from 'react'
 import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock, Cloud, GraduationCap, Newspaper } from 'lucide-react'
 import { useStore, hashPw, isElevatedRole } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
-import { Modal, Field, Confirm, toast, CommitInput } from '../ui.jsx'
+import { Modal, Field, Confirm, toast, CommitInput, PinField } from '../ui.jsx'
 import { testConnection } from '../supabaseSync.js'
 import { SUPABASE_URL, isSupabaseConfigured } from '../supabaseConfig.js'
 
@@ -371,8 +371,11 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
               )}
               <Field label="Nom"><CommitInput className="input !w-72" disabled={store.readOnly} value={env.name} onCommit={v => store.updateEnv(env.id, { name: v })} /></Field>
               <Field label="Logo de l'entreprise"><ImageInput value={env.logo} onChange={v => !store.readOnly && store.updateEnv(env.id, { logo: v })} label="Télécharger un logo" /></Field>
-              <Field label="Code d'accès (4 chiffres, vide = aucun)">
-                <CommitInput className="input !w-32" maxLength={4} disabled={store.readOnly} value={env.pin || ''} sanitize={v => v.replace(/\D/g, '')} onCommit={v => store.updateEnv(env.id, { pin: v })} />
+              {/* ⚠️ ÉCRITURE SEULE. Le champ portait le code en clair dans sa `value` :
+                  il se lisait dans l'inspecteur sans même ouvrir la base. Le code est
+                  désormais haché — il n'y a plus rien à réafficher, seulement à remplacer. */}
+              <Field label={env.pin ? "Code d'accès — saisir pour le remplacer" : "Code d'accès (4 chiffres, vide = aucun)"}>
+                <PinField value={env.pin} disabled={store.readOnly} onSet={v => store.updateEnv(env.id, { pin: v })} />
               </Field>
               {env.subState === 'cancelling'
                 ? <p className="text-xs text-muted">Résiliation demandée — en attente du traitement par le support.</p>
@@ -420,10 +423,10 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
                         </select>
                       : <CommitInput className="input" value={s.service} onCommit={v => store.updateSubEnv(s.id, { service: v })} />}
                   </Field>
-                  <Field label="Code (4 chiffres)">
+                  <Field label={s.pin ? 'Code — saisir pour le remplacer' : 'Code (4 chiffres)'}>
                     {canPin
-                      ? <CommitInput className="input" maxLength={4} value={s.pin} sanitize={v => v.replace(/\D/g, '')} onCommit={v => store.updateSubEnv(s.id, { pin: v })} />
-                      : <input className="input" value="••••" disabled title="Code masqué" />}
+                      ? <PinField value={s.pin} onSet={v => store.updateSubEnv(s.id, { pin: v })} />
+                      : <input className="input" value="••••" disabled title="Code masqué" aria-label="Code masqué" />}
                   </Field>
                 </div>
               )

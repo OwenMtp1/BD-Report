@@ -177,8 +177,14 @@ function ProfilePanel({ sub, envId, store, onClose }) {
           <Field label="Code d'accès à l'espace">
             <div className="flex items-center gap-1.5">
               <KeyRound size={14} className="text-muted shrink-0" />
-              <input className="input font-mono" maxLength={4} defaultValue={sub.pin || ''}
-                onBlur={e => { store.updateSubEnv(sub.id, { pin: e.target.value.replace(/\D/g, '') }); toast('Code mis à jour') }} />
+              {/* ⚠️ Écriture seule : le code est haché, il n'y a plus rien à réafficher. */}
+              <input className="input font-mono" maxLength={4} inputMode="numeric" defaultValue=""
+                placeholder={sub.pin ? '•••• — saisir pour remplacer' : 'Aucun code'}
+                onBlur={e => {
+                  const v = e.target.value.replace(/\D/g, '')
+                  if (!v) return
+                  store.updateSubEnv(sub.id, { pin: v }); e.target.value = ''; toast('Code mis à jour')
+                }} />
             </div>
           </Field>
         </div>
