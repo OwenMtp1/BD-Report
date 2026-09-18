@@ -5,9 +5,10 @@
 // cesse de servir un bundle périmé. À incrémenter dès qu'une version livrée doit
 // remplacer la précédente sans attendre — typiquement après un correctif de sécurité,
 // où continuer à servir l'ancien fichier revient à ne pas avoir corrigé.
+// v4 : le bundle v3 portait encore l identifiant env-peoplespheres en clair.
 // v3 : le bundle v2 contenait encore le code PIN de démarrage en clair et deux
 // identifiants nommant le fondateur. Il ne doit plus être servi à personne.
-const CACHE = 'bdrflow-v3'
+const CACHE = 'bdrflow-v4'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./'])).catch(() => {}))

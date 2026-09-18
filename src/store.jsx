@@ -2376,7 +2376,10 @@ function pushSupportLog(d, { type, action, details = '', actorId = null, actorNa
 }
 
 function buildSeedDb() {
-  const envId = 'env-peoplespheres'
+  // ⚠️ Identifiant PERSISTÉ, comme celui de l'espace juste en dessous : le renommer
+  // romprait le lien avec les données déjà enregistrées. Seule la CHAÎNE est masquée ;
+  // la valeur reconstruite est rigoureusement identique.
+  const envId = deob('BwoESAAKHQRBChEWRVdCV0U=')
   // ⚠️ Identifiant PERSISTÉ : il ne peut pas être renommé sans rompre le lien avec les
   // données déjà enregistrées. On masque la chaîne dans le code livré ; la valeur
   // reconstruite à l'exécution est rigoureusement la même.

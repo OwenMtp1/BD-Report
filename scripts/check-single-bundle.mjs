@@ -61,10 +61,19 @@ if (code.includes('esm.sh')) {
 //  reconstruite dans le navigateur. Ça retire ce qui se lit d'un coup d'œil ou se
 //  trouve par une recherche de texte. La confidentialité réelle vient du passage au
 //  serveur (RLS, tâche 46), pas d'ici.
+//  ⚠️ LA RECHERCHE EST INSENSIBLE À LA CASSE, et c'est le correctif le plus important
+//  de ce contrôle. Ma vérification cherchait « PeopleSpheres » ; l'identifiant s'écrit
+//  `env-peoplespheres`, en minuscules. J'ai donc conclu « zéro occurrence » et affirmé
+//  que le bundle était propre — alors que la chaîne y était, et que la recherche de
+//  DevTools, elle, ignore la casse par défaut. Un utilisateur l'a trouvée en trois
+//  secondes après que j'ai déclaré le contraire. Un contrôle plus strict que le mien
+//  ne sert à rien : c'est celui de l'attaquant qu'il faut égaler.
 const INTERDIT = [
   { motif: 'pin:"1205"', why: "le code PIN de démarrage, en clair dans le code livré" },
   { motif: 'sub-owen', why: "un identifiant qui nomme le fondateur" },
-  { motif: 'pipelineOwen', why: "un repère de semis qui nomme le fondateur" },
+  { motif: 'pipelineowen', why: "un repère de semis qui nomme le fondateur" },
+  { motif: 'peoplespheres', why: "le nom de l'entreprise cliente, dans un identifiant d'environnement" },
+  { motif: 'mrani', why: "le patronyme du fondateur" },
 ]
 // ⚠️ Deux règles ont été RETIRÉES après vérification, et c'est instructif :
 //  · `passwordClear` / `passwordPlain` sont bien dans le bundle — uniquement dans des
@@ -78,7 +87,8 @@ if (ECRITURE_CLAIR.test(code)) {
   console.error("  ✖ le bundle ÉCRIT un mot de passe en clair (passwordClear/passwordPlain) — seule leur purge est permise")
   process.exit(1)
 }
-const trouves = INTERDIT.filter(x => code.includes(x.motif))
+const bas = code.toLowerCase()
+const trouves = INTERDIT.filter(x => bas.includes(x.motif.toLowerCase()))
 if (trouves.length) {
   console.error('  ✖ chaînes compromettantes dans le bundle livré :')
   for (const t of trouves) console.error(`      « ${t.motif} » — ${t.why}`)
