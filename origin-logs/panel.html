@@ -1430,6 +1430,35 @@ select.input{height:36px}
       </div>
     </section>
 
+    <!-- ============ LISTE DES ENVIRONNEMENTS ============
+         ⚠️ UN ONGLET, PAS UNE FENÊTRE. La liste des espaces vivait dans
+         une fenêtre modale : on l'ouvrait, on entrait quelque part, elle
+         se refermait — et pour revenir au client suivant il fallait la
+         rouvrir. C'est l'écran que l'administration regarde le plus
+         souvent ; il a sa place dans le rail, comme les autres. -->
+    <section class="view" id="viewSpaces" hidden aria-label="Liste des environnements">
+      <div class="head">
+        <div>
+          <h1 class="title">Liste des environnements</h1>
+          <div class="sub" id="envSub">Tous les serveurs clients de la plateforme.</div>
+        </div>
+        <span class="tools">
+          <button class="btn" id="envNewBtn" hidden>Créer un environnement</button>
+        </span>
+      </div>
+      <div class="cat-find">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10.6 10.6 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input id="envQ" type="search" autocomplete="off"
+               placeholder="Rechercher un client — nom, formule, propriétaire…"
+               aria-label="Rechercher un environnement">
+        <button class="btn sm" id="envQClear" hidden>Effacer</button>
+      </div>
+      <div class="pgrid" id="envGrid"></div>
+    </section>
+
     <!-- ============ JOURNAL D'ADMINISTRATION ============ -->
     <section class="view" id="viewPlatformLog" hidden aria-label="Journal d’administration">
       <div class="head">
@@ -2332,6 +2361,7 @@ function render() {
   $('#viewOnline').hidden      = STATE.view !== 'online';
   $('#viewTeam').hidden        = STATE.view !== 'team';
   $('#viewPlatform').hidden    = STATE.view !== 'platform';
+  $('#viewSpaces').hidden      = STATE.view !== 'spaces';
   $('#viewPlatformLog').hidden = STATE.view !== 'platformlog';
   // ⚠️ L'entrée ne se rejoue qu'au CHANGEMENT de vue. `render()` est
   // rappelé à chaque rafraîchissement, à chaque marque posée, à chaque
@@ -2348,6 +2378,7 @@ function render() {
   else if (STATE.view === 'online') renderOnline();
   else if (STATE.view === 'team') renderTeam();
   else if (STATE.view === 'platform') rendrePlateforme();
+  else if (STATE.view === 'spaces') rendreEnvs();   // charge à la volée si besoin
   else rendreJournal();
 }
 
@@ -2364,6 +2395,8 @@ function buildNav() {
     html += `<div class="nav-group eyebrow">Plateforme</div>
       <button class="nav-item" data-view="platform" style="--fam:var(--f-staff)">
         <span class="nav-dot"></span><span class="nav-label">Supervision</span><span class="nav-n"></span></button>
+      ${canPlat('plat.voir') ? `<button class="nav-item" data-view="spaces" style="--fam:var(--f-staff)">
+        <span class="nav-dot"></span><span class="nav-label">Liste des environnements</span><span class="nav-n" id="navEnvN"></span></button>` : ''}
       <button class="nav-item" data-view="platformlog" style="--fam:var(--f-staff)">
         <span class="nav-dot"></span><span class="nav-label">Journal d'administration</span><span class="nav-n"></span></button>`;
     // ⚠️ AUCUN ESPACE = AUCUNE RUBRIQUE. Tant que l'administration n'est
@@ -3447,6 +3480,7 @@ function syncHash(replace) {
   const chemin = STATE.view === 'overview'    ? '/vue'
                : STATE.view === 'platform'    ? '/plateforme'
                : STATE.view === 'platformlog' ? '/plateforme/journal'
+               : STATE.view === 'spaces'      ? '/environnements'
                : STATE.view === 'bans'        ? '/bans/' + STATE.banState
                : STATE.view === 'online'      ? '/en-ligne'
                : STATE.view === 'team'        ? '/equipe'
@@ -3474,6 +3508,7 @@ function applyHash() {
   const [chemin, requete] = brut.split('?');
   const seg = chemin.split('/').filter(Boolean);
   if (seg[0] === 'plateforme') STATE.view = seg[1] === 'journal' ? 'platformlog' : 'platform';
+  else if (seg[0] === 'environnements') { STATE.view = 'spaces'; STATE.cat = 'all'; }
   else if (seg[0] === 'flux') { STATE.view = 'stream'; STATE.cat = seg[1] || 'all'; }
   else if (seg[0] === 'bans') { STATE.view = 'bans'; STATE.cat = 'bans';
                                 STATE.banState = ['actifs','expires','tous'].includes(seg[1]) ? seg[1] : 'actifs'; }
@@ -3482,7 +3517,7 @@ function applyHash() {
   else                        { STATE.view = 'overview'; STATE.cat = 'all'; }
   // Un lien vers un flux, collé par un collègue qui, lui, est dans un
   // espace : on ne montre pas une page vide, on ramène à la supervision.
-  if (sansEspace() && STATE.view !== 'platform' && STATE.view !== 'platformlog')
+  if (sansEspace() && !['platform','platformlog','spaces'].includes(STATE.view))
     STATE.view = 'platform';
   const p = new URLSearchParams(requete || '');
   // Le registre a sa propre recherche : la confondre avec celle des
@@ -3883,17 +3918,25 @@ $('#teamSeg').addEventListener('click', e => {
    L'aperçu se présente en Fondateur : c'est le rôle qui voit tout, et
    c'est ce qu'on veut montrer. Les écrans d'administration répondent
    donc avec un jeu d'exemple plutôt que de rester vides. */
+const DEMO_FORMULES = [
+  { key:'starter', label:'Starter', prix:'9 €/mois' },
+  { key:'pro',     label:'Pro',     prix:'29 €/mois' },
+  { key:'illimite',label:'Illimité',prix:'79 €/mois' }
+];
 const DEMO_ESPACES = [
   { id:1, nom:'Origin Roleplay', etat:'actif', guildId:'938271640518273024', staffRoleId:'938271640518273100',
     retention:30, conservationEffective:30, conservationIllimitee:false, cle:'demo-cle-1', creeLe:Date.now()-320*86400000, creePar:'Owen',
-    proprietaire:{ id:1, pseudo:'Owen' }, membres:24, evenements:184203, bannis:37 },
+    proprietaire:{ id:1, pseudo:'Owen' }, membres:24, evenements:184203, bannis:37,
+    formule:'pro', formuleLabel:'Pro', brancheLe:Date.now()-318*86400000 },
   { id:2, nom:'Origin RP — serveur test', etat:'actif', guildId:'938271640518273024', staffRoleId:'938271640518273101',
     retention:7, conservationEffective:7, conservationIllimitee:false, cle:'demo-cle-2', creeLe:Date.now()-40*86400000, creePar:'Owen',
-    proprietaire:{ id:3, pseudo:'Vortex' }, membres:6, evenements:9120, bannis:2 },
+    proprietaire:{ id:3, pseudo:'Vortex' }, membres:6, evenements:9120, bannis:2,
+    formule:'starter', formuleLabel:'Starter', brancheLe:null },
   { id:3, nom:'Origin RP — ancienne saison', etat:'ferme', guildId:'', staffRoleId:'',
     retention:90, conservationEffective:null, conservationIllimitee:true, cle:'demo-cle-3', creeLe:Date.now()-700*86400000, creePar:'Owen',
     fermeLe:Date.now()-60*86400000, motifFermeture:'Fin de saison 3 — journaux conservés',
-    proprietaire:null, membres:0, evenements:441027, bannis:0 }
+    proprietaire:null, membres:0, evenements:441027, bannis:0,
+    formule:'', formuleLabel:'', brancheLe:Date.now()-690*86400000 }
 ];
 const DEMO_EQUIPE = [
   { id:1, pseudo:'Owen',   source:'local',   roles:[{id:'fondateur',label:'Fondateur'}], rank:100, estMoi:true },
@@ -4172,6 +4215,9 @@ async function openPlatform() {
   let d;
   try { d = await api('/api/platform/spaces'); } catch (e) { return toast(e.message); }
   SPACES = d;   // gardé pour composer la fiche d'installation d'un client
+  // L'onglet « Liste des environnements » lit la même chose : on le tient
+  // à jour au passage, sinon il montrerait l'état d'avant l'action.
+  ENVS = d; rendreEnvs();
   openSheet('Espaces de logs', `${d.spaces.length} espace(s) · chacun a son serveur Discord et sa clé d’ingestion`,
     { name:'Plateforme', hue:200 }, `
     ${d.discordGlobal ? '' : `<div class="banner" style="--c:var(--warn)">L’application Discord n’est pas configurée (<code>DISCORD_CLIENT_SECRET</code>, <code>DISCORD_BOT_TOKEN</code>) : les espaces ne pourront pas ouvrir de connexion Discord.</div>`}
@@ -4652,6 +4698,141 @@ function choisirEspace() {
 }
 
 /* ============================================================
+   LISTE DES ENVIRONNEMENTS — l'écran de travail de l'administration
+   ============================================================
+   ⚠️ DEUX GESTES, ET ILS NE SE RESSEMBLENT PAS. « Entrer » ouvre les
+   journaux d'un client pour l'aider ; « Modifier » change ce qu'il a
+   acheté. Les mettre côte à côte dans un menu les aurait rendus
+   interchangeables : ils portent donc deux boutons distincts, et le
+   second n'apparaît qu'à qui peut réellement changer quelque chose. */
+let ENVS = null;
+let ENV_Q = '';
+
+document.addEventListener('input', ev => {
+  if (ev.target && ev.target.id === 'envQ') {
+    ENV_Q = ev.target.value || '';
+    const c = $('#envQClear'); if (c) c.hidden = !ENV_Q;
+    rendreEnvs();
+  }
+});
+
+/* La création reprend le formulaire de la fenêtre historique : un seul
+   formulaire, un seul endroit à corriger. */
+function creerEnvironnement() {
+  if (!ENVS) return toast('Rechargez la liste.');
+  const d = ENVS;
+  openSheet('Créer un environnement', 'Un client = un environnement = une clé d’ingestion',
+    { name: 'Nouveau', hue: 150 }, `
+    ${d.discordGlobal ? '' : `<div class="banner" style="--c:var(--warn)">L’application Discord n’est pas
+      configurée (<code>DISCORD_CLIENT_SECRET</code>, <code>DISCORD_BOT_TOKEN</code>) : l’équipe de ce
+      client ne pourra pas se connecter avec Discord.</div>`}
+    <div class="block">
+      <div class="field"><label for="nsNom">Nom de l’environnement</label>
+        <input class="input" id="nsNom" placeholder="Los Santos RP" maxlength="60"></div>
+      <div class="map-row" style="border:none">
+        <input class="input" id="nsGuild" placeholder="ID du serveur Discord du client" inputmode="numeric">
+        <input class="input" id="nsStaff" placeholder="ID de son rôle staff" inputmode="numeric">
+      </div>
+      <div class="map-row" style="border:none">
+        <select class="input" id="nsPlan" title="Formule vendue à ce client">
+          <option value="">— sans formule —</option>
+          ${(d.formules || []).map(f => `<option value="${esc(f.key)}">${esc(f.label)}${f.prix ? ' · ' + esc(f.prix) : ''}</option>`).join('')}
+        </select>
+        <input class="input" id="nsEch" type="date" title="Échéance — vide = sans fin">
+      </div>
+      <div class="map-row" style="border:none">
+        <input class="input" id="nsRet" type="number" min="1" max="3650" value="30" title="Rétention en jours">
+        <button class="btn primary" id="nsSpaceGo">Créer l’environnement</button>
+      </div>
+      <label class="map-row" style="border:none;cursor:pointer">
+        <span><span class="map-name">Ne jamais effacer les journaux</span>
+          <span class="map-desc">La rétention ci-dessus est ignorée — rien ne part, jamais.</span></span>
+        <input type="checkbox" id="nsForever">
+      </label>
+      <span class="lite-m">L’environnement reçoit sa propre clé d’ingestion : elle n’ouvre que ses
+        journaux. Ses 14 rôles d’origine y sont créés automatiquement.</span>
+    </div>`);
+}
+
+async function chargerEnvs() {
+  if (MODE !== 'api') { ENVS = { spaces: DEMO_ESPACES, formules: DEMO_FORMULES, discordGlobal: true }; return rendreEnvs(); }
+  try { ENVS = await api('/api/platform/spaces'); SPACES = ENVS; }
+  catch (e) { return toast(e.message); }
+  rendreEnvs();
+}
+
+function rendreEnvs() {
+  const host = $('#envGrid'); if (!host) return;
+  if (!ENVS) { host.innerHTML = '<span class="lite-m">Chargement…</span>'; chargerEnvs(); return; }
+  const tous = ENVS.spaces || [];
+  const q = ENV_Q.trim().toLowerCase();
+  const list = q ? tous.filter(sp => [sp.nom, sp.formuleLabel, sp.proprietaire && sp.proprietaire.pseudo,
+    sp.etat].filter(Boolean).join(' ').toLowerCase().includes(q)) : tous;
+
+  const actifs = tous.filter(x => x.etat === 'actif').length;
+  $('#envSub').innerHTML = `<b>${tous.length}</b> environnement(s) · <b>${actifs}</b> actif(s)`
+    + (tous.length - actifs ? ` · ${tous.length - actifs} fermé(s)` : '');
+  const n = $('#navEnvN'); if (n) n.textContent = tous.length || '';
+  const b = $('#envNewBtn'); if (b) b.hidden = !canPlat('plat.espace.creer');
+
+  if (!list.length) {
+    host.innerHTML = `<div class="void"><b>${q ? 'Aucun environnement ne correspond.' : 'Aucun environnement.'}</b>
+      <span class="lite-m">${q ? 'Essayez un autre mot.' : 'Créez-en un pour votre premier client.'}</span></div>`;
+    return;
+  }
+
+  host.innerHTML = list.map(sp => {
+    const actif = sp.etat === 'actif';
+    // ⚠️ Ce qui manque se DIT ici, pas trois écrans plus loin : sans
+    // serveur Discord ni rôle staff, l'équipe du client ne peut pas se
+    // connecter, et personne ne le découvre avant de l'entendre.
+    const manques = [];
+    if (!sp.guildId || !sp.staffRoleId) manques.push('liaison Discord incomplète');
+    if (!sp.brancheLe) manques.push('jamais branché');
+    if (!sp.formule) manques.push('sans formule');
+    return `<div class="pcard ${actif ? '' : 'ferme'} ${manques.length ? 'alerte' : ''}">
+      <div class="ptop">
+        <span class="pulse-dot" style="--c:${actif ? 'var(--ok)' : 'var(--muted)'}"></span>
+        <span>
+          <span class="pname">${esc(sp.nom)}</span>
+          <span class="psub">#${sp.id} · ${actif ? 'actif' : 'fermé'}
+            · ${esc(sp.formuleLabel || 'sans formule')}
+            · ${sp.conservationEffective == null ? 'conservation illimitée' : sp.conservationEffective + ' j'}</span>
+        </span>
+        <span class="lite-m">${sp.proprietaire ? esc(sp.proprietaire.pseudo) : '—'}</span>
+      </div>
+      <div class="pnums">
+        <span class="pnum"><b>${(sp.evenements || 0).toLocaleString('fr-FR')}</b><span>évènements</span></span>
+        <span class="pnum"><b>${sp.membres || 0}</b><span>staff</span></span>
+        <span class="pnum ${sp.bannis ? 'crit' : ''}"><b>${sp.bannis || 0}</b><span>bannis</span></span>
+        <span class="pnum"><b>${sp.brancheLe ? '✓' : '—'}</b><span>branché</span></span>
+      </div>
+      ${manques.length ? `<span class="lite-m" style="color:var(--warn)">⚠ ${manques.map(esc).join(' · ')}</span>` : ''}
+      <div class="pact">
+        ${canPlat('plat.entrer') && actif
+          ? `<button class="btn sm primary" data-enter="${sp.id}">Entrer dans l’environnement</button>`
+          : ''}
+        <button class="btn sm" data-envedit="${sp.id}">Modifier l’environnement</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* Toutes les modifications d'un environnement, au même endroit.
+   ⚠️ On réutilise `carteEspace` : c'est déjà LE formulaire complet, et en
+   écrire un second aurait garanti que les deux divergent — celui qu'on
+   corrige et celui qu'on oublie. */
+function ficheEnvironnement(id) {
+  if (!ENVS) return toast('Rechargez la liste.');
+  const sp = (ENVS.spaces || []).find(x => x.id === Number(id));
+  if (!sp) return toast('Environnement introuvable.');
+  openSheet('Modifier l’environnement', esc(sp.nom) + ' · #' + sp.id,
+    { name: sp.nom, hue: 200 }, `
+    ${canPlat('plat.espace.modifier') ? '' : `<div class="banner" style="--c:var(--warn)">
+      Votre rôle ne permet pas de modifier un environnement : cet écran est en lecture.</div>`}
+    ${carteEspace(sp, ENVS)}`);
+}
+/* ============================================================
    L'ÉQUIPE DE LA PLATEFORME — celle de l'éditeur
    ============================================================
    ⚠️ RIEN À VOIR AVEC LE STAFF D'UN CLIENT. Ici on ne modère personne :
@@ -5013,12 +5194,17 @@ document.addEventListener('change', ev => {
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
     + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],[data-brancher],[data-integ],[data-rgpd],[data-relais],'
-    + '[data-export],[data-sauvdl],[data-sauvrm],[data-ilua],[data-iscan],[data-goesp],[data-psave],[data-pout],[data-prsave],[data-prdel],'
+    + '[data-export],[data-sauvdl],[data-sauvrm],[data-ilua],[data-iscan],[data-goesp],[data-psave],[data-pout],[data-prsave],[data-prdel],[data-envedit],'
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
     if (id === 'rolesBtn')    { ROLE_OUVERT = null; openRoles(); }
-    if (id === 'platformBtn') openPlatform();
+    // ⚠️ Le bouton mène à l'ONGLET, il ne rouvre plus une fenêtre : deux
+    // chemins vers la même liste finissent par diverger, et c'est celui
+    // qu'on ferme par erreur qui contenait le bouton qu'on cherchait.
+    if (id === 'platformBtn') { STATE.view = 'spaces'; render(); chargerEnvs(); }
+    if (id === 'envNewBtn') return creerEnvironnement();
+    if (id === 'envQClear') { ENV_Q = ''; $('#envQ').value = ''; $('#envQClear').hidden = true; return rendreEnvs(); }
     if (id === 'nrGo')        creerRole();
     if (id === 'nsSpaceGo')   creerEspace();
     if (id === 'sauvNow')     sauvegarderMaintenant();
@@ -5135,6 +5321,7 @@ document.addEventListener('click', async ev => {
           toast('Espace supprimé.'); openPlatform(); } catch (e) { toast(e.message); }
     return;
   }
+  if (D.envedit) return ficheEnvironnement(D.envedit);
   if (D.psave || D.pout || D.prsave || D.prdel) return actionEquipePlateforme(D);
   if (D.goesp) {
     try { const r = await api('/api/espace', { method:'POST', body: JSON.stringify({ spaceId: Number(D.goesp) }) });
@@ -5193,8 +5380,9 @@ async function creerEspace() {
       retention: Number($('#nsRet').value),
       conservationIllimitee: $('#nsForever').checked,
       formule: $('#nsPlan').value, echeance: $('#nsEch').value }) });
-    toast('Espace créé — ouvrez sa fiche d’installation pour la transmettre.');
-    openPlatform();
+    toast('Environnement créé — ouvrez sa fiche d’installation pour la transmettre.');
+    closeSheet();
+    await chargerEnvs();
   } catch (e) { toast(e.message); }
 }
 </script>
@@ -5528,6 +5716,7 @@ document.addEventListener('click', async ev => {
 
   if (t.dataset.view === 'platform')    return goVue('platform');
   if (t.dataset.view === 'platformlog')  return goVue('platformlog');
+  if (t.dataset.view === 'spaces')       return goVue('spaces');
   if (t.dataset.view === 'overview') return goOverview();
   if (t.dataset.view === 'online') return goVue('online');
   if (t.dataset.view === 'team')   return goVue('team');

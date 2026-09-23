@@ -84,6 +84,23 @@ t('⚠️ bannir et effacer ne se ressemblent plus', /\.btn\.grave\{/.test(P) &&
 t('la coche « traité » atteint 24 px', /width:24px;height:24px;flex:none;border-radius:6px/.test(P));
 t('un repère <main> et un titre de région', /<main id="contenu">/.test(P) && /class="sr-only" id="feedHead"/.test(P));
 
+sect('La liste des environnements est un ONGLET, pas une fenêtre');
+// ⚠️ Elle vivait dans une fenêtre modale : on l'ouvrait, on entrait
+// quelque part, elle se refermait — et pour revenir au client suivant il
+// fallait la rouvrir. C'est l'écran que l'administration regarde le plus.
+t('la vue existe', /id="viewSpaces"/.test(P));
+t('elle a son entrée dans le rail', /data-view="spaces"/.test(P));
+t('et son adresse, comme les autres vues', /'\/environnements'/.test(P));
+t('⚠️ le clic du rail la route vraiment — sans quoi l’onglet retombe sur la supervision',
+  /dataset\.view === 'spaces'\)\s*return goVue\('spaces'\)/.test(P));
+t('deux gestes distincts, pas un menu', /data-enter="\$\{sp\.id\}/.test(P) && /data-envedit="\$\{sp\.id\}/.test(P));
+t('⚠️ « Entrer » n’apparaît qu’à qui en a le droit, et pas sur un espace fermé',
+  /canPlat\('plat\.entrer'\) && actif/.test(P));
+t('⚠️ la fiche de modification RÉUTILISE le formulaire complet',
+  /carteEspace\(sp, ENVS\)/.test(P), 'un second formulaire aurait divergé');
+t('ce qui manque chez un client se dit sur sa carte',
+  /liaison Discord incomplète/.test(P) && /jamais branché/.test(P));
+
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);
 process.exit(n===T.length?0:1);
