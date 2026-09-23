@@ -22,6 +22,7 @@ const PLANS = require('./plans.js');
 const SAUV = require('./sauvegarde.js');
 const TRANSF = require('./transfert.js');
 const CONSERV = require('./conservation.js');
+const ECO = require('./ecosysteme.js');
 const BRANCH = require('./branchement.js');
 
 /* ---------- configuration ---------- */
@@ -1253,6 +1254,51 @@ async function route(req, res) {
       cle: esp.server_key, nom: esp.name, url: originOf(req),
       fichiers: BRANCH.fichiers(path.join(CFG.panelDir, 'resource'))
     });
+  }
+
+  /* ---- ce que fait tourner le serveur de jeu ----
+     ⚠️ Deux routes, deux questions. L'inventaire dit « qu'est-ce qui
+     tourne ici ? » et part tout seul au démarrage, parce qu'il ne coûte
+     rien. Le scan dit « qu'est-ce que ce code sait faire ? » et ne part
+     QUE sur commande console : il lit tous les scripts serveur du
+     serveur de jeu, et cela ne se déclenche pas dans le dos de personne. */
+  if ((p === '/api/inventory' || p === '/api/scan') && method === 'POST') {
+    const esp = spaceFromKey(req);
+    if (!esp) {
+      if (debit('cle:' + ip, 30, 60000)) return fail(res, 429, 'Trop de tentatives.');
+      return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
+    }
+    if (debit('inv:' + esp.id, 6, 60000)) return fail(res, 429, 'Trop de remontées.');
+    const b = await readBody(req);
+    const table = p === '/api/scan' ? 'scans' : 'inventory';
+    const txt = (v, n) => (typeof v === 'string' ? v : '').trim().slice(0, n);
+    // ⚠️ On BORNE ce qu'on accepte d'écrire. Le corps vient d'une machine
+    // qu'on ne maîtrise pas : un serveur à 400 ressources est déjà énorme,
+    // et rien n'oblige la ressource à être celle qu'on a livrée.
+    const charge = table === 'scans' ? {
+      ts: now(),
+      ressources: (Array.isArray(b.ressources) ? b.ressources : []).slice(0, 400).map(r => ({
+        // ⚠️ `S()` rend null sur une valeur vide : un `.slice` posé
+        // directement dessus faisait tomber la route entière sur une
+        // ressource sans version. Le corps vient d'une machine qu'on ne
+        // maîtrise pas — chaque champ est facultatif, aucun ne se suppose.
+        nom: txt(r && r.nom, 80),
+        evenements: (Array.isArray(r && r.evenements) ? r.evenements : [])
+          .slice(0, 200).map(e => txt(e, 160)).filter(Boolean)
+      })).filter(r => r.nom),
+      protegees: (Array.isArray(b.protegees) ? b.protegees : []).slice(0, 400)
+        .map(x => txt(x, 80)).filter(Boolean),
+      lus: Number(b.lus) || 0
+    } : {
+      ts: now(), framework: txt(b.framework, 20),
+      ressources: (Array.isArray(b.ressources) ? b.ressources : []).slice(0, 400).map(r => ({
+        nom: txt(r && r.nom, 80), etat: txt(r && r.etat, 20), version: txt(r && r.version, 30)
+      })).filter(r => r.nom)
+    };
+    db.prepare(`INSERT INTO ${table}(space_id, ts, payload) VALUES(?,?,?)
+                ON CONFLICT(space_id) DO UPDATE SET ts = excluded.ts, payload = excluded.payload`)
+      .run(esp.id, now(), JSON.stringify(charge));
+    return ok(res, { recu: charge.ressources.length });
   }
 
   /* ---- dépôt des logs par la ressource FiveM ---- */
@@ -3030,6 +3076,30 @@ async function route(req, res) {
         const sousRoute = morceaux[1] || '';
         const sp = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(sid));
         if (!sp) return fail(res, 404, 'Espace inconnu.');
+
+        /* Ce que le serveur du client fait tourner, et ce qu'on en tire.
+           Chez le vendeur, pas chez le client : c'est lui qui installe,
+           et c'est la fiche d'installation qui pose la question. */
+        if (sousRoute === 'integration') {
+          const lire = t => {
+            const r = DB.row(db.prepare(`SELECT * FROM ${t} WHERE space_id = ?`).get(sid));
+            if (!r) return null;
+            try { return Object.assign(JSON.parse(r.payload), { ts: r.ts }); } catch { return null; }
+          };
+          if (method === 'GET')
+            return ok(res, Object.assign(ECO.analyser(lire('inventory'), lire('scans')),
+                                         { espace: sp.name }));
+          if (method === 'POST') {
+            // Le fichier à déposer. On le rend en texte dans du JSON : le
+            // panneau en fait un téléchargement, sans route à protéger en plus.
+            const b = await readBody(req);
+            const choix = (Array.isArray(b.choix) ? b.choix : []).slice(0, 300);
+            audit(me, 'plateforme.integration.fichier',
+                  `${sp.name} — ${choix.length} raccordement(s)`, ip, sid);
+            return ok(res, { lua: ECO.lua(choix, sp.name), retenus: choix.length });
+          }
+          return fail(res, 405, 'Méthode non autorisée.');
+        }
 
         /* Émettre le code d'installation. On rend la COMMANDE entière :
            le client n'a rien à assembler, et on ne peut pas se tromper

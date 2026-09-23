@@ -21,7 +21,14 @@ server_scripts {
   'server/anticheat.lua',
   'server/actions.lua',
   'server/captures.lua',
-  'server/presence.lua'
+  'server/presence.lua',
+  'server/inventaire.lua',
+  'server/scan.lua',
+  -- ⚠️ Les raccordements propres à CE serveur, générés par le panneau.
+  -- Un motif plutôt qu'un fichier nommé : un motif qui ne correspond à
+  -- rien est sans effet, alors qu'un fichier absent fait échouer le
+  -- chargement de la ressource chez tous ceux qui n'en ont pas.
+  'server/sur_mesure/*.lua'
 }
 
 client_script 'client/main.lua'

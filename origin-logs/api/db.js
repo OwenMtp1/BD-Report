@@ -39,6 +39,24 @@ CREATE TABLE IF NOT EXISTS spaces(
   closed_reason TEXT
 );
 
+-- Ce que fait tourner le serveur de jeu d'un espace, et ce que son code
+-- sait faire. Une ligne par espace, remplacée à chaque remontée : ce
+-- n'est pas un historique, c'est une PHOTO — savoir qu'une ressource
+-- tournait il y a trois mois n'aide personne à brancher celle d'aujourd'hui.
+-- ⚠️ La colonne payload ne contient JAMAIS de code, seulement des noms :
+-- beaucoup de ressources FiveM sont payantes et sous licence.
+CREATE TABLE IF NOT EXISTS inventory(
+  space_id INTEGER PRIMARY KEY,
+  ts       INTEGER NOT NULL,
+  payload  TEXT    NOT NULL
+);
+CREATE TABLE IF NOT EXISTS scans(
+  space_id INTEGER PRIMARY KEY,
+  ts       INTEGER NOT NULL,
+  payload  TEXT    NOT NULL
+);
+
+
 -- FORMULES commerciales. Un espace de logs se vend : la formule borne ce
 -- qu'il peut faire, et c'est la seule chose qui distingue un client d'un
 -- autre. Elles vivent en base — pas dans le code — parce qu'on ajuste un

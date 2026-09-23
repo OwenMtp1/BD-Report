@@ -4261,6 +4261,7 @@ function carteEspace(sp, d) {
       <code>${esc(sp.cle)}</code>
       <button class="btn sm" data-copykey="${esc(sp.cle)}">Copier la clé</button>
       <button class="btn sm primary" data-fiche="${sp.id}">Fiche d’installation</button>
+      <button class="btn sm" data-integ="${sp.id}" title="Ce que fait tourner ce serveur, et ce qui reste à raccorder">Intégration</button>
       <button class="btn sm" data-regen="${sp.id}" title="L’ancienne clé cesse immédiatement de fonctionner">Régénérer</button>
     </div>
     <!-- ⚠️ LA CLÉ DU BOT EST UNE AUTRE CLÉ, et c'est tout l'intérêt.
@@ -4425,6 +4426,125 @@ function ficheInstallation(id) {
       sans eux, son équipe ne pourra pas se connecter avec Discord.</div>` : ''}`);
 }
 
+/* ============================================================
+   Intégration — ce que fait tourner le serveur du client
+   ============================================================
+   ⚠️ LE PANNEAU PROPOSE, L'HUMAIN VALIDE. Rien ne se branche tout seul :
+   un serveur raccordé à l'aveugle, c'est des centaines de milliers de
+   lignes de bruit par jour, une base qui gonfle et un panneau devenu
+   illisible. Chaque candidat se coche, et sa rubrique se corrige. */
+let INTEG = null;
+
+async function ficheIntegration(id) {
+  if (MODE !== 'api') return toast('Mode démonstration : aucun serveur de jeu à interroger.');
+  let d;
+  try { d = await api('/api/platform/spaces/' + id + '/integration'); }
+  catch (e) { return toast(e.message); }
+  INTEG = { id, d };
+
+  const jamais = !d.quand;
+  const cat = c => (CATS.find(x => x.id === c) || {}).label || c;
+  const select = (i, c) => `<select class="input sm" data-icat="${i}">${
+    CATS.map(x => `<option value="${esc(x.id)}" ${x.id === c ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>`;
+
+  const manquantsRequis = d.natives.filter(n => n.requis && n.etat !== 'branche');
+  const aBrancher = d.natives.filter(n => n.etat !== 'branche' && !n.requis);
+  const visibles = d.candidats.slice(0, 200);
+
+  openSheet('Intégration', esc(d.espace) + ' · ce que fait tourner ce serveur', { name: d.espace, hue: 150 }, `
+    ${jamais ? `<div class="banner" style="--c:var(--warn)">
+      <b>Aucune remontée pour l’instant.</b> La ressource envoie son inventaire
+      15 secondes après le démarrage du serveur de jeu. Pour la déclencher tout de
+      suite, dans la console du serveur : <code>origin_logs_inventaire</code>.</div>` : `
+      <div class="block"><h3 class="eyebrow">Inventaire</h3>
+        <span class="lite-m"><b>${d.total}</b> ressource(s) · framework
+        <b>${esc(d.framework || 'standalone')}</b> · relevé ${dayLabel(d.quand)}</span></div>`}
+
+    ${manquantsRequis.length ? `<div class="banner" style="--c:var(--crit)">
+      ${manquantsRequis.map(n => `<div><b>${esc(n.label)}</b> n’est pas démarrée. ${esc(n.sans || '')}</div>`).join('')}
+    </div>` : ''}
+
+    <div class="block">
+      <h3 class="eyebrow">Déjà branché, sans rien écrire</h3>
+      ${d.natives.filter(n => n.etat === 'branche').length
+        ? d.natives.filter(n => n.etat === 'branche').map(n =>
+            `<div class="map-row" style="border:none"><span><span class="map-name">${esc(n.label)}</span>
+             <span class="map-desc">alimente ${n.donne.map(cat).map(esc).join(', ')}</span></span>
+             <span class="state" style="--c:var(--ok)">branché</span></div>`).join('')
+        : '<span class="lite-m">Aucune des ressources que le panneau gère nativement.</span>'}
+      ${aBrancher.length ? `<span class="lite-m">Absentes : ${aBrancher.map(n => esc(n.label)).join(', ')}.</span>` : ''}
+    </div>
+
+    <div class="block">
+      <h3 class="eyebrow">Connues du panneau, à raccorder</h3>
+      ${d.connues.length
+        ? d.connues.map(c => `<div class="map-row" style="border:none">
+            <span><span class="map-name">${esc(c.label)}</span>
+            <span class="map-desc">alimenterait « ${esc(cat(c.cat))} »</span></span>
+            <span class="state" style="--c:var(--warn)">à brancher</span></div>`).join('')
+        : '<span class="lite-m">Aucune ressource du catalogue n’est présente ici.</span>'}
+      <span class="lite-m">Ce catalogue grossit à chaque client : la vingtième installation
+        reconnaît ce que les dix-neuf précédentes ont appris.</span>
+    </div>
+
+    <div class="block">
+      <h3 class="eyebrow">Candidats trouvés dans le code</h3>
+      ${!d.quandScan ? `<span class="lite-m">Aucun scan pour l’instant. Dans la console du
+        serveur de jeu : <code>origin_logs_scan</code>. Il lit les scripts serveur des autres
+        ressources et n’en remonte que des <b>noms d’évènements</b> — jamais une ligne de code.</span>`
+      : `<span class="lite-m"><b>${d.candidats.length}</b> candidat(s) retenu(s), scan de ${dayLabel(d.quandScan)}.
+          Écartés : ${d.ecartes.bruit} trop bavard(s), ${d.ecartes.sansIndice} sans rubrique évidente.
+          ${d.protegees.length ? d.protegees.length + ' ressource(s) protégée(s) (escrow) : code chiffré, illisible.' : ''}</span>
+        ${visibles.length ? `
+          <div class="tools" style="margin:8px 0">
+            <button class="btn sm" data-itoggle="1">Tout cocher</button>
+            <button class="btn sm" data-itoggle="0">Tout décocher</button>
+            <button class="btn sm primary" data-ilua="${id}">Générer le fichier</button>
+          </div>
+          ${visibles.map((c, i) => `<div class="map-row" style="border:none">
+            <span><span class="map-name"><code>${esc(c.ev)}</code></span>
+              <span class="map-desc">${esc(c.ressource)} · ${c.sur === 'catalogue'
+                ? 'ressource connue' : 'indice « ' + esc(c.mot || '') + ' »'}</span></span>
+            ${select(i, c.cat)}
+            <input type="checkbox" data-icheck="${i}" ${c.sur === 'catalogue' ? 'checked' : ''}>
+          </div>`).join('')}
+          ${d.candidats.length > visibles.length
+            ? `<span class="lite-m">${d.candidats.length - visibles.length} autre(s) non affiché(s) :
+               traitez d’abord ceux-ci, le scan se relance quand vous voulez.</span>` : ''}
+        ` : '<span class="lite-m">Le scan n’a retenu aucun candidat.</span>'}`}
+    </div>
+
+    ${d.inconnues.length ? `<details class="block">
+      <summary class="eyebrow" style="cursor:pointer">${d.inconnues.length} ressource(s) que le panneau ne connaît pas</summary>
+      <span class="lite-m">${d.inconnues.slice(0, 150).map(r => esc(r.nom)).join(' · ')}</span>
+    </details>` : ''}`);
+}
+
+async function genererIntegration(id) {
+  if (!INTEG || INTEG.id !== id) return toast('Rouvrez l’écran d’intégration.');
+  const choix = [];
+  document.querySelectorAll('[data-icheck]').forEach(b => {
+    if (!b.checked) return;
+    const i = Number(b.dataset.icheck);
+    const c = INTEG.d.candidats[i]; if (!c) return;
+    const sel = document.querySelector(`[data-icat="${i}"]`);
+    choix.push({ ev: c.ev, ressource: c.ressource, cat: sel ? sel.value : c.cat, sev: 'info' });
+  });
+  if (!choix.length) return toast('Cochez au moins un évènement.');
+  let r;
+  try { r = await api('/api/platform/spaces/' + id + '/integration', { method:'POST', body: JSON.stringify({ choix }) }); }
+  catch (e) { return toast(e.message); }
+  // Le fichier naît dans le navigateur : pas de route à protéger en plus
+  // pour servir un texte que l'on vient déjà de recevoir.
+  const blob = new Blob([r.lua], { type:'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'origin_logs_sur_mesure.lua';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(r.retenus + ' raccordement(s) — à déposer dans server/sur_mesure/ du client.');
+}
+
 /* ---------- propriétaire : on choisit parmi les membres de l'espace ---------- */
 async function choisirProprietaire(spaceId) {
   let d;
@@ -4551,8 +4671,8 @@ async function openTeam() {
    ============================================================ */
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
-    + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],[data-brancher],[data-rgpd],[data-relais],'
-    + '[data-export],[data-sauvdl],[data-sauvrm],'
+    + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],[data-brancher],[data-integ],[data-rgpd],[data-relais],'
+    + '[data-export],[data-sauvdl],[data-sauvrm],[data-itoggle],[data-ilua],'
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
@@ -4647,6 +4767,7 @@ document.addEventListener('click', async ev => {
     return;
   }
   if (D.fiche) return ficheInstallation(D.fiche);
+  if (D.integ) return ficheIntegration(Number(D.integ));
   if (D.rgpd) return rgpd(D.rgpd, D.key, D.name);
   if (D.copyfiche) return copy(D.copyfiche, 'Configuration copiée — à coller dans server.cfg');
   if (D.brancher) {
@@ -4668,6 +4789,11 @@ document.addEventListener('click', async ev => {
           toast('Espace supprimé.'); openPlatform(); } catch (e) { toast(e.message); }
     return;
   }
+  if (D.itoggle !== undefined) {
+    document.querySelectorAll('[data-icheck]').forEach(b => { b.checked = D.itoggle === '1'; });
+    return;
+  }
+  if (D.ilua) return genererIntegration(Number(D.ilua));
   if (D.owner) return choisirProprietaire(D.owner);
   // L'export part par le navigateur, avec le cookie de session : c'est le
   // serveur qui nomme le fichier et qui journalise la sortie.

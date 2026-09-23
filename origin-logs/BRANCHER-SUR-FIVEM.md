@@ -264,6 +264,10 @@ ligne de commande :
   section 1 bis) ;
 - **Bot Discord** — recopier les logs en direct dans des salons Discord, un
   salon par rubrique (voir `bot/README.md`) ;
+- **Adapter le panneau à ce serveur** — dans sa console, `origin_logs_scan` :
+  le panneau lit le code du serveur et propose les raccordements manquants
+  (écran **Espaces de logs → Intégration**). Seuls des noms d'évènements
+  remontent, jamais de code ;
 - `resource/config.lua` — couper les rubriques qui ne vous intéressent pas,
   régler l'anticheat, les zones protégées, les captures d'écran. Ce fichier-là
   n'a **rien de secret** : c'est le bon endroit pour les réglages de jeu.

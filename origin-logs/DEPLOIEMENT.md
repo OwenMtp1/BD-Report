@@ -377,6 +377,77 @@ clé refusée, API injoignable, ou rubrique désactivée dans `config.lua`.
 
 ---
 
+## 3 bis. Adapter le panneau au serveur du client
+
+Un serveur FiveM tourne avec 80 à 150 ressources. `origin_logs` en gère une
+dizaine tout seul (ESX, QBCore, QBox, ox_inventory, baseevents,
+screenshot-basic) — chez un client donné, la moitié des rubriques restait donc
+vide, et la seule issue était qu'un humain ouvre `EXEMPLES.md` et ajoute des
+lignes à la main. C'est exactement ce que personne ne fait.
+
+Deux commandes, côté serveur de jeu, et un écran côté panneau
+(**Espaces de logs → Intégration**).
+
+### `origin_logs_inventaire` — qu'est-ce qui tourne ici ?
+
+Part **tout seul**, 15 secondes après le démarrage du serveur (après les autres
+ressources : un inventaire pris à la seconde zéro verrait un serveur à moitié
+allumé). La commande ne sert qu'à le redemander tout de suite.
+
+L'écran répond alors à la question qu'on se posait à chaque livraison :
+
+- ce qui est **déjà branché** sans rien écrire ;
+- ce qui est **connu du panneau mais pas raccordé** (`Renewed-Banking`,
+  `qb-garages`, `ps-housing`…) ;
+- ce qui manque et qui gêne (`baseevents` absente = aucune mort journalisée) ;
+- tout le reste, que le panneau ne connaît pas encore.
+
+⚠️ Le catalogue (`api/ecosysteme.js`) **grossit à chaque client**. C'est sa
+raison d'être : la vingtième installation reconnaît ce que les dix-neuf
+précédentes ont appris. Ajouter une entrée là suffit, rien d'autre à toucher.
+
+### `origin_logs_scan` — qu'est-ce que ce code sait faire ?
+
+Lit les scripts serveur des autres ressources et en extrait les **noms** des
+évènements qu'elles écoutent. Le panneau les trie, propose une rubrique pour
+chacun, et génère un fichier `.lua` à déposer dans
+`resources/origin_logs/server/sur_mesure/` chez le client.
+
+⚠️ **Le code ne quitte JAMAIS la machine du client.** Seuls des noms
+d'évènements remontent. Beaucoup de ressources FiveM sont payantes et sous
+licence : envoyer leur source vers un panneau tiers serait un problème
+juridique et commercial, pas un détail d'implémentation.
+
+⚠️ **Rien ne part au démarrage.** Le scan lit tout le serveur : il se déclenche
+à la main, depuis la console, jamais dans le dos de l'administrateur.
+
+⚠️ **Le panneau propose, l'humain valide.** Chaque candidat se coche et sa
+rubrique se corrige. Un serveur raccordé à l'aveugle, c'est des centaines de
+milliers de lignes de bruit par jour et un panneau devenu illisible — les noms
+manifestement bavards (`hud`, `sync`, `tick`, `position`…) sont d'ailleurs
+écartés **avant** d'être proposés.
+
+⚠️ **Le fichier généré n'utilise QUE `AddEventHandler`, jamais
+`RegisterNetEvent`** — et ce n'est pas un détail de style. Enregistrer en
+« net » un évènement qui ne l'était pas le rendrait déclenchable **par les
+joueurs** : n'importe qui pourrait alors appeler le gestionnaire d'origine,
+celui qui donne l'argent. On ajoute un écouteur, on n'ouvre rien.
+
+### Ce que le scan ne peut pas faire
+
+- Les ressources **protégées par escrow** (Cfx) ont leur code chiffré. Le
+  panneau les nomme au lieu de les passer sous silence : « code illisible » et
+  « rien trouvé » ne se corrigent pas de la même façon.
+- Un `server_scripts { 'server/*.lua' }` **ne se déplie pas** : FiveM n'expose
+  aucune lecture de dossier. On tente les noms de fichiers les plus courants,
+  et la console dit combien de motifs sont restés non dépliés — ces
+  ressources-là sont lues **partiellement**.
+- **Il n'existe pas d'espion universel** dans FiveM : pour écouter un
+  évènement, il faut connaître son nom. C'est précisément ce que le scan sert
+  à trouver.
+
+---
+
 ## 4. Le bot Discord (facultatif)
 
 Les journaux dans vos salons, un par rubrique. Il vit à côté de l'API et
