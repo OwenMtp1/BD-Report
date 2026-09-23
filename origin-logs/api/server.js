@@ -21,6 +21,7 @@ const ROLESVC = require('./roles.js');
 const PLANS = require('./plans.js');
 const SAUV = require('./sauvegarde.js');
 const TRANSF = require('./transfert.js');
+const BRANCH = require('./branchement.js');
 
 /* ---------- configuration ---------- */
 // setup.js écrit un .env ; sans cette lecture, `npm start` réclamerait
@@ -158,6 +159,11 @@ function originOf(req) {
   return proto + '://' + host;
 }
 const redirectUriOf = (c, req) => c.redirectUri || (originOf(req) + '/api/auth/discord/callback');
+/* La commande se compose à UN SEUL endroit : le panneau l'affiche, le
+   script la rappelle dans ses messages d'erreur, et les deux doivent
+   dire la même chose au caractère près — c'est elle qu'on copie-colle. */
+const commandeInstall = (origine, code) =>
+  `bash <(curl -fsSL ${String(origine).replace(/\/+$/, '')}/install) ${code}`;
 
 /* ---------- réponses ---------- */
 const SEC_HEADERS = {
@@ -1060,10 +1066,23 @@ const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; chars
   '.png':'image/png', '.jpg':'image/jpeg', '.webp':'image/webp', '.ico':'image/x-icon', '.woff2':'font/woff2' };
 
 
+/* ⚠️ LE PANNEAU EST SERVI DEPUIS LA RACINE DU PROJET, donc `api/` et
+   `bot/` sont dans l'arborescence servie. Sans ce filtre, un simple
+   GET /bot/.env rendait le jeton du bot Discord, et GET /api/data/…
+   la base elle-même. Le chemin normalisé protégeait des « .. », pas de
+   ce qui est légitimement sous la racine. On refuse donc par NOM : les
+   fichiers cachés, et les dossiers qui ne contiennent que du serveur.
+   `resource/` et `juridique/` restent servis — le premier est ce que le
+   script d'installation télécharge, le second est du texte public. */
+const DOSSIERS_PRIVES = new Set(['api', 'bot', 'node_modules', 'data']);
+
 async function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
   const file = path.join(CFG.panelDir, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
   if (!file.startsWith(CFG.panelDir)) return fail(res, 403, 'Chemin refusé.');
+  const segments = path.relative(CFG.panelDir, file).split(path.sep).filter(Boolean);
+  if (segments.some(x => x.startsWith('.')) || DOSSIERS_PRIVES.has(segments[0]))
+    return fail(res, 404, 'Introuvable.');
   try {
     const stat = await fsp.stat(file);
     if (stat.isDirectory()) return fail(res, 404, 'Introuvable.');
@@ -1201,6 +1220,33 @@ async function route(req, res) {
   const Q = u.query;
   const ip = clientIp(req);
   const method = req.method;
+
+  /* ---- branchement d'un serveur de jeu en une commande ----
+     Le script est PUBLIC : il ne contient aucun secret, seulement
+     l'adresse du panneau. Ce qui est secret, c'est le code passé en
+     argument — et il ne vaut qu'une fois. */
+  if (p === '/install' && method === 'GET') {
+    res.writeHead(200, Object.assign({ 'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store' }, SEC_HEADERS));
+    return res.end(BRANCH.script(originOf(req)));
+  }
+  if (p === '/api/enroll' && method === 'POST') {
+    // Un code court se devine à force d'essais : c'est le seul frein.
+    if (debit('enroll:' + ip, 10, 60000)) return fail(res, 429, 'Trop de tentatives. Réessayez dans une minute.');
+    const b = await readBody(req);
+    const r = BRANCH.consommer(db, b && b.code);
+    if (!r) return fail(res, 404, 'Code inconnu. Vérifiez-le, ou demandez-en un nouveau.');
+    if (r.erreur) return fail(res, 409, r.erreur);
+    const esp = DB.row(r.space);
+    // `id: null` explicitement : la colonne accepte NULL, pas `undefined`,
+    // et l'installateur n'est un compte de personne.
+    audit({ id: null, pseudo: 'installation', spaceId: esp.id }, 'espace.branchement',
+          `${esp.name} — code consommé`, ip, esp.id);
+    return ok(res, {
+      cle: esp.server_key, nom: esp.name, url: originOf(req),
+      fichiers: BRANCH.fichiers(path.join(CFG.panelDir, 'resource'))
+    });
+  }
 
   /* ---- dépôt des logs par la ressource FiveM ---- */
   if (p === '/api/ingest' && method === 'POST') {
@@ -2909,6 +2955,11 @@ async function route(req, res) {
             echeance: sp.plan_until || null, echeanceEtat: PLANS.echeance(sp),
             plafonds: PLANS.forSpace(db, sp),
             cle: sp.server_key, relais: sp.relay_key || null,
+            // État du branchement : le code encore valide (pour recopier
+            // la commande) et la date à laquelle un serveur s'est branché.
+            codeBranchement: sp.enroll_until > Date.now() ? sp.enroll_code : null,
+            codeExpire: sp.enroll_until > Date.now() ? sp.enroll_until : null,
+            brancheLe: sp.enroll_at || null,
             creeLe: sp.created_at, creePar: sp.created_by,
             fermeLe: sp.closed_at, motifFermeture: sp.closed_reason,
             proprietaire: sp.owner_id
@@ -2951,9 +3002,31 @@ async function route(req, res) {
         return ok(res, { ok: true, id: sid, cle });
       }
       if (p.startsWith('/api/platform/spaces/')) {
-        const sid = Number(p.slice('/api/platform/spaces/'.length)) || 0;
+        const morceaux = p.slice('/api/platform/spaces/'.length).split('/');
+        const sid = Number(morceaux[0]) || 0;
+        const sousRoute = morceaux[1] || '';
         const sp = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(sid));
         if (!sp) return fail(res, 404, 'Espace inconnu.');
+
+        /* Émettre le code d'installation. On rend la COMMANDE entière :
+           le client n'a rien à assembler, et on ne peut pas se tromper
+           d'adresse en la recopiant à la main. */
+        if (sousRoute === 'branchement') {
+          if (method === 'POST') {
+            if (sp.state !== 'actif')
+              return fail(res, 409, 'Cet espace est fermé : rouvrez-le avant de le brancher.');
+            const b = await readBody(req);
+            const e = BRANCH.emettre(db, sid, b && b.heures);
+            audit(me, 'plateforme.branchement.code', `${sp.name} — code émis`, ip, sid);
+            return ok(res, Object.assign(e, { commande: commandeInstall(originOf(req), e.code) }));
+          }
+          if (method === 'DELETE') {
+            BRANCH.annuler(db, sid);
+            audit(me, 'plateforme.branchement.annulation', sp.name, ip, sid);
+            return ok(res, { ok: true });
+          }
+          return fail(res, 405, 'Méthode non autorisée.');
+        }
 
         if (method === 'PATCH') {
           const b = await readBody(req);

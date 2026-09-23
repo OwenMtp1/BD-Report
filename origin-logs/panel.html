@@ -4335,13 +4335,49 @@ function ficheInstallation(id) {
     'ensure origin_logs'
   ].join('\n');
 
+  // ⚠️ La commande ne s'affiche QUE si un code est encore valide : une
+  // ligne toute faite dont le code a expiré se recopie quand même, et
+  // c'est l'installateur qui découvre le refus, pas nous.
+  const cmd = sp.codeBranchement
+    ? 'bash <(curl -fsSL ' + url + '/install) ' + sp.codeBranchement : '';
+  const etat = sp.brancheLe
+    ? '<b style="color:var(--ok)">Branché</b> le ' + new Date(sp.brancheLe).toLocaleString('fr-FR')
+    : '<b>Jamais branché</b> — aucun serveur de jeu n’a encore consommé de code.';
+
   openSheet('Fiche d’installation', esc(sp.nom) + ' · à transmettre au serveur client',
     { name: sp.nom, hue: 268 }, `
     ${!SPACES.adressePublique ? `<div class="banner" style="--c:var(--warn)">
       <b>Adresse déduite de votre navigateur</b> (${esc(url)}). Posez <code>PUBLIC_URL</code>
       dans <code>api/.env</code> pour que cette fiche porte toujours la bonne adresse,
       quelle que soit la machine depuis laquelle vous l’ouvrez.</div>` : ''}
+
     <div class="block">
+      <h3 class="eyebrow">En une commande — recommandé</h3>
+      <span class="lite-m">${etat}</span>
+      ${cmd ? `
+        <pre class="payload">${esc(cmd)}</pre>
+        <div class="tools" style="margin-top:8px">
+          <button class="btn sm primary" data-copyfiche="${esc(cmd)}">Copier la commande</button>
+          <button class="btn sm" data-brancher="${sp.id}">Nouveau code</button>
+        </div>
+        <span class="lite-m">Valable jusqu’au
+          <b>${new Date(sp.codeExpire).toLocaleString('fr-FR')}</b>, <b>une seule fois</b>.
+          Le client la colle sur sa machine : le script trouve son
+          <code>server.cfg</code>, pose la ressource, écrit la clé dans un
+          <code>secrets.cfg</code> à lui seul et complète la configuration.</span>
+      ` : `
+        <div class="tools" style="margin-top:8px">
+          <button class="btn sm primary" data-brancher="${sp.id}">Générer la commande d’installation</button>
+        </div>
+        <span class="lite-m">Le code produit vaut <b>une seule installation</b> et périme en
+          quelques heures — c’est pour cela qu’on transmet un code et non la clé :
+          cette ligne-là voyage par Discord, par ticket, par historique de terminal.</span>
+      `}
+    </div>
+
+    <details class="block">
+      <summary class="eyebrow" style="cursor:pointer">Ou à la main, en trois gestes</summary>
+      <div class="block" style="border:0;padding:12px 0 0">
       <h3 class="eyebrow">1. Le dossier</h3>
       <span class="lite-m">Copiez le dossier <code>resource</code> du panneau dans les
       ressources du serveur de jeu, sous le nom <code>origin_logs</code>. Il ne modifie
@@ -4363,6 +4399,7 @@ function ficheInstallation(id) {
       Un évènement doit apparaître dans « Action staff » de cet espace. Côté panneau,
       <b>Supervision → Vérifier</b> dit si cet espace reçoit bien quelque chose.</span>
     </div>
+    </div></details>
     ${!sp.guildId || !sp.staffRoleId ? `<div class="banner" style="--c:var(--check)">
       Pensez à renseigner le <b>serveur Discord</b> et le <b>rôle staff</b> de ce client :
       sans eux, son équipe ne pourra pas se connecter avec Discord.</div>` : ''}`);
@@ -4494,7 +4531,7 @@ async function openTeam() {
    ============================================================ */
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
-    + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],[data-rgpd],[data-relais],'
+    + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],[data-brancher],[data-rgpd],[data-relais],'
     + '[data-export],[data-sauvdl],[data-sauvrm],'
     + '[data-spdel],[data-owner]');
   if (!t) {
@@ -4584,6 +4621,18 @@ document.addEventListener('click', async ev => {
   if (D.fiche) return ficheInstallation(D.fiche);
   if (D.rgpd) return rgpd(D.rgpd, D.key, D.name);
   if (D.copyfiche) return copy(D.copyfiche, 'Configuration copiée — à coller dans server.cfg');
+  if (D.brancher) {
+    try {
+      const r = await api('/api/platform/spaces/' + D.brancher + '/branchement', { method:'POST' });
+      // On recharge la liste AVANT de rouvrir la fiche : elle s'alimente
+      // de SPACES, et la rouvrir sur une liste périmée afficherait
+      // l'ancien code — celui qu'on vient justement de remplacer.
+      await openPlatform();
+      ficheInstallation(Number(D.brancher));
+      copy(r.commande, 'Commande copiée — à transmettre au client.');
+    } catch (e) { toast(e.message); }
+    return;
+  }
   if (D.spdel) {
     const nom = prompt(`Supprimer « ${D.spname} » efface TOUS ses journaux, définitivement.\nRecopiez son nom pour confirmer :`, '');
     if (nom !== D.spname) return toast(nom === null ? '' : 'Nom incorrect — rien n’a été supprimé.');

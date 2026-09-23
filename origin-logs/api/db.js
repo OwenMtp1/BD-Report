@@ -401,6 +401,15 @@ function open(file) {
   // supprimer une formule ne casse pas la ligne de l'espace.
   ensureColumn(db, 'spaces', 'plan_key', 'TEXT');
   ensureColumn(db, 'spaces', 'plan_until', 'INTEGER');   // échéance, NULL = sans fin
+  // Branchement en une commande : le code transmis au client, sa péremption,
+  // et la date à laquelle il a été consommé.
+  // ⚠️ `enroll_at` ne se vide jamais : « ce serveur s'est branché un jour »
+  // est un fait, et c'est lui qui distingue une installation EN ATTENTE
+  // d'une installation faite puis refaite. Sans lui, un code réémis pour
+  // changer de machine ferait retomber l'espace en « jamais branché ».
+  ensureColumn(db, 'spaces', 'enroll_code', 'TEXT');
+  ensureColumn(db, 'spaces', 'enroll_until', 'INTEGER');
+  ensureColumn(db, 'spaces', 'enroll_at', 'INTEGER');
   db.exec('CREATE INDEX IF NOT EXISTS idx_st_space ON staff(space_id)');
   // COLLATE NOCASE : « Nyx » et « nyx » sont le même compte pour qui se
   // connecte, donc le même compte pour l'index.

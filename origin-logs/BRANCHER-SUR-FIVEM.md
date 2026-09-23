@@ -31,8 +31,8 @@ Les deux programmes sont sur la **même machine**, donc ils se parlent par
 Trois étapes :
 
 1. faire tourner le panneau sur le VPS ;
-2. poser le dossier `origin_logs` dans le serveur FiveM ;
-3. écrire trois lignes dans `server.cfg`.
+2. l'ouvrir depuis votre PC ;
+3. coller **une commande** que le panneau vous donne — elle fait le reste.
 
 ---
 
@@ -114,104 +114,7 @@ ouverte pour l'instant — on la rendra permanente à l'étape 5.
 
 ---
 
-## Étape 3 — Poser la ressource dans le serveur FiveM
-
-Ouvrez **une deuxième fenêtre SSH** (le panneau tourne dans la première).
-
-Trouvez le dossier `resources` de votre serveur FiveM. C'est celui qui contient
-déjà vos autres ressources (`[core]`, `es_extended`, `qb-core`…). Souvent :
-
-```
-/home/fivem/server-data/resources
-```
-
-Copiez-y le dossier, **sous le nom `origin_logs`** (le nom compte) :
-
-```bash
-cp -r /srv/BD-Report/origin-logs/resource /home/fivem/server-data/resources/origin_logs
-```
-
-Si votre chemin est différent, remplacez la partie de droite par le vôtre.
-Pour le retrouver :
-
-```bash
-find / -name "server.cfg" 2>/dev/null
-```
-
----
-
-## Étape 4 — Les trois lignes dans `server.cfg`
-
-Ouvrez le `server.cfg` de votre serveur FiveM :
-
-```bash
-nano /home/fivem/server-data/server.cfg
-```
-
-Descendez tout en bas (flèche ↓) et collez ceci, en remplaçant
-`COLLEZ-VOTRE-CLE-ICI` par la **clé serveur** notée à l'étape 2 :
-
-```cfg
-set origin_logs_url "http://127.0.0.1:8080"
-set origin_logs_key "COLLEZ-VOTRE-CLE-ICI"
-set origin_logs_name "origin-1"
-
-ensure baseevents
-ensure origin_logs
-```
-
-Pour enregistrer dans nano : **Ctrl+O**, puis **Entrée**, puis **Ctrl+X**.
-
-### ⚠️ Les deux pièges à ne pas faire
-
-**1. La clé va dans `server.cfg`, JAMAIS dans `config.lua`.**
-`config.lua` est un fichier que **chaque joueur télécharge** en se connectant à
-votre serveur. Une clé posée là-dedans est publique : n'importe quel joueur
-pourrait écrire de faux logs chez vous, ou noyer les vrais pour cacher ce qu'il
-a fait.
-
-**2. On écrit `set`, pas `setr`.**
-Une seule lettre de différence, mais `setr` **envoie la valeur à tous les
-clients** — ça remettrait la clé exactement là où on vient d'éviter de la
-mettre. Si vous voyez `setr origin_logs_key` quelque part, corrigez-le.
-
-> 💡 Encore plus propre : mettez les trois `set` dans un fichier à part,
-> `secrets.cfg`, et dans `server.cfg` écrivez seulement `exec secrets.cfg`.
-> Comme ça, si vous partagez ou sauvegardez votre `server.cfg` un jour, la clé
-> ne part pas avec.
-
-Redémarrez votre serveur FiveM.
-
----
-
-## Étape 5 — Vérifier que ça marche
-
-Dans la **console de votre serveur FiveM**, tapez :
-
-```
-origin_logs_test
-```
-
-Il doit répondre `[origin_logs] évènement de test envoyé`.
-
-Ouvrez maintenant le panneau (étape 6) : la ligne doit apparaître dans la
-rubrique **« Action staff »**. Si elle y est, tout est branché. 🎉
-
-### Si rien n'arrive
-
-Regardez la console FiveM au démarrage :
-
-| Message | Ce qu'il faut faire |
-|---|---|
-| `Aucune clé d'ingestion` | la ligne `set origin_logs_key` manque ou est vide |
-| `La clé est restée « CHANGEZ-MOI »` | vous avez collé l'exemple, pas votre vraie clé |
-| rien du tout, aucune ligne `origin_logs` | le dossier n'est pas au bon endroit, ou `ensure origin_logs` manque |
-
-Et côté panneau, la fenêtre où tourne `npm start` affiche les refus.
-
----
-
-## Étape 6 — Voir le panneau depuis votre PC
+## Étape 3 — Ouvrir le panneau depuis votre PC
 
 Pour l'instant le panneau n'écoute que la machine. Pour le regarder depuis chez
 vous, le plus sûr est un **tunnel SSH** : depuis votre PC, dans PowerShell ou
@@ -233,7 +136,82 @@ Rien n'est exposé sur Internet : c'est parfait pour tester seul.
 
 ---
 
-## Étape 7 — Que le panneau survive à la fermeture de la fenêtre
+## Étape 4 — Brancher le serveur FiveM : **une seule commande**
+
+C'est le panneau qui prépare la commande. Vous n'avez rien à recopier à la
+main, et surtout pas la clé.
+
+**a.** Donnez-vous le droit de gérer les espaces (une fois pour toutes). Dans
+la fenêtre SSH, dans le dossier `api`, puis reconnectez-vous au panneau :
+
+```bash
+node staff.js platform VotrePseudo on
+```
+
+**b.** Dans le panneau : colonne de gauche → **Espaces de logs** → sur la carte
+de votre serveur, bouton **Fiche d'installation** → **Générer la commande
+d'installation**.
+
+Le panneau affiche une ligne qui ressemble à ça :
+
+```bash
+bash <(curl -fsSL https://votre-panneau/install) ORG-4F2K-9BQX
+```
+
+**c.** Collez-la dans votre fenêtre SSH, sur la machine du serveur FiveM.
+C'est tout. Le script :
+
+1. trouve tout seul votre `server.cfg` ;
+2. installe le dossier `origin_logs` dans vos `resources` ;
+3. écrit la clé dans un fichier `secrets.cfg` que vous seul pouvez lire ;
+4. ajoute les lignes qu'il faut dans `server.cfg` (en gardant une copie de
+   l'original, au cas où) ;
+5. vous dit quoi faire ensuite.
+
+Puis **redémarrez votre serveur FiveM**.
+
+### Ce qu'il faut savoir sur ce code
+
+- Il ne vaut **qu'une seule fois** et **quelques heures**. C'est voulu : cette
+  ligne-là se colle dans un Discord, reste dans un historique de terminal,
+  traîne dans un ticket. Un code qui a servi ne sert plus à rien ; la clé, elle,
+  ouvrirait vos journaux jusqu'à ce que vous la changiez.
+- Si vous avez **plusieurs serveurs**, créez un espace par serveur et générez
+  un code pour chacun. Chaque clé n'ouvre que son espace.
+- Vous pouvez **relancer la commande** (avec un nouveau code) autant de fois
+  que vous voulez : elle ne duplique rien, elle met à jour.
+- Si le script trouve **plusieurs `server.cfg`**, il ne devine pas : il les
+  liste et vous demande de relancer en ajoutant le bon à la fin de la ligne.
+
+---
+
+## Étape 5 — Vérifier que ça marche
+
+Dans la **console de votre serveur FiveM**, tapez :
+
+```
+origin_logs_test
+```
+
+Il doit répondre `[origin_logs] évènement de test envoyé`.
+
+Dans le panneau, la ligne doit apparaître dans la rubrique **« Action staff »**.
+Si elle y est, tout est branché. 🎉
+
+### Si rien n'arrive
+
+| Message dans la console FiveM | Ce qu'il faut faire |
+|---|---|
+| `Aucune clé d'ingestion` | le `exec secrets.cfg` manque dans `server.cfg` |
+| `La clé est restée « CHANGEZ-MOI »` | une vieille clé d'exemple traîne : relancez la commande |
+| rien du tout, aucune ligne `origin_logs` | `ensure origin_logs` manque, ou le dossier n'est pas dans `resources` |
+
+Côté panneau, **Supervision → Vérifier** teste chaque espace et dit ce qui
+cloche.
+
+---
+
+## Étape 6 — Que le panneau survive à la fermeture de la fenêtre
 
 Tant que le panneau tourne avec `npm start`, il s'arrête dès que vous fermez la
 fenêtre SSH. Pour qu'il démarre tout seul, y compris après un redémarrage du
@@ -293,3 +271,44 @@ ligne de commande :
 Si votre serveur utilise un framework que la ressource ne reconnaît pas,
 `resource/EXEMPLES.md` donne, rubrique par rubrique, la ligne à ajouter dans
 vos propres scripts.
+
+---
+
+## Annexe — le faire à la main
+
+Si vous préférez tout poser vous-même, ou si le script ne convient pas à votre
+hébergement, voici les trois gestes qu'il fait à votre place.
+
+**1. Copier le dossier**, sous le nom exact `origin_logs` :
+
+```bash
+cp -r /srv/BD-Report/origin-logs/resource /chemin/vers/resources/origin_logs
+```
+
+**2. Créer un fichier `secrets.cfg`** à côté de `server.cfg` (la clé est celle
+affichée par `npm run setup`, ou dans la fiche d'installation du panneau) :
+
+```cfg
+set origin_logs_url  "http://127.0.0.1:8080"
+set origin_logs_key  "VOTRE-CLÉ"
+set origin_logs_name "origin-1"
+```
+
+**3. Ajouter à la fin de `server.cfg`** :
+
+```cfg
+exec secrets.cfg
+ensure baseevents
+ensure origin_logs
+```
+
+### ⚠️ Les deux pièges
+
+**La clé va dans `secrets.cfg` (ou `server.cfg`), JAMAIS dans `config.lua`.**
+`config.lua` est **téléchargé par chaque joueur** qui se connecte. Une clé
+posée là-dedans est publique : n'importe qui pourrait écrire de faux logs chez
+vous, ou noyer les vrais pour cacher ce qu'il a fait.
+
+**On écrit `set`, pas `setr`.** Une lettre de différence, mais `setr` **envoie
+la valeur à tous les clients** — ça remettrait la clé exactement là où on vient
+d'éviter de la mettre.

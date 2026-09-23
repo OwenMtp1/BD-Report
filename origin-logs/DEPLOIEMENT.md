@@ -129,11 +129,15 @@ du staff signale que « ça ne marche plus ».
 
 1. **Espaces de logs** → *Créer un espace* : un nom, l'ID de son serveur
    Discord, l'ID de son rôle staff, sa rétention.
-2. L'espace reçoit **sa propre clé d'ingestion**. Copiez-la dans le
-   `config.lua` du second serveur de jeu — celle du premier n'ouvre pas ses
-   journaux, et réciproquement.
+2. Sur sa carte : **Fiche d'installation** → *Générer la commande
+   d'installation*. Transmettez la ligne au client ; elle fait tout le reste
+   sur sa machine (voir § 3).
 3. Ses 14 rôles d'origine sont créés automatiquement. Reliez-les à ses rôles
    Discord depuis *Liaison Discord*, après y être **entré**.
+
+⚠️ Chaque espace a **sa propre clé d'ingestion** : celle du premier n'ouvre
+pas les journaux du second, et réciproquement. Elle ne se recopie jamais à la
+main dans `config.lua` — ce fichier part chez tous les joueurs.
 
 ⚠️ La barre affiche **« visite — nom de l'espace »** quand vous en visitez un
 autre : on ne modère pas un serveur en croyant être chez soi.
@@ -281,6 +285,34 @@ comptes sont comptés à part.
 ---
 
 ## 3. La ressource FiveM
+
+### En une commande (ce qu'on donne au client)
+
+Sur la carte de l'espace : **Fiche d'installation** → *Générer la commande
+d'installation*. Elle ressemble à :
+
+```bash
+bash <(curl -fsSL https://logs.origin-rp.fr/install) ORG-4F2K-9BQX
+```
+
+Le client la colle sur la machine de son serveur de jeu. Le script trouve son
+`server.cfg`, télécharge la ressource sous `resources/origin_logs`, écrit la
+clé dans un `secrets.cfg` en 0600, complète `server.cfg` (`exec secrets.cfg`,
+`ensure baseevents`, `ensure origin_logs`) après en avoir gardé une copie, et
+ne duplique rien si on le relance.
+
+⚠️ **On transmet un CODE, pas la clé d'ingestion.** Cette ligne-là voyage :
+Discord, ticket, historique de terminal. Le code ne vaut **qu'une fois** et
+périme en 6 heures ; la clé, elle, ouvrirait les journaux jusqu'à révocation.
+Le code dit aussi **quand** le client a branché : tant que personne ne l'a
+consommé, la fiche affiche « jamais branché » — une installation qui n'avance
+pas se voit, au lieu de se découvrir en cherchant pourquoi l'espace reste vide.
+
+⚠️ Le script est servi par le panneau lui-même (`GET /install`) : il porte donc
+toujours la bonne adresse, y compris derrière votre reverse proxy. Il ne
+contient **aucun secret**.
+
+### Ou à la main
 
 ```bash
 cp -r origin-logs/resource /chemin/vers/votre-serveur/resources/origin_logs
