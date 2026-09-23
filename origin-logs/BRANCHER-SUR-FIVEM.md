@@ -312,3 +312,37 @@ vous, ou noyer les vrais pour cacher ce qu'il a fait.
 **On écrit `set`, pas `setr`.** Une lettre de différence, mais `setr` **envoie
 la valeur à tous les clients** — ça remettrait la clé exactement là où on vient
 d'éviter de la mettre.
+
+---
+
+## Annexe — le message à envoyer à votre client
+
+Quand vous vendez un espace, le client n'a besoin de **rien lire** : une
+commande et deux phrases suffisent. Voici le message type, à copier tel quel
+en remplaçant la ligne `bash …` par celle que le panneau vous a donnée.
+
+> Bonjour,
+>
+> Votre espace de logs est prêt. Pour brancher votre serveur, connectez-vous
+> en SSH à la machine où tourne votre serveur FiveM et collez cette ligne :
+>
+> ```
+> bash <(curl -fsSL https://votre-panneau/install) ORG-4F2K-9BQX
+> ```
+>
+> Elle installe tout et vous dit quand c'est fini. Ensuite :
+> 1. redémarrez votre serveur FiveM ;
+> 2. dans sa console, tapez `origin_logs_test` ;
+> 3. la ligne doit apparaître dans votre panneau, rubrique « Action staff ».
+>
+> Le code ne fonctionne **qu'une fois** et expire dans 6 heures — si vous le
+> ratez, demandez-m'en un nouveau, c'est immédiat.
+>
+> Vos identifiants de connexion au panneau : …
+
+⚠️ **Si votre client n'a pas d'accès SSH** (hébergeur « clic-bouton » avec
+seulement un FTP et un bouton Démarrer), la commande ne peut pas s'exécuter :
+il n'y a pas de terminal. Donnez-lui alors l'annexe précédente — il dépose le
+dossier par FTP et édite `server.cfg` depuis l'éditeur de son hébergeur. C'est
+le seul cas où l'on revient au manuel, et il vaut mieux le repérer **avant**
+de promettre une installation en une minute.
