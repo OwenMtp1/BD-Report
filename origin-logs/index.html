@@ -4061,6 +4061,8 @@ async function demoApi(path, opts) {
     if (path.startsWith('/api/platform/sauvegardes')) return demoSauvegardes();
     if (path.startsWith('/api/platform/journal'))  return demoJournal(path);
     if (path.startsWith('/api/platform/plans'))    return demoOffres();
+    if (/^\/api\/platform\/spaces\/\d+\/membres/.test(path))
+      return demoMembres(Number((path.match(/spaces\/(\d+)/) || [])[1]) || 1);
     if (path.startsWith('/api/platform/roles'))
       return { roles: DEMO_PLAT_ROLES.map(r => Object.assign({}, r)),
                perms: PLAT_PERMS, groupes: PLAT_GROUPES,
@@ -4172,6 +4174,58 @@ const DEMO_HORS_EQUIPE = [
   { id:7, pseudo:'Ilyes', spaceId:2, source:'discord', platform:false, disabled:false,
     platformRole:null, platformRoleLabel:null, roles:[], rank:30, last_login:Date.now()-9*86400000 }
 ];
+
+/* ---------- les membres d'un environnement, en démonstration ----------
+   Trois situations qu'il faut savoir montrer : une équipe fournie avec
+   son propriétaire, une équipe de deux sur un serveur de test, et un
+   environnement fermé qui n'a plus personne. */
+const DEMO_GRADES = [
+  { key:'fondateur',   label:'Fondateur',   rank:100 },
+  { key:'administrateur', label:'Administrateur', rank:90 },
+  { key:'moderateur',  label:'Modérateur',  rank:50 },
+  { key:'anticheat',   label:'Brigade Anti-Cheat', rank:45 },
+  { key:'helper',      label:'Helper',      rank:30 },
+  { key:'animateur',   label:'Animateur',   rank:25 }
+];
+const DEMO_MEMBRES = {
+  1: [
+    { id:1, pseudo:'Owen',   roleKeys:['fondateur'],   source:'local',   discordId:'', proprietaire:true,  plateforme:true },
+    { id:2, pseudo:'Nyx',    roleKeys:['administrateur'], source:'discord', discordId:'338271640518273024' },
+    { id:4, pseudo:'Kaleb',  roleKeys:['moderateur'],  source:'discord', discordId:'338271640518273025' },
+    { id:5, pseudo:'Sasha',  roleKeys:['helper'],      source:'discord', discordId:'338271640518273026' },
+    { id:6, pseudo:'Orion',  roleKeys:['animateur'],   source:'discord', discordId:'338271640518273027', disabled:true }
+  ],
+  2: [
+    { id:3, pseudo:'Vortex', roleKeys:['fondateur'],   source:'discord', discordId:'338271640518273028', proprietaire:true },
+    { id:7, pseudo:'Ilyes',  roleKeys:['moderateur'],  source:'discord', discordId:'338271640518273029' }
+  ],
+  3: []
+};
+function demoMembres(sid) {
+  const brut = DEMO_MEMBRES[sid] || [];
+  const sp = DEMO_ESPACES.find(x => x.id === sid) || { id:sid, nom:'Environnement', etat:'actif' };
+  const of = DEMO_OFFRES.find(o => o.key === sp.formule);
+  const membres = brut.map(m => Object.assign({
+    disabled:false, proprietaire:false, plateforme:false, manuel:true,
+    roles: (m.roleKeys || []).map(k => ({ id:k, label:(DEMO_GRADES.find(g => g.key === k) || {}).label || k })),
+    rank: Math.max(0, ...(m.roleKeys || []).map(k => (DEMO_GRADES.find(g => g.key === k) || {}).rank || 0)),
+    creeLe: Date.now() - 200 * 86400000,
+    vuLe: Date.now() - Math.floor(Math.random() * 9) * 86400000
+  }, m));
+  // Qui l'on peut faire venir : tous les autres, avec leur environnement.
+  const ailleurs = [];
+  for (const [k, l] of Object.entries(DEMO_MEMBRES)) {
+    if (Number(k) === sid) continue;
+    const e = DEMO_ESPACES.find(x => x.id === Number(k));
+    l.forEach(m => ailleurs.push({ id:m.id, pseudo:m.pseudo, space_id:Number(k),
+                                   source:m.source, espace:(e || {}).nom || ('espace #' + k) }));
+  }
+  return { espace:{ id:sp.id, nom:sp.nom, etat:sp.etat }, membres,
+           roles: DEMO_GRADES.map(g => ({ key:g.key, label:g.label, rang:g.rank })),
+           proprietaire: (brut.find(m => m.proprietaire) || {}).id || null,
+           ailleurs,
+           sieges: { utilises: membres.length, max: of ? of.maxStaff : null, offre: (of || {}).label || 'sans offre' } };
+}
 
 /* ---------- offres, en démonstration ----------
    Les trois paliers livrés par `api/plans.js`. L'aperçu doit montrer
@@ -5036,6 +5090,8 @@ function rendreEnvs() {
           ? `<button class="btn sm primary" data-enter="${sp.id}">Entrer dans l’environnement</button>`
           : ''}
         <button class="btn sm" data-envedit="${sp.id}">Modifier l’environnement</button>
+        <button class="btn sm" data-membres="${sp.id}"
+          title="L’équipe de ce serveur : grades, propriétaire, ajout et retrait">Gérer les membres</button>
       </div>
     </div>`;
   }).join('');
@@ -6619,6 +6675,239 @@ async function sortirEspace() {
 }
 
 /* ============================================================
+   LES MEMBRES D'UN ENVIRONNEMENT, DEPUIS LA LISTE
+   ⚠️ IL FALLAIT ENTRER CHEZ LE CLIENT pour changer un grade. Cela
+   marchait, mais un aller-retour par geste — entrer, changer, ressortir,
+   recommencer chez le suivant — et toute la trace disait « fait depuis
+   l'intérieur », comme si le client l'avait fait lui-même.
+   ============================================================ */
+let MEMB = null;
+
+async function ouvrirMembres(id) {
+  try { MEMB = await api('/api/platform/spaces/' + Number(id) + '/membres'); }
+  catch (e) { return toast(e.message); }
+  rendreMembres();
+}
+
+function rendreMembres() {
+  const d = MEMB; if (!d) return;
+  const sid = d.espace.id;
+  const grades = d.roles || [];
+  const choix = (m) => `<select class="input" data-mrole="${m.id}" style="height:30px">${
+    grades.map(r => `<option value="${esc(r.key)}" ${(m.roleKeys || []).includes(r.key) ? 'selected' : ''}
+      >${esc(r.label)}</option>`).join('')}</select>`;
+  const s = d.sieges || {};
+  // ⚠️ Les sièges se disent AVANT d'ajouter quelqu'un, pas au moment du
+  // refus : « limite atteinte » découvert après avoir tapé un pseudo et
+  // un mot de passe, c'est du travail jeté.
+  const sieges = s.max == null
+    ? `${s.utilises} compte(s) · offre « ${esc(s.offre || '—')} », sans plafond`
+    : `${s.utilises} / ${s.max} compte(s) · offre « ${esc(s.offre || '—')} »`;
+
+  openSheet('Membres de ' + d.espace.nom,
+    `${(d.membres || []).length} personne(s) · ${sieges}`,
+    { name: d.espace.nom, hue: 200 }, `
+    ${s.max != null && s.utilises >= s.max ? `<div class="banner" style="--c:var(--warn)">
+      <b>Tous les sièges de l’offre sont pris.</b> Changez d’offre, ou retirez quelqu’un
+      avant d’ajouter.</div>` : ''}
+
+    <div class="block">
+      <h3 class="eyebrow">L’équipe de ce serveur</h3>
+      <div class="reg-scroll">
+        <table class="reg">
+          <thead><tr>
+            <th scope="col">Qui</th><th scope="col">Grade</th>
+            <th scope="col">Connexion</th><th scope="col" style="text-align:right">Actions</th>
+          </tr></thead>
+          <tbody>${(d.membres || []).length ? d.membres.map(m => `
+            <tr${m.disabled ? ' style="opacity:.55"' : ''}>
+              <td><span style="display:flex;align-items:center;gap:8px">
+                <span class="av sm" style="${avatarStyle({ name: m.pseudo })}">${initials({ name: m.pseudo })}</span>
+                <span><span style="font-weight:500">${esc(m.pseudo)}</span>
+                  ${m.proprietaire ? ' <span class="on-tag ok">propriétaire</span>' : ''}
+                  ${m.disabled ? ' <span class="on-tag crit">suspendu</span>' : ''}
+                  ${m.plateforme ? ' <span class="on-tag warn">équipe Origin Logs</span>' : ''}
+                  <span class="psub" style="display:block">${m.discordId ? 'Discord ' + esc(m.discordId)
+                    : 'mot de passe'}${m.vuLe ? ' · vu ' + ago(m.vuLe) : ' · jamais connecté'}</span></span>
+              </span></td>
+              <td>${choix(m)}</td>
+              <td class="lite-m">${m.source === 'discord' ? 'Discord' : 'mot de passe'}</td>
+              <td class="t-act">
+                <button class="btn sm primary" data-msave="${m.id}" data-msp="${sid}">Appliquer</button>
+                ${m.proprietaire ? '' :
+                  `<button class="btn sm" data-mown="${m.id}" data-msp="${sid}" data-mname="${esc(m.pseudo)}"
+                     title="Le propriétaire peut nommer un fondateur sans passer par nous">Propriétaire</button>`}
+                <button class="btn sm" data-moff="${m.id}" data-msp="${sid}" data-off="${m.disabled ? 1 : 0}"
+                  >${m.disabled ? 'Réactiver' : 'Suspendre'}</button>
+                <button class="btn sm danger" data-mdel="${m.id}" data-msp="${sid}" data-mname="${esc(m.pseudo)}"
+                  >Retirer</button>
+              </td>
+            </tr>`).join('')
+            : `<tr><td colspan="4"><div class="void"><b>Aucun membre</b>
+                 <span>Ajoutez le fondateur du serveur ci-dessous.</span></div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="block">
+      <h3 class="eyebrow">Ajouter quelqu’un</h3>
+      <div class="seg" id="mAddSeg" style="--n:2;--i:0;width:fit-content">
+        <button data-maddmode="neuf" aria-pressed="true">Créer un compte</button>
+        <button data-maddmode="autre" aria-pressed="false">Reprendre un compte existant</button>
+      </div>
+
+      <div id="mAddNeuf" style="margin-top:12px">
+        <!-- ⚠️ DEUX FAÇONS D'ENTRER, ET IL EN FAUT UNE. Par Discord — le
+             cas courant — ou par mot de passe, pour un prestataire ou un
+             compte de secours. Sans l'une ni l'autre, on créerait une
+             ligne dans la liste et personne derrière. -->
+        <div class="map-row" style="border:none">
+          <span><span class="map-name">Pseudo</span>
+            <span class="map-desc">Le nom affiché dans son panneau.</span></span>
+          <input class="input" id="mPseudo" maxlength="40" placeholder="Nyx">
+        </div>
+        <div class="map-row" style="border:none">
+          <span><span class="map-name">Identifiant Discord</span>
+            <span class="map-desc">17 à 20 chiffres. Mode développeur → clic droit sur le profil
+              → Copier l’identifiant. C’est ainsi qu’il se connectera.</span></span>
+          <input class="input" id="mDiscord" inputmode="numeric" placeholder="338271640518273024">
+        </div>
+        <div class="map-row" style="border:none">
+          <span><span class="map-name">…ou un mot de passe</span>
+            <span class="map-desc">10 caractères minimum. Pour un compte de secours,
+              quand Discord ne convient pas.</span></span>
+          <input class="input" id="mPass" type="text" autocomplete="off" placeholder="laisser vide si Discord">
+        </div>
+        <div class="map-row" style="border:none">
+          <span><span class="map-name">Grade</span>
+            <span class="map-desc">Parmi les grades de CET environnement.</span></span>
+          <select class="input" id="mGrade">${grades.map(r =>
+            `<option value="${esc(r.key)}">${esc(r.label)}</option>`).join('')}</select>
+        </div>
+        <div class="tools"><button class="btn primary" data-mnew="${sid}">Créer et ajouter</button></div>
+      </div>
+
+      <div id="mAddAutre" hidden style="margin-top:12px">
+        <!-- ⚠️ UN COMPTE N'APPARTIENT QU'À UN ENVIRONNEMENT : le reprendre
+             ici, c'est le DÉPLACER. On le dit plutôt que de fabriquer un
+             doublon qui partagerait un mot de passe et divergerait le
+             lendemain. -->
+        <div class="banner" style="--c:var(--warn)">Reprendre un compte le <b>déplace</b> :
+          il quitte son environnement actuel, ses grades d’avant ne le suivent pas, et ses
+          sessions se ferment. Son historique de journal, lui, reste où il a été écrit.</div>
+        <div class="map-row" style="border:none">
+          <span><span class="map-name">Qui</span>
+            <span class="map-desc">Cherchez par pseudo ou par environnement.</span></span>
+          <span style="display:grid;gap:6px;min-width:0">
+            <input class="input" id="mCherche" type="search" placeholder="Rechercher…" autocomplete="off">
+            <select class="input" id="mQui" size="6" style="height:auto"></select>
+          </span>
+        </div>
+        <div class="map-row" style="border:none">
+          <span><span class="map-name">Grade à l’arrivée</span>
+            <span class="map-desc">Ses grades d’avant appartenaient à l’autre environnement.</span></span>
+          <select class="input" id="mGrade2">${grades.map(r =>
+            `<option value="${esc(r.key)}">${esc(r.label)}</option>`).join('')}</select>
+        </div>
+        <div class="tools"><button class="btn primary" data-mmove="${sid}">Déplacer ici</button></div>
+      </div>
+    </div>`);
+  remplirCandidats('');
+}
+
+/* La liste des comptes qu'on peut faire venir. Filtrée à la frappe : six
+   cents comptes dans un menu déroulant ne se parcourent pas. */
+function remplirCandidats(q) {
+  const sel = $('#mQui'); if (!sel || !MEMB) return;
+  const t = String(q || '').trim().toLowerCase();
+  const l = (MEMB.ailleurs || []).filter(x => !t ||
+    (x.pseudo + ' ' + (x.espace || '')).toLowerCase().includes(t));
+  sel.innerHTML = l.slice(0, 200).map(x =>
+    `<option value="${x.id}">${esc(x.pseudo)} — ${esc(x.espace || 'espace #' + x.space_id)}</option>`).join('')
+    || '<option value="" disabled>Aucun compte ne correspond</option>';
+}
+
+document.addEventListener('input', ev => {
+  if (ev.target && ev.target.id === 'mCherche') remplirCandidats(ev.target.value);
+});
+
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('[data-maddmode],[data-msave],[data-mown],[data-moff],[data-mdel],'
+    + '[data-mnew],[data-mmove],[data-membres]');
+  if (!t) return;
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  const D = t.dataset;
+
+  if (D.membres) return ouvrirMembres(D.membres);
+  if (D.maddmode) {
+    const neuf = D.maddmode === 'neuf';
+    $('#mAddNeuf').hidden = !neuf; $('#mAddAutre').hidden = neuf;
+    $('#mAddSeg').style.setProperty('--i', neuf ? 0 : 1);
+    document.querySelectorAll('[data-maddmode]').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.maddmode === D.maddmode)));
+    return;
+  }
+  const url = sp => '/api/platform/spaces/' + Number(D.msp || sp) + '/membres';
+  const apres = async msg => { toast(msg); await ouvrirMembres(D.msp); if (ENVS) { ENVS = null; chargerEnvs(); } };
+
+  if (D.msave) {
+    const sel = document.querySelector(`[data-mrole="${D.msave}"]`);
+    try { await api(url() + '/' + D.msave, { method:'PATCH',
+            body: JSON.stringify({ roles: sel ? [sel.value] : [] }) });
+          return apres('Grade appliqué — ses sessions sont fermées.'); }
+    catch (e) { return toast(e.message); }
+  }
+  if (D.mown) {
+    if (!confirm(`Faire de ${D.mname} le propriétaire de cet environnement ?\n\n`
+      + `Le propriétaire peut nommer un fondateur sans passer par nous — c’est ce qui rend `
+      + `le serveur autonome.`)) return;
+    try { await api(url() + '/' + D.mown, { method:'PATCH', body: JSON.stringify({ proprietaire: true }) });
+          return apres('Propriétaire changé.'); }
+    catch (e) { return toast(e.message); }
+  }
+  if (D.moff) {
+    try { await api(url() + '/' + D.moff, { method:'PATCH',
+            body: JSON.stringify({ disabled: D.off !== '1' }) });
+          return apres(D.off === '1' ? 'Accès rétabli.' : 'Accès suspendu.'); }
+    catch (e) { return toast(e.message); }
+  }
+  if (D.mdel) {
+    if (!confirm(`Retirer ${D.mname} de cet environnement ?\n\n`
+      + `Son compte est supprimé et il ne peut plus se connecter. Ce qu’il a fait reste `
+      + `au journal : une trace ne s’efface pas avec celui qui l’a laissée.`)) return;
+    try { await api(url() + '/' + D.mdel, { method:'DELETE' });
+          return apres('Membre retiré.'); }
+    catch (e) { return toast(e.message); }
+  }
+  if (D.mnew) {
+    const corps = {
+      pseudo: ($('#mPseudo') || {}).value || '',
+      discordId: ($('#mDiscord') || {}).value || '',
+      password: ($('#mPass') || {}).value || '',
+      role: ($('#mGrade') || {}).value || ''
+    };
+    try { await api('/api/platform/spaces/' + Number(D.mnew) + '/membres',
+            { method:'POST', body: JSON.stringify(corps) });
+          MEMB = null; toast('Membre ajouté.');
+          await ouvrirMembres(D.mnew); if (ENVS) { ENVS = null; chargerEnvs(); } }
+    catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.mmove) {
+    const qui = ($('#mQui') || {}).value;
+    if (!qui) return toast('Choisissez un compte à déplacer.');
+    try { await api('/api/platform/spaces/' + Number(D.mmove) + '/membres',
+            { method:'POST', body: JSON.stringify({ depuis: Number(qui),
+                                                    role: ($('#mGrade2') || {}).value || '' }) });
+          MEMB = null; toast('Compte déplacé dans cet environnement.');
+          await ouvrirMembres(D.mmove); if (ENVS) { ENVS = null; chargerEnvs(); } }
+    catch (e) { toast(e.message); }
+    return;
+  }
+}, true);
+
+/* ============================================================
    L'IDENTITÉ DE LA PAGE SUIT L'ENDROIT OÙ L'ON EST
    ⚠️ LA MARQUE ÉTAIT CELLE D'UN CLIENT, EN DUR, SUR TOUTES LES PAGES.
    « Origin Roleplay » s'affichait en haut du rail qu'on suive dix
@@ -6710,6 +6999,11 @@ function poserEspaceDemo(id) {
   const sp = id ? (DEMO_ESPACES || []).find(x => x.id === id) : null;
   if (id && !sp) return toast('Environnement introuvable.');
   ME.espace = sp ? { id: sp.id, nom: sp.nom, visite: true } : null;
+  // ⚠️ On entre chez un client EN FONDATEUR, quel que soit son grade
+  // dans l'équipe de la plateforme — et l'étiquette doit le dire, sinon
+  // l'écran annonce un rôle et en donne un autre.
+  ME.roleLabel = sp ? 'Fondateur (équipe Origin Logs)' : 'Direction';
+  const wr = $('#whoRole'); if (wr) wr.textContent = ME.roleLabel;
   closeSheet();
   STATE.view = sp ? 'overview' : 'spaces';
   STATE.cat = 'all'; STATE.list = []; STATE.limit = 120;

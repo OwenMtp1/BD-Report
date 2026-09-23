@@ -179,6 +179,32 @@ t('⚠️ tout se repeint SANS recharger — sinon l’aperçu, qui n’a pas de
 t('entrer et ressortir passent par un seul chemin',
   /function entrerEspace/.test(P) && /if \(D\.enter\) return entrerEspace/.test(P));
 
+sect('Gérer les membres d’un environnement, sans y entrer');
+// ⚠️ Il fallait ENTRER chez le client pour changer un grade : un
+// aller-retour par geste, et une trace qui disait « fait depuis
+// l'intérieur », comme si le client l'avait fait lui-même.
+t('le bouton est sur la carte de l’environnement', /data-membres="\$\{sp\.id\}"/.test(P));
+t('la liste montre qui, son grade et son mode de connexion',
+  /data-mrole="/.test(P) && /Discord ' \+ esc\(m\.discordId\)/.test(P));
+t('le grade est une liste des grades de CET environnement',
+  /grades\.map\(r => `<option value="\$\{esc\(r\.key\)\}"/.test(P));
+t('les quatre gestes sont là : grade, propriétaire, suspendre, retirer',
+  /data-msave="/.test(P) && /data-mown="/.test(P) && /data-moff="/.test(P) && /data-mdel="/.test(P));
+t('⚠️ les sièges de l’offre se disent AVANT d’ajouter, pas au moment du refus',
+  /sieges/.test(P) && /Tous les sièges de l’offre sont pris/.test(P));
+t('deux façons d’ajouter : créer, ou reprendre quelqu’un',
+  /data-maddmode="neuf"/.test(P) && /data-maddmode="autre"/.test(P));
+t('à la création : pseudo, Discord OU mot de passe, et un grade',
+  /id="mPseudo"/.test(P) && /id="mDiscord"/.test(P) && /id="mPass"/.test(P) && /id="mGrade"/.test(P));
+t('⚠️ reprendre un compte le DÉPLACE, et l’écran le dit avant le clic',
+  /Reprendre un compte le <b>déplace<\/b>/.test(P));
+t('la recherche filtre les candidats — six cents comptes ne se parcourent pas',
+  /function remplirCandidats/.test(P) && /id="mCherche"/.test(P));
+
+sect('Entrer chez un client, c’est y entrer en fondateur');
+t('⚠️ l’étiquette ne ment plus, même en aperçu',
+  /Fondateur \(équipe Origin Logs\)/.test(P));
+
 sect('Équipe & rôles de la plateforme : un ONGLET, en deux parties');
 // ⚠️ Même leçon que la liste des environnements : cet écran vivait dans
 // une modale, on changeait un rôle, elle se refermait, et il fallait la

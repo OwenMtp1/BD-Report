@@ -721,6 +721,74 @@ espace** (`ROLESVC.basRole`).
 
 ---
 
+## Les membres d'un environnement, depuis la console
+
+Depuis **Liste des environnements → Gérer les membres**, sans entrer chez le
+client : l'équipe de son serveur, le grade de chacun (liste déroulante des
+grades **de cet environnement**), qui en est propriétaire, et les quatre
+gestes — changer un grade, désigner le propriétaire, suspendre, retirer.
+
+⚠️ **On le faisait en entrant chez le client.** Cela marchait, mais cela
+imposait un aller-retour par geste — entrer, changer, ressortir, recommencer
+chez le suivant — et toute la trace disait « fait depuis l'intérieur », comme
+si le client l'avait fait lui-même. Ici c'est la plateforme qui agit, et le
+journal le dit (`plateforme.membre.*`).
+
+**Ajouter quelqu'un, deux façons.** *Créer un compte* — pseudo, puis un
+**identifiant Discord** (le cas courant : c'est ainsi qu'il se connectera) **ou**
+un mot de passe d'au moins 10 caractères (compte de secours, prestataire) — et
+un grade. Ou *reprendre un compte existant*, cherché parmi ceux de tous les
+autres environnements.
+
+⚠️ **Il faut l'un ou l'autre.** Un compte sans identifiant Discord ni mot de
+passe, c'est une ligne dans la liste et personne derrière. Un compte créé par
+Discord porte dans sa colonne `pass` un marqueur qui n'est **pas** un hachage :
+aucune saisie ne peut le reproduire, et le test le fige.
+
+⚠️ **Reprendre un compte, c'est le DÉPLACER.** Un compte n'appartient qu'à un
+environnement ; fabriquer un doublon aurait donné deux comptes partageant un
+mot de passe, qui divergent le lendemain. L'écran le dit **avant** le clic : il
+quitte son environnement, ses grades d'avant ne le suivent pas (ils
+appartenaient à l'autre environnement), ses sessions se ferment.
+
+⚠️ **On ne retire pas le propriétaire sans le remplacer.** L'environnement se
+retrouverait sans personne capable d'y nommer un fondateur, et il faudrait
+repasser par la console à chaque fois. Le refus dit quoi faire d'abord.
+
+⚠️ **Les sièges de l'offre se disent avant, pas au moment du refus.** « Limite
+atteinte » découvert après avoir tapé un pseudo et un mot de passe, c'est du
+travail jeté : le compteur est dans l'en-tête, et un bandeau prévient quand
+tous les sièges sont pris.
+
+⚠️ **Retirer un membre n'efface pas ce qu'il a fait.** Son compte part, ses
+sessions se ferment, mais le journal reste : une trace ne s'efface pas avec
+celui qui l'a laissée.
+
+---
+
+## Entrer chez un client, c'est y entrer en fondateur
+
+Quel que soit son grade dans l'équipe de la plateforme. Un support qui dépanne
+doit tout voir et tout pouvoir dans l'environnement où il entre, sinon il
+redemande l'accès au client à chaque intervention. C'est le droit
+`plat.entrer` qui décide s'il **peut** entrer ; une fois dedans, il n'y a plus
+de demi-mesure : tous les droits du panneau, toutes les rubriques — **sans être
+borné par l'offre du client**, puisqu'il dépanne l'environnement, il ne le
+consomme pas.
+
+⚠️ **Et le libellé ne ment plus.** Les droits étaient déjà complets, mais le
+rôle affiché venait de la résolution de ses clés de rôle de *son* environnement
+d'origine contre celui-ci : un commercial nommé « Modérateur » chez lui entrait
+avec tous les droits sous l'étiquette « Modérateur ». On lisait à l'écran
+l'inverse de ce qu'on pouvait faire. L'étiquette dit désormais **Fondateur
+(équipe Origin Logs)** — le pouvoir et sa provenance.
+
+Chaque entrée est journalisée, le bandeau du haut affiche « visite — *nom du
+client* », et la marque de la page prend son nom : on ne modère pas un autre
+serveur en croyant être chez soi.
+
+---
+
 ## Équipe & rôles de la plateforme
 
 L'équipe d'Origin Logs — la vôtre — a son **onglet**, en deux parties. Il

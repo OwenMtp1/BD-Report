@@ -317,6 +317,22 @@ function whoami(req) {
   // sans cela, un fondateur ne pourrait jamais en nommer un second, et
   // l'espace resterait suspendu à une seule personne.
   const proprio = !!(esp && Number(esp.owner_id) === Number(r.id));
+  /* ⚠️ ENTRER CHEZ UN CLIENT, C'EST Y ENTRER EN FONDATEUR — quel que
+     soit son grade dans l'équipe de la plateforme. Un support qui
+     dépanne doit tout voir et tout pouvoir dans l'environnement où il
+     entre, sinon il redemande l'accès au client à chaque intervention.
+     C'est le droit `plat.entrer` qui décide s'il peut entrer ; une fois
+     dedans, il n'y a plus de demi-mesure.
+     ⚠️ ET LE LIBELLÉ NE MENT PLUS. Les droits étaient déjà complets,
+     mais le rôle affiché venait de la résolution de ses clés de rôle de
+     SON environnement d'origine contre celui-ci : un commercial nommé
+     « Modérateur » chez lui entrait avec tous les droits sous
+     l'étiquette « Modérateur ». On lisait donc à l'écran l'inverse de ce
+     qu'on pouvait faire. */
+  const hautRole = platform && spaceId
+    ? (ROLESVC.list(db, spaceId).find(x => x.key === 'fondateur')
+       || ROLESVC.list(db, spaceId)[0] || null)
+    : null;
   const perms = platform ? CAT.PERM_IDS.slice() : res.perms;
   // ⚠️ L'OFFRE BORNE CE QUE LE RÔLE DÉCOUPE. Les rubriques d'un rôle
   // disent ce qu'une PERSONNE lit dans ce que le client a acheté ; la
@@ -329,9 +345,11 @@ function whoami(req) {
   const cats  = platform ? CAT.CATS.map(c => c.id)
                          : PLANS.borner(res.cats, PLANS.forSpace(db, esp));
   return { id: r.id, pseudo: r.pseudo, token: tok, avatar: r.avatar,
-           roles: res.keys.length ? res.keys : roles,
-           roleLabels: res.labels, role: res.main ? res.main.key : roles[0],
-           roleLabel: res.main ? res.main.label : (CAT.ROLES[roles[0]] || {}).label || roles[0],
+           roles: hautRole ? [hautRole.key] : (res.keys.length ? res.keys : roles),
+           roleLabels: hautRole ? [{ id: hautRole.key, label: hautRole.label }] : res.labels,
+           role: hautRole ? hautRole.key : (res.main ? res.main.key : roles[0]),
+           roleLabel: hautRole ? hautRole.label + ' (équipe Origin Logs)'
+                     : (res.main ? res.main.label : (CAT.ROLES[roles[0]] || {}).label || roles[0]),
            rank: platform ? 1000 : res.rank,
            manual: manuels.length > 0, platform, owner: proprio,
            plafond: platform ? 10000 : (res.rank + (proprio ? 1 : 0)),
@@ -3522,6 +3540,182 @@ async function route(req, res) {
         /* Émettre le code d'installation. On rend la COMMANDE entière :
            le client n'a rien à assembler, et on ne peut pas se tromper
            d'adresse en la recopiant à la main. */
+        /* ============================================================
+           LES MEMBRES D'UN ENVIRONNEMENT, DEPUIS LA CONSOLE
+           ⚠️ ON LES GÉRAIT EN ENTRANT CHEZ LE CLIENT. Cela marchait, mais
+           cela obligeait à un aller-retour pour chaque geste — entrer,
+           changer un grade, ressortir, recommencer chez le suivant — et
+           toute la trace disait « fait depuis l'intérieur », comme si le
+           client l'avait fait lui-même. Ici c'est la plateforme qui agit,
+           le journal le dit, et l'on ne quitte pas la liste.
+           ============================================================ */
+        if (sousRoute === 'membres') {
+          if (!platNeed('plat.espace.modifier')) return;
+          const mid = Number(morceaux[2]) || 0;
+          const roles = ROLESVC.list(db, sid);
+          const plan = PLANS.forSpace(db, sp);
+          const compte = () => DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE space_id = ?').get(sid)).n;
+          // ⚠️ Le plafond de sièges se vérifie À L'ENTRÉE, jamais à la
+          // sortie : refuser après avoir créé le compte laisserait un
+          // client au-dessus de son offre, et c'est précisément ce que
+          // l'offre sert à empêcher.
+          const siegeLibre = () => plan.maxStaff == null || compte() < plan.maxStaff;
+          const trop = () => fail(res, 402,
+            `L’offre « ${plan.label} » est limitée à ${plan.maxStaff} compte(s) staff ` +
+            `(${compte()} utilisés). Changez d’offre, ou retirez quelqu’un.`);
+          const fiche = x => {
+            const manuels = parseRoles(x.manual_roles);
+            const cles = manuels.length ? manuels : parseRoles(x.roles);
+            const r = ROLESVC.resolve(db, sid, cles.length ? cles : [x.role]);
+            return { id:x.id, pseudo:x.pseudo, source:x.source, discordId: x.discord_id || '',
+                     disabled: !!x.disabled, avatar: x.avatar,
+                     roleKeys: r.keys.length ? r.keys : (x.role ? [x.role] : []),
+                     roles: r.labels, rank: r.rank, manuel: manuels.length > 0,
+                     proprietaire: Number(sp.owner_id) === Number(x.id),
+                     plateforme: !!x.platform_admin,
+                     creeLe: x.created_at, vuLe: x.last_login };
+          };
+
+          if (method === 'GET') {
+            const l = db.prepare('SELECT * FROM staff WHERE space_id = ? ORDER BY pseudo').all(sid).map(DB.row);
+            // Qui l'on peut faire venir d'ailleurs : tout compte d'un
+            // AUTRE environnement. On rend l'environnement d'origine avec,
+            // sans quoi « Nyx » dans une liste de six « Nyx » ne désigne
+            // personne.
+            const ailleurs = db.prepare(`SELECT s.id, s.pseudo, s.space_id, s.source, e.name AS espace
+                                         FROM staff s LEFT JOIN spaces e ON e.id = s.space_id
+                                         WHERE s.space_id <> ? ORDER BY e.name, s.pseudo LIMIT 500`)
+              .all(sid).map(DB.row);
+            return ok(res, {
+              espace: { id: sp.id, nom: sp.name, etat: sp.state },
+              membres: l.map(fiche).sort((a, b) => b.rank - a.rank || a.pseudo.localeCompare(b.pseudo)),
+              roles: roles.map(r => ({ key: r.key, label: r.label, rank: r.rank })),
+              proprietaire: sp.owner_id || null,
+              ailleurs,
+              sieges: { utilises: l.length, max: plan.maxStaff, offre: plan.label }
+            });
+          }
+
+          if (method === 'POST') {
+            const b = await readBody(req);
+            if (!roles.length) return fail(res, 409, 'Cet environnement n’a aucun grade : créez-en un d’abord.');
+            const cle = roles.find(r => r.key === b.role) ? b.role : ROLESVC.basRole(db, sid);
+            const r = ROLESVC.byKey(db, sid, cle);
+
+            /* Reprendre quelqu'un qui existe déjà ailleurs.
+               ⚠️ UN COMPTE N'APPARTIENT QU'À UN ENVIRONNEMENT : le
+               « rattacher » ici, c'est le DÉPLACER. Le dire franchement
+               vaut mieux que de fabriquer un doublon qui partagerait un
+               mot de passe et divergerait le lendemain. */
+            if (b.depuis) {
+              const cible = DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(Number(b.depuis)));
+              if (!cible) return fail(res, 404, 'Ce compte n’existe pas.');
+              if (Number(cible.space_id) === sid) return fail(res, 409, 'Ce compte est déjà dans cet environnement.');
+              if (!siegeLibre()) return trop();
+              if (DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE AND space_id = ?')
+                    .get(cible.pseudo, sid)))
+                return fail(res, 409, `Un « ${cible.pseudo} » existe déjà ici : deux pseudos identiques rendraient la connexion ambiguë.`);
+              const source = DB.row(db.prepare('SELECT name FROM spaces WHERE id = ?').get(cible.space_id));
+              // ⚠️ Les rôles appartiennent à l'environnement quitté : on
+              // repart du grade choisi plutôt que d'accorder au hasard
+              // des droits homonymes.
+              db.prepare('UPDATE staff SET space_id = ?, manual_roles = ?, roles = ?, role = ? WHERE id = ?')
+                .run(sid, JSON.stringify([cle]), JSON.stringify([cle]), cle, cible.id);
+              db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(cible.id);
+              // Propriétaire de l'environnement qu'il quitte : la place
+              // ne reste pas prise par quelqu'un qui n'y est plus.
+              db.prepare('UPDATE spaces SET owner_id = NULL WHERE owner_id = ?').run(cible.id);
+              audit(me, 'plateforme.membre.mutation',
+                    `${cible.pseudo} : ${(source || {}).name || '—'} → ${sp.name} (${r.label})`, ip, sid);
+              return ok(res, { ok: true, id: cible.id, deplace: true });
+            }
+
+            const pseudo = String(b.pseudo || '').trim();
+            const did = String(b.discordId || '').trim();
+            const pass = String(b.password || '');
+            if (pseudo.length < 3) return fail(res, 400, 'Pseudo trop court (3 caractères minimum).');
+            if (DB.row(db.prepare('SELECT id FROM staff WHERE pseudo = ? COLLATE NOCASE AND space_id = ?')
+                  .get(pseudo, sid)))
+              return fail(res, 409, 'Ce pseudo existe déjà dans cet environnement.');
+            /* ⚠️ DEUX FAÇONS D'ENTRER, ET IL EN FAUT UNE. Par Discord —
+               c'est le cas courant, la personne se connecte avec son
+               compte — ou par mot de passe, pour un prestataire ou un
+               compte de secours. Créer un compte sans l'une ni l'autre
+               donnerait une ligne dans la liste et personne derrière. */
+            if (!did && pass.length < 10)
+              return fail(res, 400, 'Donnez un identifiant Discord, ou un mot de passe d’au moins 10 caractères.');
+            if (did && !/^[0-9]{17,20}$/.test(did))
+              return fail(res, 400, 'Identifiant Discord attendu : 17 à 20 chiffres (mode développeur → clic droit sur le profil → Copier l’identifiant).');
+            if (did && DB.row(db.prepare('SELECT pseudo FROM staff WHERE discord_id = ? AND space_id = ?').get(did, sid)))
+              return fail(res, 409, 'Cet identifiant Discord est déjà relié à un compte de cet environnement.');
+            if (!siegeLibre()) return trop();
+            db.prepare(`INSERT INTO staff(pseudo,pass,role,roles,manual_roles,created_at,space_id,source,discord_id,discord)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)`)
+              // ⚠️ Un compte Discord n'a pas de mot de passe, et la colonne
+              // ne peut pas être vide : on y pose un marqueur qui n'est
+              // PAS un hachage (`sha256:…`), donc qu'aucune saisie ne peut
+              // reproduire. Laisser NULL ferait échouer l'insertion ;
+              // laisser une chaîne vide ouvrirait un compte sans mot de passe.
+              .run(pseudo, pass ? AUTH.hash(pass) : 'discord', cle,
+                   JSON.stringify([cle]), JSON.stringify([cle]), now(), sid,
+                   did ? 'discord' : 'local', did || null, did ? 'discord:' + did : null);
+            audit(me, 'plateforme.membre.creation',
+                  `${pseudo} chez ${sp.name} (${r.label}${did ? ', par Discord' : ', par mot de passe'})`, ip, sid);
+            return ok(res, { ok: true });
+          }
+
+          if (!mid) return fail(res, 405, 'Méthode non autorisée.');
+          const cible = DB.row(db.prepare('SELECT * FROM staff WHERE id = ? AND space_id = ?').get(mid, sid));
+          if (!cible) return fail(res, 404, 'Ce compte n’est pas dans cet environnement.');
+
+          if (method === 'PATCH') {
+            const b = await readBody(req);
+            if (Array.isArray(b.roles)) {
+              const voulus = b.roles.filter(k => roles.some(r => r.key === k));
+              if (!voulus.length) return fail(res, 400, 'Choisissez au moins un grade.');
+              // Attribution MANUELLE : une décision prise ici ne doit pas
+              // être défaite à la prochaine synchronisation Discord.
+              db.prepare('UPDATE staff SET manual_roles = ?, roles = ?, role = ? WHERE id = ?')
+                .run(JSON.stringify(voulus), JSON.stringify(voulus), voulus[0], mid);
+              db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(mid);
+              audit(me, 'plateforme.membre.grade',
+                    `${cible.pseudo} → ${voulus.map(k => (ROLESVC.byKey(db, sid, k) || {}).label || k).join(', ')}`,
+                    ip, sid);
+            }
+            if (b.disabled !== undefined) {
+              db.prepare('UPDATE staff SET disabled = ? WHERE id = ?').run(b.disabled ? 1 : 0, mid);
+              if (b.disabled) db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(mid);
+              audit(me, b.disabled ? 'plateforme.membre.suspension' : 'plateforme.membre.reactivation',
+                    `${cible.pseudo} chez ${sp.name}`, ip, sid);
+            }
+            if (b.proprietaire) {
+              // ⚠️ Le propriétaire peut nommer jusqu'à son propre rang :
+              // c'est ce qui permet à un environnement de se donner un
+              // second fondateur sans nous. Un environnement sans
+              // propriétaire ne le peut pas — d'où ce geste.
+              db.prepare('UPDATE spaces SET owner_id = ? WHERE id = ?').run(mid, sid);
+              audit(me, 'plateforme.proprietaire', `${sp.name} → ${cible.pseudo}`, ip, sid);
+            }
+            return ok(res, { ok: true });
+          }
+
+          if (method === 'DELETE') {
+            // ⚠️ ON NE RETIRE PAS LE PROPRIÉTAIRE SANS LE REMPLACER.
+            // L'environnement se retrouverait sans personne capable d'y
+            // nommer un fondateur, et il faudrait repasser par nous à
+            // chaque fois. On refuse, en disant quoi faire d'abord.
+            if (Number(sp.owner_id) === mid)
+              return fail(res, 409, `${cible.pseudo} est le propriétaire de cet environnement : `
+                + `désignez d’abord quelqu’un d’autre.`);
+            if (mid === me.id) return fail(res, 400, 'Vous ne pouvez pas vous retirer vous-même.');
+            db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(mid);
+            db.prepare('DELETE FROM staff WHERE id = ?').run(mid);
+            audit(me, 'plateforme.membre.retrait', `${cible.pseudo} retiré de ${sp.name}`, ip, sid);
+            return ok(res, { ok: true });
+          }
+          return fail(res, 405, 'Méthode non autorisée.');
+        }
+
         if (sousRoute === 'branchement') {
           if (!platNeed('plat.branchement')) return;
           if (method === 'POST') {

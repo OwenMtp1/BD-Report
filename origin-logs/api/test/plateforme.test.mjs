@@ -144,6 +144,110 @@ const dcObs = await J('/api/platform/discord',{method:'POST',body:JSON.stringify
 t('⚠️ mais ne la règle pas : ce serait nommer qui il veut dans l’équipe',
   dcObs.status===403, dcObs.body && dcObs.body.error);
 
+sect('Les membres d’un environnement, depuis la console');
+// ⚠️ Il fallait ENTRER chez le client pour changer un grade : un
+// aller-retour par geste, et une trace qui disait « fait depuis
+// l'intérieur », comme si le client l'avait fait lui-même.
+const espMb = await J('/api/platform/spaces',{method:'POST',body:JSON.stringify(
+  {nom:'Client Membres',guildId:'555000555',staffRoleId:'900055',formule:'illimite'})},patron);
+const SM = espMb.body.id;
+const mUrl = '/api/platform/spaces/' + SM + '/membres';
+const vide = await J(mUrl,{},patron);
+t('un environnement neuf n’a aucun membre', (vide.body.membres||[]).length===0);
+t('mais il a déjà ses grades', (vide.body.roles||[]).length > 0,
+  (vide.body.roles||[]).map(r=>r.label).slice(0,3).join(', '));
+t('et il dit combien de sièges l’offre laisse',
+  vide.body.sieges && vide.body.sieges.offre==='Illimité' && vide.body.sieges.max===null);
+
+const parDc = await J(mUrl,{method:'POST',body:JSON.stringify(
+  {pseudo:'PatronMb', discordId:'338271640518273111', role:'fondateur'})},patron);
+t('on crée un membre par identifiant Discord', parDc.status===200, parDc.body && parDc.body.error);
+const parMdp = await J(mUrl,{method:'POST',body:JSON.stringify(
+  {pseudo:'SecoursMb', password:'motdepassesecours1', role:'moderateur'})},patron);
+t('ou par mot de passe, pour un compte de secours', parMdp.status===200);
+const sansRien = await J(mUrl,{method:'POST',body:JSON.stringify({pseudo:'Fantome', role:'helper'})},patron);
+t('⚠️ mais pas SANS l’un ni l’autre — ce serait une ligne dans la liste et personne derrière',
+  sansRien.status===400, sansRien.body && sansRien.body.error);
+const dcFaux = await J(mUrl,{method:'POST',body:JSON.stringify(
+  {pseudo:'Bancal', discordId:'nyx', role:'helper'})},patron);
+t('un identifiant Discord qui n’en est pas est refusé', dcFaux.status===400);
+const doublon = await J(mUrl,{method:'POST',body:JSON.stringify(
+  {pseudo:'PatronMb', password:'motdepassedouble12', role:'helper'})},patron);
+t('deux fois le même pseudo dans un environnement : refusé', doublon.status===409);
+// ⚠️ UN COMPTE DISCORD N'A PAS DE MOT DE PASSE, et la colonne ne peut
+// pas rester vide : on y pose un marqueur qui n'est pas un hachage.
+// Encore faut-il qu'il ne se saisisse pas — sinon le marqueur SERAIT le
+// mot de passe, le même pour tous les comptes Discord du produit.
+for (const essai of ['discord', '', 'Discord'])
+  t(`⚠️ « ${essai || '(vide)'} » n’ouvre pas le compte Discord de PatronMb`,
+    (await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({pseudo:'PatronMb',password:essai})})).status !== 200);
+
+let lst = (await J(mUrl,{},patron)).body;
+const patronMb = lst.membres.find(x=>x.pseudo==='PatronMb');
+const secours  = lst.membres.find(x=>x.pseudo==='SecoursMb');
+t('les deux sont là, avec leur grade',
+  patronMb.roleKeys.includes('fondateur') && secours.roleKeys.includes('moderateur'),
+  lst.membres.map(m=>m.pseudo+':'+m.roleKeys.join('+')).join(', '));
+
+const grade = await J(mUrl+'/'+secours.id,{method:'PATCH',body:JSON.stringify({roles:['helper']})},patron);
+t('on change un grade depuis la console', grade.status===200);
+lst = (await J(mUrl,{},patron)).body;
+t('et le changement tient', lst.membres.find(x=>x.id===secours.id).roleKeys.includes('helper'));
+const inconnu = await J(mUrl+'/'+secours.id,{method:'PATCH',body:JSON.stringify({roles:['roi']})},patron);
+t('⚠️ un grade qui n’existe pas dans CET environnement est refusé', inconnu.status===400);
+
+await J(mUrl+'/'+patronMb.id,{method:'PATCH',body:JSON.stringify({proprietaire:true})},patron);
+lst = (await J(mUrl,{},patron)).body;
+t('on désigne le propriétaire', lst.proprietaire===patronMb.id
+  && lst.membres.find(x=>x.id===patronMb.id).proprietaire===true);
+const retraitProprio = await J(mUrl+'/'+patronMb.id,{method:'DELETE'},patron);
+t('⚠️ et on ne le retire pas sans le remplacer — sinon plus personne ne peut nommer un fondateur',
+  retraitProprio.status===409, retraitProprio.body && retraitProprio.body.error);
+
+const retrait = await J(mUrl+'/'+secours.id,{method:'DELETE'},patron);
+t('on retire un membre ordinaire', retrait.status===200);
+lst = (await J(mUrl,{},patron)).body;
+t('il quitte la liste', !lst.membres.some(x=>x.id===secours.id), lst.membres.length+' restant(s)');
+t('mais ce qu’il a fait reste au journal',
+  ((await J('/api/platform/journal?q=SecoursMb',{},patron)).body.entrees||[]).length > 0);
+
+sect('Reprendre un compte existant, c’est le DÉPLACER');
+// ⚠️ Un compte n'appartient qu'à un environnement. Fabriquer un doublon
+// aurait donné deux comptes partageant un mot de passe, qui divergent
+// le lendemain.
+const ailleurs = (await J(mUrl,{},patron)).body.ailleurs || [];
+t('la console propose les comptes des autres environnements', ailleurs.length > 0,
+  ailleurs.length+' candidat(s)');
+t('et dit de quel environnement ils viennent', ailleurs.every(x=>x.espace !== undefined));
+const venu = ailleurs.find(x=>x.pseudo!=='PatronMb');
+const bouge = await J(mUrl,{method:'POST',body:JSON.stringify(
+  {depuis: venu.id, role:'moderateur'})},patron);
+t('on en déplace un ici', bouge.status===200 && bouge.body.deplace===true, bouge.body && bouge.body.error);
+lst = (await J(mUrl,{},patron)).body;
+t('il arrive avec le grade choisi, pas avec ceux d’avant',
+  (lst.membres.find(x=>x.id===venu.id)||{}).roleKeys.join()==='moderateur');
+const rebelote = await J(mUrl,{method:'POST',body:JSON.stringify({depuis: venu.id, role:'helper'})},patron);
+t('le redéplacer ici ne veut rien dire : refusé', rebelote.status===409);
+
+sect('Entrer chez un client, c’est y entrer en FONDATEUR');
+// ⚠️ Quel que soit son grade dans l'équipe de la plateforme : un support
+// qui dépanne doit tout pouvoir dans l'environnement où il entre, sinon
+// il redemande l'accès au client à chaque intervention. C'est
+// `plat.entrer` qui décide s'il peut entrer ; dedans, pas de demi-mesure.
+await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:SM})},patron);
+const dedans = await J('/api/auth/me',{},patron);
+t('tous les droits du panneau', (dedans.body.perms||[]).includes('actions.ban')
+  && (dedans.body.perms||[]).includes('roles.manage'),
+  (dedans.body.perms||[]).length+' droit(s)');
+t('toutes les rubriques, sans être borné par l’offre du client',
+  (dedans.body.cats||[]).length >= 18, (dedans.body.cats||[]).length+' rubrique(s)');
+t('⚠️ et l’ÉTIQUETTE ne ment plus : elle dit Fondateur, pas le grade d’un autre environnement',
+  /Fondateur/.test(dedans.body.staff.roleLabel||''), dedans.body.staff.roleLabel);
+t('le libellé dit aussi d’où vient ce pouvoir',
+  /Origin Logs/.test(dedans.body.staff.roleLabel||''), dedans.body.staff.roleLabel);
+await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:0})},patron);
+
 sect('Le journal d’UNE personne');
 // ⚠️ « Qui a fermé cet espace ? » ne se lit pas en parcourant tout le
 // journal. Le filtre porte sur l'IDENTIFIANT : deux espaces peuvent
