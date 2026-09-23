@@ -23,6 +23,10 @@ Trois choses, et rien d'autre :
 Rien à acheter, rien à installer d'autre : le produit **n'a aucune dépendance
 npm**. Il tourne avec Node seul.
 
+L'installation fait dix étapes. Une onzième, facultative, branche les **mises à
+jour automatiques** : elle demande à Owen un dépôt privé et trois clics, et peut
+se faire plus tard.
+
 ---
 
 ## Instructions à l'assistant
@@ -430,6 +434,146 @@ Elle doit finir par `15 suite(s) au vert.`
 
 ---
 
+## Étape 11 — Les mises à jour automatiques (facultatif, recommandé)
+
+Sans cette étape, une mise à jour se fait à la main : Owen envoie une nouvelle
+archive, tu la décompresses (voir « Mettre à jour plus tard »). Ça marche.
+
+Avec cette étape, **la machine va chercher les mises à jour toute seule** dans
+le dépôt privé d'Owen, vérifie que le code passe les tests, redémarre — et
+**remet la version précédente si le panneau ne répond plus**. Personne n'a rien
+à faire, et une mauvaise version ne reste pas en place jusqu'au lendemain.
+
+🛑 **Cette étape demande deux choses à Owen** (pas à toi) :
+
+- un **dépôt privé** qui ne contient que ce produit, et dont il te donnera
+  l'adresse (`git@github.com:SON-COMPTE/origin-logs.git`) ;
+- l'ajout de la **clé de déploiement** que tu vas générer juste en dessous.
+
+Demande-lui l'adresse du dépôt avant de continuer. S'il ne l'a pas encore
+créé, arrête-toi ici : le reste de l'installation fonctionne déjà, cette étape
+peut se faire n'importe quand.
+
+### 11.1 — La clé de déploiement
+
+Elle est générée **sur le VPS**, et sa moitié secrète n'en sort jamais.
+
+```bash
+sudo -u origin ssh-keygen -t ed25519 -N '' -f /srv/origin-logs/.ssh-deploy -C "vps-origin-logs"
+sudo -u origin cat /srv/origin-logs/.ssh-deploy.pub
+```
+
+🛑 **Donne cette ligne publique à Owen** (elle commence par `ssh-ed25519`). Il
+l'ajoute sur GitHub : son dépôt → **Settings** → **Deploy keys** → **Add deploy
+key**. ⚠️ Il doit **laisser décochée** la case *Allow write access* : cette
+machine doit pouvoir lire les mises à jour, jamais rien renvoyer.
+
+Dis à git d'utiliser cette clé-là :
+
+```bash
+sudo -u origin tee /srv/origin-logs/.ssh-config >/dev/null <<'EOF'
+Host github-origin-logs
+  HostName github.com
+  User git
+  IdentityFile /srv/origin-logs/.ssh-deploy
+  IdentitiesOnly yes
+EOF
+sudo chown origin:origin /srv/origin-logs/.ssh-config
+sudo chmod 600 /srv/origin-logs/.ssh-deploy /srv/origin-logs/.ssh-config
+```
+
+**Vérification** — une fois qu'Owen a confirmé avoir ajouté la clé :
+
+```bash
+sudo -u origin ssh -F /srv/origin-logs/.ssh-config -T github-origin-logs
+```
+
+GitHub doit répondre quelque chose comme
+`Hi SON-COMPTE/origin-logs! You've successfully authenticated, but GitHub does
+not provide shell access.` — **c'est le résultat attendu**, ce n'est pas une
+erreur. S'il répond `Permission denied (publickey)`, la clé n'est pas encore
+posée côté GitHub : attends, ne recommence pas la génération.
+
+### 11.2 — Transformer le dossier en copie du dépôt
+
+Le dossier a été posé depuis une archive ; on le rattache au dépôt sans rien
+perdre.
+
+⚠️ **`api/.env` et `api/data/` ne bougent pas** : ils sont ignorés par git, donc
+invisibles pour toutes les commandes ci-dessous. C'est vérifié, mais garde-le en
+tête si quelque chose t'inquiète.
+
+Remplace `SON-COMPTE` par ce qu'Owen t'a donné :
+
+```bash
+cd /srv/origin-logs
+sudo -u origin git init -q -b main .
+sudo -u origin git config core.sshCommand "ssh -F /srv/origin-logs/.ssh-config"
+sudo -u origin git remote add origin github-origin-logs:SON-COMPTE/origin-logs.git
+sudo -u origin git fetch -q origin
+sudo -u origin git reset --hard origin/main
+```
+
+**Vérification** — les trois doivent passer :
+
+```bash
+sudo -u origin git -C /srv/origin-logs log --oneline -1     # le dernier commit d'Owen
+sudo -u origin test -s /srv/origin-logs/api/.env && echo ".env intact"
+sudo -u origin test -s /srv/origin-logs/api/data/origin-logs.db && echo "base intacte"
+```
+
+### 11.3 — Le minuteur
+
+```bash
+sudo cp /srv/origin-logs/maj/maj.conf.exemple /etc/origin-logs-maj.conf
+sudo cp /srv/origin-logs/maj/origin-logs-maj.service /etc/systemd/system/
+sudo cp /srv/origin-logs/maj/origin-logs-maj.timer   /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now origin-logs-maj.timer
+```
+
+🛑 **Une question pour Owen, une seule**, à lui poser avant d'activer :
+veut-il que cette machine prenne **chaque commit** (réglage `SUIVRE=branche`,
+la valeur par défaut, pratique tant que c'est un serveur d'essai), ou
+seulement les versions qu'il publie explicitement (`SUIVRE=etiquette`) ?
+Le réglage est un mot à changer dans `/etc/origin-logs-maj.conf`, rien d'autre.
+
+**Vérification** :
+
+```bash
+systemctl list-timers origin-logs-maj --no-pager    # doit afficher la prochaine exécution
+sudo /srv/origin-logs/maj/mise-a-jour.sh            # à la main, tout de suite
+```
+
+La dernière commande doit afficher soit `déjà à jour (…) — rien à faire.`, soit
+le détail d'une mise à jour qui s'est faite. Ensuite, pour voir ce que le
+minuteur raconte :
+
+```bash
+journalctl -u origin-logs-maj -n 30 --no-pager
+```
+
+### Ce que fait le script, dans l'ordre
+
+1. Il regarde ce qui existe dans le dépôt (`fetch`).
+2. Si c'est identique à ce qui tourne, **il s'arrête** — pas de redémarrage
+   inutile toutes les dix minutes.
+3. Sinon il pose le nouveau code et **joue la suite de tests**. Elle monte ses
+   propres serveurs sur d'autres ports et sa propre base : elle ne dérange pas
+   le panneau qui tourne. Si elle échoue, **la mise à jour est annulée** et
+   rien n'a bougé.
+4. Il redémarre le service, puis **vérifie que le panneau répond vraiment**.
+5. S'il ne répond pas dans les vingt secondes, **il remet la version
+   précédente** et redémarre. Un déploiement automatique sans retour arrière
+   n'est pas un déploiement automatique, c'est une panne différée.
+
+⚠️ Le script fait `reset --hard` : la machine d'un client ne doit rien porter en
+propre. Si tu modifies un fichier sur ce VPS « pour dépanner », il sera écrasé à
+la mise à jour suivante — et c'est voulu, sans quoi toutes les mises à jour
+finiraient par échouer en silence. Un correctif se fait chez Owen, jamais ici.
+
+---
+
 ## Les sauvegardes
 
 La base contient tout : journaux, comptes, rôles, offres.
@@ -456,8 +600,11 @@ rsync -az origin@IP-DU-VPS:/srv/origin-logs/api/data/backups/ ./sauvegardes-orig
 
 ## Mettre à jour plus tard
 
-Owen enverra une nouvelle archive. `api/.env` et `api/data/` **ne sont pas
-dedans** : ils restent en place.
+**Si l'étape 11 est faite, il n'y a rien à faire** : la machine se met à jour
+toute seule, et `journalctl -u origin-logs-maj` raconte ce qui s'est passé.
+
+Sinon, Owen enverra une nouvelle archive. `api/.env` et `api/data/` **ne sont
+pas dedans** : ils restent en place.
 
 ```bash
 sudo systemctl stop origin-logs
@@ -486,6 +633,10 @@ sont conçus pour ne rien effacer. Vérifie quand même
 | J'ai changé `.env` et rien ne change | Une variable de même nom est posée dans le service systemd, et systemd gagne | Retire-la du fichier `.service`, `daemon-reload`, redémarre |
 | Un fichier privé répond 200 | Grave | Arrête-toi, signale-le à l'humain |
 | Le panneau s'affiche mais dit « démonstration » | La page est ouverte en fichier local, pas servie par l'API | Ouvre bien `https://le-domaine`, pas le fichier `index.html` |
+| `Permission denied (publickey)` au `git fetch` | La clé de déploiement n'est pas (encore) posée sur le dépôt | Owen l'ajoute dans *Settings → Deploy keys*. Ne regénère pas la clé, attends |
+| La mise à jour dit « LES TESTS ÉCHOUENT » | Le code poussé est cassé — rien n'a bougé, c'est le filet qui a joué | Préviens Owen, ne force rien. La version précédente tourne toujours |
+| `journalctl -u origin-logs-maj` affiche « RETOUR ARRIÈRE » | La nouvelle version ne répondait plus ; l'ancienne a été remise | Préviens Owen avec les 30 dernières lignes du journal |
+| Une mise à jour écrase un fichier modifié sur le VPS | `reset --hard`, et c'est voulu | Un correctif se fait chez Owen, jamais sur cette machine |
 
 ---
 
@@ -501,6 +652,9 @@ sont conçus pour ne rien effacer. Vérifie quand même
   contient les secrets, le second tous les journaux.
 - **Supprimer `api/data/origin-logs.db`** pour « repartir propre ». C'est toute
   la mémoire du produit : comptes, rôles, environnements clients, journaux.
+- **Modifier un fichier du produit sur ce VPS.** Il sera écrasé à la prochaine
+  mise à jour, et entre-temps cette machine ne fera plus tourner le même code
+  que les autres. Ce qui doit changer, change chez Owen.
 
 ---
 

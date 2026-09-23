@@ -721,6 +721,43 @@ espace** (`ROLESVC.basRole`).
 
 ---
 
+## Livrer les mises à jour à un panneau installé ailleurs
+
+`maj/` contient de quoi faire en sorte qu'un panneau installé chez quelqu'un
+**aille chercher tout seul** les mises à jour dans un dépôt privé : script,
+réglages, service et minuteur systemd. La mise en place côté VPS est l'étape 11
+de `INSTALLER-SUR-VPS.md` ; ce qu'il y a à faire côté éditeur est dans
+`maj/README.md`.
+
+⚠️ **Le dépôt distribué ne doit contenir QUE ce produit.** Ce dossier vit dans
+un dépôt qui porte aussi un autre logiciel : une clé de déploiement posée
+dessus donnerait à la machine d'un tiers l'accès à l'autre. `git subtree split`
+en extrait une histoire propre, dossier remonté à la racine.
+
+⚠️ **Un déploiement automatique sans retour arrière n'est pas un déploiement
+automatique, c'est une panne différée.** Le script joue la suite de tests avant
+de toucher au service — elle monte ses propres serveurs sur d'autres ports et sa
+propre base, donc sans déranger celui qui tourne — puis vérifie que le panneau
+**répond vraiment** après redémarrage, et remet la version précédente sinon.
+
+⚠️ **`api/.env` et `api/data/` sont ignorés par git**, donc invisibles pour la
+mise à jour : elle ne peut ni les écraser ni les lire. C'est ce qui permet de la
+lancer sans rien sauvegarder d'abord.
+
+⚠️ **`reset --hard`, pas `pull`** : la machine d'un client ne doit rien porter en
+propre. Une modification faite « pour dépanner » sur place ferait échouer toutes
+les mises à jour suivantes en silence, et ferait diverger ce panneau de tous les
+autres.
+
+Deux régimes, un mot à changer dans `/etc/origin-logs-maj.conf` : `branche`
+(chaque commit part, confortable tant que c'est un serveur d'essai) ou
+`etiquette` (rien ne part tant qu'une version n'est pas publiée). Le tri des
+étiquettes se fait **par numéro de version, pas par date** — sans quoi une
+correction publiée sur une ancienne version ferait reculer un serveur déjà
+passé à la suivante.
+
+---
+
 ## Les membres d'un environnement, depuis la console
 
 Depuis **Liste des environnements → Gérer les membres**, sans entrer chez le

@@ -1,0 +1,37 @@
+# ============================================================
+# Origin Logs — réglages de la mise à jour automatique
+# À copier dans /etc/origin-logs-maj.conf
+# ============================================================
+
+# Où le panneau est installé, et sous quel utilisateur il tourne.
+DOSSIER=/srv/origin-logs
+UTILISATEUR=origin
+SERVICE=origin-logs
+
+# ⚠️ CE QUE LA MACHINE SUIT — c'est le seul réglage qui se décide, et il
+# change tout.
+#
+#   branche    elle prend CHAQUE commit poussé, dans les minutes qui
+#              suivent. Confortable pendant qu'on construit ; à éviter
+#              dès que de vrais clients écrivent dans ce panneau, car
+#              aucune relecture ne s'intercale.
+#
+#   etiquette  elle ne bouge QUE lorsque vous publiez une version
+#              (« git tag v1.3 && git push --tags »). On continue de
+#              pousser du code tous les jours sans que rien n'arrive ici.
+#
+# Passer de l'un à l'autre : changez ce mot, rien d'autre.
+SUIVRE=branche
+BRANCHE=main
+
+# L'adresse que le script interroge APRÈS redémarrage pour savoir si le
+# panneau est vraiment debout. S'il ne répond pas, la version précédente
+# est remise.
+SANTE=http://127.0.0.1:8080/api/auth/options
+ATTENTE=20
+
+# Jouer la suite de tests avant de redémarrer. Elle monte ses propres
+# serveurs sur d'autres ports et sa propre base : elle ne dérange pas
+# celui qui tourne. La laisser à 1 est ce qui attrape une bêtise AVANT
+# qu'elle atteigne le client.
+TESTER=1

@@ -1,0 +1,8 @@
+[Unit]
+Description=Origin Logs — mise à jour depuis le dépôt
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/srv/origin-logs/maj/mise-a-jour.sh
