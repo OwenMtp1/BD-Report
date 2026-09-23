@@ -475,11 +475,39 @@ commercialement un client d'un autre, et elle vit **en base** — pas dans le
 code : on ajuste un tarif ou un plafond bien plus souvent qu'on ne
 redéploie. Trois formules de départ, modifiables, et on en crée d'autres :
 
-| | Comptes staff | Rétention | Captures | Quota d'images | Dépôts/min |
-|---|---|---|---|---|---|
-| **Starter** | 5 | 7 j | non | — | 60 |
-| **Pro** | 25 | 30 j | oui | 512 Mo | 120 |
-| **Illimité** | sans limite | sans limite | oui | plafond du serveur | plafond du serveur |
+| | Comptes staff | Rétention | Rubriques | Captures | Quota d'images | Dépôts/min |
+|---|---|---|---|---|---|---|
+| **Starter** | 5 | 7 j | 8 sur 18 | non | — | 60 |
+| **Pro** | 25 | 30 j | 14 sur 18 | oui | 512 Mo | 120 |
+| **Illimité** | sans limite | sans limite | toutes | oui | plafond du serveur | plafond du serveur |
+
+⚠️ **UNE OFFRE VEND DES RUBRIQUES, pas seulement des jours.** C'est ce qui
+manquait pour qu'il y ait quelque chose à vendre au palier du dessus : tant que
+les dix-huit rubriques étaient ouvertes à tout le monde, deux formules ne se
+distinguaient que par un nombre de jours. Chaque offre porte donc la liste des
+rubriques qu'elle ouvre.
+
+⚠️ **L'offre BORNE, le rôle DÉCOUPE** — et jamais l'inverse. Le serveur garde
+l'**intersection** des deux (`PLANS.borner`, appliqué dans `whoami`) : cocher
+« Casino » dans un rôle n'ouvre rien si l'offre ne le vend pas, et vendre le
+casino ne l'ouvre pas à qui n'en a pas le rôle. **Même le fondateur du client
+est borné** — sinon il lui suffisait de se cocher la rubrique pour s'offrir le
+palier supérieur, et le bornage n'aurait été qu'une décoration de la page
+tarifs. L'administration de plateforme, elle, y échappe : elle dépanne
+l'espace, elle ne le consomme pas, et sa visite est journalisée.
+
+⚠️ **« Toutes les rubriques » n'est pas « les dix-huit cochées ».** En base,
+c'est `NULL` : une offre haute reçoit ainsi les rubriques ajoutées plus tard
+sans qu'on repasse la cocher. Une liste, même vide, est un choix explicite —
+et une formule d'avant cette mise en place n'a pas de liste, donc ne perd
+aucun onglet le jour de la migration.
+
+⚠️ **Ce que l'offre ne vend pas ne se coche pas.** Dans l'éditeur de rôles du
+client, ces rubriques sont **inertes et marquées d'un cadenas**, avec le nom de
+l'offre au survol. Une case qui obéit sans effet ne laisse qu'une conclusion
+possible — la panne — et un ticket au support. En revanche une case déjà
+cochée le **reste** : rétrograder l'offre ne doit pas effacer le rôle que le
+client avait composé, sinon remonter d'offre lui rendrait un panneau vide.
 
 ⚠️ **« Sans limite » n'est pas « zéro ».** Une formule sans plafond est le cas
 courant de l'offre haute ; confondre les deux aurait fait de l'offre la plus
@@ -501,9 +529,19 @@ de jeu cesse d'être accepté. Fermer n'est pas supprimer — les journaux
 restent, et repousser la date rouvre. C'est ainsi qu'on coupe un client sans
 avoir à y penser, et qu'on le rétablit sans rien perdre.
 
-Écrans : **Supervision → Formules** (créer, modifier, supprimer — une formule
-utilisée ne se supprime pas), et la carte de chaque espace pour lui attribuer
-sa formule et sa date.
+**Durée de conservation, par environnement.** Elle se règle sur la fiche de
+chaque client — pas seulement à sa création. C'est le réglage qu'on renégocie
+le plus souvent, parce qu'il se paie ; ne pouvoir le poser qu'au premier jour
+obligeait à passer par la console six semaines plus tard. La fiche montre les
+**deux** nombres quand ils diffèrent : la durée demandée, et le plafond de
+l'offre qui s'applique réellement — masquer l'écart ferait promettre au
+commercial ce que la purge ne tiendra pas. La case « ne jamais effacer » reste
+au-dessus : c'est une décision, pas une durée très longue.
+
+Écrans : l'onglet **Offres** du rail (créer une offre, modifier son nom, son
+prix, ses plafonds et ses rubriques, la supprimer — une offre que des clients
+portent ne se supprime pas), et l'onglet **Liste des environnements** pour
+attribuer à chaque client son offre, sa date et sa durée de conservation.
 
 ---
 

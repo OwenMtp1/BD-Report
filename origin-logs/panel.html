@@ -1459,6 +1459,25 @@ select.input{height:36px}
       <div class="pgrid" id="envGrid"></div>
     </section>
 
+    <!-- ============ OFFRES ============
+         ⚠️ UNE OFFRE N'EST PAS QU'UN PRIX. Elle disait déjà combien de
+         comptes et combien de jours ; elle dit désormais QUELLES
+         RUBRIQUES le client achète. Sans cela il n'y avait rien à vendre
+         au palier du dessus : tous les clients voyaient tout, et la seule
+         différence entre deux formules était un nombre de jours. -->
+    <section class="view" id="viewPlans" hidden aria-label="Offres">
+      <div class="head">
+        <div>
+          <h1 class="title">Offres</h1>
+          <div class="sub" id="offreSub">Ce qu’un client achète : un prix, des plafonds, des rubriques.</div>
+        </div>
+        <span class="tools">
+          <button class="btn primary" id="offreNewBtn" hidden>Créer une offre</button>
+        </span>
+      </div>
+      <div class="pgrid" id="offreGrid"></div>
+    </section>
+
     <!-- ============ JOURNAL D'ADMINISTRATION ============ -->
     <section class="view" id="viewPlatformLog" hidden aria-label="Journal d’administration">
       <div class="head">
@@ -2280,6 +2299,12 @@ const STATE = { view:'overview', cat:'all', range:24, q:'', sevs:new Set(),
                 // Les évènements arrivés pendant qu'on lisait plus bas.
                 enAttente:[], compact:false };
 
+/* ⚠️ LA LISTE DES VUES DE PLATEFORME VIT À UN SEUL ENDROIT. Elle était
+   recopiée dans trois conditions (le rafraîchissement, le repli sans
+   espace, le routage) : la quatrième vue ajoutée en a manqué une, et
+   l'onglet retombait silencieusement sur la supervision. */
+const VUES_PLATEFORME = new Set(['platform', 'platformlog', 'spaces', 'plans']);
+
 const CHART_CFG = {
   1:  { n:12, fmt:t => pad(new Date(t).getHours())+':'+pad(new Date(t).getMinutes()), every:3, title:'60 dernières minutes' },
   6:  { n:12, fmt:t => pad(new Date(t).getHours())+'h'+pad(new Date(t).getMinutes()), every:3, title:'6 dernières heures' },
@@ -2321,10 +2346,18 @@ async function refresh(opts) {
   // espace depuis la supervision laissait vingt et un compteurs sur
   // vingt-deux à « · » : le rail promettait un chiffre par rubrique et
   // n'en donnait aucun, jusqu'à ce qu'on ouvre un autre écran.
-  if (STATE.view === 'platform' || STATE.view === 'platformlog') {
+  // ⚠️ Les écrans de PLATEFORME ne lisent aucun journal : les envoyer
+  // interroger l'espace courant coûterait une requête par rafraîchissement
+  // pour un résultat que personne n'affiche. Le rail, lui, garde ses
+  // compteurs — il reste à l'écran, et des tirets à côté de chaque
+  // rubrique donneraient un panneau qui promet sans rien tenir.
+  if (VUES_PLATEFORME.has(STATE.view)) {
     if (!sansEspace()) chargerComptesRail();
     renderNav(); renderActiveFilters();
-    return STATE.view === 'platform' ? chargerPlateforme() : chargerJournal();
+    if (STATE.view === 'platform')    return chargerPlateforme();
+    if (STATE.view === 'platformlog') return chargerJournal();
+    if (STATE.view === 'spaces')      return chargerEnvs();
+    return chargerOffres();
   }
   // Hors espace, l'API répond 409 à tout le reste : lui poser la question
   // ne ferait qu'afficher une erreur là où il n'y a rien à afficher.
@@ -2362,6 +2395,7 @@ function render() {
   $('#viewTeam').hidden        = STATE.view !== 'team';
   $('#viewPlatform').hidden    = STATE.view !== 'platform';
   $('#viewSpaces').hidden      = STATE.view !== 'spaces';
+  $('#viewPlans').hidden       = STATE.view !== 'plans';
   $('#viewPlatformLog').hidden = STATE.view !== 'platformlog';
   // ⚠️ L'entrée ne se rejoue qu'au CHANGEMENT de vue. `render()` est
   // rappelé à chaque rafraîchissement, à chaque marque posée, à chaque
@@ -2379,6 +2413,7 @@ function render() {
   else if (STATE.view === 'team') renderTeam();
   else if (STATE.view === 'platform') rendrePlateforme();
   else if (STATE.view === 'spaces') rendreEnvs();   // charge à la volée si besoin
+  else if (STATE.view === 'plans') rendreOffres();
   else rendreJournal();
 }
 
@@ -2397,6 +2432,9 @@ function buildNav() {
         <span class="nav-dot"></span><span class="nav-label">Supervision</span><span class="nav-n"></span></button>
       ${canPlat('plat.voir') ? `<button class="nav-item" data-view="spaces" style="--fam:var(--f-staff)">
         <span class="nav-dot"></span><span class="nav-label">Liste des environnements</span><span class="nav-n" id="navEnvN"></span></button>` : ''}
+      ${canPlat('plat.voir') ? `<button class="nav-item" data-view="plans" style="--fam:var(--f-shop)"
+          title="Ce qu’on vend : prix, plafonds et rubriques">
+        <span class="nav-dot"></span><span class="nav-label">Offres</span><span class="nav-n" id="navOffreN"></span></button>` : ''}
       <button class="nav-item" data-view="platformlog" style="--fam:var(--f-staff)">
         <span class="nav-dot"></span><span class="nav-label">Journal d'administration</span><span class="nav-n"></span></button>`;
     // ⚠️ AUCUN ESPACE = AUCUNE RUBRIQUE. Tant que l'administration n'est
@@ -3481,6 +3519,7 @@ function syncHash(replace) {
                : STATE.view === 'platform'    ? '/plateforme'
                : STATE.view === 'platformlog' ? '/plateforme/journal'
                : STATE.view === 'spaces'      ? '/environnements'
+               : STATE.view === 'plans'       ? '/offres'
                : STATE.view === 'bans'        ? '/bans/' + STATE.banState
                : STATE.view === 'online'      ? '/en-ligne'
                : STATE.view === 'team'        ? '/equipe'
@@ -3509,6 +3548,7 @@ function applyHash() {
   const seg = chemin.split('/').filter(Boolean);
   if (seg[0] === 'plateforme') STATE.view = seg[1] === 'journal' ? 'platformlog' : 'platform';
   else if (seg[0] === 'environnements') { STATE.view = 'spaces'; STATE.cat = 'all'; }
+  else if (seg[0] === 'offres')        { STATE.view = 'plans';  STATE.cat = 'all'; }
   else if (seg[0] === 'flux') { STATE.view = 'stream'; STATE.cat = seg[1] || 'all'; }
   else if (seg[0] === 'bans') { STATE.view = 'bans'; STATE.cat = 'bans';
                                 STATE.banState = ['actifs','expires','tous'].includes(seg[1]) ? seg[1] : 'actifs'; }
@@ -3517,7 +3557,7 @@ function applyHash() {
   else                        { STATE.view = 'overview'; STATE.cat = 'all'; }
   // Un lien vers un flux, collé par un collègue qui, lui, est dans un
   // espace : on ne montre pas une page vide, on ramène à la supervision.
-  if (sansEspace() && !['platform','platformlog','spaces'].includes(STATE.view))
+  if (sansEspace() && !VUES_PLATEFORME.has(STATE.view))
     STATE.view = 'platform';
   const p = new URLSearchParams(requete || '');
   // Le registre a sa propre recherche : la confondre avec celle des
@@ -3927,16 +3967,16 @@ const DEMO_ESPACES = [
   { id:1, nom:'Origin Roleplay', etat:'actif', guildId:'938271640518273024', staffRoleId:'938271640518273100',
     retention:30, conservationEffective:30, conservationIllimitee:false, cle:'demo-cle-1', creeLe:Date.now()-320*86400000, creePar:'Owen',
     proprietaire:{ id:1, pseudo:'Owen' }, membres:24, evenements:184203, bannis:37,
-    formule:'pro', formuleLabel:'Pro', brancheLe:Date.now()-318*86400000 },
+    formule:'pro', formuleLabel:'Pro', plafondConservation:30, brancheLe:Date.now()-318*86400000 },
   { id:2, nom:'Origin RP — serveur test', etat:'actif', guildId:'938271640518273024', staffRoleId:'938271640518273101',
     retention:7, conservationEffective:7, conservationIllimitee:false, cle:'demo-cle-2', creeLe:Date.now()-40*86400000, creePar:'Owen',
     proprietaire:{ id:3, pseudo:'Vortex' }, membres:6, evenements:9120, bannis:2,
-    formule:'starter', formuleLabel:'Starter', brancheLe:null },
+    formule:'starter', formuleLabel:'Starter', plafondConservation:7, brancheLe:null },
   { id:3, nom:'Origin RP — ancienne saison', etat:'ferme', guildId:'', staffRoleId:'',
     retention:90, conservationEffective:null, conservationIllimitee:true, cle:'demo-cle-3', creeLe:Date.now()-700*86400000, creePar:'Owen',
     fermeLe:Date.now()-60*86400000, motifFermeture:'Fin de saison 3 — journaux conservés',
     proprietaire:null, membres:0, evenements:441027, bannis:0,
-    formule:'', formuleLabel:'', brancheLe:Date.now()-690*86400000 }
+    formule:'', formuleLabel:'', plafondConservation:null, brancheLe:Date.now()-690*86400000 }
 ];
 const DEMO_EQUIPE = [
   { id:1, pseudo:'Owen',   source:'local',   roles:[{id:'fondateur',label:'Fondateur'}], rank:100, estMoi:true },
@@ -3976,7 +4016,9 @@ async function demoApi(path, opts) {
     if (path.startsWith('/api/platform/check'))    return demoCheck();
     if (path.startsWith('/api/platform/sauvegardes')) return demoSauvegardes();
     if (path.startsWith('/api/platform/journal'))  return demoJournal();
-    return { spaces: DEMO_ESPACES, monEspace: 1, discordGlobal: true };
+    if (path.startsWith('/api/platform/plans'))    return demoOffres();
+    return { spaces: DEMO_ESPACES, monEspace: 1, discordGlobal: true,
+             formules: DEMO_OFFRES, adresse: location.origin, adressePublique: false };
   }
   if (path.startsWith('/api/discord/config')) {
     if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true, pret:true }; }
@@ -4001,6 +4043,27 @@ async function demoApi(path, opts) {
   return { ok:true };
 }
 let DEMO_PERMS = [];
+
+/* ---------- offres, en démonstration ----------
+   Les trois paliers livrés par `api/plans.js`. L'aperçu doit montrer
+   EXACTEMENT ce qui sortira de l'installation, y compris le découpage
+   des rubriques : c'est lui qu'on discute avec un client. */
+const OF_STARTER = ['bans','sanctions','anticheat','reports',
+                    'connexions','deconnexion','combat','admin'];
+const OF_PRO = OF_STARTER.concat(['ecran_joueur','inventaire','items_sol',
+                                  'proprietes','jobs','facture_ems']);
+const DEMO_OFFRES = [
+  { key:'starter', label:'Starter', rang:10, prix:'offert', maxStaff:5, maxRetention:7,
+    screens:false, screenQuota:0, maxIngest:60, cats:OF_STARTER, builtin:true, espaces:0,
+    notes:'Pour essayer : une petite équipe, une semaine d’historique, sans captures d’écran.' },
+  { key:'pro', label:'Pro', rang:20, prix:'9 €/mois', maxStaff:25, maxRetention:30,
+    screens:true, screenQuota:512, maxIngest:120, cats:OF_PRO, builtin:true, espaces:1,
+    notes:'Le serveur qui tourne : un mois d’historique, les captures d’écran, une vraie équipe.' },
+  { key:'illimite', label:'Illimité', rang:30, prix:'29 €/mois', maxStaff:null, maxRetention:null,
+    screens:true, screenQuota:null, maxIngest:null, cats:null, builtin:true, espaces:1,
+    notes:'Aucun plafond, toutes les rubriques. Pour les serveurs qui journalisent beaucoup.' }
+];
+const demoOffres = () => ({ plans: DEMO_OFFRES.map(o => Object.assign({}, o)), sansFormule: 1 });
 
 /* ---------- supervision, en démonstration ----------
    Trois espaces aux situations contrastées : un qui tourne, un jeune
@@ -4150,14 +4213,24 @@ function rendreRoles() {
   }
 }
 function carteRole(r, effectif, d) {
+  // ⚠️ CE QUE L'OFFRE NE VEND PAS NE SE COCHE PAS. Sans cela, le
+  // fondateur d'un client cochait « Casino », enregistrait, et la
+  // rubrique n'apparaissait nulle part : rien à l'écran ne disait que
+  // le serveur borne le rôle par l'offre, et la seule conclusion
+  // possible était la panne. Une case inerte qui dit pourquoi vaut
+  // mieux qu'une case qui obéit sans effet.
+  const vendu = c => !d.catsFormule || d.catsFormule.includes(c);
   const grp = (d.groups || GROUPS).map(g => {
     const dans = (d.cats || CATS).filter(c => c.group === g.id);
     if (!dans.length) return '';
     return `<div style="--fam:${g.fam}">
       <div class="grp-label">${esc(g.label)}</div>
-      <div class="checks">${dans.map(c => `<label class="check fam" style="--fam:${g.fam}">
-        <input type="checkbox" data-cat="${esc(c.id)}" data-role="${esc(r.key)}" ${r.cats.includes(c.id) ? 'checked' : ''}>
-        ${esc(c.label)}</label>`).join('')}</div></div>`;
+      <div class="checks">${dans.map(c => `<label class="check fam" style="--fam:${g.fam}${
+          vendu(c.id) ? '' : ';opacity:.4'}"${vendu(c.id) ? ''
+          : ` title="Hors de l’offre ${esc(d.formuleLabel || '')} : cette rubrique n’est ouverte à personne ici."`}>
+        <input type="checkbox" data-cat="${esc(c.id)}" data-role="${esc(r.key)}"
+               ${r.cats.includes(c.id) ? 'checked' : ''} ${vendu(c.id) ? '' : 'disabled'}>
+        ${esc(c.label)}${vendu(c.id) ? '' : ' 🔒'}</label>`).join('')}</div></div>`;
   }).join('');
   return `<div class="role-card">
     <button class="role-head" data-roletoggle="${esc(r.key)}">
@@ -4285,6 +4358,22 @@ function carteEspace(sp, d) {
         <option value="">— sans formule —</option>
         ${(d.formules || []).map(f => `<option value="${esc(f.key)}" ${f.key === sp.formule ? 'selected' : ''}>${esc(f.label)}${f.prix ? ' · ' + esc(f.prix) : ''}</option>`).join('')}
       </select>
+    </div>
+    <!-- ⚠️ LA DURÉE SE RÈGLE ICI, PAS SEULEMENT À LA CRÉATION. Elle ne se
+         posait qu'au moment de créer l'espace : un client qui demandait
+         « gardez-moi trois mois » six semaines plus tard obligeait à passer
+         par la console. C'est pourtant le réglage qu'on renégocie le plus
+         souvent, parce qu'il se paie. -->
+    <div class="map-row" style="border:none">
+      <span><span class="map-name">Durée de conservation</span>
+        <span class="map-desc">${sp.conservationIllimitee
+          ? 'Sans effet tant que « ne jamais effacer » est coché.'
+          : (sp.plafondConservation != null && sp.retention > sp.plafondConservation
+              ? '<span style="color:var(--warn)">La formule ' + esc(sp.formuleLabel)
+                + ' plafonne à ' + sp.plafondConservation + ' j : c\'est cette valeur qui s\'applique.</span>'
+              : 'Au-delà, les journaux sont effacés au balayage suivant.')}</span></span>
+      <input class="input" type="number" min="1" max="3650" data-sp="${sp.id}" data-spfield="retention"
+             value="${sp.retention || 30}" title="En jours. La formule peut plafonner cette valeur.">
     </div>
     <!-- ⚠️ Deux informations, pas une : ce que le client a DEMANDÉ (la case)
          et ce qui s'applique VRAIMENT (la formule peut plafonner). Masquer
@@ -4833,6 +4922,278 @@ function ficheEnvironnement(id) {
     ${carteEspace(sp, ENVS)}`);
 }
 /* ============================================================
+   OFFRES — ce qu'on vend
+   ⚠️ UNE OFFRE DIT TROIS CHOSES, et la troisième manquait. Combien
+   ça coûte (le prix), jusqu'où ça va (les plafonds) — et DE QUOI on
+   dispose : les rubriques. Sans elle, deux formules ne se
+   distinguaient que par un nombre de jours, et tous les clients
+   voyaient les dix-huit rubriques, y compris celles qu'on espérait
+   leur vendre.
+   ⚠️ L'offre BORNE, le rôle DÉCOUPE. Le serveur garde l'intersection
+   des deux (cf. `PLANS.borner`) : cocher « Casino » dans un rôle
+   n'ouvre rien si l'offre ne le vend pas, et vendre le casino ne
+   l'ouvre pas à qui n'en a pas le rôle.
+   ============================================================ */
+let OFFRES = null;
+
+async function chargerOffres() {
+  try { OFFRES = await api('/api/platform/plans'); }
+  catch (e) { return toast(e.message); }
+  rendreOffres();
+}
+
+/* Le nombre de rubriques d'une offre, dit dans les deux sens : ce qui
+   est ouvert ET ce qui existe. « 14 » seul ne dit pas si c'est tout. */
+const offreCats = o => (o && o.cats) || null;
+function offreRubriquesTexte(o) {
+  const l = offreCats(o);
+  if (l == null) return 'toutes les rubriques';
+  if (!l.length) return 'aucune rubrique';
+  return l.length + ' rubrique(s) sur ' + CATS.length;
+}
+
+function rendreOffres() {
+  const host = $('#offreGrid'); if (!host) return;
+  if (!OFFRES) { host.innerHTML = '<span class="lite-m">Chargement…</span>'; chargerOffres(); return; }
+  const l = OFFRES.plans || [];
+  const n = $('#navOffreN'); if (n) n.textContent = l.length || '';
+  const b = $('#offreNewBtn'); if (b) b.hidden = !canPlat('plat.formules');
+
+  $('#offreSub').innerHTML = `<b>${l.length}</b> offre(s)`
+    + (OFFRES.sansFormule ? ` · <span style="color:var(--warn)">${OFFRES.sansFormule} environnement(s) sans formule</span>` : '')
+    + (canPlat('plat.formules') ? '' : ' · votre rôle ne permet que la lecture');
+
+  if (!l.length) {
+    host.innerHTML = `<div class="void"><b>Aucune offre.</b>
+      <span class="lite-m">Créez-en une : c’est elle qui décide de ce qu’un client reçoit.</span></div>`;
+    return;
+  }
+
+  host.innerHTML = l.map(o => {
+    const cats = offreCats(o);
+    // Une offre que personne ne porte n'est pas une erreur — c'est
+    // souvent la prochaine. On le dit sans la peindre en rouge.
+    return `<div class="pcard">
+      <div class="ptop">
+        <span class="pulse-dot" style="--c:${o.espaces ? 'var(--ok)' : 'var(--muted)'}"></span>
+        <span>
+          <span class="pname">${esc(o.label)}</span>
+          <span class="psub">${esc(o.key)} · ${esc(o.prix || 'sans prix affiché')} · rang ${o.rang}${
+            o.builtin ? ' · d’origine' : ''}</span>
+        </span>
+        <span class="lite-m">${o.espaces ? o.espaces + ' client(s)' : 'aucun client'}</span>
+      </div>
+      <div class="pnums">
+        <span class="pnum"><b>${o.maxStaff == null ? '∞' : o.maxStaff}</b><span>comptes</span></span>
+        <span class="pnum"><b>${o.maxRetention == null ? '∞' : o.maxRetention + ' j'}</b><span>conservation</span></span>
+        <span class="pnum"><b>${cats == null ? CATS.length : cats.length}<span style="font-size:11px;color:var(--muted)">/${CATS.length}</span></b><span>rubriques</span></span>
+        <span class="pnum"><b>${o.screens ? 'oui' : 'non'}</b><span>captures</span></span>
+      </div>
+      <span class="lite-m">${esc(o.notes || offreRubriquesTexte(o))}</span>
+      <div class="pact">
+        <button class="btn sm primary" data-offreedit="${esc(o.key)}">Modifier l’offre</button>
+        ${canPlat('plat.formules') ? `<button class="btn sm danger" data-offredel="${esc(o.key)}"
+          data-offrenom="${esc(o.label)}" ${o.espaces ? 'title="' + o.espaces + ' environnement(s) la portent : changez-les d’abord."' : ''}
+          >Supprimer l’offre</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ⚠️ UN SEUL FORMULAIRE POUR CRÉER ET POUR MODIFIER. En écrire deux
+   aurait garanti qu'ils divergent — celui qu'on corrige et celui qu'on
+   oublie, exactement ce qui est arrivé à l'arbre de l'organigramme. */
+function formulaireOffre(o, nouvelle) {
+  const cats = offreCats(o);
+  const toutes = cats == null;
+  const lisible = canPlat('plat.formules');
+  const grille = GROUPS.map(g => {
+    const dans = CATS.filter(c => c.group === g.id);
+    if (!dans.length) return '';
+    return `<div style="--fam:${g.fam}">
+      <div class="grp-label">${esc(g.label)}</div>
+      <div class="checks">${dans.map(c => `<label class="check fam" style="--fam:${g.fam}">
+        <input type="checkbox" data-offrecat="${esc(c.id)}" ${toutes || cats.includes(c.id) ? 'checked' : ''}
+               ${toutes || !lisible ? 'disabled' : ''}>
+        ${esc(c.label)}</label>`).join('')}</div></div>`;
+  }).join('');
+
+  return `
+    ${lisible ? '' : `<div class="banner" style="--c:var(--warn)">
+      Votre rôle ne permet pas de modifier une offre : cet écran est en lecture.</div>`}
+    ${o.espaces ? `<div class="banner" style="--c:var(--check)">
+      <b>${o.espaces} environnement(s)</b> portent cette offre. Retirer une rubrique la
+      retire de leur panneau dès leur prochaine connexion — les journaux, eux, restent.</div>` : ''}
+    <div class="block">
+      <h3 class="eyebrow">Identité et prix</h3>
+      <div class="map-row" style="border:none">
+        <span><span class="map-name">Nom de l’offre</span>
+          <span class="map-desc">Ce que le client lit sur sa fiche.</span></span>
+        <input class="input" id="ofLabel" maxlength="40" value="${esc(o.label || '')}"
+               placeholder="Pro" ${lisible ? '' : 'disabled'}>
+      </div>
+      <div class="map-row" style="border:none">
+        <span><span class="map-name">Prix</span>
+          <span class="map-desc">Texte libre : « 9 €/mois », « offert », « sur devis ».</span></span>
+        <input class="input" id="ofPrix" maxlength="40" value="${esc(o.prix || '')}"
+               placeholder="9 €/mois" ${lisible ? '' : 'disabled'}>
+      </div>
+      <div class="map-row" style="border:none">
+        <span><span class="map-name">Rang</span>
+          <span class="map-desc">L’ordre d’affichage, du plus petit au plus grand.</span></span>
+        <input class="input" id="ofRang" type="number" min="0" max="999" value="${Number(o.rang) || 0}"
+               ${lisible ? '' : 'disabled'}>
+      </div>
+      <div class="field">
+        <label for="ofNotes">Ce que l’offre promet</label>
+        <input class="input" id="ofNotes" maxlength="400" value="${esc(o.notes || '')}"
+               placeholder="Le serveur qui tourne : un mois d’historique, les captures d’écran."
+               ${lisible ? '' : 'disabled'}>
+      </div>
+    </div>
+
+    <div class="block">
+      <h3 class="eyebrow">Plafonds — vide veut dire « sans limite »</h3>
+      <!-- ⚠️ « Vide = sans limite », jamais « vide = zéro ». L'offre haute
+           n'a aucun plafond, et confondre les deux bloquerait précisément
+           le client qui paie le plus. -->
+      <div class="map-row" style="border:none">
+        <span><span class="map-name">Comptes staff</span>
+          <span class="map-desc">Au-delà, le client ne peut plus ajouter personne.</span></span>
+        <input class="input" id="ofStaff" type="number" min="0" max="9999" value="${o.maxStaff == null ? '' : o.maxStaff}"
+               placeholder="sans limite" ${lisible ? '' : 'disabled'}>
+      </div>
+      <div class="map-row" style="border:none">
+        <span><span class="map-name">Conservation maximale</span>
+          <span class="map-desc">En jours. Plafonne la durée réglée sur l’environnement.</span></span>
+        <input class="input" id="ofRet" type="number" min="0" max="3650" value="${o.maxRetention == null ? '' : o.maxRetention}"
+               placeholder="sans limite" ${lisible ? '' : 'disabled'}>
+      </div>
+      <label class="map-row" style="border:none;cursor:pointer">
+        <span><span class="map-name">Captures d’écran</span>
+          <span class="map-desc">Demander l’écran d’un joueur en jeu.</span></span>
+        <input type="checkbox" id="ofScreens" ${o.screens ? 'checked' : ''} ${lisible ? '' : 'disabled'}>
+      </label>
+      <div class="map-row" style="border:none">
+        <span><span class="map-name">Quota de captures</span>
+          <span class="map-desc">En Mo sur le disque. Vide : le plafond du serveur.</span></span>
+        <input class="input" id="ofQuota" type="number" min="0" value="${o.screenQuota == null ? '' : o.screenQuota}"
+               placeholder="plafond du serveur" ${lisible ? '' : 'disabled'}>
+      </div>
+      <div class="map-row" style="border:none">
+        <span><span class="map-name">Lots par minute</span>
+          <span class="map-desc">Débit d’écriture accepté du serveur de jeu.</span></span>
+        <input class="input" id="ofIngest" type="number" min="0" value="${o.maxIngest == null ? '' : o.maxIngest}"
+               placeholder="plafond du serveur" ${lisible ? '' : 'disabled'}>
+      </div>
+    </div>
+
+    <div class="block">
+      <h3 class="eyebrow">Rubriques ouvertes par cette offre</h3>
+      <span class="lite-m">C’est la borne HAUTE : le rôle de chacun découpe ensuite
+        là-dedans. Une rubrique décochée ici n’apparaît chez le client pour personne,
+        même pour son fondateur.</span>
+      <label class="check" style="width:fit-content">
+        <input type="checkbox" id="ofToutes" ${toutes ? 'checked' : ''} ${lisible ? '' : 'disabled'}>
+        Toutes les rubriques, y compris celles à venir
+      </label>
+      <!-- ⚠️ « Toutes » N'EST PAS « les dix-huit cochées ». Une offre
+           haute doit recevoir les rubriques ajoutées plus tard sans qu'on
+           repasse la cocher : c'est la différence entre une promesse et
+           une liste figée le jour où on l'a écrite. -->
+      <div id="ofCats" style="display:grid;gap:14px;${toutes ? 'opacity:.45' : ''}">${grille}</div>
+    </div>
+
+    ${lisible ? `<div class="tools">
+      <button class="btn primary" data-offresave="${esc(o.key || '')}">${nouvelle ? 'Créer l’offre' : 'Enregistrer'}</button>
+      ${nouvelle ? '' : `<span class="lite-m">La clé « ${esc(o.key)} » ne change pas : c’est elle que portent les environnements.</span>`}
+    </div>` : ''}`;
+}
+
+function ficheOffre(key) {
+  if (!OFFRES) return toast('Rechargez la liste.');
+  const o = (OFFRES.plans || []).find(x => x.key === key);
+  if (!o) return toast('Offre introuvable.');
+  openSheet('Modifier l’offre', esc(o.label) + ' · ' + offreRubriquesTexte(o),
+    { name: o.label, hue: 320 }, formulaireOffre(o, false));
+}
+
+function nouvelleOffre() {
+  if (!canPlat('plat.formules')) return toast('Votre rôle ne permet pas de créer une offre.');
+  openSheet('Créer une offre', 'Un prix, des plafonds, des rubriques',
+    { name: 'Offre', hue: 320 },
+    formulaireOffre({ key: '', label: '', prix: '', rang: 0, notes: '',
+                      maxStaff: null, maxRetention: null, screens: true,
+                      screenQuota: null, maxIngest: null, cats: null, espaces: 0 }, true));
+}
+
+/* La lecture du formulaire. ⚠️ Un champ VIDE rend `''`, pas `0` : c'est
+   ce que le serveur traduit en « sans limite ». Rendre 0 aurait posé un
+   plafond à zéro, donc un client incapable de créer un seul compte. */
+function lireOffre() {
+  const v = id => { const n = $(id); return n ? n.value.trim() : ''; };
+  const toutes = $('#ofToutes') && $('#ofToutes').checked;
+  return {
+    label: v('#ofLabel'), prix: v('#ofPrix'), rang: Number(v('#ofRang')) || 0,
+    notes: v('#ofNotes'),
+    maxStaff: v('#ofStaff'), maxRetention: v('#ofRet'),
+    screens: !!($('#ofScreens') && $('#ofScreens').checked),
+    screenQuota: v('#ofQuota'), maxIngest: v('#ofIngest'),
+    cats: toutes ? null
+                 : [...document.querySelectorAll('[data-offrecat]')]
+                     .filter(n => n.checked).map(n => n.dataset.offrecat)
+  };
+}
+
+async function enregistrerOffre(key) {
+  const b = lireOffre();
+  if (b.label.length < 2) return toast('Donnez un nom à l’offre.');
+  // Une offre qui n'ouvre rien se vend peut-être, mais elle ne se pose
+  // pas par mégarde : on demande confirmation plutôt que de la refuser.
+  if (Array.isArray(b.cats) && !b.cats.length
+      && !confirm('Cette offre n’ouvre AUCUNE rubrique.\n\nSes clients ouvriront un panneau vide. Continuer ?'))
+    return;
+  try {
+    if (key) await api('/api/platform/plans/' + encodeURIComponent(key),
+                       { method:'PATCH', body: JSON.stringify(b) });
+    else     await api('/api/platform/plans', { method:'POST', body: JSON.stringify(b) });
+    toast(key ? 'Offre enregistrée.' : 'Offre créée.');
+    closeSheet(); OFFRES = null; chargerOffres();
+  } catch (e) { toast(e.message); }
+}
+
+async function supprimerOffre(key, nom) {
+  if (!confirm(`Supprimer l’offre « ${nom} » ?\n\n`
+    + `Les environnements qui la portent doivent d’abord recevoir une autre offre — `
+    + `sinon ils se retrouveraient sans plafond du jour au lendemain.`)) return;
+  try {
+    await api('/api/platform/plans/' + encodeURIComponent(key), { method:'DELETE' });
+    toast('Offre supprimée.'); OFFRES = null; chargerOffres();
+  } catch (e) { toast(e.message); }
+}
+
+/* La case « toutes » commande la grille : cochée, les rubriques une par
+   une n'ont plus de sens, et les laisser cliquables ferait croire
+   qu'elles comptent. */
+document.addEventListener('change', ev => {
+  if (!ev.target || ev.target.id !== 'ofToutes') return;
+  const on = ev.target.checked;
+  const grille = $('#ofCats'); if (grille) grille.style.opacity = on ? '.45' : '';
+  document.querySelectorAll('[data-offrecat]').forEach(n => {
+    n.disabled = on; if (on) n.checked = true;
+  });
+});
+
+document.addEventListener('click', ev => {
+  const t = ev.target.closest('[data-offreedit],[data-offredel],[data-offresave]');
+  if (!t) { if (ev.target.id === 'offreNewBtn') { ev.stopImmediatePropagation(); nouvelleOffre(); } return; }
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  if (t.dataset.offreedit) return ficheOffre(t.dataset.offreedit);
+  if (t.dataset.offredel)  return supprimerOffre(t.dataset.offredel, t.dataset.offrenom || '');
+  return enregistrerOffre(t.dataset.offresave);
+}, true);
+
+/* ============================================================
    L'ÉQUIPE DE LA PLATEFORME — celle de l'éditeur
    ============================================================
    ⚠️ RIEN À VOIR AVEC LE STAFF D'UN CLIENT. Ici on ne modère personne :
@@ -5277,6 +5638,7 @@ document.addEventListener('click', async ev => {
     try { await api('/api/platform/spaces/' + D.spsave, { method:'PATCH',
             body: JSON.stringify({ guildId: val('guildId'), staffRoleId: val('staffRoleId'),
                                    formule: val('formule'), echeance: val('echeance'),
+                                   retention: val('retention'),
                                    conservationIllimitee: coche('conservationIllimitee') }) });
           toast('Espace enregistré.'); openPlatform(); } catch (e) { toast(e.message); }
     return;
@@ -5717,6 +6079,7 @@ document.addEventListener('click', async ev => {
   if (t.dataset.view === 'platform')    return goVue('platform');
   if (t.dataset.view === 'platformlog')  return goVue('platformlog');
   if (t.dataset.view === 'spaces')       return goVue('spaces');
+  if (t.dataset.view === 'plans')        return goVue('plans');
   if (t.dataset.view === 'overview') return goOverview();
   if (t.dataset.view === 'online') return goVue('online');
   if (t.dataset.view === 'team')   return goVue('team');

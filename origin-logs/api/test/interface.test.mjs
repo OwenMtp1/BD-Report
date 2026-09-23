@@ -101,6 +101,52 @@ t('⚠️ la fiche de modification RÉUTILISE le formulaire complet',
 t('ce qui manque chez un client se dit sur sa carte',
   /liaison Discord incomplète/.test(P) && /jamais branché/.test(P));
 
+sect('Les offres se composent dans un ONGLET, avec leurs rubriques');
+// ⚠️ Une offre disait un prix et des plafonds ; elle dit maintenant CE
+// QU'ON ACHÈTE. Sans les rubriques, deux formules ne se distinguaient
+// que par un nombre de jours, et il n'y avait rien à vendre au palier
+// du dessus.
+t('la vue existe', /id="viewPlans"/.test(P));
+t('elle a son entrée dans le rail', /data-view="plans"/.test(P));
+t('et son adresse', /'\/offres'/.test(P));
+t('⚠️ le clic du rail la route vraiment — sans quoi l’onglet retombe sur la supervision',
+  /dataset\.view === 'plans'\)\s*return goVue\('plans'\)/.test(P));
+t('⚠️ la liste des vues de plateforme vit à UN SEUL endroit',
+  /const VUES_PLATEFORME = new Set\(\[[^\]]*'plans'/.test(P)
+  && !/\['platform','platformlog','spaces'\]/.test(P));
+t('créer et supprimer sont là, pas seulement modifier',
+  /id="offreNewBtn"/.test(P) && /data-offredel="/.test(P) && /data-offreedit="/.test(P));
+t('⚠️ UN SEUL formulaire sert à créer ET à modifier',
+  /function formulaireOffre\(o, nouvelle\)/.test(P)
+  && (P.match(/formulaireOffre\(/g) || []).length >= 3, 'un second aurait divergé');
+t('les rubriques se cochent par groupe, comme dans l’éditeur de rôles',
+  /data-offrecat="/.test(P) && /GROUPS\.map\(g =>/.test(P));
+t('⚠️ « toutes » n’est pas « les dix-huit cochées » — une offre haute reçoit les rubriques à venir',
+  /id="ofToutes"/.test(P) && /toutes \? null/.test(P));
+t('et cocher « toutes » neutralise la grille plutôt que de la laisser mentir',
+  /ofToutes/.test(P) && /n\.disabled = on/.test(P));
+t('une offre qui n’ouvre RIEN se confirme, elle ne se pose pas par mégarde',
+  /n’ouvre AUCUNE rubrique/.test(P));
+t('le nombre de rubriques se lit dans les deux sens : ouvert ET total',
+  /rubrique\(s\) sur ' \+ CATS\.length/.test(P));
+
+t('⚠️ une rubrique hors offre ne se coche pas dans un rôle — la case le DIT au lieu d’obéir sans effet',
+  /const vendu = c => !d\.catsFormule/.test(P) && /vendu\(c\.id\) \? '' : 'disabled'/.test(P));
+t('et le serveur envoie ce que l’offre vend', /catsFormule/.test(P));
+// ⚠️ La case reste COCHÉE quand elle l'était : rétrograder l'offre ne
+// doit pas effacer le rôle que le client avait composé, sinon remonter
+// d'offre lui rendrait un panneau vide qu'il faudrait tout recocher.
+t('une case verrouillée reste lue à l’enregistrement',
+  /\.filter\(n => n\.checked\)\.map\(n => n\.dataset\[attr\]\)/.test(P));
+
+sect('La durée de conservation se règle sur chaque environnement');
+// ⚠️ Elle ne se posait qu'à la création de l'espace : un client qui la
+// renégocie six semaines plus tard obligeait à passer par la console.
+t('le champ est sur la fiche de l’environnement', /data-spfield="retention"/.test(P));
+t('et l’enregistrement l’emporte', /retention: val\('retention'\)/.test(P));
+t('⚠️ le plafond de l’offre est NOMMÉ quand il prend le dessus',
+  /plafondConservation/.test(P) && /plafonne à ' \+ sp\.plafondConservation/.test(P));
+
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);
 process.exit(n===T.length?0:1);

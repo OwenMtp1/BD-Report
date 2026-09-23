@@ -10,33 +10,60 @@
 // ============================================================
 'use strict';
 
+const CAT = require('./catalogue.js');
+
 const cache = { liste: null };
 const invalidate = () => { cache.liste = null; };
 
 // Formules de départ. Elles vivent en base ensuite : on ajuste un tarif
 // ou un plafond bien plus souvent qu'on ne redéploie.
+// Les rubriques de l'offre d'entrée : de quoi modérer, et rien de plus.
+// L'économie, la boutique et le casino sont ce qu'on vend au palier
+// suivant — ce sont aussi les rubriques les plus volumineuses.
+const CATS_STARTER = ['bans', 'sanctions', 'anticheat', 'reports',
+                      'connexions', 'deconnexion', 'combat', 'admin'];
+const CATS_PRO = CATS_STARTER.concat(['ecran_joueur', 'inventaire', 'items_sol',
+                                      'proprietes', 'jobs', 'facture_ems']);
+
 const DEPART = [
   { key: 'starter', label: 'Starter', rang: 10, prix: 'offert',
     maxStaff: 5, maxRetention: 7, screens: 0, screenQuota: 0, maxIngest: 60,
+    cats: CATS_STARTER,
     notes: 'Pour essayer : une petite équipe, une semaine d’historique, sans captures d’écran.' },
   { key: 'pro', label: 'Pro', rang: 20, prix: '9 €/mois',
     maxStaff: 25, maxRetention: 30, screens: 1, screenQuota: 512, maxIngest: 120,
+    cats: CATS_PRO,
     notes: 'Le serveur qui tourne : un mois d’historique, les captures d’écran, une vraie équipe.' },
   { key: 'illimite', label: 'Illimité', rang: 30, prix: '29 €/mois',
     maxStaff: null, maxRetention: null, screens: 1, screenQuota: null, maxIngest: null,
-    notes: 'Aucun plafond. Pour les serveurs qui journalisent beaucoup et gardent longtemps.' }
+    cats: null,
+    notes: 'Aucun plafond, toutes les rubriques. Pour les serveurs qui journalisent beaucoup.' }
 ];
 
 function seed(db) {
   const n = db.prepare('SELECT COUNT(*) n FROM plans').get().n;
   if (n) return;
   const ins = db.prepare(`INSERT INTO plans(key,label,rang,prix,max_staff,max_retention,
-                            screens,screen_quota,max_ingest,notes,builtin,created_at)
-                          VALUES(?,?,?,?,?,?,?,?,?,?,1,?)`);
+                            screens,screen_quota,max_ingest,cats,notes,builtin,created_at)
+                          VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)`);
   for (const p of DEPART)
     ins.run(p.key, p.label, p.rang, p.prix, p.maxStaff, p.maxRetention,
-            p.screens, p.screenQuota, p.maxIngest, p.notes, Date.now());
+            p.screens, p.screenQuota, p.maxIngest,
+            p.cats ? JSON.stringify(p.cats) : null, p.notes, Date.now());
   invalidate();
+}
+
+/* ⚠️ `cats` À NULL = TOUTES LES RUBRIQUES, jamais aucune. Une formule
+   d'avant la mise en place des onglets n'a pas de liste : la lire comme
+   une liste vide aurait vidé le panneau de tous ces clients d'un coup,
+   au redémarrage suivant, sans que personne n'ait rien décidé.
+   On garde aussi les rubriques inconnues du catalogue à l'écart : un id
+   retiré du code ne doit pas voyager jusqu'aux requêtes SQL. */
+function litCats(brut) {
+  if (brut == null || brut === '') return null;
+  let l; try { l = JSON.parse(brut); } catch (e) { return null; }
+  if (!Array.isArray(l)) return null;
+  return CAT.CAT_IDS.filter(id => l.includes(id));
 }
 
 const ligne = r => ({
@@ -46,6 +73,7 @@ const ligne = r => ({
   screens: !!r.screens,
   screenQuota: r.screen_quota == null ? null : Number(r.screen_quota),
   maxIngest: r.max_ingest == null ? null : Number(r.max_ingest),
+  cats: litCats(r.cats),
   notes: r.notes || '', builtin: !!r.builtin
 });
 
@@ -61,12 +89,29 @@ const byKey = (db, key) => list(db).find(p => p.key === key) || null;
    client d'avant la mise en place des formules. Brider par défaut aurait
    coupé des espaces en service le jour de la migration. */
 const AUCUNE = { key: null, label: 'Sans formule', prix: '', maxStaff: null, maxRetention: null,
-                 screens: true, screenQuota: null, maxIngest: null, notes: '', builtin: false };
+                 screens: true, screenQuota: null, maxIngest: null, cats: null,
+                 notes: '', builtin: false };
 
 function forSpace(db, sp) {
   if (!sp || !sp.plan_key) return AUCUNE;
   return byKey(db, sp.plan_key) || AUCUNE;
 }
+
+/* ---------- les rubriques qu'une formule ouvre ----------
+   ⚠️ L'OFFRE BORNE, LE RÔLE DÉCOUPE — et jamais l'inverse. Le rôle dit
+   ce qu'une PERSONNE a le droit de lire dans ce que le client a acheté ;
+   l'offre dit ce que le client a acheté. On garde donc l'INTERSECTION :
+   cocher une rubrique dans un rôle ne peut pas la faire apparaître si
+   elle n'est pas vendue, et vendre une rubrique ne l'ouvre pas à qui
+   n'en a pas le rôle. */
+function catsFor(db, sp) {
+  const p = forSpace(db, sp);
+  return p.cats == null ? CAT.CAT_IDS.slice() : p.cats.slice();
+}
+const borner = (cats, plan) => {
+  const permis = plan && plan.cats;
+  return permis == null ? cats.slice() : cats.filter(c => permis.includes(c));
+};
 
 /* ---------- échéance ----------
    `plan_until` à NULL = sans fin. Sinon l'espace se ferme tout seul au
@@ -96,4 +141,5 @@ function fermerExpires(db) {
   return faits;
 }
 
-module.exports = { seed, list, byKey, forSpace, echeance, fermerExpires, invalidate, AUCUNE, DEPART };
+module.exports = { seed, list, byKey, forSpace, catsFor, borner, litCats,
+                   echeance, fermerExpires, invalidate, AUCUNE, DEPART };

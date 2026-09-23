@@ -318,7 +318,16 @@ function whoami(req) {
   // l'espace resterait suspendu à une seule personne.
   const proprio = !!(esp && Number(esp.owner_id) === Number(r.id));
   const perms = platform ? CAT.PERM_IDS.slice() : res.perms;
-  const cats  = platform ? CAT.CATS.map(c => c.id) : res.cats;
+  // ⚠️ L'OFFRE BORNE CE QUE LE RÔLE DÉCOUPE. Les rubriques d'un rôle
+  // disent ce qu'une PERSONNE lit dans ce que le client a acheté ; la
+  // formule dit ce qu'il a acheté. Sans cette intersection, il aurait
+  // suffi à un fondateur de cocher « Casino » dans son propre éditeur de
+  // rôles pour se servir d'une rubrique vendue au palier au-dessus —
+  // et le bornage n'aurait été qu'une décoration de la page tarifs.
+  // L'administration de plateforme échappe à la borne : elle dépanne
+  // l'espace, elle ne le consomme pas, et sa visite est journalisée.
+  const cats  = platform ? CAT.CATS.map(c => c.id)
+                         : PLANS.borner(res.cats, PLANS.forSpace(db, esp));
   return { id: r.id, pseudo: r.pseudo, token: tok, avatar: r.avatar,
            roles: res.keys.length ? res.keys : roles,
            roleLabels: res.labels, role: res.main ? res.main.key : roles[0],
@@ -2438,6 +2447,12 @@ async function route(req, res) {
       return ok(res, {
         roles: ROLESVC.list(db, me.spaceId),
         perms: CAT.PERMS, cats: CAT.CATS, groups: CAT.GROUPS,
+        // ⚠️ CE QUE L'OFFRE VEND, dit à l'éditeur de rôles. Sans cette
+        // liste, cocher « Casino » dans un rôle ne produisait RIEN et
+        // l'écran ne pouvait pas l'expliquer : le fondateur du client
+        // concluait à une panne, puis écrivait au support. NULL = tout.
+        catsFormule: PLANS.forSpace(db, me.space).cats,
+        formuleLabel: PLANS.forSpace(db, me.space).label,
         monRang: me.plafond,
         effectifs: db.prepare('SELECT roles, manual_roles FROM staff WHERE space_id = ? AND disabled = 0').all()
           .reduce((m, r) => { for (const k of parseRoles(r.manual_roles).concat(parseRoles(r.roles)))
@@ -3257,6 +3272,19 @@ async function route(req, res) {
         return ok(res, Object.assign({ ok: true }, r));
       }
 
+      /* ⚠️ « TOUTES LES RUBRIQUES » ET « AUCUNE » SONT DEUX RÉPONSES, et
+         il faut pouvoir dire les deux. `null` (champ absent, ou la case
+         « toutes » cochée) laisse la formule ouverte à tout — c'est ce que
+         portent les formules d'avant. Un TABLEAU, même vide, est un choix
+         explicite : on l'enregistre tel quel, quitte à ce qu'il n'ouvre
+         rien. Écrire `[]` pour « toutes » aurait rendu impossible de
+         vendre une offre qui ne donne accès qu'à la modération. */
+      const catsCol = v => {
+        if (v == null) return null;
+        if (!Array.isArray(v)) return null;
+        return JSON.stringify(CAT.CAT_IDS.filter(id => v.includes(id)));
+      };
+
       if (p === '/api/platform/plans' && method === 'GET') {
         if (!platNeed('plat.voir')) return;
         const usage = {};
@@ -3276,11 +3304,12 @@ async function route(req, res) {
         if (PLANS.byKey(db, key)) return fail(res, 409, 'Une formule porte déjà ce nom.');
         const N0 = v => (v === '' || v == null) ? null : Math.max(0, Number(v) || 0);
         db.prepare(`INSERT INTO plans(key,label,rang,prix,max_staff,max_retention,
-                      screens,screen_quota,max_ingest,notes,builtin,created_at)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,0,?)`)
+                      screens,screen_quota,max_ingest,cats,notes,builtin,created_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?)`)
           .run(key, label, Number(b.rang) || 0, String(b.prix || '').slice(0, 40),
                N0(b.maxStaff), N0(b.maxRetention), b.screens === false ? 0 : 1,
-               N0(b.screenQuota), N0(b.maxIngest), String(b.notes || '').slice(0, 400), now());
+               N0(b.screenQuota), N0(b.maxIngest), catsCol(b.cats),
+               String(b.notes || '').slice(0, 400), now());
         PLANS.invalidate();
         audit(me, 'plateforme.formule.creation', label, ip);
         return ok(res, { ok: true, key });
@@ -3303,6 +3332,7 @@ async function route(req, res) {
           if (b.screens !== undefined) poser('screens', b.screens ? 1 : 0);
           if (b.screenQuota !== undefined) poser('screen_quota', N0(b.screenQuota));
           if (b.maxIngest !== undefined) poser('max_ingest', N0(b.maxIngest));
+          if (b.cats !== undefined) poser('cats', catsCol(b.cats));
           if (b.notes !== undefined) poser('notes', String(b.notes).slice(0, 400));
           if (!sets.length) return ok(res, { ok: true });
           db.prepare(`UPDATE plans SET ${sets.join(', ')} WHERE key = ?`).run(...args, key);
@@ -3337,7 +3367,14 @@ async function route(req, res) {
             conservationIllimitee: !!Number(sp.keep_forever),
             conservationEffective: conservation(sp).jours,
             conservationBridee: conservation(sp).bride,
+            // Le plafond de la formule se rend À PART de la durée demandée :
+            // c'est lui qui explique un écart entre ce qui est saisi et ce
+            // qui s'applique, et sans lui l'écran ne pourrait que le
+            // constater sans jamais en donner la raison.
+            plafondConservation: PLANS.forSpace(db, sp).maxRetention,
             formule: sp.plan_key || '', formuleLabel: PLANS.forSpace(db, sp).label,
+            // Les rubriques que l'offre ouvre chez ce client. NULL = toutes.
+            formuleCats: PLANS.forSpace(db, sp).cats,
             echeance: sp.plan_until || null, echeanceEtat: PLANS.echeance(sp),
             plafonds: PLANS.forSpace(db, sp),
             cle: sp.server_key, relais: sp.relay_key || null,

@@ -470,6 +470,13 @@ function open(file) {
   // correspondance avec le Discord officiel ne doit pas la défaire à la
   // prochaine connexion. Même principe que `manual_roles` côté client.
   ensureColumn(db, 'staff', 'platform_role_manual', 'INTEGER');
+  // ⚠️ UNE OFFRE DÉCIDE AUSSI DES RUBRIQUES, pas seulement des plafonds.
+  // `cats` à NULL veut dire « toutes », comme `max_*` à NULL veut dire
+  // « sans limite » : les formules déjà en service ne perdent donc aucun
+  // onglet le jour de la migration. Une liste VIDE, elle, est un choix —
+  // une offre qui n'ouvre aucune rubrique se vend peut-être, mais elle se
+  // lit dans l'interface, et on ne l'a pas posée par accident.
+  ensureColumn(db, 'plans', 'cats', 'TEXT');
   db.prepare("UPDATE staff SET platform_role = 'direction' WHERE platform_admin = 1 AND platform_role IS NULL").run();
   db.exec('CREATE INDEX IF NOT EXISTS idx_st_space ON staff(space_id)');
   // COLLATE NOCASE : « Nyx » et « nyx » sont le même compte pour qui se

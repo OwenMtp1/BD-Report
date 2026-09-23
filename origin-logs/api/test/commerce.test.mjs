@@ -177,6 +177,78 @@ t('et le journal dit laquelle', (jrn.body.entrees||[]).some(e=>/jamais effacés/
   && (jrn.body.entrees||[]).some(e=>/rétention de/.test(e.detail||'')),
   (jrn.body.entrees||[]).map(e=>e.detail).join(' | '));
 
+sect('Une offre vend des RUBRIQUES, pas seulement des jours');
+// ⚠️ C'est ce qui manquait pour qu'il y ait quelque chose à vendre : sans
+// découpage par offre, tous les clients voyaient les dix-huit rubriques et
+// deux formules ne se distinguaient que par un nombre de jours.
+await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:1})});
+const plans2 = (await J('/api/platform/plans')).body.plans;
+const st2 = plans2.find(x=>x.key==='starter'), il2 = plans2.find(x=>x.key==='illimite');
+t('Starter n’ouvre qu’une partie des rubriques',
+  Array.isArray(st2.cats) && st2.cats.length > 0 && st2.cats.includes('bans') && !st2.cats.includes('casino'),
+  (st2.cats||[]).length + ' rubrique(s)');
+t('⚠️ « toutes les rubriques » se dit NULL, pas une liste figée',
+  il2.cats === null, String(il2.cats));
+
+const spR = await J('/api/platform/spaces',{method:'POST',body:JSON.stringify(
+  {nom:'Client Rubriques',guildId:'555000444',staffRoleId:'900044',formule:'starter'})});
+const IDR = spR.body.id;
+await J('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:IDR})});
+await J('/api/staff',{method:'POST',body:JSON.stringify(
+  {pseudo:'PatronRub',password:'motdepassepatron123',role:'fondateur'})});
+const rp = await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({pseudo:'PatronRub',password:'motdepassepatron123'})});
+const ckR = (rp.headers.get('set-cookie')||'').split(';')[0];
+const moi1 = await J('/api/auth/me',{},ckR);
+t('⚠️ même le FONDATEUR du client est borné par l’offre — sinon il lui suffisait de cocher',
+  !moi1.body.cats.includes('casino') && moi1.body.cats.includes('bans'),
+  moi1.body.cats.length+' rubrique(s)');
+t('et il ne voit que ce que Starter vend',
+  moi1.body.cats.every(c => st2.cats.includes(c)), moi1.body.cats.join(','));
+const casino = await J('/api/events?cat=casino',{},ckR);
+t('une rubrique non vendue ne rend AUCUN évènement',
+  casino.status===200 && (casino.body.events||[]).length===0, 'HTTP '+casino.status);
+
+await J('/api/platform/spaces/'+IDR,{method:'PATCH',body:JSON.stringify({formule:'illimite'})});
+const moi2 = await J('/api/auth/me',{},ckR);
+t('⚠️ monter d’offre ouvre les rubriques SANS se reconnecter',
+  moi2.body.cats.includes('casino'), moi2.body.cats.length+' rubrique(s)');
+
+// On modifie l'offre elle-même : c'est le geste de l'onglet « Offres ».
+await J('/api/platform/plans/illimite',{method:'PATCH',body:JSON.stringify(
+  {cats:['bans','sanctions'],label:'Illimité',prix:'29 €/mois'})});
+const moi3 = await J('/api/auth/me',{},ckR);
+t('retirer une rubrique de l’OFFRE la retire chez ses clients',
+  !moi3.body.cats.includes('casino') && moi3.body.cats.includes('bans'),
+  moi3.body.cats.join(','));
+await J('/api/platform/plans/illimite',{method:'PATCH',body:JSON.stringify({cats:null})});
+const moi4 = await J('/api/auth/me',{},ckR);
+t('et « toutes » les rend toutes', moi4.body.cats.includes('casino'), moi4.body.cats.length+' rubrique(s)');
+
+t('⚠️ on ne supprime pas une offre que des clients portent',
+  (await J('/api/platform/plans/illimite',{method:'DELETE'})).status===409);
+
+sect('La durée de conservation se règle sur CHAQUE environnement');
+// ⚠️ Elle ne se posait qu'à la création : un client qui renégocie six
+// semaines plus tard obligeait à passer par la console.
+await J('/api/platform/spaces/'+IDR,{method:'PATCH',body:JSON.stringify({retention:120})});
+const carteR = (await J('/api/platform/spaces')).body.spaces.find(x=>x.id===IDR);
+t('la durée saisie est retenue', carteR.retention===120, String(carteR.retention));
+t('et elle s’applique, l’offre Illimité ne plafonnant pas',
+  carteR.conservationEffective===120, String(carteR.conservationEffective));
+t('la carte dit le plafond de l’offre — c’est lui qui explique un écart',
+  carteR.plafondConservation===null, String(carteR.plafondConservation));
+await J('/api/platform/spaces/'+IDR,{method:'PATCH',body:JSON.stringify({formule:'starter'})});
+const carteR2 = (await J('/api/platform/spaces')).body.spaces.find(x=>x.id===IDR);
+t('⚠️ sous une offre plafonnée, c’est le PLAFOND qui s’applique',
+  carteR2.conservationEffective===7 && carteR2.plafondConservation===7,
+  'effective='+carteR2.conservationEffective);
+t('mais la durée demandée reste écrite', carteR2.retention===120, String(carteR2.retention));
+const bornes = await J('/api/platform/spaces/'+IDR,{method:'PATCH',body:JSON.stringify({retention:99999})});
+const carteR3 = (await J('/api/platform/spaces')).body.spaces.find(x=>x.id===IDR);
+t('une durée aberrante est ramenée dans les bornes',
+  bornes.status===200 && carteR3.retention===3650, String(carteR3.retention));
+
 const bad=T.filter(x=>!x[0]);
 console.log(`\n  ${T.length-bad.length}/${T.length} contrôles passés`);
 if(bad.length) console.log('  à corriger :\n   - '+bad.map(x=>x[1]).join('\n   - '));
