@@ -152,8 +152,128 @@ passe de l'étape 3.
 Internet**. Le tunnel SSH fait passer le trafic par votre connexion SSH
 existante ; personne d'autre ne peut l'atteindre.
 
-> ⚠️ Avant de donner l'accès à votre staff, il faudra un nom de domaine et du
-> HTTPS (`DEPLOIEMENT.md` § 2) — sinon leurs mots de passe circulent en clair.
+> ⚠️ Ceci est la vue **de test, pour vous seul**. Pour que votre staff et vos
+> clients y accèdent, passez à l'étape 5 bis : sans HTTPS, leurs mots de passe
+> circuleraient en clair — et la connexion Discord serait impossible à
+> configurer.
+
+---
+
+## Étape 5 bis — Le rendre public (domaine + HTTPS)
+
+Le tunnel de l'étape 5 est parfait pour tester **seul**. Dès que votre staff ou
+vos clients doivent y accéder, il faut une **vraie adresse**.
+
+> ⚠️ Ce n'est pas seulement du confort : **Discord refuse une URL de
+> redirection en `http://` sur une adresse publique**. Seul `localhost` échappe
+> à la règle. Sans domaine ni HTTPS, la connexion Discord ne peut pas être
+> configurée du tout.
+
+### a. Un nom de domaine qui pointe vers le VPS
+
+Chez votre registrar (OVH, Namecheap, Cloudflare…), créez un enregistrement :
+
+| Type | Nom | Valeur |
+|---|---|---|
+| `A` | `logs` | l'IP de votre VPS |
+
+**Résultat attendu :** au bout de quelques minutes,
+`ping logs.votre-domaine.fr` répond avec l'IP du VPS.
+
+> Pas de domaine ? Un sous-domaine gratuit (DuckDNS, nip.io) fait l'affaire
+> pour commencer, et Caddy sait obtenir un certificat dessus.
+
+### b. Le panneau n'écoute plus que la machine
+
+**Où :** dans `api/.env`.
+
+```
+HOST=127.0.0.1
+PORT=8080
+PUBLIC_URL=https://logs.votre-domaine.fr
+SECURE_COOKIE=1
+TRUST_PROXY=1
+```
+
+⚠️ **`HOST=127.0.0.1` est la vraie serrure.** Le port 8080 devient
+injoignable depuis l'extérieur, même si le pare-feu est ouvert : c'est le
+proxy de l'étape suivante, et lui seul, qui parle au panneau.
+
+⚠️ **`TRUST_PROXY=1` ne se met QUE derrière ce proxy.** `X-Forwarded-For` est
+un en-tête, donc une donnée que le client choisit : à l'envers (panneau exposé
+en direct avec `TRUST_PROXY=1`), le frein anti-force-brute redevient
+décoratif — il suffirait de changer l'en-tête à chaque tentative.
+
+⚠️ **`PUBLIC_URL` fige l'adresse.** Sans elle, le panneau déduit son adresse de
+la façon dont on y accède : il afficherait une URL de redirection Discord
+différente selon que vous l'ouvrez en localhost ou par le domaine, et Discord
+n'en accepte qu'une.
+
+### c. Caddy : le portier qui gère le HTTPS
+
+```bash
+apt install -y caddy
+nano /etc/caddy/Caddyfile
+```
+
+Remplacez tout le contenu par :
+
+```
+logs.votre-domaine.fr {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+```bash
+systemctl restart caddy
+```
+
+**Résultat attendu :** `https://logs.votre-domaine.fr` s'ouvre dans votre
+navigateur, avec le cadenas. Caddy demande et renouvelle le certificat
+Let's Encrypt **tout seul** — il n'y a rien d'autre à faire.
+
+> Avec Nginx, il faut en plus `proxy_buffering off;` et
+> `proxy_read_timeout 1h;` : le flux temps réel est du SSE, et sans ces deux
+> lignes les évènements arrivent par paquets au lieu d'arriver en direct.
+> (Configuration complète dans `DEPLOIEMENT.md` § 2.)
+
+### d. Fermer ce qui ne doit pas être ouvert
+
+```bash
+ufw allow 22
+ufw allow 80
+ufw allow 443
+ufw enable
+ufw status
+```
+
+**Résultat attendu :** 22, 80 et 443 ouverts, et **rien d'autre**. Le 8080
+n'apparaît pas : personne ne doit l'atteindre directement, puisqu'il ne fait
+pas de TLS.
+
+### e. Redémarrer le panneau
+
+```bash
+systemctl restart origin-logs   # ou Ctrl+C puis npm start
+```
+
+**Ce que ça débloque :**
+- votre staff se connecte depuis n'importe où, en HTTPS ;
+- la connexion Discord devient configurable (voir étape 6) ;
+- la **fiche d'installation** de vos clients porte la bonne adresse, donc la
+  commande en une ligne fonctionne chez eux ;
+- le tunnel SSH de l'étape 5 n'est plus nécessaire — gardez-le comme porte de
+  secours si le proxy tombe.
+
+### Et le serveur de jeu, il vise quoi ?
+
+| Où tourne le serveur FiveM | `origin_logs_url` |
+|---|---|
+| **Sur le même VPS** | `http://127.0.0.1:8080` — plus rapide, ne sort pas de la machine |
+| **Ailleurs** (client) | `https://logs.votre-domaine.fr` |
+
+C'est le seul endroit où la distinction compte. La commande d'installation
+générée par le panneau met déjà la bonne valeur.
 
 ---
 
@@ -263,6 +383,11 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 ```
+
+> Les réglages (`PUBLIC_URL`, `SECURE_COOKIE`…) sont lus dans `api/.env` au
+> démarrage : il n'y a rien à recopier ici. On peut les poser en
+> `Environment=` si l'on préfère, mais deux endroits pour un même réglage
+> finissent par se contredire.
 
 ```bash
 systemctl enable --now origin-logs
