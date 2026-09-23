@@ -218,6 +218,29 @@ mot de passe : la correspondance des rôles Discord ne les défait pas. À
 l'inverse, un compte **né** de Discord ne change pas d'identifiant — celui-ci
 est son identité, le déplacer reviendrait à donner le compte.
 
+### Un modérateur qui travaille sur plusieurs de vos clients
+
+Une même identité Discord peut être staff chez deux clients. La barre du
+panneau affiche alors le nom du serveur courant avec un **chevron** : un clic
+liste les espaces que ses rôles Discord lui ouvrent, et il passe de l'un à
+l'autre sans se déconnecter.
+
+⚠️ **Ce n'est pas un changement de périmètre sur un même compte.** Chaque
+espace a SON compte staff (`staff` est indexé par `discord_id` **et**
+`space_id`) : on entre avec les rôles et les droits que *ce* serveur-là donne,
+jamais ceux d'à côté. La session précédente se ferme — deux sessions vivantes
+depuis le même navigateur, c'est un onglet qui agit dans l'espace de l'autre
+sans que rien ne le montre.
+
+⚠️ **Discord est revérifié au moment du saut**, pas seulement à la connexion :
+une session dure sept jours, et se fier à la liste calculée à l'ouverture
+laisserait entrer dans un espace dont on vient de perdre le rôle.
+
+⚠️ La liste n'est **pas** calculée à la connexion : interroger Discord pour
+chaque espace coûterait cinquante appels à un client qui n'en a qu'un. La
+connexion s'arrête au premier espace qui accepte ; la liste complète ne se
+calcule que si quelqu'un ouvre le sélecteur, et se garde cinq minutes.
+
 ⚠️ Gardez au moins **un compte fondateur par mot de passe**. C'est lui qui
 rouvre la porte si Discord est indisponible ou si la liaison est mal réglée.
 

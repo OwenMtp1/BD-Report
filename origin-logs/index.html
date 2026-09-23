@@ -4604,6 +4604,57 @@ async function genererIntegration(id) {
   toast(r.retenus + ' raccordement(s) dans le fichier.');
 }
 
+/* ============================================================
+   Changer de serveur — une identité Discord, plusieurs espaces
+   ============================================================
+   ⚠️ CE N'EST PAS UN CHANGEMENT DE PÉRIMÈTRE SUR UN MÊME COMPTE. Chaque
+   espace a SON compte staff, avec les rôles et les droits que CE
+   serveur-là donne. Changer d'espace ouvre donc une session sur l'autre
+   compte, et l'ancienne se ferme : deux sessions vivantes depuis le même
+   navigateur, c'est un onglet qui agit dans l'espace de l'autre sans que
+   rien ne le montre. */
+let MES_ESPACES = null;
+
+async function chargerMesEspaces() {
+  // Le calcul coûte un appel à Discord par espace : on ne le demande
+  // qu'une fois par chargement de page, et l'API le garde en cache.
+  if (MES_ESPACES) return peindreSelecteur();
+  try { MES_ESPACES = (await api('/api/mes-espaces')).espaces || []; }
+  catch (e) { return; }
+  peindreSelecteur();
+}
+
+function peindreSelecteur() {
+  if (!MES_ESPACES || MES_ESPACES.length < 2 || !ME.espace || ME.espace.visite) return;
+  const t = $('#modeTag');
+  t.innerHTML = `<span class="tag-nom">${esc(ME.espace.nom)}</span>`
+              + `<span class="tag-x" aria-hidden="true">▾</span>`;
+  t.title = `Vous êtes staff sur ${MES_ESPACES.length} serveurs. Cliquez pour changer.`;
+  t.setAttribute('role', 'button');
+  t.setAttribute('tabindex', '0');
+  t.onclick = choisirEspace;
+}
+
+function choisirEspace() {
+  openSheet('Changer de serveur',
+    `Votre compte Discord ouvre ${MES_ESPACES.length} espaces de logs`,
+    { name: 'Espaces', hue: 200 }, `
+    <div class="banner" style="--c:var(--vio)">Chaque serveur a ses propres rôles :
+      vous entrez avec les droits que <b>celui-ci</b> vous donne, jamais ceux d’à côté.</div>
+    ${MES_ESPACES.map(e => `
+      <div class="map-row" style="border:none">
+        <span><span class="map-name">${esc(e.nom)}</span>
+          <span class="map-desc">${e.roles && e.roles.length
+            ? esc(e.roles.join(', ')) : 'aucun rôle du panneau'}</span></span>
+        ${e.actuel
+          ? '<span class="state" style="--c:var(--ok)">vous y êtes</span>'
+          : `<button class="btn sm primary" data-goesp="${e.id}">Entrer</button>`}
+      </div>`).join('')}
+    <span class="lite-m">Cette liste vient de vos rôles Discord, relus à l’instant.
+      Perdre le rôle staff d’un serveur le retire d’ici — et le changement est
+      revérifié auprès de Discord au moment où vous entrez.</span>`);
+}
+
 /* ---------- propriétaire : on choisit parmi les membres de l'espace ---------- */
 async function choisirProprietaire(spaceId) {
   let d;
@@ -4749,7 +4800,7 @@ document.addEventListener('change', ev => {
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
     + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],[data-brancher],[data-integ],[data-rgpd],[data-relais],'
-    + '[data-export],[data-sauvdl],[data-sauvrm],[data-ilua],[data-iscan],'
+    + '[data-export],[data-sauvdl],[data-sauvrm],[data-ilua],[data-iscan],[data-goesp],'
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
@@ -4869,6 +4920,16 @@ document.addEventListener('click', async ev => {
     if (nom !== D.spname) return toast(nom === null ? '' : 'Nom incorrect — rien n’a été supprimé.');
     try { await api('/api/platform/spaces/' + D.spdel + '?confirme=' + encodeURIComponent(nom), { method:'DELETE' });
           toast('Espace supprimé.'); openPlatform(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.goesp) {
+    try { const r = await api('/api/espace', { method:'POST', body: JSON.stringify({ spaceId: Number(D.goesp) }) });
+          toast('Bienvenue sur ' + r.espace.nom + '.');
+          // On recharge la page : les rubriques, les droits et le flux
+          // viennent tous de l'espace, et les rafraîchir un par un
+          // laisserait forcément quelque chose de l'ancien à l'écran.
+          location.reload(); }
+    catch (e) { toast(e.message); }
     return;
   }
   if (D.ilua) return genererIntegration(Number(D.ilua));
@@ -5645,6 +5706,12 @@ async function startPanel() {
       $('#modeTag').onclick = sortirEspace;
     } else if (ME.espace) {
       $('#modeTag').textContent = ME.espace.nom;
+      // ⚠️ Un modérateur peut être staff sur DEUX serveurs clients. Sans
+      // ce sélecteur, la connexion le posait dans le premier espace qui
+      // l'acceptait et le second était inatteignable : se déconnecter et
+      // se reconnecter ramenait au même. On ne l'affiche que s'il y a
+      // vraiment le choix — une liste d'un seul élément n'est pas un choix.
+      chargerMesEspaces();
     } else if (ME.plateforme) {
       // Aucun espace : le dire franchement. « Origin Roleplay » en barre
       // laisserait croire qu'on est quelque part.

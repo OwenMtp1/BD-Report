@@ -2,10 +2,18 @@
 // démarre l'API dessus : ce fichier ne suppose que l'adresse reçue.
 const B = process.env.BASE;
 const T=[];const t=(n,ok,x='')=>{T.push(ok);console.log((ok?'  ok    ':'  ÉCHEC ')+n+(x?'  → '+x:''));};
-const GUILD='555000111', STAFF='900001', R={moderateur:'900010',animateur:'900011',fondateur:'900099'};
+const GUILD='555000111', GUILD2='555000222', STAFF='900001', R={moderateur:'900010',animateur:'900011',fondateur:'900099'};
 let cookie='';
 const call=(p,o={})=>fetch(B+p,{redirect:'manual',...o,headers:{'content-type':'application/json',cookie,...(o.headers||{})}});
 const J=async(p,o)=>{const r=await call(p,o);return{status:r.status,body:await r.json().catch(()=>null),r};};
+// Le reste de la suite parle avec UN cookie ambiant ; le changement
+// d'espace, lui, jongle avec plusieurs sessions à la fois.
+const Jc=async(p,o={},ck)=>{const r=await fetch(B+p,{redirect:'manual',...o,
+  headers:{'content-type':'application/json',cookie:ck!==undefined?ck:cookie,...(o.headers||{})}});
+  return{status:r.status,body:await r.json().catch(()=>null),r};};
+const login=async(pseudo,mdp)=>{const r=await fetch(B+'/api/auth/login',{method:'POST',
+  headers:{'content-type':'application/json'},body:JSON.stringify({pseudo,password:mdp})});
+  return (r.headers.get('set-cookie')||'').split(';')[0];};
 
 // 1. l'écran de connexion sait que Discord n'est pas prêt
 let o=await J('/api/auth/options');
@@ -177,6 +185,82 @@ if (autre) t2('⚠️ un compte NÉ de Discord ne change pas d’identifiant —
 const delie = await J('/api/staff/'+patron.id,{method:'PATCH',body:JSON.stringify({discordId:''})});
 t2('on peut délier', delie.status===200
   && !((await J('/api/staff')).body.staff.find(x=>x.id===patron.id).discordId));
+
+
+// ============================================================
+// ⚠️ UNE IDENTITÉ DISCORD, PLUSIEURS SERVEURS CLIENTS
+// Un modérateur peut être staff chez deux clients. La connexion le
+// posait dans le PREMIER espace qui l'acceptait, et le second était
+// inatteignable : se déconnecter et se reconnecter ramenait au même.
+// ============================================================
+console.log('\n── Changer de serveur ' + '─'.repeat(34));
+const sup = await login('Sup','motdepassesup12345');
+const sp2 = await Jc('/api/platform/spaces',{method:'POST',body:JSON.stringify(
+  {nom:'Second Client',guildId:GUILD2,staffRoleId:STAFF})},sup);
+const ID2 = sp2.body.id;
+// Relier les rôles du second espace à ses rôles Discord, depuis l'intérieur.
+await Jc('/api/platform/enter',{method:'POST',body:JSON.stringify({spaceId:ID2})},sup);
+await Jc('/api/discord/config',{method:'POST',body:JSON.stringify({
+  clientId:'123456789012345678', guildId:GUILD2, staffRoleId:STAFF,
+  roleMap:{moderateur:R.moderateur, animateur:R.animateur, fondateur:R.fondateur}})},sup);
+
+// 42 est staff sur les DEUX serveurs Discord ; 43 sur un seul.
+await piloter({ id:'42', guild:GUILD2, roles:[STAFF, R.animateur], nick:'Nyx' });
+
+const deux = await connecter('42');
+t2('il se connecte', !!deux.sid);
+const mesEspaces = await Jc('/api/mes-espaces',{},deux.sid);
+t2('⚠️ ses DEUX serveurs sont proposés', (mesEspaces.body.espaces||[]).length===2,
+  (mesEspaces.body.espaces||[]).map(x=>x.nom).join(' · '));
+t2('celui où il se trouve est marqué', (mesEspaces.body.espaces||[]).filter(x=>x.actuel).length===1);
+t2('et chacun annonce les rôles de CE serveur-là',
+  (mesEspaces.body.espaces||[]).every(x=>Array.isArray(x.roles)),
+  JSON.stringify((mesEspaces.body.espaces||[]).map(x=>x.roles)));
+
+const avantSaut = await Jc('/api/auth/me',{},deux.sid);
+const saut = await fetch(B+'/api/espace',{method:'POST',
+  headers:{'content-type':'application/json',cookie:deux.sid},body:JSON.stringify({spaceId:ID2})});
+const sautC = (saut.headers.getSetCookie? saut.headers.getSetCookie() : [saut.headers.get('set-cookie')])
+  .map(String).find(x=>x&&x.startsWith('origin_sid='));
+t2('il change de serveur', saut.status===200 && !!sautC);
+const apresSaut = await Jc('/api/auth/me',{},sautC.split(';')[0]);
+t2('⚠️ et il est bien dans l’AUTRE espace',
+  apresSaut.body.espace && apresSaut.body.espace.id===ID2,
+  'avant=' + (avantSaut.body.espace||{}).id + ' après=' + ((apresSaut.body.espace)||{}).id);
+t2('⚠️ avec les rôles de CE serveur, pas ceux d’à côté',
+  apresSaut.body.staff.roles.map(x=>x.id).join(',')==='animateur',
+  apresSaut.body.staff.roles.map(x=>x.id).join(','));
+t2('⚠️ l’ancienne session est fermée — deux onglets sur deux espaces, c’est un accident',
+  (await Jc('/api/auth/me',{},deux.sid)).status===401);
+
+// ⚠️ Perdre le rôle ne doit pas se rattraper par un changement d'espace.
+// On repart d'abord chez soi, puis on essaie de revenir sans le rôle.
+const retour = await fetch(B+'/api/espace',{method:'POST',
+  headers:{'content-type':'application/json',cookie:sautC.split(';')[0]},
+  body:JSON.stringify({spaceId:1})});
+const retourC = (retour.headers.getSetCookie? retour.headers.getSetCookie() : [retour.headers.get('set-cookie')])
+  .map(String).find(x=>x&&x.startsWith('origin_sid='));
+t2('on revient sur le premier serveur', retour.status===200 && !!retourC);
+await piloter({ id:'42', guild:GUILD2, roles:[], nick:'Nyx' });
+const refusSaut = await Jc('/api/espace',{method:'POST',body:JSON.stringify({spaceId:ID2})},
+  retourC.split(';')[0]);
+t2('⚠️ Discord est REVÉRIFIÉ au moment du saut, pas seulement à la connexion',
+  refusSaut.status===403, refusSaut.status+' '+JSON.stringify(refusSaut.body));
+const apresPerte = await Jc('/api/mes-espaces?refresh=1',{},retourC.split(';')[0]);
+t2('et l’espace perdu disparaît de la liste', (apresPerte.body.espaces||[]).length===1,
+  (apresPerte.body.espaces||[]).map(x=>x.nom).join(' · '));
+
+const solo43 = await connecter('43');
+if (solo43.sid) {
+  const un = await Jc('/api/mes-espaces',{},solo43.sid);
+  t2('un membre d’un seul serveur n’en voit qu’un', (un.body.espaces||[]).length<=1);
+}
+const localCk = await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({pseudo:'Kaleb',password:'motdepassetest456'})});
+const ckLocal=(localCk.headers.get('set-cookie')||'').split(';')[0];
+const pasDiscord = await Jc('/api/espace',{method:'POST',body:JSON.stringify({spaceId:ID2})},ckLocal);
+t2('⚠️ un compte par mot de passe n’existe que sur SON espace', pasDiscord.status===409,
+  pasDiscord.body && pasDiscord.body.error);
 
 console.log('\n  '+T.filter(Boolean).length+'/'+T.length+' contrôles passés');
 process.exit(T.every(Boolean)?0:1);

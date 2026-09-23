@@ -8,15 +8,23 @@
 const http = require('node:http');
 
 const GUILD = '555000111';
+// ⚠️ UN SECOND SERVEUR DISCORD, parce qu'une même personne peut être
+// staff chez deux clients — et que c'est précisément le cas qu'un faux
+// Discord à guilde unique ne pouvait pas reproduire.
+const GUILD2 = '555000222';
 const STAFF = '900001';
 const R = { moderateur: '900010', animateur: '900011', fondateur: '900099' };
 
 // 42 : staff + deux rôles du panneau · 43 : staff sans rôle du panneau
 // 44 : rôle du panneau mais pas le rôle staff · 45 : absent du serveur
+// Les membres sont par GUILDE : appartenir à l'une ne dit rien de l'autre.
 const MEMBRES = {
-  '42': { roles: [STAFF, R.moderateur, R.animateur], nick: 'Nyx' },
-  '43': { roles: [STAFF] },
-  '44': { roles: [R.moderateur] }
+  [GUILD]: {
+    '42': { roles: [STAFF, R.moderateur, R.animateur], nick: 'Nyx' },
+    '43': { roles: [STAFF] },
+    '44': { roles: [R.moderateur] }
+  },
+  [GUILD2]: {}
 };
 
 // Les tests doivent pouvoir RETIRER un rôle en cours de route : c'est tout
@@ -28,9 +36,13 @@ function piloter(u, req, j) {
   req.on('data', c => b += c).on('end', () => {
     let o = {}; try { o = JSON.parse(b || '{}'); } catch (e) {}
     const id = String(o.id || '');
-    if (o.partir) delete MEMBRES[id];
-    else MEMBRES[id] = { roles: o.roles || [], nick: o.nick };
-    j(200, { ok: true, membre: MEMBRES[id] || null });
+    // Sans `guild`, c'est le serveur historique : les suites écrites
+    // avant le second continuent de marcher sans une ligne de plus.
+    const g = String(o.guild || GUILD);
+    MEMBRES[g] = MEMBRES[g] || {};
+    if (o.partir) delete MEMBRES[g][id];
+    else MEMBRES[g][id] = { roles: o.roles || [], nick: o.nick };
+    j(200, { ok: true, membre: MEMBRES[g][id] || null });
   });
   return true;
 }
@@ -63,11 +75,12 @@ function creer() {
     }
     const m = u.pathname.match(/^\/api\/v10\/guilds\/(\d+)\/members\/(\d+)$/);
     if (m) {
-      if (m[1] !== GUILD) return j(404, { message: 'Unknown Guild' });
-      const mem = MEMBRES[m[2]];
+      if (!MEMBRES[m[1]]) return j(404, { message: 'Unknown Guild' });
+      const mem = MEMBRES[m[1]][m[2]];
       return mem ? j(200, { user: { id: m[2] }, roles: mem.roles, nick: mem.nick }) : j(404, { message: 'Unknown Member' });
     }
-    if (u.pathname === `/api/v10/guilds/${GUILD}/roles`)
+    const g = u.pathname.match(/^\/api\/v10\/guilds\/(\d+)\/roles$/);
+    if (g && MEMBRES[g[1]])
       return j(200, [{ id: STAFF, name: 'Staff', position: 10, color: 0 },
                      { id: R.moderateur, name: 'Modérateur', position: 8, color: 1 },
                      { id: R.animateur, name: 'Animateur', position: 6, color: 2 },
@@ -76,4 +89,4 @@ function creer() {
   });
 }
 
-module.exports = { creer, GUILD, STAFF, R };
+module.exports = { creer, GUILD, GUILD2, STAFF, R };

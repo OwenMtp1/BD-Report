@@ -393,6 +393,39 @@ async function verdictEspace(c, esp, userId) {
   return { ok:true, membre:m, rolesDiscord, roles };
 }
 
+/* ---------- les espaces qu'une identité Discord ouvre ----------
+   ⚠️ CE N'EST PAS CALCULÉ À LA CONNEXION, et c'est délibéré. Interroger
+   Discord pour CHAQUE espace à chaque connexion, c'est cinquante appels
+   pour un client qui n'en a qu'un — et une connexion qui traîne d'autant.
+   La connexion s'arrête donc au premier espace qui accepte ; la liste
+   complète ne se calcule que si quelqu'un ouvre le sélecteur.
+   ⚠️ Et elle se garde quelques minutes : ouvrir le sélecteur trois fois
+   de suite ne doit pas coûter trois fois le tour complet. */
+const cacheEspaces = new Map();      // discord_id -> { ts, liste }
+const CACHE_ESPACES_MS = 5 * 60000;
+
+async function espacesDeDiscord(me, forcer) {
+  if (!me.discordId) {
+    // Un compte par mot de passe n'existe que sur SON espace : il n'y a
+    // rien à lui proposer, et le dire vaut mieux qu'une liste vide.
+    const sp = DB.row(db.prepare('SELECT id, name FROM spaces WHERE id = ?').get(me.spaceId));
+    return sp ? [{ id: sp.id, nom: sp.name, actuel: true, roles: [] }] : [];
+  }
+  const vu = cacheEspaces.get(me.discordId);
+  if (!forcer && vu && Date.now() - vu.ts < CACHE_ESPACES_MS) return vu.liste;
+  const liste = [];
+  for (const e of spacesDiscord()) {
+    let v = null;
+    try { v = await verdictEspace(dconfFor(e), e, me.discordId); } catch { v = null; }
+    if (v && v.ok) liste.push({
+      id: e.id, nom: e.name, actuel: e.id === me.spaceId,
+      roles: ROLESVC.resolve(db, e.id, v.roles).labels
+    });
+  }
+  cacheEspaces.set(me.discordId, { ts: Date.now(), liste });
+  return liste;
+}
+
 /* ============================================================
    REVÉRIFICATION AUTOMATIQUE DES ACCÈS
    ⚠️ LA REVÉRIFICATION À LA DEMANDE NE SUFFIT PAS. `refreshRolesSoon`
@@ -1724,6 +1757,22 @@ async function route(req, res) {
     }
   }
 
+  /* ============================================================
+     PLUSIEURS SERVEURS POUR UN SEUL COMPTE DISCORD
+     ============================================================
+     Un modérateur peut être staff sur deux serveurs clients. À la
+     connexion, on le posait dans le PREMIER espace qui l'acceptait, et
+     il n'y avait plus aucun chemin vers l'autre : il fallait se
+     déconnecter, et se reconnecter menait au même premier espace. Le
+     second était inatteignable depuis le panneau.
+
+     ⚠️ Un compte staff par ESPACE, une identité Discord au-dessus.
+     `upsertDiscordStaff` est déjà indexé par (discord_id, space_id) :
+     changer d'espace n'est donc pas un changement de périmètre sur un
+     même compte, c'est ouvrir une session sur l'autre compte — avec les
+     rôles et les droits que CE serveur-là lui donne, jamais ceux d'à
+     côté.
+     ============================================================ */
   /* ---- connexion ---- */
   if (p === '/api/auth/login' && method === 'POST') {
     const b = await readBody(req);
@@ -1794,6 +1843,40 @@ async function route(req, res) {
     if (me) { qDropSession.run(me.token); audit(me, 'auth.deconnexion', null, ip); }
     return send(res, 200, { ok: true }, { 'set-cookie': AUTH.cookieHeader('origin_sid', '', { clear: true, secure: CFG.secure }) });
   }
+  if (p === '/api/mes-espaces' && method === 'GET') {
+    if (!me) return fail(res, 401, 'Connexion requise.');
+    const liste = await espacesDeDiscord(me, Q.refresh === '1');
+    return ok(res, { espaces: liste, actuel: me.spaceId, discord: !!me.discordId });
+  }
+  if (p === '/api/espace' && method === 'POST') {
+    if (!me) return fail(res, 401, 'Connexion requise.');
+    const b = await readBody(req);
+    const cible = Number(b.spaceId) || 0;
+    if (cible === me.spaceId) return ok(res, { ok: true, deja: true });
+    if (!me.discordId)
+      return fail(res, 409, 'Ce compte n’est relié à aucun compte Discord : il n’existe que sur cet espace.');
+    const esp = DB.row(db.prepare("SELECT * FROM spaces WHERE id = ? AND state = 'actif'").get(cible));
+    if (!esp) return fail(res, 404, 'Espace inconnu ou fermé.');
+    // ⚠️ On REVÉRIFIE auprès de Discord au moment du changement. Se fier
+    // à la liste calculée à la connexion laisserait entrer dans un espace
+    // dont on vient de perdre le rôle — et une session dure sept jours.
+    let v;
+    try { v = await verdictEspace(dconfFor(esp), esp, me.discordId); }
+    catch (e) { return fail(res, 502, 'Discord n’a pas répondu : ' + e.message); }
+    if (!v.ok) { cacheEspaces.delete(me.discordId); return fail(res, 403, v.message); }
+    const compte = upsertDiscordStaff(
+      Object.assign({ id: me.discordId, username: me.pseudo, avatar: me.avatar },
+                    (v.membre && v.membre.user) || {}), v, esp.id);
+    if (compte.disabled) return fail(res, 403, 'Votre accès à cet espace a été suspendu.');
+    // L'ancienne session est close : deux sessions ouvertes sur deux
+    // espaces depuis le même navigateur, c'est un onglet qui agit dans
+    // l'espace de l'autre sans que rien ne le montre.
+    db.prepare('DELETE FROM sessions WHERE token = ?').run(AUTH.parseCookies(req)['origin_sid'] || '');
+    audit(me, 'auth.espace', `${me.space ? me.space.name : '—'} → ${esp.name}`, ip, esp.id);
+    return send(res, 200, { ok: true, espace: { id: esp.id, nom: esp.name } },
+                { 'set-cookie': ouvrirSession(res, compte, req) });
+  }
+
   if (p === '/api/auth/me') {
     if (!me) return fail(res, 401, 'Session expirée.');
     return ok(res, {
