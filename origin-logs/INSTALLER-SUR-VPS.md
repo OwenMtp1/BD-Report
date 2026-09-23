@@ -445,11 +445,14 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now origin-logs-maj.timer
 ```
 
-🛑 **Une question pour Owen, une seule.** Veut-il que cette machine prenne
-**chaque commit** qu'il pousse (`SUIVRE=branche`, la valeur par défaut, pratique
-tant que c'est un serveur d'essai), ou seulement les versions qu'il publie
-explicitement (`SUIVRE=etiquette`) ? C'est un mot à changer dans
-`/etc/origin-logs-maj.conf`, rien d'autre.
+Le réglage est déjà celui qu'il faut : **`SUIVRE=etiquette`** (livré ainsi). Ce
+panneau fera tourner un serveur avec de vrais joueurs — la machine ne prendra
+donc **que les versions qu'Owen publie et valide** (`v1.0`, `v1.1`…), jamais un
+commit en cours de route. Rien à changer.
+
+À l'installation, la machine tourne sur la dernière version publiée. Ensuite,
+chaque fois qu'Owen publie une nouvelle version, elle arrive ici dans les dix
+minutes — tests puis retour arrière automatique si quelque chose ne répond plus.
 
 **Vérification** :
 

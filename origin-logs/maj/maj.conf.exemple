@@ -21,7 +21,11 @@ SERVICE=origin-logs
 #              pousser du code tous les jours sans que rien n'arrive ici.
 #
 # Passer de l'un à l'autre : changez ce mot, rien d'autre.
-SUIVRE=branche
+#
+# Livré sur « etiquette » : ce panneau fait tourner un serveur avec de
+# vrais joueurs, on ne veut donc QUE des versions publiées et validées,
+# jamais un commit en cours de route.
+SUIVRE=etiquette
 BRANCHE=main
 
 # L'adresse que le script interroge APRÈS redémarrage pour savoir si le

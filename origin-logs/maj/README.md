@@ -43,17 +43,21 @@ le « pourquoi » de chaque changement suit), la pousse, et s'arrête si quelque
 chose n'est pas commité — le dépôt de distribution doit refléter un état
 qu'on peut retrouver chez soi.
 
-### 3. Publier une VERSION plutôt qu'un commit
+### 3. Publier une VERSION
 
-Dès qu'un vrai client écrit dans un de ces panneaux, réglez les VPS sur
-`SUIVRE=etiquette` et publiez explicitement :
+Les VPS sont livrés sur `SUIVRE=etiquette` (des joueurs tournent dessus) : ils
+ne prennent **que** les versions publiées. Une version se publie en donnant un
+numéro :
 
 ```bash
 bash origin-logs/maj/publier.sh v1.3
 ```
 
-Les machines ne bougent que là. Entre deux étiquettes, vous poussez autant de
-code que vous voulez sans rien envoyer chez personne.
+Les machines ne bougent que là — dans les dix minutes, tests puis retour arrière
+si besoin. **Entre deux versions**, `publier.sh` sans numéro met à jour la
+branche du dépôt (utile pour l'aperçu) **sans rien envoyer chez personne** :
+tant qu'aucune nouvelle étiquette n'est posée, les serveurs des joueurs ne
+bougent pas.
 
 ⚠️ Le script de mise à jour trie les étiquettes **par numéro de version, pas
 par date** : `v1.10` passe après `v1.9`, et une correction publiée plus tard
