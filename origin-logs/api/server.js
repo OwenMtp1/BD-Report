@@ -569,9 +569,24 @@ function upsertDiscordStaff(user, v, spaceId) {
   const principal = v.roles[0];
   const existant = DB.row(db.prepare('SELECT * FROM staff WHERE discord_id = ? AND space_id = ?').get(user.id, spaceId));
   if (existant) {
+    // ⚠️ UN COMPTE RELIÉ À LA MAIN N'EST PAS UN COMPTE NÉ DE DISCORD.
+    // Quand on relie le fondateur posé par `setup.js` à un compte
+    // Discord, il garde son mot de passe et son pseudo : le renommer
+    // d'après son pseudo Discord lui retirerait le nom par lequel il se
+    // connecte — et le jour où Discord est indisponible, c'est cette
+    // porte-là qui reste. On n'adopte donc le nom Discord que pour les
+    // comptes qui n'existent QUE par Discord.
+    const venuDeDiscord = existant.source === 'discord';
+    // ⚠️ Et un rôle posé à la main ne se fait pas défaire par la
+    // correspondance des rôles Discord : `manual_roles` est justement là
+    // pour ça, mais laisser `role` dériver dessous rendait la base
+    // incompréhensible — deux colonnes qui se contredisent, et la page
+    // des comptes qui affiche l'une pendant que l'autre décide.
+    const tenuAlaMain = parseRoles(existant.manual_roles).length > 0;
     db.prepare(`UPDATE staff SET pseudo=?, avatar=?, roles=?, role=?, disabled=0,
                                  roles_checked_at=?, last_login=?, discord=? WHERE id=?`)
-      .run(pseudoLibre(nom, user.id, spaceId), S(user.avatar), roles, principal, now(), now(),
+      .run(venuDeDiscord ? pseudoLibre(nom, user.id, spaceId) : existant.pseudo,
+           S(user.avatar), roles, tenuAlaMain ? existant.role : principal, now(), now(),
            'discord:' + user.id, existant.id);
     return DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(existant.id));
   }
@@ -2493,6 +2508,7 @@ async function route(req, res) {
             const rs = manuels.length ? manuels : parseRoles(x.roles);
             const r = ROLESVC.resolve(db, me.spaceId, rs.length ? rs : [x.role]);
             return { id:x.id, pseudo:x.pseudo, source:x.source, avatar:x.avatar,
+                     discordId: x.discord_id || '',
                      disabled:x.disabled, created_at:x.created_at, last_login:x.last_login,
                      platform_admin: !!x.platform_admin,
                      role: r.main ? r.main.key : x.role,
@@ -2564,6 +2580,34 @@ async function route(req, res) {
             audit(me, 'staff.roles', `${target.pseudo} → ${voulus.join(', ')} (manuel)`, ip);
           }
           db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(id);   // les droits changent tout de suite
+        }
+        /* Relier un compte EXISTANT à un compte Discord.
+           ⚠️ Sans cela, entrer par Discord CRÉAIT un second compte : le
+           fondateur posé à l'installation restait à côté, avec son mot
+           de passe, ses droits et son historique, pendant que la
+           personne se retrouvait dans un compte tout neuf sans rien.
+           Relier, c'est dire « c'est la même personne ». */
+        if (b.discordId !== undefined) {
+          const did = String(b.discordId || '').trim();
+          // ⚠️ Un compte NÉ de Discord ne change pas d'identifiant :
+          // celui-ci EST son identité. Le déplacer donnerait le compte —
+          // et ses droits — à quelqu'un d'autre.
+          if (target.source === 'discord')
+            return fail(res, 409, 'Ce compte vient de Discord : son identifiant est son identité, il ne se déplace pas.');
+          if (did) {
+            // Un « snowflake » Discord fait 17 à 20 chiffres. Un pseudo
+            // collé là par erreur ne relierait rien, et on ne s'en
+            // apercevrait qu'au moment de se connecter.
+            if (!/^[0-9]{17,20}$/.test(did))
+              return fail(res, 400, 'Identifiant Discord attendu : 17 à 20 chiffres (mode développeur → clic droit sur le profil → Copier l’identifiant).');
+            const pris = DB.row(db.prepare('SELECT pseudo FROM staff WHERE discord_id = ? AND space_id = ? AND id <> ?')
+              .get(did, me.spaceId, id));
+            if (pris) return fail(res, 409, `Cet identifiant Discord est déjà relié à « ${pris.pseudo} ».`);
+            db.prepare('UPDATE staff SET discord_id = ?, discord = ? WHERE id = ?').run(did, 'discord:' + did, id);
+          } else {
+            db.prepare('UPDATE staff SET discord_id = NULL, discord = NULL WHERE id = ?').run(id);
+          }
+          audit(me, 'staff.discord', `${target.pseudo} → ${did || 'délié'}`, ip);
         }
         if (b.password) {
           if (target.source === 'discord') return fail(res, 409, 'Ce compte se connecte par Discord : il n’a pas de mot de passe.');

@@ -4706,6 +4706,14 @@ async function openTeam() {
                      ${(m.roleKeys || (m.roles || []).map(x => x.id)).includes(r.id) ? 'checked' : ''}>
               ${esc(r.label)}</label>`).join('')}</div>
           </div>
+          ${m.source === 'discord' ? '' : `
+          <div>
+            <div class="grp-label" style="--fam:var(--vio-hi)">Compte Discord relié</div>
+            <span class="lite-m">Sans cela, entrer par Discord crée un <b>second</b> compte à côté
+              de celui-ci. Mode développeur → clic droit sur le profil → <i>Copier l’identifiant</i>.</span>
+            <input class="input" data-memdid="${m.id}" value="${esc(m.discordId || '')}"
+                   placeholder="identifiant Discord (17 à 20 chiffres)" inputmode="numeric">
+          </div>` }
           <div class="tools">
             <button class="btn sm primary" data-memsave="${m.id}">Enregistrer les rôles</button>
             ${m.estMoi ? '' : `
@@ -4770,7 +4778,12 @@ document.addEventListener('click', async ev => {
   if (D.memsave) {
     const roles = [...document.querySelectorAll(`[data-memrole][data-mem="${D.memsave}"]`)]
       .filter(n => n.checked).map(n => n.dataset.memrole);
-    try { await api('/api/staff/' + D.memsave, { method:'PATCH', body: JSON.stringify({ roles }) });
+    const champDid = document.querySelector(`[data-memdid="${D.memsave}"]`);
+    const corps = { roles };
+    // Le champ n'existe pas pour un compte né de Discord : son
+    // identifiant EST son identité, et l'API refuse de le déplacer.
+    if (champDid) corps.discordId = champDid.value.trim();
+    try { await api('/api/staff/' + D.memsave, { method:'PATCH', body: JSON.stringify(corps) });
           toast(roles.length ? 'Rôles attribués à la main.' : 'Rôles rendus à Discord.'); openTeam(); }
     catch (e) { toast(e.message); }
     return;

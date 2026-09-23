@@ -196,6 +196,28 @@ DISCORD_BOT_TOKEN=...       # onglet Bot
 avec un message qui le lui dit — c'est volontaire : mieux vaut un refus
 explicite qu'un panneau vide sans explication.
 
+**e. Reliez votre compte fondateur à votre compte Discord.** ⚠️ Sans ce geste,
+entrer par Discord **crée un second compte** : le fondateur posé à
+l'installation reste à côté, avec son mot de passe, ses droits et son
+historique, pendant que vous vous retrouvez dans un compte tout neuf sans
+rien. Relier, c'est dire « c'est la même personne ».
+
+Depuis le panneau : **Gérer l'équipe** → le compte → champ *Compte Discord
+relié*. Ou en console :
+
+```bash
+node staff.js discord VotrePseudo 123456789012345678
+```
+
+(L'identifiant Discord se copie avec le mode développeur activé : clic droit
+sur votre profil → *Copier l'identifiant*. C'est un nombre de 17 à 20
+chiffres, jamais un pseudo.)
+
+Le compte relié garde alors **son pseudo**, **son rôle posé à la main** et son
+mot de passe : la correspondance des rôles Discord ne les défait pas. À
+l'inverse, un compte **né** de Discord ne change pas d'identifiant — celui-ci
+est son identité, le déplacer reviendrait à donner le compte.
+
 ⚠️ Gardez au moins **un compte fondateur par mot de passe**. C'est lui qui
 rouvre la porte si Discord est indisponible ou si la liaison est mal réglée.
 

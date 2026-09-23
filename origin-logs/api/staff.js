@@ -64,6 +64,7 @@ function usage(msg) {
     node staff.js passwd <pseudo> [motdepasse]
     node staff.js role <pseudo> <role>
     node staff.js disable <pseudo> | enable <pseudo> | remove <pseudo>
+    node staff.js discord <pseudo> <id>|off    (relier un compte à un compte Discord)
     node staff.js platform <pseudo> on|off     (administration de la plateforme)
     node staff.js spaces
 
@@ -134,6 +135,34 @@ switch (cmd) {
     db.prepare('UPDATE staff SET role=?, manual_roles=? WHERE id=?').run(role, JSON.stringify([role]), r.id);
     db.prepare('DELETE FROM sessions WHERE staff_id=?').run(r.id);
     console.log(`\n  ${r.pseudo} est désormais ${labelOf(role)} (attribution manuelle).\n`);
+    break;
+  }
+  /* Relier un compte EXISTANT à un compte Discord.
+     ⚠️ Sans cela, entrer par Discord CRÉAIT un second compte : le
+     fondateur posé par `setup.js` restait à côté, avec son mot de passe
+     et ses droits, pendant que la personne se retrouvait dans un compte
+     tout neuf sans rien. Relier, c'est dire « c'est la même personne ». */
+  case 'discord': {
+    const [pseudo, id] = args;
+    const r = find(pseudo); if (!r) usage('Compte inconnu.');
+    if (id === 'off') {
+      db.prepare('UPDATE staff SET discord_id=NULL, discord=NULL WHERE id=?').run(r.id);
+      db.prepare('DELETE FROM sessions WHERE staff_id=?').run(r.id);
+      console.log(`\n  ${r.pseudo} n'est plus relié à Discord.\n`);
+      break;
+    }
+    // Un identifiant Discord est un « snowflake » : 17 à 20 chiffres.
+    // Un pseudo collé là par erreur ne relierait rien, et on ne s'en
+    // apercevrait qu'au moment de se connecter.
+    if (!/^[0-9]{17,20}$/.test(String(id || '')))
+      usage('Identifiant Discord attendu : 17 à 20 chiffres (clic droit sur votre profil → Copier l\'identifiant, mode développeur activé).');
+    const pris = DB.row(db.prepare('SELECT pseudo FROM staff WHERE discord_id = ? AND space_id = ? AND id <> ?')
+      .get(id, SPACE, r.id));
+    if (pris) usage(`Cet identifiant Discord est déjà relié à « ${pris.pseudo} » dans cet espace.`);
+    db.prepare('UPDATE staff SET discord_id=?, discord=? WHERE id=?').run(id, 'discord:' + id, r.id);
+    console.log(`\n  ${r.pseudo} est relié au compte Discord ${id}.`);
+    console.log('  Il gardera son pseudo, son rôle et ses droits en entrant par Discord.');
+    console.log('  Il lui faut encore le rôle staff sur le serveur Discord de l\'espace.\n');
     break;
   }
   case 'disable': case 'enable': {
