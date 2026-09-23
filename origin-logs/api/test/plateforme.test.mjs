@@ -144,6 +144,25 @@ const dcObs = await J('/api/platform/discord',{method:'POST',body:JSON.stringify
 t('⚠️ mais ne la règle pas : ce serait nommer qui il veut dans l’équipe',
   dcObs.status===403, dcObs.body && dcObs.body.error);
 
+sect('Le journal d’UNE personne');
+// ⚠️ « Qui a fermé cet espace ? » ne se lit pas en parcourant tout le
+// journal. Le filtre porte sur l'IDENTIFIANT : deux espaces peuvent
+// chacun avoir leur « Nyx », et un filtre textuel aurait attribué à
+// l'un les gestes de l'autre.
+const moiPlat = ((await J("/api/platform/members",{},patron)).body.members||[]).find(x=>x.pseudo==="Sup");
+const mien = await J('/api/platform/journal?membre='+moiPlat.id,{},patron);
+t('le journal se filtre par personne', mien.status===200);
+t('et ne rend que ses actions à elle',
+  (mien.body.entrees||[]).length > 0
+  && (mien.body.entrees||[]).every(e => e.pseudo === 'Sup'),
+  (mien.body.entrees||[]).length + ' entrée(s)');
+const autrui = await J('/api/platform/journal?membre='+v.id,{},patron);
+t('⚠️ et le journal de quelqu’un d’autre ne contient pas les miennes',
+  (autrui.body.entrees||[]).every(e => e.pseudo !== 'Sup'),
+  (autrui.body.entrees||[]).length + ' entrée(s)');
+t('un identifiant qui n’existe pas ne rend rien plutôt que TOUT',
+  ((await J('/api/platform/journal?membre=999999',{},patron)).body.entrees||[]).length===0);
+
 sect('Le dernier administrateur ne se retire pas');
 // ⚠️ Se retirer de l'équipe ferme sa propre session sur-le-champ : c'est
 // voulu, mais cela veut dire qu'il n'y a pas de retour en arrière. D'où

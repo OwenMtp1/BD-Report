@@ -7,6 +7,17 @@
 // ⚠️ UNE LIMITE À NULL VEUT DIRE « SANS LIMITE », PAS « ZÉRO ».
 // L'offre haute n'a souvent aucun plafond, et confondre les deux
 // bloquerait précisément le client qui paie le plus.
+//
+// ⚠️ UNE OFFRE NE PORTE PLUS AUCUN PLAFOND TECHNIQUE — ni quota
+// d'images, ni débit d'écriture. Ce sont des protections de MACHINE,
+// pas des arguments de vente : personne n'achète « 120 dépôts par
+// minute », et les faire vivre dans une offre revenait à vendre au
+// client une panne qu'on lui infligerait ensuite. Elles restent où
+// elles ont un sens, dans la configuration du serveur
+// (SCREEN_QUOTA_MB, MAX_INGEST_PER_MIN), les mêmes pour tous.
+// Les colonnes `screen_quota` et `max_ingest` restent en base : une
+// migration qui EFFACE est pire que deux colonnes qui dorment, et
+// rien ne les lit plus.
 // ============================================================
 'use strict';
 
@@ -27,15 +38,15 @@ const CATS_PRO = CATS_STARTER.concat(['ecran_joueur', 'inventaire', 'items_sol',
 
 const DEPART = [
   { key: 'starter', label: 'Starter', rang: 10, prix: 'offert',
-    maxStaff: 5, maxRetention: 7, screens: 0, screenQuota: 0, maxIngest: 60,
+    maxStaff: 5, maxRetention: 7, screens: 0,
     cats: CATS_STARTER,
     notes: 'Pour essayer : une petite équipe, une semaine d’historique, sans captures d’écran.' },
   { key: 'pro', label: 'Pro', rang: 20, prix: '9 €/mois',
-    maxStaff: 25, maxRetention: 30, screens: 1, screenQuota: 512, maxIngest: 120,
+    maxStaff: 25, maxRetention: 30, screens: 1,
     cats: CATS_PRO,
     notes: 'Le serveur qui tourne : un mois d’historique, les captures d’écran, une vraie équipe.' },
   { key: 'illimite', label: 'Illimité', rang: 30, prix: '29 €/mois',
-    maxStaff: null, maxRetention: null, screens: 1, screenQuota: null, maxIngest: null,
+    maxStaff: null, maxRetention: null, screens: 1,
     cats: null,
     notes: 'Aucun plafond, toutes les rubriques. Pour les serveurs qui journalisent beaucoup.' }
 ];
@@ -44,12 +55,11 @@ function seed(db) {
   const n = db.prepare('SELECT COUNT(*) n FROM plans').get().n;
   if (n) return;
   const ins = db.prepare(`INSERT INTO plans(key,label,rang,prix,max_staff,max_retention,
-                            screens,screen_quota,max_ingest,cats,notes,builtin,created_at)
-                          VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)`);
+                            screens,cats,notes,builtin,created_at)
+                          VALUES(?,?,?,?,?,?,?,?,?,1,?)`);
   for (const p of DEPART)
     ins.run(p.key, p.label, p.rang, p.prix, p.maxStaff, p.maxRetention,
-            p.screens, p.screenQuota, p.maxIngest,
-            p.cats ? JSON.stringify(p.cats) : null, p.notes, Date.now());
+            p.screens, p.cats ? JSON.stringify(p.cats) : null, p.notes, Date.now());
   invalidate();
 }
 
@@ -71,8 +81,6 @@ const ligne = r => ({
   maxStaff: r.max_staff == null ? null : Number(r.max_staff),
   maxRetention: r.max_retention == null ? null : Number(r.max_retention),
   screens: !!r.screens,
-  screenQuota: r.screen_quota == null ? null : Number(r.screen_quota),
-  maxIngest: r.max_ingest == null ? null : Number(r.max_ingest),
   cats: litCats(r.cats),
   notes: r.notes || '', builtin: !!r.builtin
 });
@@ -89,8 +97,7 @@ const byKey = (db, key) => list(db).find(p => p.key === key) || null;
    client d'avant la mise en place des formules. Brider par défaut aurait
    coupé des espaces en service le jour de la migration. */
 const AUCUNE = { key: null, label: 'Sans formule', prix: '', maxStaff: null, maxRetention: null,
-                 screens: true, screenQuota: null, maxIngest: null, cats: null,
-                 notes: '', builtin: false };
+                 screens: true, cats: null, notes: '', builtin: false };
 
 function forSpace(db, sp) {
   if (!sp || !sp.plan_key) return AUCUNE;

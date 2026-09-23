@@ -261,6 +261,17 @@ joueurs, registre, statistiques. Se replier sur le premier espace aurait servi
 les journaux d'un client au hasard ; son compte a beau être né quelque part,
 ce n'est plus un domicile.
 
+⚠️ **LA MARQUE SUIT L'ENDROIT OÙ L'ON EST.** Elle affichait « Origin Roleplay »
+en dur, c'est-à-dire le nom d'un **client**, sur toutes les pages : la
+plateforme portait le nom de son premier client, et rien ne disait chez qui
+l'on venait d'entrer. Hors environnement, la page est **Origin Logs** (sigle
+`OL`, sous-titre « Plateforme »). Dedans, elle prend le **nom du client**, ses
+initiales et une couleur dérivée de son nom — deux onglets ouverts côte à côte
+ne se confondent plus, et le titre de l'onglet du navigateur le dit aussi. Le
+bandeau du haut porte alors « visite — *nom* » avec une croix pour ressortir :
+entrer sans pouvoir sortir serait un aller simple. Tout se repeint **sans
+recharger**.
+
 **Entrer** est un geste, depuis la supervision ou « Espaces de logs », et la
 barre affiche alors « visite — nom de l'espace · sortir ». **Ressortir** en
 est un aussi : un clic sur cette étiquette, ou le bouton *Sortir* sur la carte
@@ -475,11 +486,25 @@ commercialement un client d'un autre, et elle vit **en base** — pas dans le
 code : on ajuste un tarif ou un plafond bien plus souvent qu'on ne
 redéploie. Trois formules de départ, modifiables, et on en crée d'autres :
 
-| | Comptes staff | Rétention | Rubriques | Captures | Quota d'images | Dépôts/min |
-|---|---|---|---|---|---|---|
-| **Starter** | 5 | 7 j | 8 sur 18 | non | — | 60 |
-| **Pro** | 25 | 30 j | 14 sur 18 | oui | 512 Mo | 120 |
-| **Illimité** | sans limite | sans limite | toutes | oui | plafond du serveur | plafond du serveur |
+| | Comptes staff | Conservation | Rubriques | Captures |
+|---|---|---|---|---|
+| **Starter** | 5 | 7 j | 8 sur 18 | non |
+| **Pro** | 25 | 30 j | 14 sur 18 | oui |
+| **Illimité** | illimité | illimitée | toutes | oui |
+
+⚠️ **UNE OFFRE NE PORTE PLUS AUCUN PLAFOND TECHNIQUE** — ni quota d'images, ni
+débit d'écriture. Personne n'achète « 120 dépôts par minute », et les faire
+vivre dans une offre revenait à vendre au client une panne qu'on lui inflige
+ensuite, un soir de rush, sans qu'il comprenne pourquoi. Ces protections
+restent là où elles ont un sens — la configuration du serveur
+(`SCREEN_QUOTA_MB`, `MAX_INGEST_PER_MIN`) — et sont **les mêmes pour tous**.
+
+⚠️ **« Illimité » se coche, il ne se devine pas.** C'était un champ laissé
+vide : rien ne distinguait « sans limite » de « je n'ai pas encore rempli ».
+Chaque plafond porte donc sa case, et le champ s'éteint quand elle est cochée
+plutôt que d'afficher une valeur qui ne s'applique plus. Un champ vide sans la
+case est **refusé** : le traiter comme « illimité » aurait livré l'offre la
+plus large de toutes à qui avait simplement oublié de taper un nombre.
 
 ⚠️ **UNE OFFRE VEND DES RUBRIQUES, pas seulement des jours.** C'est ce qui
 manquait pour qu'il y ait quelque chose à vendre au palier du dessus : tant que
@@ -693,6 +718,57 @@ prenait `moderateur` : dans un espace qui l'avait renommé ou supprimé, le
 compte se retrouvait avec une clé inexistante, donc aucun droit, et un écran
 vide sans explication. Le repli est maintenant **le rôle le plus bas de CET
 espace** (`ROLESVC.basRole`).
+
+---
+
+## Équipe & rôles de la plateforme
+
+L'équipe d'Origin Logs — la vôtre — a son **onglet**, en deux parties. Il
+vivait dans une fenêtre modale : on l'ouvrait, on changeait un rôle, elle se
+refermait, et il fallait la rouvrir pour la personne suivante. C'est pourtant
+l'écran où l'on gouverne l'équipe.
+
+⚠️ **Deux parties, parce qu'il y a deux questions.** *Équipe staff* répond à
+« qui est là, et qu'a-t-il fait ? » ; *Permissions* à « que peut un rôle ? ».
+Les mélanger sur une seule page obligeait à traverser dix-neuf cases à cocher
+pour retrouver le nom de quelqu'un.
+
+**Partie Équipe.** Un tableau : qui, son rôle sur la plateforme (modifiable
+dans la ligne), comment il est arrivé (Discord officiel ou mot de passe), sa
+dernière connexion. Par ligne : **son journal**, **suspendre / réactiver**,
+**virer de l'équipe**. Plus bas, ajouter quelqu'un — un compte existant, de
+n'importe quel environnement, qui garde son compte et gagne *en plus* les
+droits de plateforme.
+
+⚠️ **« Virer » de l'équipe n'est pas supprimer le compte.** La personne garde
+son environnement et son accès de staff client ; elle perd les droits de
+plateforme, rien d'autre. Confondre les deux ferait perdre un modérateur en
+retirant un commercial — le dialogue de confirmation le dit.
+
+⚠️ **Le journal d'une personne se filtre sur son identifiant, pas sur son
+pseudo.** Deux environnements peuvent chacun avoir leur « Nyx » : un filtre
+textuel aurait attribué à l'un les gestes de l'autre, ce qui est exactement ce
+qu'un journal ne doit jamais faire.
+
+**Partie Permissions.** Les 19 droits de plateforme, rangés en 5 groupes, à
+cocher rôle par rôle. Créer un rôle, l'enregistrer, le supprimer.
+
+⚠️ **On n'accorde que des droits qu'on détient soi-même**, et jamais à un rôle
+de son propre rang ou au-dessus : sinon un droit de composition suffirait à
+s'attribuer tout le reste. Les cases hors de portée sont **inertes**, pas
+absentes — on voit ce qui existe sans pouvoir se le donner.
+
+⚠️ **La Direction porte tous ses droits par construction**, jamais par une
+liste enregistrée, et ses cases sont inertes : le jour où quelqu'un décoche la
+gouvernance sur le seul rôle qui pouvait la recocher, plus personne
+n'administre rien.
+
+⚠️ **Un rôle naît sans aucun droit.** Naître avec des droits par défaut, c'est
+en accorder sans les avoir choisis.
+
+Un rôle d'origine ne se supprime pas, et un rôle que des gens portent non plus
+— ils doivent d'abord en recevoir un autre. Enregistrer un rôle **ferme les
+sessions** de ceux qui le portent : un accès retiré doit l'être tout de suite.
 
 ---
 

@@ -1111,10 +1111,10 @@ select.input{height:36px}
 <div class="gate" id="gate" hidden>
   <form class="gate-card" id="gateForm">
     <div class="gate-head">
-      <div class="mark" aria-hidden="true">OR</div>
+      <div class="mark" aria-hidden="true">OL</div>
       <div>
-        <div class="gate-t">Origin Roleplay</div>
-        <div class="brand-sub">Journal serveur</div>
+        <div class="gate-t">Origin Logs</div>
+        <div class="brand-sub">Journal serveur FiveM</div>
       </div>
     </div>
     <div class="gate-err" id="gateErr" hidden></div>
@@ -1145,11 +1145,16 @@ select.input{height:36px}
 
 <div class="app" id="app" hidden>
   <nav class="rail" aria-label="Navigation du journal">
+    <!-- ⚠️ LA MARQUE SUIT L'ENDROIT OÙ L'ON EST. Elle affichait « Origin
+         Roleplay » en dur — c'est-à-dire le nom d'un CLIENT, sur toutes
+         les pages, y compris quand on suivait dix autres serveurs. On ne
+         savait donc jamais chez qui l'on venait d'entrer, et la
+         plateforme portait le nom de son premier client. -->
     <div class="brand">
-      <div class="mark" aria-hidden="true">OR</div>
+      <div class="mark" id="brandMark" aria-hidden="true">OL</div>
       <div class="brand-text">
-        <div class="brand-name">Origin Roleplay</div>
-        <div class="brand-sub">Journal serveur</div>
+        <div class="brand-name" id="brandName">Origin Logs</div>
+        <div class="brand-sub" id="brandSub">Plateforme</div>
       </div>
     </div>
     <div class="rail-wrap">
@@ -1484,6 +1489,29 @@ select.input{height:36px}
         </span>
       </div>
       <div class="pgrid" id="offreGrid"></div>
+    </section>
+
+    <!-- ============ ÉQUIPE & RÔLES DE LA PLATEFORME ============
+         ⚠️ UN ONGLET, PAS UNE FENÊTRE — même leçon que la liste des
+         environnements. Cet écran vivait dans une modale : on l'ouvrait,
+         on changeait un rôle, elle se refermait, et il fallait la rouvrir
+         pour le suivant. C'est l'écran où l'on gouverne l'équipe.
+         ⚠️ DEUX PARTIES, parce qu'il y a deux questions : QUI est dans
+         l'équipe (et ce qu'il a fait), puis CE QUE PEUT un rôle. Les
+         mélanger sur une seule page obligeait à traverser dix-neuf cases
+         à cocher pour retrouver le nom de quelqu'un. -->
+    <section class="view" id="viewStaff" hidden aria-label="Équipe et rôles de la plateforme">
+      <div class="head">
+        <div>
+          <h1 class="title">Équipe &amp; rôles</h1>
+          <div class="sub" id="staffSub">L’équipe d’Origin Logs — sans rapport avec le staff d’un serveur client.</div>
+        </div>
+        <div class="seg" id="staffSeg" role="group" aria-label="Partie">
+          <button data-staffpart="equipe" aria-pressed="true">Équipe staff</button>
+          <button data-staffpart="perms" aria-pressed="false">Permissions</button>
+        </div>
+      </div>
+      <div id="staffBody"></div>
     </section>
 
     <!-- ============ JOURNAL D'ADMINISTRATION ============ -->
@@ -2311,7 +2339,7 @@ const STATE = { view:'overview', cat:'all', range:24, q:'', sevs:new Set(),
    recopiée dans trois conditions (le rafraîchissement, le repli sans
    espace, le routage) : la quatrième vue ajoutée en a manqué une, et
    l'onglet retombait silencieusement sur la supervision. */
-const VUES_PLATEFORME = new Set(['platform', 'platformlog', 'spaces', 'plans']);
+const VUES_PLATEFORME = new Set(['platform', 'platformlog', 'spaces', 'plans', 'staff']);
 
 const CHART_CFG = {
   1:  { n:12, fmt:t => pad(new Date(t).getHours())+':'+pad(new Date(t).getMinutes()), every:3, title:'60 dernières minutes' },
@@ -2365,6 +2393,7 @@ async function refresh(opts) {
     if (STATE.view === 'platform')    return chargerPlateforme();
     if (STATE.view === 'platformlog') return chargerJournal();
     if (STATE.view === 'spaces')      return chargerEnvs();
+    if (STATE.view === 'staff')       return chargerStaff();
     return chargerOffres();
   }
   // Hors espace, l'API répond 409 à tout le reste : lui poser la question
@@ -2404,6 +2433,7 @@ function render() {
   $('#viewPlatform').hidden    = STATE.view !== 'platform';
   $('#viewSpaces').hidden      = STATE.view !== 'spaces';
   $('#viewPlans').hidden       = STATE.view !== 'plans';
+  $('#viewStaff').hidden       = STATE.view !== 'staff';
   $('#viewPlatformLog').hidden = STATE.view !== 'platformlog';
   // ⚠️ L'entrée ne se rejoue qu'au CHANGEMENT de vue. `render()` est
   // rappelé à chaque rafraîchissement, à chaque marque posée, à chaque
@@ -2422,6 +2452,7 @@ function render() {
   else if (STATE.view === 'platform') rendrePlateforme();
   else if (STATE.view === 'spaces') rendreEnvs();   // charge à la volée si besoin
   else if (STATE.view === 'plans') rendreOffres();
+  else if (STATE.view === 'staff') rendreStaff();
   else rendreJournal();
 }
 
@@ -2443,6 +2474,9 @@ function buildNav() {
       ${canPlat('plat.voir') ? `<button class="nav-item" data-view="plans" style="--fam:var(--f-shop)"
           title="Ce qu’on vend : prix, plafonds et rubriques">
         <span class="nav-dot"></span><span class="nav-label">Offres</span><span class="nav-n" id="navOffreN"></span></button>` : ''}
+      ${canPlat('plat.equipe.voir') ? `<button class="nav-item" data-view="staff" style="--fam:var(--f-play)"
+          title="Qui compose l’équipe d’Origin Logs, et ce que chaque rôle permet">
+        <span class="nav-dot"></span><span class="nav-label">Équipe &amp; rôles</span><span class="nav-n" id="navStaffN"></span></button>` : ''}
       <button class="nav-item" data-view="platformlog" style="--fam:var(--f-staff)">
         <span class="nav-dot"></span><span class="nav-label">Journal d'administration</span><span class="nav-n"></span></button>`;
     // ⚠️ AUCUN ESPACE = AUCUNE RUBRIQUE. Tant que l'administration n'est
@@ -3528,6 +3562,7 @@ function syncHash(replace) {
                : STATE.view === 'platformlog' ? '/plateforme/journal'
                : STATE.view === 'spaces'      ? '/environnements'
                : STATE.view === 'plans'       ? '/offres'
+               : STATE.view === 'staff'       ? '/equipe-plateforme'
                : STATE.view === 'bans'        ? '/bans/' + STATE.banState
                : STATE.view === 'online'      ? '/en-ligne'
                : STATE.view === 'team'        ? '/equipe'
@@ -3557,6 +3592,7 @@ function applyHash() {
   if (seg[0] === 'plateforme') STATE.view = seg[1] === 'journal' ? 'platformlog' : 'platform';
   else if (seg[0] === 'environnements') { STATE.view = 'spaces'; STATE.cat = 'all'; }
   else if (seg[0] === 'offres')        { STATE.view = 'plans';  STATE.cat = 'all'; }
+  else if (seg[0] === 'equipe-plateforme') { STATE.view = 'staff'; STATE.cat = 'all'; }
   else if (seg[0] === 'flux') { STATE.view = 'stream'; STATE.cat = seg[1] || 'all'; }
   else if (seg[0] === 'bans') { STATE.view = 'bans'; STATE.cat = 'bans';
                                 STATE.banState = ['actifs','expires','tous'].includes(seg[1]) ? seg[1] : 'actifs'; }
@@ -4019,12 +4055,21 @@ async function demoApi(path, opts) {
   if (path.startsWith('/api/platform')) {
     if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true, espace:'Origin Roleplay' }; }
     if (path.startsWith('/api/platform/members'))
-      return { members: DEMO_EQUIPE.map(m => Object.assign({ spaceId:1, platform:m.id === 1 }, m)) };
+      return { members: DEMO_PLAT_MEMBRES.concat(DEMO_HORS_EQUIPE) };
     if (path.startsWith('/api/platform/overview')) return demoOverview();
     if (path.startsWith('/api/platform/check'))    return demoCheck();
     if (path.startsWith('/api/platform/sauvegardes')) return demoSauvegardes();
-    if (path.startsWith('/api/platform/journal'))  return demoJournal();
+    if (path.startsWith('/api/platform/journal'))  return demoJournal(path);
     if (path.startsWith('/api/platform/plans'))    return demoOffres();
+    if (path.startsWith('/api/platform/roles'))
+      return { roles: DEMO_PLAT_ROLES.map(r => Object.assign({}, r)),
+               perms: PLAT_PERMS, groupes: PLAT_GROUPES,
+               monRole:'direction', monRang:100, mesDroits: PLAT_TOUT, peutComposer:true };
+    if (path.startsWith('/api/platform/discord'))
+      return { guildId:'1183920145927383040', peutRegler:true, pret:true,
+               roleMap:{ direction:'118392014592738400', technique:'118392014592738401',
+                         support:'118392014592738402' },
+               roles: DEMO_PLAT_ROLES.map(r => ({ id:r.key, label:r.label })) };
     return { spaces: DEMO_ESPACES, monEspace: 1, discordGlobal: true,
              formules: DEMO_OFFRES, adresse: location.origin, adressePublique: false };
   }
@@ -4052,6 +4097,82 @@ async function demoApi(path, opts) {
 }
 let DEMO_PERMS = [];
 
+/* ---------- l'équipe de la plateforme, en démonstration ----------
+   Miroir de api/plateforme.js : l'aperçu doit montrer EXACTEMENT les
+   droits et les rôles qui seront livrés, pas une approximation. */
+const PLAT_GROUPES = [
+  { id:'supervision', label:'Supervision' },
+  { id:'espaces',     label:'Environnements clients' },
+  { id:'commerce',    label:'Commerce' },
+  { id:'donnees',     label:'Données' },
+  { id:'equipe',      label:'Équipe de la plateforme' }
+];
+const PLAT_PERMS = [
+  { id:'plat.voir',            groupe:'supervision', label:'Voir la supervision et la liste des environnements' },
+  { id:'plat.verifier',        groupe:'supervision', label:'Lancer la vérification des panneaux' },
+  { id:'plat.journal',         groupe:'supervision', label:'Lire le journal d’administration' },
+  { id:'plat.espace.creer',    groupe:'espaces', label:'Créer un environnement client' },
+  { id:'plat.espace.modifier', groupe:'espaces', label:'Modifier un environnement (nom, Discord, conservation, propriétaire)' },
+  { id:'plat.espace.fermer',   groupe:'espaces', label:'Fermer et rouvrir un environnement' },
+  { id:'plat.espace.supprimer',groupe:'espaces', label:'Supprimer un environnement et tous ses journaux' },
+  { id:'plat.espace.cle',      groupe:'espaces', label:'Régénérer la clé d’ingestion, délivrer une clé de bot' },
+  { id:'plat.branchement',     groupe:'espaces', label:'Générer la commande d’installation' },
+  { id:'plat.integration',     groupe:'espaces', label:'Scanner un serveur et régler ses raccordements' },
+  { id:'plat.entrer',          groupe:'espaces', label:'Entrer dans l’environnement d’un client' },
+  { id:'plat.formules',        groupe:'commerce', label:'Composer les offres, leurs plafonds et leurs rubriques' },
+  { id:'plat.facturation',     groupe:'commerce', label:'Poser une offre et une échéance sur un environnement' },
+  { id:'plat.sauvegardes',     groupe:'donnees', label:'Déclencher et télécharger les sauvegardes' },
+  { id:'plat.restaurer',       groupe:'donnees', label:'Restaurer un environnement depuis un export' },
+  { id:'plat.export',          groupe:'donnees', label:'Exporter les journaux d’un environnement' },
+  { id:'plat.equipe.voir',     groupe:'equipe', label:'Voir l’équipe de la plateforme' },
+  { id:'plat.equipe.gerer',    groupe:'equipe', label:'Attribuer un rôle plateforme, révoquer un accès' },
+  { id:'plat.roles',           groupe:'equipe', label:'Composer les rôles de la plateforme (gouvernance)' }
+];
+const PLAT_TOUT = PLAT_PERMS.map(p => p.id);
+const DEMO_PLAT_ROLES = [
+  { key:'direction', label:'Direction', rang:100, builtin:true, membres:1, perms:PLAT_TOUT,
+    desc:'Tous les droits sur la plateforme, y compris la composition des rôles.' },
+  { key:'technique', label:'Technique', rang:80, builtin:true, membres:1,
+    desc:'Met en service, dépanne, sauvegarde. Ne touche pas aux tarifs.',
+    perms:['plat.voir','plat.verifier','plat.journal','plat.espace.creer','plat.espace.modifier',
+           'plat.espace.cle','plat.branchement','plat.integration','plat.entrer',
+           'plat.sauvegardes','plat.restaurer','plat.export','plat.equipe.voir'] },
+  { key:'support', label:'Support', rang:60, builtin:true, membres:2,
+    desc:'Répond aux clients, entre chez eux pour comprendre. Ne crée ni ne supprime.',
+    perms:['plat.voir','plat.verifier','plat.journal','plat.entrer','plat.branchement',
+           'plat.integration','plat.equipe.voir'] },
+  { key:'commercial', label:'Commercial', rang:50, builtin:true, membres:1,
+    desc:'Ouvre des comptes clients et pose les offres. N’entre pas dans leurs journaux.',
+    perms:['plat.voir','plat.espace.creer','plat.espace.modifier','plat.facturation',
+           'plat.formules','plat.branchement','plat.equipe.voir'] },
+  { key:'observateur', label:'Observateur', rang:10, builtin:true, membres:0,
+    desc:'Lecture seule : l’état de la plateforme, sans aucune action.',
+    perms:['plat.voir','plat.journal','plat.equipe.voir'] },
+  // Un rôle FABRIQUÉ, pour que l'aperçu montre aussi la suppression : les
+  // cinq rôles d'origine ne se suppriment pas, et un écran où le bouton
+  // n'apparaît jamais ne dit pas qu'il existe.
+  { key:'facturation', label:'Facturation', rang:40, builtin:false, membres:0,
+    desc:'Rôle créé sur mesure : relance les impayés, ne touche à rien d’autre.',
+    perms:['plat.voir','plat.facturation','plat.equipe.voir'] }
+];
+const DEMO_PLAT_MEMBRES = [
+  { id:1, pseudo:'Owen',   spaceId:1, source:'local',   platformRole:'direction',  estMoi:true  },
+  { id:2, pseudo:'Nyx',    spaceId:1, source:'discord', platformRole:'technique'   },
+  { id:3, pseudo:'Vortex', spaceId:2, source:'discord', platformRole:'support'     },
+  { id:5, pseudo:'Sasha',  spaceId:1, source:'discord', platformRole:'commercial'  },
+  { id:6, pseudo:'Orion',  spaceId:1, source:'discord', platformRole:'support', disabled:true }
+].map(m => Object.assign({
+  platform:true, disabled:false, estMoi:false, roles:[], rank:0,
+  last_login: Date.now() - Math.floor(Math.random() * 6) * 86400000,
+  platformRoleLabel: (DEMO_PLAT_ROLES.find(r => r.key === m.platformRole) || {}).label || '—'
+}, m));
+const DEMO_HORS_EQUIPE = [
+  { id:4, pseudo:'Kaleb', spaceId:1, source:'discord', platform:false, disabled:false,
+    platformRole:null, platformRoleLabel:null, roles:[], rank:50, last_login:Date.now()-2*86400000 },
+  { id:7, pseudo:'Ilyes', spaceId:2, source:'discord', platform:false, disabled:false,
+    platformRole:null, platformRoleLabel:null, roles:[], rank:30, last_login:Date.now()-9*86400000 }
+];
+
 /* ---------- offres, en démonstration ----------
    Les trois paliers livrés par `api/plans.js`. L'aperçu doit montrer
    EXACTEMENT ce qui sortira de l'installation, y compris le découpage
@@ -4062,13 +4183,13 @@ const OF_PRO = OF_STARTER.concat(['ecran_joueur','inventaire','items_sol',
                                   'proprietes','jobs','facture_ems']);
 const DEMO_OFFRES = [
   { key:'starter', label:'Starter', rang:10, prix:'offert', maxStaff:5, maxRetention:7,
-    screens:false, screenQuota:0, maxIngest:60, cats:OF_STARTER, builtin:true, espaces:0,
+    screens:false, cats:OF_STARTER, builtin:true, espaces:0,
     notes:'Pour essayer : une petite équipe, une semaine d’historique, sans captures d’écran.' },
   { key:'pro', label:'Pro', rang:20, prix:'9 €/mois', maxStaff:25, maxRetention:30,
-    screens:true, screenQuota:512, maxIngest:120, cats:OF_PRO, builtin:true, espaces:1,
+    screens:true, cats:OF_PRO, builtin:true, espaces:1,
     notes:'Le serveur qui tourne : un mois d’historique, les captures d’écran, une vraie équipe.' },
   { key:'illimite', label:'Illimité', rang:30, prix:'29 €/mois', maxStaff:null, maxRetention:null,
-    screens:true, screenQuota:null, maxIngest:null, cats:null, builtin:true, espaces:1,
+    screens:true, cats:null, builtin:true, espaces:1,
     notes:'Aucun plafond, toutes les rubriques. Pour les serveurs qui journalisent beaucoup.' }
 ];
 const demoOffres = () => ({ plans: DEMO_OFFRES.map(o => Object.assign({}, o)), sansFormule: 1 });
@@ -4160,7 +4281,7 @@ function demoCheck() {
               probleme: tous.filter(x => x.niveau === 'probleme').length },
     plateforme: plat, espaces: esp };
 }
-function demoJournal() {
+function demoJournal(chemin) {
   const m = 60000, h = 3600000;
   const e = [
     [2*m,  'Owen',   'roles.modification',  'Brigade Anti-Cheat', 'Origin Roleplay'],
@@ -4180,7 +4301,12 @@ function demoJournal() {
   ].map(([d, p, a, det, sp]) => ({ ts: Date.now() - d, pseudo:p, action:a, detail:det, espace:sp }));
   const f = {};
   e.forEach(x => { const k = x.action.split('.')[0]; f[k] = (f[k] || 0) + 1; });
-  const filtre = JRN_FILTRES.action ? e.filter(x => x.action.startsWith(JRN_FILTRES.action)) : e;
+  // Le journal d'UNE personne : filtré comme le fait l'API, sur son
+  // identifiant — pas sur son pseudo, qui n'est unique que dans un espace.
+  const qui = Number((String(chemin || '').match(/[?&]membre=(\d+)/) || [])[1]) || 0;
+  const nom = qui ? ((DEMO_PLAT_MEMBRES.concat(DEMO_HORS_EQUIPE).find(m => m.id === qui) || {}).pseudo || '') : '';
+  let filtre = qui ? e.filter(x => x.pseudo === nom) : e;
+  if (!qui && JRN_FILTRES.action) filtre = filtre.filter(x => x.action.startsWith(JRN_FILTRES.action));
   return { entrees: filtre, total: e.length,
     familles: Object.entries(f).map(([ff, n]) => ({ f: ff, n })).sort((a, b) => b.n - a.n),
     espaces: DEMO_ESPACES.map(x => ({ id: x.id, name: x.nom })) };
@@ -4992,8 +5118,8 @@ function rendreOffres() {
         <span class="lite-m">${o.espaces ? o.espaces + ' client(s)' : 'aucun client'}</span>
       </div>
       <div class="pnums">
-        <span class="pnum"><b>${o.maxStaff == null ? '∞' : o.maxStaff}</b><span>comptes</span></span>
-        <span class="pnum"><b>${o.maxRetention == null ? '∞' : o.maxRetention + ' j'}</b><span>conservation</span></span>
+        <span class="pnum"><b>${o.maxStaff == null ? 'illimité' : o.maxStaff}</b><span>comptes</span></span>
+        <span class="pnum"><b>${o.maxRetention == null ? 'illimité' : o.maxRetention + ' j'}</b><span>conservation</span></span>
         <span class="pnum"><b>${cats == null ? CATS.length : cats.length}<span style="font-size:11px;color:var(--muted)">/${CATS.length}</span></b><span>rubriques</span></span>
         <span class="pnum"><b>${o.screens ? 'oui' : 'non'}</b><span>captures</span></span>
       </div>
@@ -5006,6 +5132,28 @@ function rendreOffres() {
       </div>
     </div>`;
   }).join('');
+}
+
+/* ---------- un plafond : un nombre, ou rien du tout ----------
+   ⚠️ DEUX CHAMPS POUR UNE SEULE DÉCISION, et c'est voulu : la case dit
+   « y a-t-il une limite ? », le nombre dit « laquelle ». Le nombre seul
+   ne pouvait pas répondre à la première question — vide voulait dire
+   « sans limite » pour le code et « à remplir » pour qui le lisait. */
+function champPlafond(id, nom, aide, valeur, max, lisible) {
+  const illimite = valeur == null;
+  return `<div class="map-row" style="border:none">
+    <span><span class="map-name">${esc(nom)}</span>
+      <span class="map-desc">${aide}</span></span>
+    <span style="display:grid;gap:6px;min-width:0">
+      <input class="input" id="${id}" type="number" min="1" max="${max}"
+             value="${illimite ? '' : valeur}" placeholder="—"
+             ${illimite || !lisible ? 'disabled' : ''}>
+      <label class="check" style="width:fit-content">
+        <input type="checkbox" data-illimite="${id}" ${illimite ? 'checked' : ''}
+               ${lisible ? '' : 'disabled'}> illimité
+      </label>
+    </span>
+  </div>`;
 }
 
 /* ⚠️ UN SEUL FORMULAIRE POUR CRÉER ET POUR MODIFIER. En écrire deux
@@ -5061,39 +5209,23 @@ function formulaireOffre(o, nouvelle) {
     </div>
 
     <div class="block">
-      <h3 class="eyebrow">Plafonds — vide veut dire « sans limite »</h3>
-      <!-- ⚠️ « Vide = sans limite », jamais « vide = zéro ». L'offre haute
-           n'a aucun plafond, et confondre les deux bloquerait précisément
-           le client qui paie le plus. -->
-      <div class="map-row" style="border:none">
-        <span><span class="map-name">Comptes staff</span>
-          <span class="map-desc">Au-delà, le client ne peut plus ajouter personne.</span></span>
-        <input class="input" id="ofStaff" type="number" min="0" max="9999" value="${o.maxStaff == null ? '' : o.maxStaff}"
-               placeholder="sans limite" ${lisible ? '' : 'disabled'}>
-      </div>
-      <div class="map-row" style="border:none">
-        <span><span class="map-name">Conservation maximale</span>
-          <span class="map-desc">En jours. Plafonne la durée réglée sur l’environnement.</span></span>
-        <input class="input" id="ofRet" type="number" min="0" max="3650" value="${o.maxRetention == null ? '' : o.maxRetention}"
-               placeholder="sans limite" ${lisible ? '' : 'disabled'}>
-      </div>
+      <h3 class="eyebrow">Plafonds</h3>
+      <!-- ⚠️ « ILLIMITÉ » SE COCHE, IL NE SE DEVINE PAS. C'était un champ
+           laissé vide : rien ne distinguait « sans limite » de « je n'ai
+           pas encore rempli », et la seule façon de le savoir était de
+           relire le code. Une case dit ce qu'elle veut dire, et le champ
+           se retire quand elle est cochée plutôt que de rester là à
+           afficher une valeur qui ne s'applique plus. -->
+      ${champPlafond('ofStaff', 'Comptes staff',
+        'Au-delà, le client ne peut plus ajouter personne.', o.maxStaff, 9999, lisible)}
+      ${champPlafond('ofRet', 'Conservation maximale',
+        'En jours. Plafonne la durée réglée sur l’environnement.', o.maxRetention, 3650, lisible)}
       <label class="map-row" style="border:none;cursor:pointer">
         <span><span class="map-name">Captures d’écran</span>
-          <span class="map-desc">Demander l’écran d’un joueur en jeu.</span></span>
+          <span class="map-desc">Demander l’écran d’un joueur en jeu. Sans quota :
+            la place sur le disque est celle du serveur, la même pour tous.</span></span>
         <input type="checkbox" id="ofScreens" ${o.screens ? 'checked' : ''} ${lisible ? '' : 'disabled'}>
       </label>
-      <div class="map-row" style="border:none">
-        <span><span class="map-name">Quota de captures</span>
-          <span class="map-desc">En Mo sur le disque. Vide : le plafond du serveur.</span></span>
-        <input class="input" id="ofQuota" type="number" min="0" value="${o.screenQuota == null ? '' : o.screenQuota}"
-               placeholder="plafond du serveur" ${lisible ? '' : 'disabled'}>
-      </div>
-      <div class="map-row" style="border:none">
-        <span><span class="map-name">Lots par minute</span>
-          <span class="map-desc">Débit d’écriture accepté du serveur de jeu.</span></span>
-        <input class="input" id="ofIngest" type="number" min="0" value="${o.maxIngest == null ? '' : o.maxIngest}"
-               placeholder="plafond du serveur" ${lisible ? '' : 'disabled'}>
-      </div>
     </div>
 
     <div class="block">
@@ -5132,30 +5264,42 @@ function nouvelleOffre() {
     { name: 'Offre', hue: 320 },
     formulaireOffre({ key: '', label: '', prix: '', rang: 0, notes: '',
                       maxStaff: null, maxRetention: null, screens: true,
-                      screenQuota: null, maxIngest: null, cats: null, espaces: 0 }, true));
+                      cats: null, espaces: 0 }, true));
 }
 
-/* La lecture du formulaire. ⚠️ Un champ VIDE rend `''`, pas `0` : c'est
-   ce que le serveur traduit en « sans limite ». Rendre 0 aurait posé un
-   plafond à zéro, donc un client incapable de créer un seul compte. */
+/* La lecture du formulaire. ⚠️ « Illimité » coché rend `''`, que le
+   serveur traduit en « sans limite ». Rendre 0 aurait posé un plafond à
+   zéro, donc un client incapable de créer un seul compte. */
 function lireOffre() {
   const v = id => { const n = $(id); return n ? n.value.trim() : ''; };
+  const illimite = id => { const n = document.querySelector(`[data-illimite="${id}"]`);
+                           return !!(n && n.checked); };
+  const plafond = id => illimite(id) ? '' : v('#' + id);
   const toutes = $('#ofToutes') && $('#ofToutes').checked;
   return {
     label: v('#ofLabel'), prix: v('#ofPrix'), rang: Number(v('#ofRang')) || 0,
     notes: v('#ofNotes'),
-    maxStaff: v('#ofStaff'), maxRetention: v('#ofRet'),
+    maxStaff: plafond('ofStaff'), maxRetention: plafond('ofRet'),
     screens: !!($('#ofScreens') && $('#ofScreens').checked),
-    screenQuota: v('#ofQuota'), maxIngest: v('#ofIngest'),
     cats: toutes ? null
                  : [...document.querySelectorAll('[data-offrecat]')]
-                     .filter(n => n.checked).map(n => n.dataset.offrecat)
+                     .filter(n => n.checked).map(n => n.dataset.offrecat),
+    // Ce que l'écran n'a pas su remplir : dit à l'appelant plutôt
+    // qu'enregistré comme « illimité » par défaut.
+    _vides: [['ofStaff', 'Comptes staff'], ['ofRet', 'Conservation maximale']]
+      .filter(([id]) => !illimite(id) && !(Number(v('#' + id)) > 0)).map(x => x[1])
   };
 }
 
 async function enregistrerOffre(key) {
   const b = lireOffre();
   if (b.label.length < 2) return toast('Donnez un nom à l’offre.');
+  // ⚠️ Un champ vide n'est PAS « illimité » : c'est un champ vide. Le
+  // traiter comme « sans limite » aurait livré l'offre la plus large de
+  // toutes à qui avait simplement oublié de taper un nombre.
+  if (b._vides.length)
+    return toast(b._vides.join(' et ') + ' : donnez un nombre, ou cochez « illimité ».');
+  delete b._vides;
   // Une offre qui n'ouvre rien se vend peut-être, mais elle ne se pose
   // pas par mégarde : on demande confirmation plutôt que de la refuser.
   if (Array.isArray(b.cats) && !b.cats.length
@@ -5183,6 +5327,17 @@ async function supprimerOffre(key, nom) {
 /* La case « toutes » commande la grille : cochée, les rubriques une par
    une n'ont plus de sens, et les laisser cliquables ferait croire
    qu'elles comptent. */
+/* La case « illimité » vide et éteint son champ : laisser « 25 » visible
+   à côté d'une case cochée ferait lire un plafond qui ne s'applique pas. */
+document.addEventListener('change', ev => {
+  const c = ev.target && ev.target.closest && ev.target.closest('[data-illimite]');
+  if (!c) return;
+  const champ = $('#' + c.dataset.illimite); if (!champ) return;
+  champ.disabled = c.checked;
+  if (c.checked) champ.value = '';
+  else champ.focus();
+});
+
 document.addEventListener('change', ev => {
   if (!ev.target || ev.target.id !== 'ofToutes') return;
   const on = ev.target.checked;
@@ -5202,221 +5357,344 @@ document.addEventListener('click', ev => {
 }, true);
 
 /* ============================================================
-   L'ÉQUIPE DE LA PLATEFORME — celle de l'éditeur
-   ============================================================
-   ⚠️ RIEN À VOIR AVEC LE STAFF D'UN CLIENT. Ici on ne modère personne :
-   on crée des espaces, on les facture, on les dépanne. Les deux
-   catalogues de droits sont séparés, et le resteront : mélanger les deux
-   donnerait un commercial capable de bannir un joueur, ou un modérateur
-   capable de supprimer l'espace qu'il modère. */
-let PEQ = null;
+   ÉQUIPE & RÔLES DE LA PLATEFORME — l'onglet
+   ⚠️ RIEN À VOIR AVEC LE STAFF D'UN CLIENT, et le rappeler n'est pas du
+   bavardage : les deux écrans se ressemblent, les deux parlent de rôles
+   et de permissions, et confondre les deux donnerait un commercial
+   capable de bannir un joueur, ou un modérateur capable de supprimer
+   l'environnement qu'il modère. Les deux catalogues de droits ne se
+   recouvrent EN RIEN.
+   ⚠️ Cet écran vivait dans une fenêtre modale. On l'ouvrait, on changeait
+   un rôle, elle se refermait — et il fallait la rouvrir pour la personne
+   suivante. C'est pourtant l'écran où l'on gouverne l'équipe.
+   ============================================================ */
+let PEQ = null, STAFF_PART = 'equipe';
 
-async function ouvrirEquipePlateforme() {
-  if (MODE !== 'api') return toast('Mode démonstration : l’équipe n’existe pas.');
+async function chargerStaff() {
   try {
     const [roles, membres, dc] = await Promise.all([
       api('/api/platform/roles'), api('/api/platform/members'), api('/api/platform/discord')
     ]);
     PEQ = { roles, membres, dc };
   } catch (e) { return toast(e.message); }
-  rendreEquipePlateforme();
+  rendreStaff();
 }
 
-function rendreEquipePlateforme() {
-  const { roles, membres, dc } = PEQ;
+/* Le raccourci du pied de rail ouvre l'onglet : deux chemins vers le
+   même écran, pas deux écrans. */
+function ouvrirEquipePlateforme() { goVue('staff'); }
+
+function rendreStaff() {
+  const host = $('#staffBody'); if (!host) return;
+  if (!PEQ) { host.innerHTML = '<span class="lite-m">Chargement…</span>'; chargerStaff(); return; }
+  const { roles, membres } = PEQ;
+  const equipe = (membres.members || []).filter(m => m.platform);
+  const n = $('#navStaffN'); if (n) n.textContent = equipe.length || '';
+  $('#staffSub').innerHTML = `<b>${equipe.length}</b> personne(s) dans l’équipe d’Origin Logs`
+    + ` · votre rôle : <b>${esc(roles.monRole || '—')}</b>`
+    + ` · ces droits n’ont <b>aucun effet</b> sur le staff d’un serveur client`;
+  document.querySelectorAll('[data-staffpart]').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.staffpart === STAFF_PART)));
+  const seg = $('#staffSeg');
+  if (seg) { seg.style.setProperty('--n', 2);
+             seg.style.setProperty('--i', STAFF_PART === 'equipe' ? 0 : 1); }
+  host.innerHTML = STAFF_PART === 'equipe' ? partieEquipe() : partiePermissions();
+}
+
+/* ---------- partie 1 : qui compose l'équipe ---------- */
+function partieEquipe() {
+  const { roles, membres } = PEQ;
   const equipe = (membres.members || []).filter(m => m.platform);
   const dehors = (membres.members || []).filter(m => !m.platform);
-  // On ne nomme jamais à son propre niveau : les rôles hors de portée ne
-  // sont pas grisés, ils sont ABSENTS. Un bouton inerte se clique quand même.
+  const gere = roles.mesDroits.includes('plat.equipe.gerer');
+  // ⚠️ On ne nomme jamais à son propre niveau : les rôles hors de portée
+  // ne sont pas grisés, ils sont ABSENTS. Un bouton inerte se clique
+  // quand même, et laisse croire à une panne plutôt qu'à une règle.
   const nommables = roles.roles.filter(r => r.rang < roles.monRang);
-  const choixRole = (id, actuel) => `<select class="input sm" data-prole="${id}">${
-    nommables.map(r => `<option value="${esc(r.key)}" ${r.key === actuel ? 'selected' : ''}>${esc(r.label)}</option>`).join('')
-  }</select>`;
 
-  openSheet('Équipe de la plateforme',
-    `${equipe.length} personne(s) · votre rôle : ${esc(roles.monRole || '—')}`,
-    { name: 'Plateforme', hue: 190 }, `
-    <div class="banner" style="--c:var(--vio)">Ces rôles décident de ce qu’on peut faire
-      <b>sur la plateforme</b> — créer un espace, poser une formule, entrer chez un client.
-      Ils n’ont <b>aucun effet</b> sur les rôles du staff d’un serveur client, qui restent
-      réglés dans chaque espace.</div>
-
-    <div class="block">
-      <h3 class="eyebrow">Qui compose l’équipe</h3>
-      ${equipe.length ? equipe.map(m => `
-        <div class="map-row" style="border:none">
-          <span><span class="map-name">${esc(m.pseudo)}${m.estMoi ? ' <span class="lite-m">(vous)</span>' : ''}</span>
-            <span class="map-desc">${esc(m.platformRoleLabel || '—')}
-              ${m.source === 'discord' ? '· par Discord' : '· par mot de passe'}
-              ${m.disabled ? '· <b style="color:var(--crit)">suspendu</b>' : ''}</span></span>
-          ${roles.mesDroits.includes('plat.equipe.gerer') && !m.estMoi ? `
-            ${choixRole(m.id, m.platformRole)}
-            <span class="tools">
-              <button class="btn sm primary" data-psave="${m.id}">Appliquer</button>
-              <button class="btn sm danger" data-pout="${m.id}" data-pname="${esc(m.pseudo)}">Retirer</button>
-            </span>` : `<span class="state" style="--c:var(--ok)">${esc(m.platformRoleLabel || '—')}</span>`}
-        </div>`).join('') : '<span class="lite-m">Personne — ce qui ne devrait pas arriver.</span>'}
-    </div>
-
-    ${roles.mesDroits.includes('plat.equipe.gerer') ? `
-    <details class="block">
-      <summary class="eyebrow" style="cursor:pointer">Ajouter quelqu’un à l’équipe</summary>
-      <span class="lite-m">Un compte existant (de n’importe quel espace) rejoint l’équipe.
-        Il garde son compte et son espace ; il gagne en plus les droits de plateforme.</span>
-      <div class="map-row" style="border:none">
-        <select class="input" id="pAddQui">
-          ${dehors.slice(0, 200).map(m => `<option value="${m.id}">${esc(m.pseudo)} — espace #${m.spaceId}</option>`).join('')}
-        </select>
-        <select class="input" id="pAddRole">
-          ${nommables.map(r => `<option value="${esc(r.key)}">${esc(r.label)}</option>`).join('')}
-        </select>
+  return `
+    <div class="grid"><div class="panel">
+      <div class="panel-head">
+        <h2 class="eyebrow">L’équipe</h2>
+        <span class="count">${equipe.length} personne(s)</span>
       </div>
-      <div class="tools"><button class="btn sm primary" id="pAddGo">Ajouter à l’équipe</button></div>
-    </details>` : ''}
+      <div class="reg-scroll">
+        <table class="reg">
+          <thead><tr>
+            <th scope="col">Qui</th><th scope="col">Rôle sur la plateforme</th>
+            <th scope="col">Arrivé par</th><th scope="col">Dernière connexion</th>
+            <th scope="col" style="text-align:right">Actions</th>
+          </tr></thead>
+          <tbody>${equipe.length ? equipe.map(m => `
+            <tr${m.disabled ? ' style="opacity:.55"' : ''}>
+              <td><span style="display:flex;align-items:center;gap:8px">
+                <span class="av sm" style="${avatarStyle({ name: m.pseudo })}">${initials({ name: m.pseudo })}</span>
+                <span><span style="font-weight:500">${esc(m.pseudo)}</span>${m.estMoi ? ' <span class="lite-m">(vous)</span>' : ''}
+                  ${m.disabled ? '<span class="on-tag crit">suspendu</span>' : ''}
+                  <span class="psub" style="display:block">espace #${m.spaceId}</span></span>
+              </span></td>
+              <td>${gere && !m.estMoi ? `<select class="input" data-prole="${m.id}" style="height:30px">${
+                    nommables.map(r => `<option value="${esc(r.key)}" ${r.key === m.platformRole ? 'selected' : ''}>${esc(r.label)}</option>`).join('')
+                  }</select>` : `<span class="state" style="--c:var(--ok)">${esc(m.platformRoleLabel || '—')}</span>`}</td>
+              <td class="lite-m">${m.source === 'discord' ? 'Discord officiel' : 'mot de passe'}</td>
+              <td class="lite-m">${m.last_login ? ago(m.last_login) : 'jamais'}</td>
+              <td class="t-act">
+                <!-- ⚠️ « Consulter ses logs » n'est pas une punition : c'est
+                     la seule façon de répondre à « qui a fermé cet espace ? »
+                     sans lire tout le journal. Le filtre porte sur son
+                     IDENTIFIANT, pas sur son pseudo — deux espaces peuvent
+                     chacun avoir leur « Nyx ». -->
+                <button class="btn sm" data-pjournal="${m.id}" data-pname="${esc(m.pseudo)}">Son journal</button>
+                ${gere && !m.estMoi ? `
+                  <button class="btn sm" data-psuspend="${m.id}" data-off="${m.disabled ? 1 : 0}"
+                    >${m.disabled ? 'Réactiver' : 'Suspendre'}</button>
+                  <button class="btn sm primary" data-psave="${m.id}">Appliquer</button>
+                  <button class="btn sm danger" data-pout="${m.id}" data-pname="${esc(m.pseudo)}">Virer</button>`
+                : '<span class="lite-m">—</span>'}
+              </td>
+            </tr>`).join('')
+            : `<tr><td colspan="5"><div class="void"><b>Personne</b>
+                 <span>Ce qui ne devrait pas arriver : il faut au moins une direction.</span></div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div></div>
 
-    <div class="block">
-      <h3 class="eyebrow">Les rôles et ce qu’ils permettent</h3>
-      ${roles.roles.map(r => `
-        <details class="role-card">
-          <summary class="role-head" style="cursor:pointer">
-            <span class="role-badge">rang ${r.rang}</span>
-            <span><span class="role-title">${esc(r.label)}</span>
-              <span class="role-sub">${esc(r.desc || '')}</span></span>
-            <span class="lite-m">${r.membres} membre(s)</span>
-            <span class="lite-m">${r.key === 'direction' ? 'tous les droits' : r.perms.length + ' droit(s)'}</span>
-          </summary>
-          <div class="role-body">
-            ${roles.groupes.map(g => `
-              <div>
-                <div class="grp-label">${esc(g.label)}</div>
-                <div class="checks">${roles.perms.filter(x => x.groupe === g.id).map(x => `
-                  <label class="check">
-                    <input type="checkbox" data-pperm="${esc(x.id)}" data-prk="${esc(r.key)}"
-                      ${r.perms.includes(x.id) ? 'checked' : ''}
-                      ${r.key === 'direction' || !roles.peutComposer || r.rang >= roles.monRang
-                        || !roles.mesDroits.includes(x.id) ? 'disabled' : ''}>
-                    ${esc(x.label)}</label>`).join('')}</div>
-              </div>`).join('')}
-            ${r.key === 'direction'
-              ? '<span class="lite-m">⚠️ La Direction porte tous les droits <b>par construction</b>, jamais par une liste enregistrée : sans cela, décocher la gouvernance fermerait la porte à tout le monde, y compris à soi.</span>'
-              : (roles.peutComposer && r.rang < roles.monRang ? `
-                <div class="tools">
-                  <button class="btn sm primary" data-prsave="${esc(r.key)}">Enregistrer ce rôle</button>
-                  ${r.builtin ? '' : `<button class="btn sm danger" data-prdel="${esc(r.key)}" data-prname="${esc(r.label)}">Supprimer</button>`}
-                </div>
-                <span class="lite-m">Vous ne pouvez accorder que des droits que vous détenez vous-même —
-                  sinon un droit de composition suffirait à s’attribuer tout le reste.</span>`
-                : '<span class="lite-m">Ce rôle est à votre niveau ou au-dessus : vous ne le composez pas.</span>')}
-          </div>
-        </details>`).join('')}
-      ${roles.peutComposer ? `
-        <details class="block" style="margin-top:10px">
-          <summary class="eyebrow" style="cursor:pointer">Créer un rôle</summary>
-          <div class="field"><label for="pnrLabel">Nom du rôle</label>
-            <input class="input" id="pnrLabel" placeholder="Ex. Facturation"></div>
-          <div class="field"><label for="pnrRang">Rang (sous le vôtre : ${roles.monRang})</label>
-            <input class="input" id="pnrRang" type="number" min="0" max="${Math.max(0, roles.monRang - 1)}" value="40"></div>
-          <div class="tools"><button class="btn sm primary" id="pnrGo">Créer</button></div>
-          <span class="lite-m">Le rôle naît sans aucun droit : vous les cochez ensuite, un par un.</span>
-        </details>` : ''}
-    </div>
-
-    <div class="block">
-      <h3 class="eyebrow">Discord officiel de la plateforme</h3>
-      <span class="lite-m">⚠️ C’est <b>votre</b> serveur Discord, pas celui d’un client. Un rôle porté
-        là donne un rôle <b>sur la plateforme</b> — jamais un droit sur les journaux d’un client,
-        qui se gagnent sur le Discord du client et nulle part ailleurs.</span>
-      ${dc.peutRegler ? `
-        <div class="field" style="margin-top:8px"><label for="pdcGuild">Identifiant de votre serveur Discord</label>
-          <input class="input" id="pdcGuild" value="${esc(dc.guildId || '')}" inputmode="numeric"></div>
-        <div class="tools" style="margin:8px 0">
-          <button class="btn sm" id="pdcLoad">Charger les rôles du serveur</button>
-          <button class="btn sm primary" id="pdcSave">Enregistrer</button>
+    ${gere ? `<div class="grid"><div class="panel">
+      <div class="panel-head"><h2 class="eyebrow">Ajouter quelqu’un à l’équipe</h2></div>
+      <div class="panel-body">
+        <span class="lite-m">Un compte existant — de n’importe quel environnement — rejoint l’équipe.
+          Il garde son compte et son environnement ; il gagne <b>en plus</b> les droits de plateforme.</span>
+        <div class="map-row" style="border:none">
+          <select class="input" id="pAddQui">
+            ${dehors.slice(0, 200).map(m => `<option value="${m.id}">${esc(m.pseudo)} — espace #${m.spaceId}</option>`).join('')}
+          </select>
+          <select class="input" id="pAddRole">
+            ${nommables.map(r => `<option value="${esc(r.key)}">${esc(r.label)}</option>`).join('')}
+          </select>
         </div>
-        ${dc.roles.map(r => `
-          <div class="map-row">
-            <span><span class="map-name">${esc(r.label)} <span class="map-rank">rang ${r.rang}</span></span>
-              <span class="map-desc">${esc(r.desc || '')}</span></span>
-            ${PDROLES
-              ? `<select class="input" data-pdc="${esc(r.key)}">
-                   <option value="">— non relié —</option>
-                   ${PDROLES.map(d => `<option value="${esc(d.id)}" ${String(dc.roleMap[r.key] || '') === String(d.id) ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
-                 </select>`
-              : `<input class="input" data-pdc="${esc(r.key)}" value="${esc(dc.roleMap[r.key] || '')}" inputmode="numeric" placeholder="ID du rôle Discord">`}
-          </div>`).join('')}
-        <span class="lite-m">Le rôle le <b>plus haut</b> l’emporte quand quelqu’un en cumule plusieurs.
-          Un rôle posé à la main ici n’est pas défait par Discord.</span>`
-        : '<span class="lite-m">Votre rôle ne permet pas de régler la liaison.</span>'}
-    </div>`);
+        <div class="tools"><button class="btn primary" id="pAddGo">Ajouter à l’équipe</button></div>
+      </div>
+    </div></div>` : ''}`;
+}
+
+/* ---------- partie 2 : ce que peut chaque rôle ---------- */
+function partiePermissions() {
+  const { roles, dc } = PEQ;
+  return `
+    <div class="banner" style="--c:var(--vio);margin-bottom:14px">Ces droits décident de ce qu’on peut
+      faire <b>sur Origin Logs</b> — créer un environnement, composer une offre, entrer chez un client.
+      Ils n’ont <b>aucun effet</b> sur les rôles du staff d’un serveur client, qui se règlent dans
+      chaque environnement et se gagnent sur le Discord du client.</div>
+
+    ${roles.roles.map(r => `
+      <details class="role-card">
+        <summary class="role-head" style="cursor:pointer">
+          <span class="role-badge">rang ${r.rang}</span>
+          <span><span class="role-title">${esc(r.label)}</span>
+            <span class="role-sub">${esc(r.desc || 'rôle personnalisé')}</span></span>
+          <span class="lite-m">${r.membres} membre(s)</span>
+          <span class="lite-m">${r.key === 'direction' ? 'tous les droits' : r.perms.length + ' droit(s)'}</span>
+        </summary>
+        <div class="role-body">
+          ${roles.groupes.map(g => `
+            <div>
+              <div class="grp-label">${esc(g.label)}</div>
+              <div class="checks">${roles.perms.filter(x => x.groupe === g.id).map(x => `
+                <label class="check">
+                  <input type="checkbox" data-pperm="${esc(x.id)}" data-prk="${esc(r.key)}"
+                    ${r.perms.includes(x.id) ? 'checked' : ''}
+                    ${r.key === 'direction' || !roles.peutComposer || r.rang >= roles.monRang
+                      || !roles.mesDroits.includes(x.id) ? 'disabled' : ''}>
+                  ${esc(x.label)}</label>`).join('')}</div>
+            </div>`).join('')}
+          ${r.key === 'direction'
+            ? '<span class="lite-m">⚠️ La Direction porte tous les droits <b>par construction</b>, jamais par une liste enregistrée : sans cela, décocher la gouvernance fermerait la porte à tout le monde, y compris à soi.</span>'
+            : (roles.peutComposer && r.rang < roles.monRang ? `
+              <div class="tools">
+                <button class="btn sm primary" data-prsave="${esc(r.key)}">Enregistrer ce rôle</button>
+                ${r.builtin ? '<span class="lite-m">Rôle d’origine : il ne se supprime pas.</span>'
+                  : `<button class="btn sm danger" data-prdel="${esc(r.key)}" data-prname="${esc(r.label)}">Supprimer le rôle</button>`}
+              </div>
+              <span class="lite-m">⚠️ Vous ne pouvez accorder que des droits que vous détenez vous-même —
+                sinon un droit de composition suffirait à s’attribuer tout le reste. Les cases
+                hors de votre portée sont inertes.</span>`
+              : '<span class="lite-m">Ce rôle est à votre niveau ou au-dessus : vous ne le composez pas.</span>')}
+        </div>
+      </details>`).join('')}
+
+    ${roles.peutComposer ? `
+      <div class="grid"><div class="panel">
+        <div class="panel-head"><h2 class="eyebrow">Créer un rôle</h2></div>
+        <div class="panel-body">
+          <div class="map-row" style="border:none">
+            <span><span class="map-name">Nom du rôle</span>
+              <span class="map-desc">Ex. « Facturation », « Support niveau 1 ».</span></span>
+            <input class="input" id="pnrLabel" placeholder="Facturation" maxlength="40">
+          </div>
+          <div class="map-row" style="border:none">
+            <span><span class="map-name">Rang</span>
+              <span class="map-desc">Sous le vôtre (${roles.monRang}) : le rang décide qui gouverne qui.</span></span>
+            <input class="input" id="pnrRang" type="number" min="0" max="${Math.max(0, roles.monRang - 1)}" value="40">
+          </div>
+          <div class="tools"><button class="btn primary" id="pnrGo">Créer le rôle</button></div>
+          <span class="lite-m">⚠️ Le rôle naît <b>sans aucun droit</b> : vous les cochez ensuite, un par un.
+            Naître avec des droits par défaut, c'est en accorder sans les avoir choisis.</span>
+        </div>
+      </div></div>` : ''}
+
+    <div class="grid"><div class="panel">
+      <div class="panel-head"><h2 class="eyebrow">Discord officiel d’Origin Logs</h2></div>
+      <div class="panel-body">
+        <span class="lite-m">⚠️ C’est <b>votre</b> serveur Discord, pas celui d’un client. Un rôle porté
+          là donne un rôle <b>sur la plateforme</b> — jamais un droit sur les journaux d’un client,
+          qui se gagnent sur le Discord du client et nulle part ailleurs.</span>
+        ${dc.peutRegler ? `
+          <div class="field" style="margin-top:10px"><label for="pdcGuild">Identifiant de votre serveur Discord</label>
+            <input class="input" id="pdcGuild" value="${esc(dc.guildId || '')}" inputmode="numeric"></div>
+          <div class="tools" style="margin:10px 0">
+            <button class="btn sm" id="pdcLoad">Charger les rôles du serveur</button>
+            <button class="btn sm primary" id="pdcSave">Enregistrer</button>
+          </div>
+          <div>${(PEQ.roles.roles || []).map(r => `
+            <div class="map-row">
+              <span><span class="map-name">${esc(r.label)} <span class="map-rank">rang ${r.rang}</span></span>
+                <span class="map-desc">${esc(r.desc || '')}</span></span>
+              ${PDROLES ? `<select class="input" data-pdcmap="${esc(r.key)}">
+                  <option value="">— non relié —</option>
+                  ${PDROLES.map(d => `<option value="${esc(d.id)}" ${String(dc.roleMap[r.key] || '') === String(d.id) ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
+                </select>`
+                : `<input class="input" data-pdcmap="${esc(r.key)}" value="${esc(dc.roleMap[r.key] || '')}"
+                          placeholder="ID du rôle Discord" inputmode="numeric">`}
+            </div>`).join('')}</div>`
+        : '<span class="lite-m" style="display:block;margin-top:8px">Votre rôle ne permet pas de régler la liaison.</span>'}
+      </div>
+    </div></div>`;
+}
+
+/* ---------- le journal d'une personne ----------
+   ⚠️ Filtré sur son IDENTIFIANT, pas sur son pseudo : deux environnements
+   peuvent chacun avoir leur « Nyx », et une recherche textuelle aurait
+   attribué à l'un les gestes de l'autre. */
+async function journalMembre(id, nom) {
+  let d;
+  try { d = await api('/api/platform/journal?limit=200&membre=' + encodeURIComponent(id)); }
+  catch (e) { return toast(e.message); }
+  const l = d.entrees || [];
+  openSheet('Journal de ' + nom, `${l.length} action(s) enregistrée(s)`,
+    { name: nom }, `
+    <span class="lite-m">Tout ce que ce compte a fait sur la plateforme et dans les environnements.
+      Le journal ne se modifie pas et ne s’efface pas : c’est ce qui en fait une trace.</span>
+    ${l.length ? `<div class="reg-scroll"><table class="jrn">
+      <thead><tr><th scope="col">Quand</th><th scope="col">Environnement</th>
+        <th scope="col">Action</th><th scope="col">Détail</th></tr></thead>
+      <tbody>${l.map(e => `<tr>
+        <td class="j-t">${dayLabel(e.ts)} ${hhmmss(e.ts)}</td>
+        <td class="j-d">${esc(e.espace || '—')}</td>
+        <td class="j-a">${esc(e.action)}</td>
+        <td class="j-d">${esc(e.detail || '')}</td></tr>`).join('')}</tbody>
+    </table></div>`
+    : `<div class="void"><b>Rien à afficher</b><span>Ce compte n’a encore rien fait.</span></div>`}`);
 }
 
 let PDROLES = null;
 
-async function ajouterAEquipePlateforme() {
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('[data-staffpart],[data-pjournal],[data-psave],[data-pout],[data-psuspend],'
+    + '[data-prsave],[data-prdel]');
+  if (!t) {
+    const id = ev.target.id;
+    if (id === 'pAddGo')  { ev.stopImmediatePropagation(); return ajouterAEquipe(); }
+    if (id === 'pnrGo')   { ev.stopImmediatePropagation(); return creerRolePlateforme(); }
+    if (id === 'pdcSave') { ev.stopImmediatePropagation(); return enregistrerDiscordPlateforme(); }
+    if (id === 'pdcLoad') { ev.stopImmediatePropagation(); return chargerRolesDiscordPlateforme(); }
+    return;
+  }
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  const D = t.dataset;
+  if (D.staffpart) { STAFF_PART = D.staffpart; return rendreStaff(); }
+  if (D.pjournal)  return journalMembre(D.pjournal, D.pname || '');
+  if (D.psave) {
+    const sel = document.querySelector(`[data-prole="${D.psave}"]`);
+    try { await api('/api/platform/members/' + D.psave, { method:'PATCH',
+            body: JSON.stringify({ platformRole: sel ? sel.value : undefined }) });
+          toast('Rôle appliqué.'); PEQ = null; chargerStaff(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.psuspend) {
+    try { await api('/api/platform/members/' + D.psuspend, { method:'PATCH',
+            body: JSON.stringify({ disabled: D.off !== '1' }) });
+          toast(D.off === '1' ? 'Accès rétabli.' : 'Accès suspendu.');
+          PEQ = null; chargerStaff(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.pout) {
+    // ⚠️ « Virer » de l'ÉQUIPE n'est pas supprimer le compte : la
+    // personne garde son environnement et son accès de staff client.
+    // Confondre les deux ferait perdre un modérateur en retirant un
+    // commercial.
+    if (!confirm(`Retirer ${D.pname} de l’équipe d’Origin Logs ?\n\n`
+      + `Son compte et son environnement restent : il perd les droits de plateforme, rien d’autre.`)) return;
+    try { await api('/api/platform/members/' + D.pout, { method:'PATCH',
+            body: JSON.stringify({ platform: false }) });
+          toast('Retiré de l’équipe.'); PEQ = null; chargerStaff(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.prsave) {
+    const perms = [...document.querySelectorAll(`[data-pperm][data-prk="${CSS.escape(D.prsave)}"]`)]
+      .filter(n => n.checked).map(n => n.dataset.pperm);
+    try { await api('/api/platform/roles/' + encodeURIComponent(D.prsave),
+            { method:'PATCH', body: JSON.stringify({ perms }) });
+          toast('Rôle enregistré.'); PEQ = null; chargerStaff(); } catch (e) { toast(e.message); }
+    return;
+  }
+  if (D.prdel) {
+    if (!confirm(`Supprimer le rôle « ${D.prname} » ?\n\n`
+      + `Les personnes qui le portent doivent d’abord en recevoir un autre.`)) return;
+    try { await api('/api/platform/roles/' + encodeURIComponent(D.prdel), { method:'DELETE' });
+          toast('Rôle supprimé.'); PEQ = null; chargerStaff(); } catch (e) { toast(e.message); }
+    return;
+  }
+}, true);
+
+async function ajouterAEquipe() {
   const qui = $('#pAddQui'), role = $('#pAddRole');
   if (!qui || !qui.value) return toast('Choisissez un compte.');
-  try { await api('/api/platform/members/' + qui.value, { method:'PATCH',
-          body: JSON.stringify({ platform: true, platformRole: role.value }) });
-        toast('Ajouté à l’équipe.'); await ouvrirEquipePlateforme(); }
-  catch (e) { toast(e.message); }
+  try {
+    await api('/api/platform/members/' + qui.value, { method:'PATCH',
+      body: JSON.stringify({ platform: true, platformRole: role ? role.value : undefined }) });
+    toast('Ajouté à l’équipe.'); PEQ = null; chargerStaff();
+  } catch (e) { toast(e.message); }
 }
 
 async function creerRolePlateforme() {
   const label = ($('#pnrLabel') || {}).value || '';
+  const rang = Number(($('#pnrRang') || {}).value) || 0;
   if (label.trim().length < 2) return toast('Donnez un nom au rôle.');
-  try { await api('/api/platform/roles', { method:'POST',
-          body: JSON.stringify({ label, rang: Number(($('#pnrRang') || {}).value) || 0, perms: [] }) });
-        toast('Rôle créé — il n’a encore aucun droit.'); await ouvrirEquipePlateforme(); }
-  catch (e) { toast(e.message); }
-}
-
-async function chargerRolesDiscordPlateforme() {
-  const g = ($('#pdcGuild') || {}).value || '';
-  try { await api('/api/platform/discord', { method:'POST', body: JSON.stringify({ guildId: g }) });
-        PDROLES = (await api('/api/platform/discord/roles')).roles || [];
-        toast(PDROLES.length + ' rôle(s) lus sur votre serveur.');
-        await ouvrirEquipePlateforme(); }
-  catch (e) { toast(e.message); }
+  try {
+    await api('/api/platform/roles', { method:'POST', body: JSON.stringify({ label, rang, perms: [] }) });
+    toast('Rôle créé — cochez maintenant ses droits.'); PEQ = null; chargerStaff();
+  } catch (e) { toast(e.message); }
 }
 
 async function enregistrerDiscordPlateforme() {
   const roleMap = {};
-  document.querySelectorAll('[data-pdc]').forEach(n => { if (n.value) roleMap[n.dataset.pdc] = n.value.trim(); });
-  try { await api('/api/platform/discord', { method:'POST',
-          body: JSON.stringify({ guildId: ($('#pdcGuild') || {}).value || '', roleMap }) });
-        toast('Liaison enregistrée.'); await ouvrirEquipePlateforme(); }
-  catch (e) { toast(e.message); }
+  document.querySelectorAll('[data-pdcmap]').forEach(n => roleMap[n.dataset.pdcmap] = n.value.trim());
+  try {
+    await api('/api/platform/discord', { method:'POST',
+      body: JSON.stringify({ guildId: ($('#pdcGuild') || {}).value || '', roleMap }) });
+    toast('Liaison enregistrée.'); PEQ = null; chargerStaff();
+  } catch (e) { toast(e.message); }
 }
 
-async function actionEquipePlateforme(D) {
-  const recharger = async (msg) => { toast(msg); await ouvrirEquipePlateforme(); };
-  if (D.psave) {
-    const sel = document.querySelector(`[data-prole="${D.psave}"]`);
-    try { await api('/api/platform/members/' + D.psave, { method:'PATCH',
-            body: JSON.stringify({ platformRole: sel.value }) });
-          return recharger('Rôle appliqué — ses sessions sont fermées.'); }
-    catch (e) { return toast(e.message); }
-  }
-  if (D.pout) {
-    if (!confirm(`Retirer ${D.pname} de l’équipe de la plateforme ?\n\nSon compte et son espace restent intacts : il perd seulement les droits d’administration.`)) return;
-    try { await api('/api/platform/members/' + D.pout, { method:'PATCH', body: JSON.stringify({ platform: false }) });
-          return recharger('Retiré de l’équipe.'); }
-    catch (e) { return toast(e.message); }
-  }
-  if (D.prsave) {
-    const perms = [...document.querySelectorAll(`[data-pperm][data-prk="${D.prsave}"]`)]
-      .filter(n => n.checked).map(n => n.dataset.pperm);
-    try { await api('/api/platform/roles/' + encodeURIComponent(D.prsave), { method:'PATCH',
-            body: JSON.stringify({ perms }) });
-          return recharger('Rôle enregistré — les sessions concernées sont fermées.'); }
-    catch (e) { return toast(e.message); }
-  }
-  if (D.prdel) {
-    if (!confirm(`Supprimer le rôle « ${D.prname} » ?`)) return;
-    try { await api('/api/platform/roles/' + encodeURIComponent(D.prdel), { method:'DELETE' });
-          return recharger('Rôle supprimé.'); }
-    catch (e) { return toast(e.message); }
-  }
+async function chargerRolesDiscordPlateforme() {
+  try {
+    await enregistrerDiscordPlateforme();
+    const d = await api('/api/platform/discord/roles');
+    PDROLES = d.roles || [];
+    toast(`${PDROLES.length} rôles lus sur votre serveur Discord`);
+    PEQ = null; chargerStaff();
+  } catch (e) { toast(e.message); }
 }
 /* ---------- propriétaire : on choisit parmi les membres de l'espace ---------- */
 async function choisirProprietaire(spaceId) {
@@ -5563,7 +5841,7 @@ document.addEventListener('change', ev => {
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
     + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],[data-brancher],[data-integ],[data-rgpd],[data-relais],'
-    + '[data-export],[data-sauvdl],[data-sauvrm],[data-ilua],[data-iscan],[data-goesp],[data-psave],[data-pout],[data-prsave],[data-prdel],[data-envedit],'
+    + '[data-export],[data-sauvdl],[data-sauvrm],[data-ilua],[data-iscan],[data-goesp],[data-envedit],'
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
@@ -5619,11 +5897,7 @@ document.addEventListener('click', async ev => {
     return;
   }
   if (D.sortir) return sortirEspace();
-  if (D.enter) {
-    try { const r = await api('/api/platform/enter', { method:'POST', body: JSON.stringify({ spaceId: Number(D.enter) }) });
-          toast('Vous êtes dans « ' + r.espace + ' ».'); location.reload(); } catch (e) { toast(e.message); }
-    return;
-  }
+  if (D.enter) return entrerEspace(D.enter);
   if (D.spacetoggle) {
     const fermer = D.etat === 'actif';
     const motif = fermer ? prompt('Motif de fermeture (visible dans la liste) :', '') : null;
@@ -5692,7 +5966,6 @@ document.addEventListener('click', async ev => {
     return;
   }
   if (D.envedit) return ficheEnvironnement(D.envedit);
-  if (D.psave || D.pout || D.prsave || D.prdel) return actionEquipePlateforme(D);
   if (D.goesp) {
     try { const r = await api('/api/espace', { method:'POST', body: JSON.stringify({ spaceId: Number(D.goesp) }) });
           toast('Bienvenue sur ' + r.espace.nom + '.');
@@ -6088,6 +6361,7 @@ document.addEventListener('click', async ev => {
   if (t.dataset.view === 'platformlog')  return goVue('platformlog');
   if (t.dataset.view === 'spaces')       return goVue('spaces');
   if (t.dataset.view === 'plans')        return goVue('plans');
+  if (t.dataset.view === 'staff')        return goVue('staff');
   if (t.dataset.view === 'overview') return goOverview();
   if (t.dataset.view === 'online') return goVue('online');
   if (t.dataset.view === 'team')   return goVue('team');
@@ -6336,12 +6610,111 @@ function onLive(e) {
    rester après coup lui ferait relire un flux de modération qui n'est pas
    son travail, et lui masquerait la supervision. ---------- */
 async function sortirEspace() {
-  if (MODE === 'demo') return toast('Mode démonstration : rien n’est enregistré.');
+  if (MODE === 'demo') return poserEspaceDemo(null);
   try {
     await api('/api/platform/enter', { method:'POST', body: JSON.stringify({ spaceId: 0 }) });
     location.hash = '#/plateforme';
     location.reload();
   } catch (e) { toast(e.message); }
+}
+
+/* ============================================================
+   L'IDENTITÉ DE LA PAGE SUIT L'ENDROIT OÙ L'ON EST
+   ⚠️ LA MARQUE ÉTAIT CELLE D'UN CLIENT, EN DUR, SUR TOUTES LES PAGES.
+   « Origin Roleplay » s'affichait en haut du rail qu'on suive dix
+   serveurs ou qu'on soit entré chez l'un d'eux : la plateforme portait
+   le nom de son premier client, et rien ne disait chez qui l'on venait
+   d'entrer. Hors environnement on est sur ORIGIN LOGS ; dedans, la page
+   prend le nom du client, sa couleur et ses initiales.
+   ⚠️ Et tout se repeint SANS RECHARGER : la fonction est rappelée à
+   l'entrée comme à la sortie, sinon l'aperçu (qui n'a pas de serveur à
+   qui demander une nouvelle session) serait resté sur l'ancienne marque.
+   ============================================================ */
+function peindreIdentite() {
+  const esp = ME.espace, dans = !!esp;
+  const nom = dans ? esp.nom : 'Origin Logs';
+  const mk = $('#brandMark');
+  if (mk) {
+    mk.textContent = dans ? initials({ name: nom }) : 'OL';
+    // Une couleur par client : deux onglets ouverts côte à côte ne se
+    // confondent plus, et l'on voit d'un coup d'œil chez qui l'on est.
+    mk.style.cssText = dans ? avatarStyle({ name: nom }) : '';
+    mk.title = dans ? nom : 'Origin Logs — la plateforme';
+  }
+  if ($('#brandName')) $('#brandName').textContent = nom;
+  if ($('#brandSub'))  $('#brandSub').textContent = dans ? 'Journal serveur' : 'Plateforme';
+  document.title = (dans ? nom + ' — journal serveur' : 'Origin Logs')
+                 + (ME.pseudo ? ' (' + ME.pseudo + ')' : '');
+
+  // ⚠️ Ces boutons agissent DANS un environnement : hors de tout espace
+  // ils ouvriraient des écrans que l'API refuse (409).
+  const b = (sel, on) => { const n = $(sel); if (n) n.hidden = !on; };
+  b('#teamBtn',     dans && can('accounts.manage'));
+  b('#rolesBtn',    dans && can('roles.manage'));
+  b('#discordBtn',  dans && can('settings.discord'));
+  b('#auditBtn',    dans && can('audit.view'));
+  b('#platformBtn', ME.plateforme);
+  if ($('#platTeamBtn')) $('#platTeamBtn').hidden = !canPlat('plat.equipe.voir');
+  // La recherche, la période, le direct et l'export portent tous sur les
+  // journaux d'un environnement : dehors, ils ne cherchent rien.
+  for (const sel of ['#findBox', '#rangeSeg', '#liveBtn', '#railLive']) b(sel, dans);
+  b('#exportBtn', dans && can('logs.export'));
+
+  const tag = $('#modeTag'); if (!tag) return;
+  tag.onclick = null; tag.removeAttribute('role'); tag.removeAttribute('tabindex');
+  const apercu = MODE !== 'api';
+  if (dans && (ME.plateforme || apercu)) {
+    // Une visite doit se voir : on ne modère pas un autre serveur en
+    // croyant être chez soi. Et elle se quitte d'un clic — entrer sans
+    // pouvoir ressortir serait un aller simple.
+    // ⚠️ LA CROIX NE SE TRONQUE JAMAIS : le nom d'un client peut être
+    // long, et c'est la seule façon de RESSORTIR.
+    tag.className = 'tag-mode demo';
+    tag.innerHTML = `<span class="tag-nom">${apercu ? 'aperçu' : 'visite'} — ${esc(nom)}</span>`
+                  + `<span class="tag-x" aria-hidden="true">✕</span>`;
+    tag.title = apercu
+      ? 'Aperçu : vous êtes entré dans un environnement de démonstration. Cliquez pour ressortir.'
+      : 'Administration de plateforme : vous passez avant le fondateur de cet environnement. Cliquez pour ressortir.';
+    tag.setAttribute('role', 'button'); tag.setAttribute('tabindex', '0');
+    tag.onclick = sortirEspace;
+  } else if (dans) {
+    tag.className = 'tag-mode live';
+    tag.textContent = nom;
+    // ⚠️ Un modérateur peut être staff sur DEUX serveurs clients. Sans ce
+    // sélecteur, la connexion le posait dans le premier espace qui
+    // l'acceptait et le second était inatteignable.
+    if (MODE === 'api') chargerMesEspaces();
+  } else {
+    tag.className = 'tag-mode demo';
+    tag.textContent = apercu ? 'aperçu — aucun environnement' : 'plateforme — aucun environnement';
+    tag.title = 'Vous suivez tous les environnements. Entrez dans l’un d’eux '
+              + 'depuis « Liste des environnements ».';
+  }
+}
+
+/* ---------- entrer chez un client ----------
+   ⚠️ EN DÉMONSTRATION, ENTRER NE RECHARGE RIEN. La page servie par l'API
+   se recharge parce que la session change côté serveur ; l'aperçu, lui,
+   n'a pas de serveur — un rechargement le ramenait à son point de départ,
+   c'est-à-dire dehors, et le bouton « Entrer » paraissait cassé. */
+async function entrerEspace(id) {
+  if (MODE === 'demo') return poserEspaceDemo(Number(id));
+  try {
+    const r = await api('/api/platform/enter', { method:'POST', body: JSON.stringify({ spaceId: Number(id) }) });
+    toast('Vous êtes dans « ' + r.espace + ' ».');
+    location.reload();
+  } catch (e) { toast(e.message); }
+}
+
+function poserEspaceDemo(id) {
+  const sp = id ? (DEMO_ESPACES || []).find(x => x.id === id) : null;
+  if (id && !sp) return toast('Environnement introuvable.');
+  ME.espace = sp ? { id: sp.id, nom: sp.nom, visite: true } : null;
+  closeSheet();
+  STATE.view = sp ? 'overview' : 'spaces';
+  STATE.cat = 'all'; STATE.list = []; STATE.limit = 120;
+  peindreIdentite(); buildNav(); syncHash(); render(); refresh(); startStream();
+  toast(sp ? 'Vous êtes dans « ' + sp.nom + ' ».' : 'Vous êtes ressorti — retour à Origin Logs.');
 }
 
 function startStream() {
@@ -6452,8 +6825,6 @@ async function startPanel() {
       $('#retention').textContent = c.conservationIllimitee ? 'illimitée'
         : (c.retention || 30) + ' jours';
     } catch (e) {}
-    $('#modeTag').className = 'tag-mode live';
-    $('#modeTag').textContent = 'en production';
     $('#demoNote').hidden = true;
     $('#whoBox').hidden = false;
     $('#whoName').textContent = ME.pseudo;
@@ -6466,54 +6837,6 @@ async function startPanel() {
     }
     $('#whoAv').style.cssText = avatarStyle({ name: ME.pseudo, hue: 268 });
     $('#whoAv').textContent = initials({ name: ME.pseudo });
-    // ⚠️ Ces cinq boutons agissent DANS un espace : sans espace courant,
-    // ils ouvriraient des écrans que l'API refuse (409). Seul « Espaces de
-    // logs » reste — c'est par lui qu'on entre quelque part.
-    const dansUnEspace = !!ME.espace;
-    $('#teamBtn').hidden = !can('accounts.manage') || !dansUnEspace;
-    $('#rolesBtn').hidden = !can('roles.manage') || !dansUnEspace;
-    $('#discordBtn').hidden = !can('settings.discord') || !dansUnEspace;
-    $('#platformBtn').hidden = !ME.plateforme;
-    if ($('#platTeamBtn')) $('#platTeamBtn').hidden = !canPlat('plat.equipe.voir');
-    if (ME.espace && ME.espace.visite) {
-      // Une visite d'administration doit se voir : on ne modère pas un
-      // autre serveur en croyant être chez soi. Et elle se quitte d'un
-      // clic — entrer sans pouvoir ressortir serait un aller simple.
-      $('#modeTag').className = 'tag-mode demo';
-      // ⚠️ LA CROIX NE SE TRONQUE JAMAIS. Le nom d'un espace peut être
-      // long, et l'étiquette se coupe pour ne pas pousser l'identité à la
-      // ligne : quand tout était un seul texte, c'est la croix — la seule
-      // façon de RESSORTIR de l'espace — qui disparaissait la première.
-      $('#modeTag').innerHTML =
-        `<span class="tag-nom">visite — ${esc(ME.espace.nom)}</span><span class="tag-x" aria-hidden="true">✕</span>`;
-      $('#modeTag').title = 'Administration de plateforme : vous passez avant le fondateur de cet espace. Cliquez pour ressortir.';
-      $('#modeTag').setAttribute('role', 'button');
-      $('#modeTag').setAttribute('tabindex', '0');
-      $('#modeTag').onclick = sortirEspace;
-    } else if (ME.espace) {
-      $('#modeTag').textContent = ME.espace.nom;
-      // ⚠️ Un modérateur peut être staff sur DEUX serveurs clients. Sans
-      // ce sélecteur, la connexion le posait dans le premier espace qui
-      // l'acceptait et le second était inatteignable : se déconnecter et
-      // se reconnecter ramenait au même. On ne l'affiche que s'il y a
-      // vraiment le choix — une liste d'un seul élément n'est pas un choix.
-      chargerMesEspaces();
-    } else if (ME.plateforme) {
-      // Aucun espace : le dire franchement. « Origin Roleplay » en barre
-      // laisserait croire qu'on est quelque part.
-      $('#modeTag').className = 'tag-mode demo';
-      $('#modeTag').textContent = 'administration — aucun espace';
-      $('#modeTag').title = 'Vous suivez tous les espaces. Entrez dans l’un d’eux depuis « Espaces de logs » ou la supervision.';
-    }
-    $('#auditBtn').hidden = !can('audit.view') || !dansUnEspace;
-    // La recherche, la période, le direct et l'export portent tous sur les
-    // journaux d'un espace : hors espace, ils ne cherchent rien.
-    for (const sel of ['#findBox', '#rangeSeg', '#liveBtn', '#railLive'])
-      { const n = $(sel); if (n) n.hidden = !dansUnEspace; }
-    // L'export sort des données du panneau : bouton absent, pas inerte,
-    // quand le rôle ne l'a pas — un bouton qui refuse n'apprend rien.
-    $('#exportBtn').hidden = !dansUnEspace || !can('logs.export');
-    document.title = `Origin Roleplay — Journal serveur (${ME.pseudo})`;
   }
   if (MODE === 'demo') {
     // L'aperçu montre le panneau tel que le voit un FONDATEUR : c'est le
@@ -6521,9 +6844,11 @@ async function startPanel() {
     ME.pseudo = 'Owen'; ME.role = 'fondateur'; ME.roleLabel = 'Fondateur';
     ME.roles = [{ id:'fondateur', label:'Fondateur' }];
     ME.source = 'local'; ME.plateforme = true;
-    // L'aperçu montre un administrateur DÉJÀ ENTRÉ dans un espace : c'est
-    // l'état où le panneau a le plus à montrer.
-    ME.espace = { id:1, nom:'Origin Roleplay', visite:false };
+    // ⚠️ ON N'ARRIVE DANS AUCUN ENVIRONNEMENT. L'aperçu ouvrait
+    // directement le panneau du premier client : on croyait que le
+    // produit ÉTAIT ce serveur-là, et rien ne disait qu'on en surveille
+    // plusieurs. On arrive sur Origin Logs, et l'on choisit où entrer.
+    ME.espace = null;
     ME.perms = DEMO_PERMS.map(p => p.id); ME.cats = CATS.map(c => c.id);
     $('#whoBox').hidden = false;
     $('#whoName').textContent = ME.pseudo;
@@ -6531,9 +6856,8 @@ async function startPanel() {
     $('#whoAv').style.cssText = avatarStyle({ name:'Owen', hue:272 });
     $('#whoAv').textContent = 'OW';
     $('#logoutBtn').hidden = true;
-    for (const b of ['#teamBtn', '#rolesBtn', '#discordBtn', '#platformBtn', '#auditBtn', '#exportBtn'])
-      $(b).hidden = false;
   }
+  peindreIdentite();
   buildNav();
   placerPeriode();   // sinon le bloc glissant démarre sous « 1 h » alors que « 24 h » est actif
   // Sans adresse précise, l'administration de plateforme atterrit sur sa

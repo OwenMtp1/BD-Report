@@ -139,6 +139,21 @@ t('et le serveur envoie ce que l’offre vend', /catsFormule/.test(P));
 t('une case verrouillée reste lue à l’enregistrement',
   /\.filter\(n => n\.checked\)\.map\(n => n\.dataset\[attr\]\)/.test(P));
 
+sect('Une offre ne porte plus aucun plafond TECHNIQUE');
+// ⚠️ Personne n'achète « 120 dépôts par minute » ni « 512 Mo d'images ».
+// Les faire vivre dans une offre revenait à vendre au client une panne
+// qu'on lui inflige ensuite, un soir de rush, sans qu'il comprenne.
+t('ni quota d’images ni débit dans le formulaire',
+  !/id="ofQuota"/.test(P) && !/id="ofIngest"/.test(P));
+t('et le serveur ne les lit plus non plus',
+  !/screenQuota/.test(P) && !/maxIngest/.test(P));
+t('⚠️ « illimité » SE COCHE, il ne se devine plus à un champ vide',
+  /function champPlafond/.test(P) && /data-illimite="/.test(P));
+t('la case éteint son champ plutôt que d’afficher un plafond qui ne s’applique pas',
+  /champ\.disabled = c\.checked/.test(P) && /if \(c\.checked\) champ\.value = ''/.test(P));
+t('⚠️ et un champ vide N’EST PAS « illimité » : on le refuse au lieu de livrer l’offre la plus large',
+  /_vides/.test(P) && /donnez un nombre, ou cochez/.test(P));
+
 sect('La durée de conservation se règle sur chaque environnement');
 // ⚠️ Elle ne se posait qu'à la création de l'espace : un client qui la
 // renégocie six semaines plus tard obligeait à passer par la console.
@@ -146,6 +161,51 @@ t('le champ est sur la fiche de l’environnement', /data-spfield="retention"/.t
 t('et l’enregistrement l’emporte', /retention: val\('retention'\)/.test(P));
 t('⚠️ le plafond de l’offre est NOMMÉ quand il prend le dessus',
   /plafondConservation/.test(P) && /plafonne à ' \+ sp\.plafondConservation/.test(P));
+
+sect('On arrive sur Origin Logs, pas chez un client');
+// ⚠️ La marque affichait « Origin Roleplay » EN DUR, c'est-à-dire le nom
+// d'un client, sur toutes les pages : la plateforme portait le nom de son
+// premier client, et rien ne disait chez qui l'on venait d'entrer.
+t('la marque est adressable', /id="brandMark"/.test(P) && /id="brandName"/.test(P) && /id="brandSub"/.test(P));
+t('⚠️ plus aucun nom de client en dur dans la coquille',
+  !/class="brand-name" id="brandName">Origin Roleplay/.test(P));
+t('hors environnement, c’est Origin Logs', /dans \? esp\.nom : 'Origin Logs'/.test(P));
+t('dedans, la page prend le nom du client, ses initiales et sa couleur',
+  /initials\(\{ name: nom \}\) : 'OL'/.test(P) && /avatarStyle\(\{ name: nom \}\)/.test(P));
+t('et l’onglet du navigateur le dit aussi', /document\.title = \(dans \? nom/.test(P));
+t('⚠️ l’aperçu n’atterrit dans AUCUN environnement', /ME\.espace = null;/.test(P));
+t('⚠️ tout se repeint SANS recharger — sinon l’aperçu, qui n’a pas de serveur, repartait dehors',
+  /function poserEspaceDemo/.test(P) && /peindreIdentite\(\); buildNav\(\)/.test(P));
+t('entrer et ressortir passent par un seul chemin',
+  /function entrerEspace/.test(P) && /if \(D\.enter\) return entrerEspace/.test(P));
+
+sect('Équipe & rôles de la plateforme : un ONGLET, en deux parties');
+// ⚠️ Même leçon que la liste des environnements : cet écran vivait dans
+// une modale, on changeait un rôle, elle se refermait, et il fallait la
+// rouvrir pour la personne suivante.
+t('la vue existe', /id="viewStaff"/.test(P));
+t('elle a son entrée dans le rail', /data-view="staff"/.test(P));
+t('et son adresse', /'\/equipe-plateforme'/.test(P));
+t('⚠️ le clic du rail la route vraiment', /dataset\.view === 'staff'\)\s*return goVue\('staff'\)/.test(P));
+t('⚠️ DEUX parties, pas une page de dix-neuf cases à traverser pour trouver un nom',
+  /data-staffpart="equipe"/.test(P) && /data-staffpart="perms"/.test(P)
+  && /function partieEquipe/.test(P) && /function partiePermissions/.test(P));
+t('l’équipe : changer un rôle, suspendre, virer',
+  /data-prole="/.test(P) && /data-psuspend="/.test(P) && /data-pout="/.test(P));
+t('⚠️ « virer » de l’équipe n’est pas supprimer le compte, et le dialogue le dit',
+  /Son compte et son environnement restent/.test(P));
+t('le journal personnel de chacun est à un clic', /data-pjournal="/.test(P) && /function journalMembre/.test(P));
+t('⚠️ et il se filtre sur l’IDENTIFIANT, pas sur le pseudo — deux espaces ont chacun leur « Nyx »',
+  /journal\?limit=200&membre=/.test(P));
+t('les permissions : toutes les cases, par groupe', /data-pperm="/.test(P) && /roles\.groupes\.map/.test(P));
+t('créer et supprimer un rôle', /id="pnrGo"/.test(P) && /data-prdel="/.test(P) && /data-prsave="/.test(P));
+t('⚠️ la Direction reste inerte : décocher la gouvernance fermerait la porte à tout le monde',
+  /r\.key === 'direction' \|\| !roles\.peutComposer/.test(P));
+t('⚠️ on n’accorde que des droits qu’on détient soi-même',
+  /!roles\.mesDroits\.includes\(x\.id\) \? 'disabled'/.test(P));
+t('un rôle naît SANS aucun droit', /perms: \[\] \}\)/.test(P) && /naît <b>sans aucun droit<\/b>/.test(P));
+t('⚠️ UNE SEULE implémentation : le raccourci du rail ouvre l’onglet, il ne rouvre pas une modale',
+  /function ouvrirEquipePlateforme\(\) \{ goVue\('staff'\); \}/.test(P));
 
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);

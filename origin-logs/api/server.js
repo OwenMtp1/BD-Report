@@ -1521,9 +1521,13 @@ async function route(req, res) {
     }
     // ⚠️ AVANT de lire le corps : refuser après l'avoir absorbé aurait
     // quand même fait passer deux mégaoctets par la machine à chaque coup.
-    const plafond = PLANS.forSpace(db, esp).maxIngest;
-    const attente = debit('ingest:' + esp.id,
-      plafond == null ? CFG.maxIngestMin : Math.min(plafond, CFG.maxIngestMin), 60000);
+    // ⚠️ LE DÉBIT N'EST PLUS UN ARGUMENT DE VENTE. Il l'était par offre :
+    // personne n'achète « 120 dépôts par minute », et le brider par
+    // formule revenait à vendre au client une panne qu'on lui inflige
+    // ensuite, un soir de rush, sans qu'il comprenne pourquoi. Le
+    // plafond reste — c'est la machine qu'il protège — et il est le
+    // même pour tous.
+    const attente = debit('ingest:' + esp.id, CFG.maxIngestMin, 60000);
     if (attente) {
       res.setHeader('retry-after', String(attente));
       return fail(res, 429, `Trop de dépôts pour cet espace. Réessayez dans ${attente} s.`);
@@ -1714,12 +1718,13 @@ async function route(req, res) {
     // lui, borne le TOTAL — et il REFUSE plutôt que d'effacer d'anciennes
     // captures, qui sont peut-être justement celles d'une enquête.
     const occupe = DB.row(db.prepare('SELECT COALESCE(SUM(bytes),0) n FROM screens WHERE space_id = ?').get(esp.id)).n;
-    // Le plafond le plus BAS s'applique : celui de la formule, ou celui
-    // du serveur. Une formule ne peut pas promettre plus que la machine.
-    const quotaMo = planEsp.screenQuota == null ? CFG.screenQuotaMb
-                                                : Math.min(planEsp.screenQuota, CFG.screenQuotaMb);
+    // ⚠️ LE QUOTA N'EST PLUS VENDU NON PLUS : c'est la place qui reste
+    // sur le disque, pas une option. Le même pour tous, réglé par le
+    // serveur (SCREEN_QUOTA_MB) — une offre qui promettait 512 Mo
+    // promettait surtout un refus le jour où le client s'en servait.
+    const quotaMo = CFG.screenQuotaMb;
     if (occupe >= quotaMo * 1048576)
-      return fail(res, 507, `Quota de captures atteint pour cet espace (${quotaMo} Mo, formule « ${planEsp.label} »).`);
+      return fail(res, 507, `Quota de captures atteint pour cet espace (${quotaMo} Mo).`);
     let buf;
     try { buf = await readBinary(req, CFG.maxScreen); }
     catch (e) { return fail(res, 413, 'Capture trop volumineuse (plafond ' + Math.round(CFG.maxScreen / 1048576) + ' Mo).'); }
@@ -2961,6 +2966,11 @@ async function route(req, res) {
         if (!platNeed('plat.journal')) return;
         const w = [], a = [];
         if (N(Q.space)) { w.push('a.space_id = ?'); a.push(N(Q.space)); }
+        // ⚠️ LE JOURNAL D'UNE PERSONNE SE FILTRE PAR SON IDENTIFIANT, pas
+        // par son pseudo : deux espaces peuvent chacun avoir leur « Nyx »,
+        // et une recherche textuelle aurait mélangé les deux — donc
+        // attribué à quelqu'un des gestes qu'il n'a pas faits.
+        if (N(Q.membre)) { w.push('a.staff_id = ?'); a.push(N(Q.membre)); }
         if (Q.action)   { w.push('a.action LIKE ?'); a.push(String(Q.action) + '%'); }
         if (Q.q) { w.push('(a.pseudo LIKE ? OR a.detail LIKE ? OR a.action LIKE ?)');
                    const t = '%' + String(Q.q) + '%'; a.push(t, t, t); }
@@ -3304,12 +3314,11 @@ async function route(req, res) {
         if (PLANS.byKey(db, key)) return fail(res, 409, 'Une formule porte déjà ce nom.');
         const N0 = v => (v === '' || v == null) ? null : Math.max(0, Number(v) || 0);
         db.prepare(`INSERT INTO plans(key,label,rang,prix,max_staff,max_retention,
-                      screens,screen_quota,max_ingest,cats,notes,builtin,created_at)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?)`)
+                      screens,cats,notes,builtin,created_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,0,?)`)
           .run(key, label, Number(b.rang) || 0, String(b.prix || '').slice(0, 40),
                N0(b.maxStaff), N0(b.maxRetention), b.screens === false ? 0 : 1,
-               N0(b.screenQuota), N0(b.maxIngest), catsCol(b.cats),
-               String(b.notes || '').slice(0, 400), now());
+               catsCol(b.cats), String(b.notes || '').slice(0, 400), now());
         PLANS.invalidate();
         audit(me, 'plateforme.formule.creation', label, ip);
         return ok(res, { ok: true, key });
@@ -3330,8 +3339,6 @@ async function route(req, res) {
           if (b.maxStaff !== undefined) poser('max_staff', N0(b.maxStaff));
           if (b.maxRetention !== undefined) poser('max_retention', N0(b.maxRetention));
           if (b.screens !== undefined) poser('screens', b.screens ? 1 : 0);
-          if (b.screenQuota !== undefined) poser('screen_quota', N0(b.screenQuota));
-          if (b.maxIngest !== undefined) poser('max_ingest', N0(b.maxIngest));
           if (b.cats !== undefined) poser('cats', catsCol(b.cats));
           if (b.notes !== undefined) poser('notes', String(b.notes).slice(0, 400));
           if (!sets.length) return ok(res, { ok: true });
