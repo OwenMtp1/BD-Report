@@ -410,6 +410,13 @@ function open(file) {
   ensureColumn(db, 'spaces', 'enroll_code', 'TEXT');
   ensureColumn(db, 'spaces', 'enroll_until', 'INTEGER');
   ensureColumn(db, 'spaces', 'enroll_at', 'INTEGER');
+  // ⚠️ « Ne jamais effacer » est une DÉCISION, pas une durée très longue.
+  // On aurait pu l'écrire `retention = 36500` : ç'aurait été un mensonge
+  // qui expire dans cent ans, invisible dans l'interface comme dans les
+  // exports, et impossible à distinguer d'une valeur saisie de travers.
+  // Une colonne à part se lit, se coche, se décoche, et se raconte au
+  // client dans les termes où il l'a demandée.
+  ensureColumn(db, 'spaces', 'keep_forever', 'INTEGER');
   db.exec('CREATE INDEX IF NOT EXISTS idx_st_space ON staff(space_id)');
   // COLLATE NOCASE : « Nyx » et « nyx » sont le même compte pour qui se
   // connecte, donc le même compte pour l'index.

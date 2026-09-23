@@ -21,6 +21,7 @@ const ROLESVC = require('./roles.js');
 const PLANS = require('./plans.js');
 const SAUV = require('./sauvegarde.js');
 const TRANSF = require('./transfert.js');
+const CONSERV = require('./conservation.js');
 const BRANCH = require('./branchement.js');
 
 /* ---------- configuration ---------- */
@@ -1019,16 +1020,15 @@ function appliquerEcheances() {
   return faits;
 }
 
+/* Voir conservation.js : `jours: null` = on n'efface jamais. */
+const conservation = sp => CONSERV.pour(sp, PLANS.forSpace(db, sp), CFG.retention);
+
 function purge() {
   // Chaque espace garde ses journaux aussi longtemps qu'il l'a décidé.
   let total = 0;
   for (const sp of db.prepare('SELECT * FROM spaces').all().map(DB.row)) {
-    // ⚠️ La formule BORNE la rétention, elle ne la fixe pas : un client
-    // qui choisit 7 jours en formule Illimité garde 7 jours. C'est le
-    // plafond qui descend, jamais la demande qui monte.
-    const max = PLANS.forSpace(db, sp).maxRetention;
-    let jours = Number(sp.retention) || CFG.retention;
-    if (max != null) jours = Math.min(jours, max);
+    const { jours } = conservation(sp);
+    if (jours == null) continue;   // conservation illimitée : rien à effacer
     total += DB.num(db.prepare('DELETE FROM events WHERE space_id = ? AND ts < ?')
                       .run(sp.id, now() - jours * 86400000).changes);
   }
@@ -1036,8 +1036,15 @@ function purge() {
   // ligne : effacer l'une sans l'autre laisserait soit des images que rien
   // ne référence, soit des vignettes qui ne s'ouvrent plus.
   for (const sp of db.prepare('SELECT * FROM spaces').all().map(DB.row)) {
+    // ⚠️ Une capture EST un journal : la garder trois jours de plus que le
+    // reste, ou l'effacer alors que la ligne qui la cite reste, produit une
+    // enquête avec un trou au milieu. La conservation illimitée les couvre
+    // donc aussi — c'est le quota disque (SCREEN_QUOTA_MB) qui borne le
+    // volume, et il REFUSE les nouvelles au lieu d'effacer les anciennes.
+    const c = conservation(sp);
+    if (c.illimite) continue;
     const maxPlan = PLANS.forSpace(db, sp).maxRetention;
-    let jours = CFG.screenDays || Number(sp.retention) || CFG.retention;
+    let jours = CFG.screenDays || c.jours;
     if (maxPlan != null) jours = Math.min(jours, maxPlan);
     const vieilles = db.prepare('SELECT id, file FROM screens WHERE space_id = ? AND taken_at < ?')
       .all(sp.id, now() - jours * 86400000).map(DB.row);
@@ -1711,7 +1718,10 @@ async function route(req, res) {
       roles: sp ? ROLESVC.list(db, sp).map(r => ({ id: r.key, label: r.label, rank: r.rank,
         desc: r.desc, perms: r.perms, cats: r.cats })) : [],
       espace: me && me.space ? { id: me.space.id, nom: me.space.name, etat: me.space.state } : null,
-      retention: (me && me.space && me.space.retention) || CFG.retention });
+      // `null` = jamais effacé. L'écran doit le DIRE : « 0 jour » se lirait
+      // comme « effacé tout de suite », l'exact contraire.
+      retention: me && me.space ? conservation(me.space).jours : CFG.retention,
+      conservationIllimitee: !!(me && me.space && conservation(me.space).illimite) });
   }
 
   if (p.startsWith('/api/')) {
@@ -2533,7 +2543,8 @@ async function route(req, res) {
             echeance: PLANS.echeance(sp),
             rolesRelies: relies, proprietaire: sp.owner_id
               ? (DB.row(db.prepare('SELECT pseudo FROM staff WHERE id = ?').get(sp.owner_id)) || {}).pseudo : null,
-            discordPret: !!(sp.guild_id && sp.staff_role_id), retention: sp.retention || CFG.retention,
+            discordPret: !!(sp.guild_id && sp.staff_role_id),
+            retention: conservation(sp).jours, conservationIllimitee: conservation(sp).illimite,
             // Approximatif, et l'écran le dit : SQLite ne sait pas
             // attribuer ses pages à un locataire. Ce qu'on mesure — la
             // longueur des textes journalisés et la taille réelle des
@@ -2951,6 +2962,12 @@ async function route(req, res) {
             id: sp.id, nom: sp.name, etat: sp.state,
             guildId: sp.guild_id || '', staffRoleId: sp.staff_role_id || '',
             retention: sp.retention || CFG.retention,
+            // Ce que le client a DEMANDÉ, et ce qui s'applique VRAIMENT :
+            // une case cochée sous une formule plafonnée ne fait rien, et
+            // c'est précisément ce qu'il faut montrer plutôt que masquer.
+            conservationIllimitee: !!Number(sp.keep_forever),
+            conservationEffective: conservation(sp).jours,
+            conservationBridee: conservation(sp).bride,
             formule: sp.plan_key || '', formuleLabel: PLANS.forSpace(db, sp).label,
             echeance: sp.plan_until || null, echeanceEtat: PLANS.echeance(sp),
             plafonds: PLANS.forSpace(db, sp),
@@ -2986,10 +3003,11 @@ async function route(req, res) {
         // n'ouvre jamais les journaux d'un autre.
         const cle = crypto.randomBytes(24).toString('hex');
         const formule = b.formule && PLANS.byKey(db, String(b.formule)) ? String(b.formule) : null;
-        const r = db.prepare(`INSERT INTO spaces(name,guild_id,staff_role_id,server_key,state,retention,created_at,created_by)
-                              VALUES(?,?,?,?, 'actif', ?,?,?)`)
+        const r = db.prepare(`INSERT INTO spaces(name,guild_id,staff_role_id,server_key,state,retention,keep_forever,created_at,created_by)
+                              VALUES(?,?,?,?, 'actif', ?,?,?,?)`)
           .run(nom, S(b.guildId), S(b.staffRoleId), cle,
-               Math.max(1, Math.min(3650, Number(b.retention) || CFG.retention)), now(), me.pseudo);
+               Math.max(1, Math.min(3650, Number(b.retention) || CFG.retention)),
+               b.conservationIllimitee ? 1 : 0, now(), me.pseudo);
         const sid = DB.num(r.lastInsertRowid);
         if (formule || b.echeance) {
           const t = b.echeance ? Date.parse(b.echeance) : null;
@@ -2999,6 +3017,11 @@ async function route(req, res) {
         ROLESVC.seed(db, sid);
         audit(me, 'plateforme.espace.creation',
               `${nom} (#${sid})` + (formule ? ` — formule ${PLANS.byKey(db, formule).label}` : ''), ip, sid);
+        // ⚠️ Tracé DÈS LA CRÉATION, pas seulement quand on modifie : sinon
+        // le journal ne montrerait que les espaces où quelqu'un a changé
+        // d'avis, et pas ceux nés « jamais effacés ».
+        if (b.conservationIllimitee)
+          audit(me, 'plateforme.conservation.illimitee', `${nom} → journaux jamais effacés`, ip, sid);
         return ok(res, { ok: true, id: sid, cle });
       }
       if (p.startsWith('/api/platform/spaces/')) {
@@ -3040,6 +3063,17 @@ async function route(req, res) {
             sets.push('staff_role_id = ?'); args.push(String(b.staffRoleId || '')); }
           if (b.retention !== undefined) { sets.push('retention = ?');
             args.push(Math.max(1, Math.min(3650, Number(b.retention) || CFG.retention))); }
+          if (b.conservationIllimitee !== undefined) {
+            const v = b.conservationIllimitee ? 1 : 0;
+            sets.push('keep_forever = ?'); args.push(v);
+            // ⚠️ Cette décision se trace. Décocher la case met des journaux
+            // à la corbeille au prochain balayage, sans confirmation et
+            // sans retour : il faut pouvoir dire qui l'a fait, et quand.
+            audit(me, v ? 'plateforme.conservation.illimitee' : 'plateforme.conservation.duree',
+                  `${sp.name} → ` + (v ? 'journaux jamais effacés'
+                                        : `rétention de ${Number(b.retention) || sp.retention || CFG.retention} jours`),
+                  ip, sid);
+          }
           if (b.formule !== undefined) {
             const k = String(b.formule || '');
             if (k && !PLANS.byKey(db, k)) return fail(res, 404, 'Formule inconnue.');

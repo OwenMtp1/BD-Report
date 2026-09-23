@@ -142,6 +142,13 @@ main dans `config.lua` — ce fichier part chez tous les joueurs.
 ⚠️ La barre affiche **« visite — nom de l'espace »** quand vous en visitez un
 autre : on ne modère pas un serveur en croyant être chez soi.
 
+⚠️ **Ne jamais effacer les journaux** : une case sur la fiche de l'espace.
+Cochée, la purge le saute entièrement — évènements et captures. Elle ne passe
+pas au-dessus du plafond d'une formule, et la décocher **détruit** tout ce qui
+dépasse au balayage suivant (confirmation demandée, décision journalisée).
+Les conséquences juridiques sont dans `juridique/CONSERVATION.md` : une
+conservation illimitée se justifie, elle ne se coche pas par confort.
+
 ⚠️ **Fermer** un espace conserve ses journaux mais coupe l'entrée et
 l'ingestion. **Supprimer** efface tout, définitivement, et demande de
 recopier le nom de l'espace.

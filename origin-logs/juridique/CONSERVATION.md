@@ -14,7 +14,7 @@ concrètement, ça part quand ? ».
 
 | Donnée | Emplacement | Effacée par |
 |---|---|---|
-| Évènements de jeu | table `events` (SQLite) | purge automatique (durée de l'espace) |
+| Évènements de jeu | table `events` (SQLite) | purge automatique (durée de l'espace), **sauf conservation illimitée** |
 | Joueurs vus | table `players` | effacement RGPD, ou suppression de l'espace |
 | Sanctions | table `sanctions` | jamais automatiquement — voir §3 |
 | Captures d'écran (métadonnées) | table `screens` | purge automatique |
@@ -41,7 +41,7 @@ toutes les 6 heures ainsi qu'à chaque démarrage.
 
 | | Durée | Réglage |
 |---|---|---|
-| Évènements | **30 jours** par défaut | fiche de l'espace, `RETENTION_DAYS` |
+| Évènements | **30 jours** par défaut, ou jamais | fiche de l'espace, `RETENTION_DAYS` |
 | Captures d'écran | la même, sauf réglage distinct | `SCREEN_DAYS` |
 | Sessions de connexion au panneau | 7 jours | `SESSION_DAYS` |
 | Sauvegardes | 14 fichiers, soit ~14 jours | `BACKUP_KEEP` |
@@ -51,6 +51,39 @@ toutes les 6 heures ainsi qu'à chaque démarrage.
 qui demande 7 jours en formule illimitée garde 7 jours : c'est le plafond qui
 descend, jamais la demande qui monte. Une formule Starter plafonnée à 7 jours
 raccourcira en revanche un espace réglé sur 30.
+
+### La conservation illimitée
+
+La fiche d'un espace porte une case **« Ne jamais effacer les journaux »**
+(`spaces.keep_forever`, appliquée par `api/conservation.js`). Cochée, la purge
+saute cet espace : ni les évènements, ni les captures d'écran n'en partent.
+
+⚠️ **C'est une décision à prendre en connaissance de cause, pas un confort.**
+Le RGPD n'interdit pas une conservation longue, mais il interdit une
+conservation *indéterminée* : l'article 5.1.e demande une durée **justifiée
+par la finalité**. « On garde tout, au cas où » n'est pas une finalité. Si un
+client active cette case, il lui faut une raison écrite — contentieux en
+cours, obligation de preuve, archive de saison fermée — et sa mention aux
+joueurs (`MENTION-JOUEURS.md`) doit dire « conservation illimitée » et non
+« 30 jours ». Le droit à l'effacement d'un joueur, lui, continue de
+s'appliquer : c'est `/api/rgpd/<clé>` qui le sert, pas la purge.
+
+⚠️ **La case ne passe pas au-dessus du plafond d'une formule.** Sous une
+formule plafonnée à 7 jours, elle reste cochée mais sans effet, et la fiche
+l'écrit en clair plutôt que de le taire — sinon le commercial promettrait ce
+que la purge ne tiendra pas.
+
+⚠️ **La décocher détruit.** Au balayage suivant (6 h au plus), tout ce qui
+dépasse la durée redevenue active part définitivement. Le panneau demande
+confirmation, et les deux décisions — cocher, décocher — sont inscrites au
+journal d'administration (`plateforme.conservation.*`) avec leur auteur.
+
+⚠️ **Le disque, lui, n'est pas illimité.** Les captures d'écran restent
+bornées par le quota par espace (`SCREEN_QUOTA_MB`), qui **refuse** les
+nouvelles au lieu d'effacer les anciennes : un espace en conservation
+illimitée cesse d'accepter des captures une fois son quota atteint, et le
+dit. Les journaux texte, eux, n'ont pas de plafond — la page *Supervision*
+affiche le poids de chaque espace, et c'est là qu'on le surveille.
 
 ⚠️ **La purge ne se rattrape pas d'elle-même sur les sauvegardes.** Une donnée
 effacée du service subsiste dans les sauvegardes déjà prises, jusqu'à ce que

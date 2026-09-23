@@ -3881,13 +3881,13 @@ $('#teamSeg').addEventListener('click', e => {
    donc avec un jeu d'exemple plutôt que de rester vides. */
 const DEMO_ESPACES = [
   { id:1, nom:'Origin Roleplay', etat:'actif', guildId:'938271640518273024', staffRoleId:'938271640518273100',
-    retention:30, cle:'demo-cle-1', creeLe:Date.now()-320*86400000, creePar:'Owen',
+    retention:30, conservationEffective:30, conservationIllimitee:false, cle:'demo-cle-1', creeLe:Date.now()-320*86400000, creePar:'Owen',
     proprietaire:{ id:1, pseudo:'Owen' }, membres:24, evenements:184203, bannis:37 },
   { id:2, nom:'Origin RP — serveur test', etat:'actif', guildId:'938271640518273024', staffRoleId:'938271640518273101',
-    retention:7, cle:'demo-cle-2', creeLe:Date.now()-40*86400000, creePar:'Owen',
+    retention:7, conservationEffective:7, conservationIllimitee:false, cle:'demo-cle-2', creeLe:Date.now()-40*86400000, creePar:'Owen',
     proprietaire:{ id:3, pseudo:'Vortex' }, membres:6, evenements:9120, bannis:2 },
   { id:3, nom:'Origin RP — ancienne saison', etat:'ferme', guildId:'', staffRoleId:'',
-    retention:90, cle:'demo-cle-3', creeLe:Date.now()-700*86400000, creePar:'Owen',
+    retention:90, conservationEffective:null, conservationIllimitee:true, cle:'demo-cle-3', creeLe:Date.now()-700*86400000, creePar:'Owen',
     fermeLe:Date.now()-60*86400000, motifFermeture:'Fin de saison 3 — journaux conservés',
     proprietaire:null, membres:0, evenements:441027, bannis:0 }
 ];
@@ -3970,7 +3970,7 @@ function demoOverview() {
       rolesRelies:0, proprietaire:'Vortex', discordPret:false, retention:7, poids:7.4e6 },
     { id:3, nom:'Origin RP — ancienne saison', etat:'ferme', evenements24:0, evenements:441027, membres:0,
       suspendus:0, bannis:0, alertes:0, actionsEnAttente:0, dernierEvenement:Date.now()-62*24*h,
-      rolesRelies:14, proprietaire:null, discordPret:true, retention:90, poids:3.02e8 }
+      rolesRelies:14, proprietaire:null, discordPret:true, retention:null, conservationIllimitee:true, poids:3.02e8 }
   ];
   const poids = [.55,.40,.25,.15,.10,.08,.10,.15,.22,.30,.38,.45,.50,.50,.55,.60,.68,.78,.90,1,1,.95,.85,.70];
   const debut = Date.now() - 24 * h;
@@ -4191,6 +4191,11 @@ async function openPlatform() {
         <input class="input" id="nsRet" type="number" min="1" max="3650" value="30" title="Rétention en jours">
         <button class="btn primary" id="nsSpaceGo">Créer l’espace</button>
       </div>
+      <label class="map-row" style="border:none;cursor:pointer">
+        <span><span class="map-name">Ne jamais effacer les journaux</span>
+          <span class="map-desc">La rétention ci-dessus est ignorée — rien ne part, jamais.</span></span>
+        <input type="checkbox" id="nsForever">
+      </label>
       <span class="lite-m">L’espace reçoit sa propre clé d’ingestion : elle n’ouvre que ses journaux. Les 14 rôles d’origine y sont créés automatiquement.</span>
     </div>`);
 }
@@ -4202,7 +4207,8 @@ function carteEspace(sp, d) {
         <div class="space-name">${esc(sp.nom)} ${sp.id === d.monEspace ? '<span class="state" style="--c:var(--vio)">ici</span>' : ''}</div>
         <div class="space-meta">#${sp.id} · ${actif ? 'actif' : 'fermé ' + (sp.fermeLe ? dayLabel(sp.fermeLe) : '')}
           · propriétaire ${esc(sp.proprietaire ? sp.proprietaire.pseudo : '—')}
-          · rétention ${sp.retention} j</div>
+          · ${sp.conservationEffective == null ? 'conservation illimitée'
+                : 'rétention ' + sp.conservationEffective + ' j'}</div>
         ${sp.motifFermeture ? `<div class="lite-m">${esc(sp.motifFermeture)}</div>` : ''}
       </div>
       <div class="tools">
@@ -4230,6 +4236,20 @@ function carteEspace(sp, d) {
         ${(d.formules || []).map(f => `<option value="${esc(f.key)}" ${f.key === sp.formule ? 'selected' : ''}>${esc(f.label)}${f.prix ? ' · ' + esc(f.prix) : ''}</option>`).join('')}
       </select>
     </div>
+    <!-- ⚠️ Deux informations, pas une : ce que le client a DEMANDÉ (la case)
+         et ce qui s'applique VRAIMENT (la formule peut plafonner). Masquer
+         l'écart ferait promettre au commercial ce que la purge ne tiendra pas. -->
+    <label class="map-row" style="border:none;cursor:pointer">
+      <span><span class="map-name">Ne jamais effacer les journaux</span>
+        <span class="map-desc">${sp.conservationBridee
+          ? '<span style="color:var(--warn)">Sans effet : la formule ' + esc(sp.formuleLabel)
+            + ' plafonne à ' + sp.conservationEffective + ' j.</span>'
+          : (sp.conservationEffective == null
+              ? 'Aucune purge : tout est conservé indéfiniment.'
+              : 'Actuellement effacé au bout de ' + sp.conservationEffective + ' jours.')}</span></span>
+      <input type="checkbox" data-sp="${sp.id}" data-spcheck="conservationIllimitee"
+             ${sp.conservationIllimitee ? 'checked' : ''}>
+    </label>
     <div class="map-row" style="border:none">
       <span><span class="map-name">Échéance</span>
         <span class="map-desc">${echeanceTexte(sp.echeanceEtat)}</span></span>
@@ -4595,9 +4615,17 @@ document.addEventListener('click', async ev => {
   }
   if (D.spsave) {
     const val = f => { const n = document.querySelector(`[data-sp="${D.spsave}"][data-spfield="${f}"]`); return n ? n.value.trim() : undefined; };
+    const coche = f => { const n = document.querySelector(`[data-sp="${D.spsave}"][data-spcheck="${f}"]`); return n ? n.checked : undefined; };
+    // ⚠️ Décocher met des journaux à la corbeille au prochain balayage, sans
+    // retour possible : c'est le seul réglage de cette carte qui DÉTRUIT.
+    if (coche('conservationIllimitee') === false
+        && document.querySelector(`[data-sp="${D.spsave}"][data-spcheck="conservationIllimitee"]`).defaultChecked
+        && !confirm('Remettre une durée de conservation ?\n\nTous les journaux plus vieux que cette durée seront effacés au prochain balayage, définitivement.'))
+      return openPlatform();
     try { await api('/api/platform/spaces/' + D.spsave, { method:'PATCH',
             body: JSON.stringify({ guildId: val('guildId'), staffRoleId: val('staffRoleId'),
-                                   formule: val('formule'), echeance: val('echeance') }) });
+                                   formule: val('formule'), echeance: val('echeance'),
+                                   conservationIllimitee: coche('conservationIllimitee') }) });
           toast('Espace enregistré.'); openPlatform(); } catch (e) { toast(e.message); }
     return;
   }
@@ -4678,6 +4706,7 @@ async function creerEspace() {
     const r = await api('/api/platform/spaces', { method:'POST', body: JSON.stringify({
       nom, guildId: $('#nsGuild').value.trim(), staffRoleId: $('#nsStaff').value.trim(),
       retention: Number($('#nsRet').value),
+      conservationIllimitee: $('#nsForever').checked,
       formule: $('#nsPlan').value, echeance: $('#nsEch').value }) });
     toast('Espace créé — ouvrez sa fiche d’installation pour la transmettre.');
     openPlatform();
@@ -4760,7 +4789,7 @@ function rendrePlateforme() {
         <span class="pnum"><b>${e.bannis}</b><span>bannis</span></span>
       </div>
       <div class="psub">${e.dernierEvenement ? 'dernier journal ' + ago(e.dernierEvenement) : 'aucun journal reçu'}
-        · ${e.rolesRelies} rôle(s) relié(s) · rétention ${e.retention} j${
+        · ${e.rolesRelies} rôle(s) relié(s) · ${e.retention == null ? 'conservation illimitée' : 'rétention ' + e.retention + ' j'}${
         e.poids ? ' · environ ' + octets(e.poids) : ''}</div>
       <div class="pact"><button class="btn sm" data-export="${e.id}"
         title="Télécharger les journaux, les comptes et les rôles de cet espace">Exporter cet espace</button></div>
@@ -5362,7 +5391,10 @@ async function startPanel() {
     try {
       const c = await api('/api/catalogue');
       setCatalogue(c.cats, c.sevs, c.groups);
-      $('#retention').textContent = (c.retention || 30) + ' jours';
+      // ⚠️ « 0 jour » se lirait comme « effacé tout de suite » : l'exact
+      // contraire de ce que veut dire une conservation illimitée.
+      $('#retention').textContent = c.conservationIllimitee ? 'illimitée'
+        : (c.retention || 30) + ' jours';
     } catch (e) {}
     $('#modeTag').className = 'tag-mode live';
     $('#modeTag').textContent = 'en production';

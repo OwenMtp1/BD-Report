@@ -122,6 +122,61 @@ t('un modérateur n’exporte pas', (await J('/api/rgpd/'+encodeURIComponent('li
 t('ni n’efface', (await J('/api/rgpd/'+encodeURIComponent('license:zz'),{method:'DELETE',body:'{}'},ckm)).status===403);
 t('ni ne voit les formules', (await J('/api/platform/plans',{},ckm)).status===403);
 
+sect('Conservation illimitée — « ne jamais effacer »');
+// ⚠️ La décision se prend à un seul endroit (conservation.js) : on la
+// vérifie ici sur la table de vérité, et sur l'API juste après. Un test
+// qui ne regarderait que l'API ne dirait pas POURQUOI un espace purge.
+const CONSERV = await import('../conservation.js');
+const sansPlafond = { maxRetention: null }, plafond7 = { maxRetention: 7 };
+const cas = [
+  ['sans case cochée, la rétention de l’espace s’applique',
+    CONSERV.pour({ retention: 30 }, sansPlafond, 30).jours === 30],
+  ['case cochée sans plafond : on n’efface jamais',
+    CONSERV.pour({ retention: 30, keep_forever: 1 }, sansPlafond, 30).jours === null],
+  ['⚠️ et « jamais » se dit `null`, pas un très grand nombre',
+    CONSERV.pour({ keep_forever: 1 }, sansPlafond, 30).illimite === true],
+  ['⚠️ une case cochée ne s’achète pas : la formule plafonne quand même',
+    CONSERV.pour({ retention: 3650, keep_forever: 1 }, plafond7, 30).jours === 7],
+  ['et l’écart se signale au lieu de se taire',
+    CONSERV.pour({ retention: 3650, keep_forever: 1 }, plafond7, 30).bride === true],
+  ['le plafond descend, la demande ne monte pas',
+    CONSERV.pour({ retention: 3 }, plafond7, 30).jours === 3],
+  ['sans rétention propre, celle du serveur sert de défaut',
+    CONSERV.pour({}, sansPlafond, 45).jours === 45]
+];
+for (const [nom, vrai] of cas) t(nom, vrai);
+
+const spInf = await J('/api/platform/spaces',{method:'POST',body:JSON.stringify(
+  {nom:'Client Archive',guildId:'555000999',staffRoleId:'900009',retention:30,conservationIllimitee:true})});
+const IDI = spInf.body.id;
+const carteI = (await J('/api/platform/spaces')).body.spaces.find(x=>x.id===IDI);
+t('on crée un espace « jamais effacé »', carteI.conservationIllimitee===true);
+t('et rien ne s’y purge', carteI.conservationEffective===null, String(carteI.conservationEffective));
+t('la rétention saisie reste mémorisée dessous', carteI.retention===30, String(carteI.retention));
+
+await J('/api/platform/spaces/'+IDI,{method:'PATCH',body:JSON.stringify({formule:'starter'})});
+const bride = (await J('/api/platform/spaces')).body.spaces.find(x=>x.id===IDI);
+t('⚠️ passer en Starter reprend la conservation illimitée',
+  bride.conservationEffective===7 && bride.conservationBridee===true,
+  'effective='+bride.conservationEffective);
+t('mais la demande du client reste visible', bride.conservationIllimitee===true);
+
+await J('/api/platform/spaces/'+IDI,{method:'PATCH',body:JSON.stringify({formule:'illimite'})});
+const rendu = (await J('/api/platform/spaces')).body.spaces.find(x=>x.id===IDI);
+t('et repasser en Illimité la rétablit sans re-cocher',
+  rendu.conservationEffective===null && rendu.conservationBridee===false);
+
+await J('/api/platform/spaces/'+IDI,{method:'PATCH',body:JSON.stringify({conservationIllimitee:false})});
+const eteint = (await J('/api/platform/spaces')).body.spaces.find(x=>x.id===IDI);
+t('on décoche et la durée revient', eteint.conservationIllimitee===false && eteint.conservationEffective===30,
+  String(eteint.conservationEffective));
+const jrn = await J('/api/platform/journal?action=plateforme.conservation');
+t('⚠️ les deux décisions sont tracées — décocher DÉTRUIT au prochain balayage',
+  (jrn.body.entrees||[]).length >= 2, ((jrn.body.entrees||[]).length)+' entrées');
+t('et le journal dit laquelle', (jrn.body.entrees||[]).some(e=>/jamais effacés/.test(e.detail||''))
+  && (jrn.body.entrees||[]).some(e=>/rétention de/.test(e.detail||'')),
+  (jrn.body.entrees||[]).map(e=>e.detail).join(' | '));
+
 const bad=T.filter(x=>!x[0]);
 console.log(`\n  ${T.length-bad.length}/${T.length} contrôles passés`);
 if(bad.length) console.log('  à corriger :\n   - '+bad.map(x=>x[1]).join('\n   - '));
