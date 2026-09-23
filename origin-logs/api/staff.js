@@ -15,6 +15,7 @@ const DB = require('./db.js');
 const AUTH = require('./auth.js');
 const CAT = require('./catalogue.js');
 const ROLESVC = require('./roles.js');
+const PLAT = require('./plateforme.js');
 
 const db = DB.open(process.env.DB_FILE || path.join(__dirname, 'data', 'origin-logs.db'));
 const [, , cmd, ...brut] = process.argv;
@@ -65,7 +66,8 @@ function usage(msg) {
     node staff.js role <pseudo> <role>
     node staff.js disable <pseudo> | enable <pseudo> | remove <pseudo>
     node staff.js discord <pseudo> <id>|off    (relier un compte à un compte Discord)
-    node staff.js platform <pseudo> on|off     (administration de la plateforme)
+    node staff.js platform <pseudo> [role|off] (équipe de la plateforme — défaut : direction)
+    node staff.js platform-roles               (liste les rôles de plateforme)
     node staff.js spaces
 
   Options : --space=<id> pour viser un autre espace de logs (défaut : ${SPACE})
@@ -180,14 +182,37 @@ switch (cmd) {
     console.log(`\n  Compte ${r.pseudo} supprimé.\n`);
     break;
   }
+  /* L'équipe de la PLATEFORME (l'éditeur), pas celle d'un espace client.
+     ⚠️ Ce droit ne s'accorde pas depuis le panneau d'un espace : sinon un
+     fondateur de client se hisserait au-dessus de tous les autres. */
   case 'platform': {
     const r = find(args[0]); if (!r) usage('Compte inconnu.');
-    const on = args[1] !== 'off';
+    const arg = args[1] === undefined ? 'on' : String(args[1]);
+    const on = arg !== 'off';
+    PLAT.seed(db);
+    const roles = PLAT.list(db);
     if (!on && DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE platform_admin=1 AND id<>?').get(r.id)).n === 0)
       usage('Il doit rester au moins un administrateur de plateforme.');
-    db.prepare('UPDATE staff SET platform_admin=? WHERE id=?').run(on ? 1 : 0, r.id);
+    let cle = 'direction';
+    if (on && arg !== 'on') {
+      const trouve = roles.find(x => x.key === arg || x.label.toLowerCase() === arg.toLowerCase());
+      if (!trouve) usage('Rôle de plateforme inconnu. Disponibles : ' + roles.map(x => x.key).join(', '));
+      cle = trouve.key;
+    }
+    db.prepare('UPDATE staff SET platform_admin=?, platform_role=?, platform_role_manual=? WHERE id=?')
+      .run(on ? 1 : 0, on ? cle : null, on ? 1 : 0, r.id);
     db.prepare('DELETE FROM sessions WHERE staff_id=?').run(r.id);
-    console.log(`\n  ${r.pseudo} ${on ? 'administre désormais la plateforme' : 'n’administre plus la plateforme'}.\n`);
+    console.log(`\n  ${r.pseudo} ${on ? 'rejoint l’équipe de la plateforme — rôle « '
+      + (roles.find(x => x.key === cle) || {}).label + ' »' : 'quitte l’équipe de la plateforme'}.\n`);
+    break;
+  }
+  case 'platform-roles': {
+    PLAT.seed(db);
+    console.log('\n  ' + 'CLÉ'.padEnd(16) + 'RÔLE'.padEnd(18) + 'RANG'.padEnd(7) + 'DROITS');
+    for (const r of PLAT.list(db))
+      console.log('  ' + r.key.padEnd(16) + r.label.padEnd(18) + String(r.rang).padEnd(7)
+                  + (r.key === 'direction' ? 'tous' : r.perms.length + ' droit(s)'));
+    console.log('');
     break;
   }
   case 'spaces': {

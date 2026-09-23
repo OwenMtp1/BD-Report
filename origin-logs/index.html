@@ -1385,7 +1385,10 @@ select.input{height:36px}
           <h1 class="title">Supervision</h1>
           <div class="sub" id="platSub">Tous les espaces de logs du serveur, d’un coup d’œil.</div>
         </div>
-        <button class="btn primary" id="checkBtn">Vérifier tous les panneaux</button>
+        <span class="tools">
+          <button class="btn" id="platTeamBtn" hidden>Équipe &amp; rôles</button>
+          <button class="btn primary" id="checkBtn">Vérifier tous les panneaux</button>
+        </span>
       </div>
       <div class="status" id="platStatus"></div>
       <div id="checkOut"></div>
@@ -2027,6 +2030,7 @@ function toast(msg) {
 let MODE = 'demo';
 const ME = { pseudo: null, role: null, roleLabel: null, perms: [], cats: [] };
 const can = p => MODE !== 'api' || ME.perms.includes(p);
+const canPlat = p => MODE !== 'api' || (ME.platPerms || []).includes(p);
 
 async function api(path, opts = {}) {
   if (MODE === 'demo') return demoApi(path, opts);
@@ -4655,6 +4659,223 @@ function choisirEspace() {
       revérifié auprès de Discord au moment où vous entrez.</span>`);
 }
 
+/* ============================================================
+   L'ÉQUIPE DE LA PLATEFORME — celle de l'éditeur
+   ============================================================
+   ⚠️ RIEN À VOIR AVEC LE STAFF D'UN CLIENT. Ici on ne modère personne :
+   on crée des espaces, on les facture, on les dépanne. Les deux
+   catalogues de droits sont séparés, et le resteront : mélanger les deux
+   donnerait un commercial capable de bannir un joueur, ou un modérateur
+   capable de supprimer l'espace qu'il modère. */
+let PEQ = null;
+
+async function ouvrirEquipePlateforme() {
+  if (MODE !== 'api') return toast('Mode démonstration : l’équipe n’existe pas.');
+  try {
+    const [roles, membres, dc] = await Promise.all([
+      api('/api/platform/roles'), api('/api/platform/members'), api('/api/platform/discord')
+    ]);
+    PEQ = { roles, membres, dc };
+  } catch (e) { return toast(e.message); }
+  rendreEquipePlateforme();
+}
+
+function rendreEquipePlateforme() {
+  const { roles, membres, dc } = PEQ;
+  const equipe = (membres.members || []).filter(m => m.platform);
+  const dehors = (membres.members || []).filter(m => !m.platform);
+  // On ne nomme jamais à son propre niveau : les rôles hors de portée ne
+  // sont pas grisés, ils sont ABSENTS. Un bouton inerte se clique quand même.
+  const nommables = roles.roles.filter(r => r.rang < roles.monRang);
+  const choixRole = (id, actuel) => `<select class="input sm" data-prole="${id}">${
+    nommables.map(r => `<option value="${esc(r.key)}" ${r.key === actuel ? 'selected' : ''}>${esc(r.label)}</option>`).join('')
+  }</select>`;
+
+  openSheet('Équipe de la plateforme',
+    `${equipe.length} personne(s) · votre rôle : ${esc(roles.monRole || '—')}`,
+    { name: 'Plateforme', hue: 190 }, `
+    <div class="banner" style="--c:var(--vio)">Ces rôles décident de ce qu’on peut faire
+      <b>sur la plateforme</b> — créer un espace, poser une formule, entrer chez un client.
+      Ils n’ont <b>aucun effet</b> sur les rôles du staff d’un serveur client, qui restent
+      réglés dans chaque espace.</div>
+
+    <div class="block">
+      <h3 class="eyebrow">Qui compose l’équipe</h3>
+      ${equipe.length ? equipe.map(m => `
+        <div class="map-row" style="border:none">
+          <span><span class="map-name">${esc(m.pseudo)}${m.estMoi ? ' <span class="lite-m">(vous)</span>' : ''}</span>
+            <span class="map-desc">${esc(m.platformRoleLabel || '—')}
+              ${m.source === 'discord' ? '· par Discord' : '· par mot de passe'}
+              ${m.disabled ? '· <b style="color:var(--crit)">suspendu</b>' : ''}</span></span>
+          ${roles.mesDroits.includes('plat.equipe.gerer') && !m.estMoi ? `
+            ${choixRole(m.id, m.platformRole)}
+            <span class="tools">
+              <button class="btn sm primary" data-psave="${m.id}">Appliquer</button>
+              <button class="btn sm danger" data-pout="${m.id}" data-pname="${esc(m.pseudo)}">Retirer</button>
+            </span>` : `<span class="state" style="--c:var(--ok)">${esc(m.platformRoleLabel || '—')}</span>`}
+        </div>`).join('') : '<span class="lite-m">Personne — ce qui ne devrait pas arriver.</span>'}
+    </div>
+
+    ${roles.mesDroits.includes('plat.equipe.gerer') ? `
+    <details class="block">
+      <summary class="eyebrow" style="cursor:pointer">Ajouter quelqu’un à l’équipe</summary>
+      <span class="lite-m">Un compte existant (de n’importe quel espace) rejoint l’équipe.
+        Il garde son compte et son espace ; il gagne en plus les droits de plateforme.</span>
+      <div class="map-row" style="border:none">
+        <select class="input" id="pAddQui">
+          ${dehors.slice(0, 200).map(m => `<option value="${m.id}">${esc(m.pseudo)} — espace #${m.spaceId}</option>`).join('')}
+        </select>
+        <select class="input" id="pAddRole">
+          ${nommables.map(r => `<option value="${esc(r.key)}">${esc(r.label)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="tools"><button class="btn sm primary" id="pAddGo">Ajouter à l’équipe</button></div>
+    </details>` : ''}
+
+    <div class="block">
+      <h3 class="eyebrow">Les rôles et ce qu’ils permettent</h3>
+      ${roles.roles.map(r => `
+        <details class="role-card">
+          <summary class="role-head" style="cursor:pointer">
+            <span class="role-badge">rang ${r.rang}</span>
+            <span><span class="role-title">${esc(r.label)}</span>
+              <span class="role-sub">${esc(r.desc || '')}</span></span>
+            <span class="lite-m">${r.membres} membre(s)</span>
+            <span class="lite-m">${r.key === 'direction' ? 'tous les droits' : r.perms.length + ' droit(s)'}</span>
+          </summary>
+          <div class="role-body">
+            ${roles.groupes.map(g => `
+              <div>
+                <div class="grp-label">${esc(g.label)}</div>
+                <div class="checks">${roles.perms.filter(x => x.groupe === g.id).map(x => `
+                  <label class="check">
+                    <input type="checkbox" data-pperm="${esc(x.id)}" data-prk="${esc(r.key)}"
+                      ${r.perms.includes(x.id) ? 'checked' : ''}
+                      ${r.key === 'direction' || !roles.peutComposer || r.rang >= roles.monRang
+                        || !roles.mesDroits.includes(x.id) ? 'disabled' : ''}>
+                    ${esc(x.label)}</label>`).join('')}</div>
+              </div>`).join('')}
+            ${r.key === 'direction'
+              ? '<span class="lite-m">⚠️ La Direction porte tous les droits <b>par construction</b>, jamais par une liste enregistrée : sans cela, décocher la gouvernance fermerait la porte à tout le monde, y compris à soi.</span>'
+              : (roles.peutComposer && r.rang < roles.monRang ? `
+                <div class="tools">
+                  <button class="btn sm primary" data-prsave="${esc(r.key)}">Enregistrer ce rôle</button>
+                  ${r.builtin ? '' : `<button class="btn sm danger" data-prdel="${esc(r.key)}" data-prname="${esc(r.label)}">Supprimer</button>`}
+                </div>
+                <span class="lite-m">Vous ne pouvez accorder que des droits que vous détenez vous-même —
+                  sinon un droit de composition suffirait à s’attribuer tout le reste.</span>`
+                : '<span class="lite-m">Ce rôle est à votre niveau ou au-dessus : vous ne le composez pas.</span>')}
+          </div>
+        </details>`).join('')}
+      ${roles.peutComposer ? `
+        <details class="block" style="margin-top:10px">
+          <summary class="eyebrow" style="cursor:pointer">Créer un rôle</summary>
+          <div class="field"><label for="pnrLabel">Nom du rôle</label>
+            <input class="input" id="pnrLabel" placeholder="Ex. Facturation"></div>
+          <div class="field"><label for="pnrRang">Rang (sous le vôtre : ${roles.monRang})</label>
+            <input class="input" id="pnrRang" type="number" min="0" max="${Math.max(0, roles.monRang - 1)}" value="40"></div>
+          <div class="tools"><button class="btn sm primary" id="pnrGo">Créer</button></div>
+          <span class="lite-m">Le rôle naît sans aucun droit : vous les cochez ensuite, un par un.</span>
+        </details>` : ''}
+    </div>
+
+    <div class="block">
+      <h3 class="eyebrow">Discord officiel de la plateforme</h3>
+      <span class="lite-m">⚠️ C’est <b>votre</b> serveur Discord, pas celui d’un client. Un rôle porté
+        là donne un rôle <b>sur la plateforme</b> — jamais un droit sur les journaux d’un client,
+        qui se gagnent sur le Discord du client et nulle part ailleurs.</span>
+      ${dc.peutRegler ? `
+        <div class="field" style="margin-top:8px"><label for="pdcGuild">Identifiant de votre serveur Discord</label>
+          <input class="input" id="pdcGuild" value="${esc(dc.guildId || '')}" inputmode="numeric"></div>
+        <div class="tools" style="margin:8px 0">
+          <button class="btn sm" id="pdcLoad">Charger les rôles du serveur</button>
+          <button class="btn sm primary" id="pdcSave">Enregistrer</button>
+        </div>
+        ${dc.roles.map(r => `
+          <div class="map-row">
+            <span><span class="map-name">${esc(r.label)} <span class="map-rank">rang ${r.rang}</span></span>
+              <span class="map-desc">${esc(r.desc || '')}</span></span>
+            ${PDROLES
+              ? `<select class="input" data-pdc="${esc(r.key)}">
+                   <option value="">— non relié —</option>
+                   ${PDROLES.map(d => `<option value="${esc(d.id)}" ${String(dc.roleMap[r.key] || '') === String(d.id) ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
+                 </select>`
+              : `<input class="input" data-pdc="${esc(r.key)}" value="${esc(dc.roleMap[r.key] || '')}" inputmode="numeric" placeholder="ID du rôle Discord">`}
+          </div>`).join('')}
+        <span class="lite-m">Le rôle le <b>plus haut</b> l’emporte quand quelqu’un en cumule plusieurs.
+          Un rôle posé à la main ici n’est pas défait par Discord.</span>`
+        : '<span class="lite-m">Votre rôle ne permet pas de régler la liaison.</span>'}
+    </div>`);
+}
+
+let PDROLES = null;
+
+async function ajouterAEquipePlateforme() {
+  const qui = $('#pAddQui'), role = $('#pAddRole');
+  if (!qui || !qui.value) return toast('Choisissez un compte.');
+  try { await api('/api/platform/members/' + qui.value, { method:'PATCH',
+          body: JSON.stringify({ platform: true, platformRole: role.value }) });
+        toast('Ajouté à l’équipe.'); await ouvrirEquipePlateforme(); }
+  catch (e) { toast(e.message); }
+}
+
+async function creerRolePlateforme() {
+  const label = ($('#pnrLabel') || {}).value || '';
+  if (label.trim().length < 2) return toast('Donnez un nom au rôle.');
+  try { await api('/api/platform/roles', { method:'POST',
+          body: JSON.stringify({ label, rang: Number(($('#pnrRang') || {}).value) || 0, perms: [] }) });
+        toast('Rôle créé — il n’a encore aucun droit.'); await ouvrirEquipePlateforme(); }
+  catch (e) { toast(e.message); }
+}
+
+async function chargerRolesDiscordPlateforme() {
+  const g = ($('#pdcGuild') || {}).value || '';
+  try { await api('/api/platform/discord', { method:'POST', body: JSON.stringify({ guildId: g }) });
+        PDROLES = (await api('/api/platform/discord/roles')).roles || [];
+        toast(PDROLES.length + ' rôle(s) lus sur votre serveur.');
+        await ouvrirEquipePlateforme(); }
+  catch (e) { toast(e.message); }
+}
+
+async function enregistrerDiscordPlateforme() {
+  const roleMap = {};
+  document.querySelectorAll('[data-pdc]').forEach(n => { if (n.value) roleMap[n.dataset.pdc] = n.value.trim(); });
+  try { await api('/api/platform/discord', { method:'POST',
+          body: JSON.stringify({ guildId: ($('#pdcGuild') || {}).value || '', roleMap }) });
+        toast('Liaison enregistrée.'); await ouvrirEquipePlateforme(); }
+  catch (e) { toast(e.message); }
+}
+
+async function actionEquipePlateforme(D) {
+  const recharger = async (msg) => { toast(msg); await ouvrirEquipePlateforme(); };
+  if (D.psave) {
+    const sel = document.querySelector(`[data-prole="${D.psave}"]`);
+    try { await api('/api/platform/members/' + D.psave, { method:'PATCH',
+            body: JSON.stringify({ platformRole: sel.value }) });
+          return recharger('Rôle appliqué — ses sessions sont fermées.'); }
+    catch (e) { return toast(e.message); }
+  }
+  if (D.pout) {
+    if (!confirm(`Retirer ${D.pname} de l’équipe de la plateforme ?\n\nSon compte et son espace restent intacts : il perd seulement les droits d’administration.`)) return;
+    try { await api('/api/platform/members/' + D.pout, { method:'PATCH', body: JSON.stringify({ platform: false }) });
+          return recharger('Retiré de l’équipe.'); }
+    catch (e) { return toast(e.message); }
+  }
+  if (D.prsave) {
+    const perms = [...document.querySelectorAll(`[data-pperm][data-prk="${D.prsave}"]`)]
+      .filter(n => n.checked).map(n => n.dataset.pperm);
+    try { await api('/api/platform/roles/' + encodeURIComponent(D.prsave), { method:'PATCH',
+            body: JSON.stringify({ perms }) });
+          return recharger('Rôle enregistré — les sessions concernées sont fermées.'); }
+    catch (e) { return toast(e.message); }
+  }
+  if (D.prdel) {
+    if (!confirm(`Supprimer le rôle « ${D.prname} » ?`)) return;
+    try { await api('/api/platform/roles/' + encodeURIComponent(D.prdel), { method:'DELETE' });
+          return recharger('Rôle supprimé.'); }
+    catch (e) { return toast(e.message); }
+  }
+}
 /* ---------- propriétaire : on choisit parmi les membres de l'espace ---------- */
 async function choisirProprietaire(spaceId) {
   let d;
@@ -4800,7 +5021,7 @@ document.addEventListener('change', ev => {
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-roletoggle],[data-rolesave],[data-roledel],[data-memtoggle],[data-memsave],'
     + '[data-memoff],[data-memdel],[data-enter],[data-sortir],[data-spacetoggle],[data-spsave],[data-regen],[data-copykey],[data-fiche],[data-copyfiche],[data-brancher],[data-integ],[data-rgpd],[data-relais],'
-    + '[data-export],[data-sauvdl],[data-sauvrm],[data-ilua],[data-iscan],[data-goesp],'
+    + '[data-export],[data-sauvdl],[data-sauvrm],[data-ilua],[data-iscan],[data-goesp],[data-psave],[data-pout],[data-prsave],[data-prdel],'
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
@@ -4922,6 +5143,7 @@ document.addEventListener('click', async ev => {
           toast('Espace supprimé.'); openPlatform(); } catch (e) { toast(e.message); }
     return;
   }
+  if (D.psave || D.pout || D.prsave || D.prdel) return actionEquipePlateforme(D);
   if (D.goesp) {
     try { const r = await api('/api/espace', { method:'POST', body: JSON.stringify({ spaceId: Number(D.goesp) }) });
           toast('Bienvenue sur ' + r.espace.nom + '.');
@@ -5277,6 +5499,11 @@ function rendreJournal() {
 document.addEventListener('click', ev => {
   const id = ev.target.id;
   if (id === 'checkBtn') { ev.stopImmediatePropagation(); return lancerVerification(); }
+  if (id === 'platTeamBtn') { ev.stopImmediatePropagation(); return ouvrirEquipePlateforme(); }
+  if (id === 'pAddGo') { ev.stopImmediatePropagation(); return ajouterAEquipePlateforme(); }
+  if (id === 'pnrGo') { ev.stopImmediatePropagation(); return creerRolePlateforme(); }
+  if (id === 'pdcSave') { ev.stopImmediatePropagation(); return enregistrerDiscordPlateforme(); }
+  if (id === 'pdcLoad') { ev.stopImmediatePropagation(); return chargerRolesDiscordPlateforme(); }
   if (id === 'jrnClear') { JRN_FILTRES.action = ''; JRN_FILTRES.space = ''; JRN_FILTRES.q = ''; return chargerJournal(); }
   const f = ev.target.closest('[data-jrnfam]');
   if (f) { ev.stopImmediatePropagation();
@@ -5634,6 +5861,12 @@ function applyMe(d) {
   ME.roles = d.staff.roles || [{ id: d.staff.role, label: d.staff.roleLabel }];
   ME.source = d.staff.source || 'local';
   ME.plateforme = !!d.staff.plateforme;
+  // ⚠️ Deux jeux de droits, pas un. `perms` porte ce qu'on fait DANS un
+  // espace, `platPerms` ce qu'on fait SUR la plateforme. Un écran qui
+  // confondrait les deux proposerait des boutons que l'API refuse.
+  ME.platPerms = d.platPerms || [];
+  ME.platRole = d.staff.plateformeRole || null;
+  ME.platRoleLabel = d.staff.plateformeRoleLabel || null;
   ME.espace = d.espace || null;
 }
 $('#gateForm').addEventListener('submit', async ev => {
@@ -5689,6 +5922,7 @@ async function startPanel() {
     $('#rolesBtn').hidden = !can('roles.manage') || !dansUnEspace;
     $('#discordBtn').hidden = !can('settings.discord') || !dansUnEspace;
     $('#platformBtn').hidden = !ME.plateforme;
+    if ($('#platTeamBtn')) $('#platTeamBtn').hidden = !canPlat('plat.equipe.voir');
     if (ME.espace && ME.espace.visite) {
       // Une visite d'administration doit se voir : on ne modère pas un
       // autre serveur en croyant être chez soi. Et elle se quitte d'un

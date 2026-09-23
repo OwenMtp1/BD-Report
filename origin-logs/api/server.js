@@ -23,6 +23,7 @@ const SAUV = require('./sauvegarde.js');
 const TRANSF = require('./transfert.js');
 const CONSERV = require('./conservation.js');
 const ECO = require('./ecosysteme.js');
+const PLAT = require('./plateforme.js');
 const BRANCH = require('./branchement.js');
 
 /* ---------- configuration ---------- */
@@ -276,7 +277,7 @@ function typeImage(buf) {
 const qSession = db.prepare(`SELECT s.token, s.expires_at, s.space_id AS visite,
                                     t.id, t.pseudo, t.role, t.roles, t.manual_roles, t.disabled,
                                     t.source, t.discord_id, t.roles_checked_at, t.avatar,
-                                    t.space_id, t.platform_admin
+                                    t.space_id, t.platform_admin, t.platform_role
                              FROM sessions s JOIN staff t ON t.id = s.staff_id WHERE s.token = ?`);
 const qDropSession = db.prepare('DELETE FROM sessions WHERE token = ?');
 
@@ -330,7 +331,16 @@ function whoami(req) {
            // n'a pas d'espace à lui, seulement celui où il est entré.
            visiting: platform ? !!r.visite : (!!r.visite && Number(r.visite) !== Number(r.space_id)),
            homeSpaceId: platform ? null : Number(r.space_id || 1),
-           source: r.source, discordId: r.discord_id, perms, cats };
+           source: r.source, discordId: r.discord_id, perms, cats,
+           // ⚠️ Deux catalogues de droits qui ne se recouvrent PAS. `perms`
+           // dit ce qu'on peut faire DANS un espace (lire des logs, bannir) ;
+           // `platPerms` ce qu'on peut faire SUR la plateforme (créer un
+           // espace, poser une formule). Les confondre donnerait un
+           // commercial capable de bannir, ou un modérateur capable de
+           // supprimer l'espace qu'il modère.
+           platRole: platform ? (r.platform_role || 'direction') : null,
+           platPerms: platform ? PLAT.permsDe(db, r.platform_role) : [],
+           platRang: platform ? PLAT.rangDe(db, r.platform_role) : 0 };
 }
 function parseRoles(j) {
   try { const v = JSON.parse(j || '[]'); return Array.isArray(v) ? v.map(CAT.canon) : []; }
@@ -391,6 +401,70 @@ async function verdictEspace(c, esp, userId) {
     return { ok:false, raison:'aucun_role',
              message:'Vous avez le rôle staff, mais aucun rôle du panneau ne vous est encore attribué. Prévenez un fondateur.' };
   return { ok:true, membre:m, rolesDiscord, roles };
+}
+
+/* ============================================================
+   LE DISCORD OFFICIEL DE LA PLATEFORME
+   ============================================================
+   ⚠️ CE N'EST PAS LE DISCORD D'UN CLIENT. Celui-ci est le vôtre : le
+   serveur de l'éditeur, où vit votre équipe. Un rôle porté LÀ donne un
+   rôle SUR LA PLATEFORME (commercial, support, technique) — jamais un
+   droit sur les journaux d'un client, qui se gagnent sur le Discord du
+   client et nulle part ailleurs.
+   ============================================================ */
+const platConf = () => ({
+  guildId: getSetting('plateforme.guildId') || '',
+  roleMap: (() => { try { return JSON.parse(getSetting('plateforme.roleMap') || '{}') || {}; }
+                    catch { return {}; } })()
+});
+const platDiscordPret = () => { const c = platConf(); return !!(c.guildId && discordGlobalOk()); };
+
+/* Renvoie le rôle plateforme que ce compte Discord obtient, ou null.
+   ⚠️ Le rôle le PLUS HAUT l'emporte : quelqu'un qui cumule « support » et
+   « technique » n'est pas rétrogradé par l'ordre des rôles sur Discord. */
+async function verdictPlateforme(userId) {
+  const c = platConf();
+  if (!c.guildId) return null;
+  const conf = Object.assign(dconf(), { guildId: c.guildId });
+  let m;
+  try { m = await DISCORD.member(conf, userId); } catch { return null; }
+  if (!m) return null;
+  const siens = m.roles || [];
+  let meilleur = null;
+  for (const r of PLAT.list(db)) {
+    const idDiscord = c.roleMap[r.key];
+    if (!idDiscord || !siens.includes(String(idDiscord))) continue;
+    if (!meilleur || r.rang > meilleur.rang) meilleur = r;
+  }
+  return meilleur ? { role: meilleur, membre: m } : null;
+}
+
+/* Le compte de l'équipe plateforme. Il vit dans l'espace le plus ancien
+   — il faut bien qu'il ait une adresse — mais son `platform_admin` fait
+   qu'il n'y habite pas : à la connexion, il ouvre la supervision. */
+function upsertDiscordPlateforme(user, roleKey) {
+  const nom = user.global_name || user.username || ('Membre' + user.id);
+  const existant = DB.row(db.prepare('SELECT * FROM staff WHERE discord_id = ? ORDER BY platform_admin DESC LIMIT 1')
+    .get(user.id));
+  if (existant) {
+    // ⚠️ Un rôle posé à la main ne se fait pas défaire par Discord, et un
+    // compte qui existait déjà côté client garde son pseudo : c'est par
+    // lui qu'il se connecte au mot de passe si Discord tombe.
+    const tenu = !!Number(existant.platform_role_manual);
+    db.prepare(`UPDATE staff SET platform_admin = 1, platform_role = ?, avatar = ?,
+                                 disabled = 0, last_login = ?, discord = ? WHERE id = ?`)
+      .run(tenu ? (existant.platform_role || roleKey) : roleKey, S(user.avatar), now(),
+           'discord:' + user.id, existant.id);
+    return DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(existant.id));
+  }
+  const maison = DB.row(db.prepare('SELECT id FROM spaces ORDER BY id LIMIT 1').get()) || { id: 1 };
+  const sid = Number(maison.id) || 1;
+  const r = db.prepare(`INSERT INTO staff(pseudo,pass,role,roles,discord,discord_id,avatar,source,
+                                          created_at,last_login,space_id,platform_admin,platform_role)
+                        VALUES(?, 'discord', ?, '[]', ?,?,?, 'discord', ?,?,?, 1, ?)`)
+    .run(pseudoLibre(nom, user.id, sid), ROLESVC.basRole(db, sid) || 'moderateur',
+         'discord:' + user.id, user.id, S(user.avatar), now(), now(), sid, roleKey);
+  return DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(DB.num(r.lastInsertRowid)));
 }
 
 /* ---------- les espaces qu'une identité Discord ouvre ----------
@@ -539,8 +613,14 @@ async function balayerAcces(raison) {
       // et surtout rien à conclure : on ne retire l'accès de personne
       // au prétexte qu'un espace n'est pas encore relié.
       if (!c.guildId || !c.staffRoleId || !c.botToken) continue;
+      // ⚠️ L'ÉQUIPE DE LA PLATEFORME EST EXCLUE. Ses comptes vivent dans
+      // un espace — il faut bien qu'ils aient une adresse — mais leur
+      // accès vient du Discord OFFICIEL, pas de celui de ce client. Les
+      // passer au balayage d'un espace les aurait tous révoqués au
+      // premier tour, faute d'y porter le rôle staff.
       const comptes = db.prepare(`SELECT * FROM staff WHERE space_id = ? AND source = 'discord'
-                                  AND disabled = 0 AND discord_id IS NOT NULL`).all(sp.id).map(DB.row);
+                                  AND disabled = 0 AND discord_id IS NOT NULL
+                                  AND COALESCE(platform_admin, 0) = 0`).all(sp.id).map(DB.row);
       for (const r of comptes) {
         try {
           const v = await verdictEspace(c, sp, r.discord_id);
@@ -572,6 +652,40 @@ async function balayerAcces(raison) {
           console.error(`[acces] ${r.pseudo} : vérification impossible — ${e.message}`);
         }
         await new Promise(r2 => setTimeout(r2, 120));   // on ménage l'API Discord
+      }
+    }
+
+    /* ⚠️ L'ÉQUIPE DE LA PLATEFORME SE REVÉRIFIE AUSSI, mais contre le
+       Discord OFFICIEL. Sans ce second tour, quelqu'un qui quitte
+       l'équipe gardait un accès d'administration — celui qui crée et
+       supprime des espaces — jusqu'à ce que quelqu'un y pense.
+       ⚠️ Et seulement si la liaison existe : sans serveur officiel
+       renseigné, il n'y a rien à conclure, et surtout pas une révocation
+       générale de l'équipe. */
+    if (platConf().guildId) {
+      const equipe = db.prepare(`SELECT * FROM staff WHERE platform_admin = 1 AND source = 'discord'
+                                 AND disabled = 0 AND discord_id IS NOT NULL`).all().map(DB.row);
+      for (const r of equipe) {
+        try {
+          const v = await verdictPlateforme(r.discord_id);
+          verifies++;
+          if (!v) {
+            db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(r.id);
+            db.prepare('UPDATE staff SET platform_admin = 0, platform_role = NULL WHERE id = ?').run(r.id);
+            audit(null, 'plateforme.revocation.discord',
+                  `${r.pseudo} — plus de rôle sur le Discord officiel (balayage ${raison})`, null, r.space_id || 1);
+            retires++;
+            continue;
+          }
+          if (!Number(r.platform_role_manual) && r.platform_role !== v.role.key) {
+            db.prepare('UPDATE staff SET platform_role = ? WHERE id = ?').run(v.role.key, r.id);
+            audit(null, 'plateforme.role.discord', `${r.pseudo} → ${v.role.label} (balayage)`, null, r.space_id || 1);
+          }
+        } catch (e) {
+          erreurs++;
+          console.error(`[acces] ${r.pseudo} (plateforme) : vérification impossible — ${e.message}`);
+        }
+        await new Promise(r2 => setTimeout(r2, 120));
       }
     }
   } finally {
@@ -1731,6 +1845,19 @@ async function route(req, res) {
       const jetons = await DISCORD.exchangeCode(c, String(Q.code || ''));
       const user = await DISCORD.meFromToken(jetons.access_token);
 
+      /* ⚠️ LE DISCORD OFFICIEL PASSE AVANT LES CLIENTS. Quelqu'un de
+         l'équipe peut être staff chez un client par ailleurs ; s'il
+         entrait d'abord dans cet espace-là, il se retrouverait modérateur
+         d'un serveur de jeu au lieu de l'administration qu'il vient
+         ouvrir. On regarde donc d'abord chez nous. */
+      const vPlat = await verdictPlateforme(user.id);
+      if (vPlat) {
+        const cp = upsertDiscordPlateforme(user, vPlat.role.key);
+        if (cp.disabled) return rentrer('Votre accès au panneau a été suspendu.');
+        audit({ id: cp.id, pseudo: cp.pseudo }, 'auth.discord.plateforme', vPlat.role.label, ip, cp.space_id || 1);
+        return rentrer(null, ouvrirSession(res, cp, req));
+      }
+
       // Plusieurs espaces peuvent exister : on cherche celui (ou ceux) où
       // cette personne est staff. Un espace déjà connu passe en premier,
       // pour qu'on retombe toujours sur le sien.
@@ -1884,7 +2011,14 @@ async function route(req, res) {
                roles: me.roleLabels && me.roleLabels.length ? me.roleLabels
                     : me.roles.map(r => ({ id: r, label: r })),
                source: me.source, avatar: me.avatar, discordId: me.discordId,
-               manuel: me.manual, plateforme: me.platform },
+               manuel: me.manual, plateforme: me.platform,
+               // Le rôle SUR LA PLATEFORME, et ce qu'il autorise. Sans
+               // cette liste, l'écran devrait deviner — et proposerait
+               // des boutons que l'API refuse, ce qui est pire que de ne
+               // rien proposer.
+               plateformeRole: me.platRole, plateformeRoleLabel: me.platRole
+                 ? ((PLAT.byKey(db, me.platRole) || {}).label || me.platRole) : null },
+      platPerms: me.platPerms,
       espace: me.space ? { id: me.space.id, nom: me.space.name, etat: me.space.state,
                            visite: me.visiting, monEspace: me.homeSpaceId } : null,
       perms: me.perms, cats: me.cats });
@@ -2724,12 +2858,26 @@ async function route(req, res) {
        ============================================================ */
     if (p.startsWith('/api/platform')) {
       if (!me.platform) return fail(res, 403, 'Réservé à l’administration de la plateforme.');
+      /* ⚠️ CHAQUE ROUTE PORTE SON DROIT. Le drapeau d'appartenance ouvre
+         la porte de l'étage, pas celle de chaque bureau : sans cela, un
+         commercial invité à poser des formules pourrait aussi supprimer
+         un espace et tous ses journaux. Le refus NOMME le droit manquant
+         — « accès refusé » envoie chercher au mauvais endroit. */
+      const platCan = id => me.platPerms.includes(id);
+      const platNeed = id => {
+        if (platCan(id)) return true;
+        const d = PLAT.PERMS.find(x => x.id === id);
+        fail(res, 403, `Votre rôle « ${(PLAT.byKey(db, me.platRole) || {}).label || me.platRole} » `
+                     + `ne permet pas : ${d ? d.label.toLowerCase() : id}.`);
+        return false;
+      };
 
       /* ---- tableau de bord de la plateforme ----
          L'administration ne modère pas un serveur de jeu : elle SUIT
          des espaces. Ce qu'elle regarde, ce sont des signes de vie,
          pas des messages de proximité. */
       if (p === '/api/platform/overview' && method === 'GET') {
+        if (!platNeed('plat.voir')) return;
         const spaces = db.prepare('SELECT * FROM spaces ORDER BY state, name').all().map(DB.row);
         const d24 = now() - 86400000;
         const parEspace = spaces.map(sp => {
@@ -2795,6 +2943,7 @@ async function route(req, res) {
          C'est la seule trace qui explique pourquoi un espace ne se
          comporte plus comme la veille. */
       if (p === '/api/platform/journal' && method === 'GET') {
+        if (!platNeed('plat.journal')) return;
         const w = [], a = [];
         if (N(Q.space)) { w.push('a.space_id = ?'); a.push(N(Q.space)); }
         if (Q.action)   { w.push('a.action LIKE ?'); a.push(String(Q.action) + '%'); }
@@ -2825,6 +2974,7 @@ async function route(req, res) {
          problème » envoie chercher au mauvais endroit.
          ============================================================ */
       if (p === '/api/platform/check' && method === 'GET') {
+        if (!platNeed('plat.verifier')) return;
         const delai = (pr, ms) => Promise.race([pr,
           new Promise((_, rej) => setTimeout(() => rej(new Error('Discord n’a pas répondu en ' + (ms / 1000) + ' s.')), ms))]);
         const C = (niveau, titre, detail, remede) => ({ niveau, titre, detail, remede });
@@ -3029,9 +3179,11 @@ async function route(req, res) {
          part toute seule, tourne sur elle-même, et se télécharge d'un clic
          le jour où il faut repartir d'hier. */
       if (p === '/api/platform/sauvegardes' && method === 'GET') {
+        if (!platNeed('plat.sauvegardes')) return;
         return ok(res, etatSauvegardes());
       }
       if (p === '/api/platform/sauvegardes' && method === 'POST') {
+        if (!platNeed('plat.sauvegardes')) return;
         try {
           const r = SAUV.faire(db, CFG.dbFile);
           SAUVE.derniere = r.le; SAUVE.erreur = null;
@@ -3070,6 +3222,7 @@ async function route(req, res) {
          d'ingestion. Il ne sort que pour un administrateur de plateforme,
          et la sortie est journalisée. */
       if (/^\/api\/platform\/spaces\/\d+\/export$/.test(p) && method === 'GET') {
+        if (!platNeed('plat.export')) return;
         const sid = Number(p.split('/')[4]);
         const sp = DB.row(db.prepare('SELECT * FROM spaces WHERE id = ?').get(sid));
         if (!sp) return fail(res, 404, 'Espace inconnu.');
@@ -3089,6 +3242,7 @@ async function route(req, res) {
          foi d'un fichier est le geste le plus destructeur du panneau, et
          aucune confirmation ne le rendrait sûr. Le doublon se supprime. */
       if (p === '/api/platform/restaurer' && method === 'POST') {
+        if (!platNeed('plat.restaurer')) return;
         const b = await readBody(req, 64 * 1024 * 1024);
         const doc = b && b.fichier ? b.fichier : b;
         const mauvais = TRANSF.verifier(doc);
@@ -3104,6 +3258,7 @@ async function route(req, res) {
       }
 
       if (p === '/api/platform/plans' && method === 'GET') {
+        if (!platNeed('plat.voir')) return;
         const usage = {};
         for (const r of db.prepare('SELECT plan_key, COUNT(*) n FROM spaces GROUP BY plan_key').all())
           usage[r.plan_key || ''] = Number(r.n);
@@ -3111,6 +3266,7 @@ async function route(req, res) {
                          sansFormule: usage[''] || 0 });
       }
       if (p === '/api/platform/plans' && method === 'POST') {
+        if (!platNeed('plat.formules')) return;
         const b = await readBody(req);
         const label = String(b.label || '').trim().slice(0, 40);
         if (label.length < 2) return fail(res, 400, 'Donnez un nom à la formule.');
@@ -3130,6 +3286,7 @@ async function route(req, res) {
         return ok(res, { ok: true, key });
       }
       if (p.startsWith('/api/platform/plans/')) {
+        if (!platNeed('plat.formules')) return;
         const key = decodeURIComponent(p.slice('/api/platform/plans/'.length));
         const plan = PLANS.byKey(db, key);
         if (!plan) return fail(res, 404, 'Formule inconnue.');
@@ -3166,6 +3323,7 @@ async function route(req, res) {
         }
       }
       if (p === '/api/platform/spaces' && method === 'GET') {
+        if (!platNeed('plat.voir')) return;
         const rows = db.prepare('SELECT * FROM spaces ORDER BY state, name').all().map(DB.row);
         const compte = (t, id) => DB.row(db.prepare(`SELECT COUNT(*) n FROM ${t} WHERE space_id = ?`).get(id)).n;
         return ok(res, {
@@ -3204,6 +3362,7 @@ async function route(req, res) {
         });
       }
       if (p === '/api/platform/spaces' && method === 'POST') {
+        if (!platNeed('plat.espace.creer')) return;
         const b = await readBody(req);
         const nom = String(b.nom || '').trim().slice(0, 60);
         if (nom.length < 2) return fail(res, 400, 'Donnez un nom à l’espace.');
@@ -3246,6 +3405,7 @@ async function route(req, res) {
            Chez le vendeur, pas chez le client : c'est lui qui installe,
            et c'est la fiche d'installation qui pose la question. */
         if (sousRoute === 'integration') {
+          if (!platNeed('plat.integration')) return;
           const lire = t => {
             const r = DB.row(db.prepare(`SELECT * FROM ${t} WHERE space_id = ?`).get(sid));
             if (!r) return null;
@@ -3319,6 +3479,7 @@ async function route(req, res) {
            le client n'a rien à assembler, et on ne peut pas se tromper
            d'adresse en la recopiant à la main. */
         if (sousRoute === 'branchement') {
+          if (!platNeed('plat.branchement')) return;
           if (method === 'POST') {
             if (sp.state !== 'actif')
               return fail(res, 409, 'Cet espace est fermé : rouvrez-le avant de le brancher.');
@@ -3338,6 +3499,13 @@ async function route(req, res) {
         if (method === 'PATCH') {
           const b = await readBody(req);
           const sets = [], args = [];
+          // ⚠️ Le PATCH d'un espace touche à des choses de natures
+          // différentes : son identité, sa facturation, ses clés, son
+          // état. Un seul droit pour tout aurait obligé à donner la
+          // suppression à qui ne doit que changer un nom.
+          const identite = ['nom','guildId','staffRoleId','retention','conservationIllimitee']
+            .some(k => b[k] !== undefined);
+          if (identite && !platNeed('plat.espace.modifier')) return;
           const idOk = v => !v || /^[0-9]{5,25}$/.test(String(v));
           if (b.nom !== undefined) { const v = String(b.nom).trim().slice(0, 60);
             if (v.length < 2) return fail(res, 400, 'Nom trop court.'); sets.push('name = ?'); args.push(v); }
@@ -3359,6 +3527,7 @@ async function route(req, res) {
                   ip, sid);
           }
           if (b.formule !== undefined) {
+            if (!platNeed('plat.facturation')) return;
             const k = String(b.formule || '');
             if (k && !PLANS.byKey(db, k)) return fail(res, 404, 'Formule inconnue.');
             sets.push('plan_key = ?'); args.push(k || null);
@@ -3366,6 +3535,7 @@ async function route(req, res) {
                   `${sp.name} → ${k ? PLANS.byKey(db, k).label : 'sans formule'}`, ip, sid);
           }
           if (b.echeance !== undefined) {
+            if (!platNeed('plat.facturation')) return;
             const t = b.echeance ? Date.parse(b.echeance) : null;
             if (b.echeance && !Number.isFinite(t)) return fail(res, 400, 'Date d’échéance illisible.');
             sets.push('plan_until = ?'); args.push(Number.isFinite(t) ? t : null);
@@ -3373,6 +3543,7 @@ async function route(req, res) {
                   `${sp.name} → ${Number.isFinite(t) ? new Date(t).toLocaleDateString('fr-FR') : 'sans fin'}`, ip, sid);
           }
           if (b.proprietaire !== undefined) {
+            if (!platNeed('plat.espace.modifier')) return;
             const cand = b.proprietaire ? DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(Number(b.proprietaire))) : null;
             if (b.proprietaire && !cand) return fail(res, 404, 'Ce compte n’existe pas.');
             if (cand && Number(cand.space_id) !== sid)
@@ -3381,6 +3552,7 @@ async function route(req, res) {
             if (cand) audit(me, 'plateforme.proprietaire', `${sp.name} → ${cand.pseudo}`, ip, sid);
           }
           if (b.etat !== undefined) {
+            if (!platNeed('plat.espace.fermer')) return;
             const e = b.etat === 'ferme' ? 'ferme' : 'actif';
             if (e === 'ferme') {
               // Fermer, ce n'est pas supprimer : les journaux restent, mais
@@ -3392,6 +3564,7 @@ async function route(req, res) {
             audit(me, e === 'ferme' ? 'plateforme.espace.fermeture' : 'plateforme.espace.reouverture', sp.name, ip, sid);
           }
           if (b.regenererCle) {
+            if (!platNeed('plat.espace.cle')) return;
             sets.push('server_key = ?'); args.push(crypto.randomBytes(24).toString('hex'));
             audit(me, 'plateforme.cle', `${sp.name} — clé régénérée`, ip, sid);
           }
@@ -3399,6 +3572,7 @@ async function route(req, res) {
           // ⚠️ La retirer ne coupe QUE le bot — les journaux continuent
           // d'arriver, et c'est tout l'intérêt de deux clés séparées.
           if (b.relais !== undefined) {
+            if (!platNeed('plat.espace.cle')) return;
             const k = b.relais ? crypto.randomBytes(24).toString('hex') : null;
             sets.push('relay_key = ?'); args.push(k);
             audit(me, k ? 'plateforme.relais.creation' : 'plateforme.relais.retrait', sp.name, ip, sid);
@@ -3412,6 +3586,7 @@ async function route(req, res) {
           return ok(res, { ok: true, cle: apres.server_key, relais: apres.relay_key || null });
         }
         if (method === 'DELETE') {
+          if (!platNeed('plat.espace.supprimer')) return;
           if (Q.confirme !== sp.name)
             return fail(res, 400, 'Pour supprimer un espace, renvoyez son nom exact : la suppression efface tous ses journaux.');
           if (db.prepare('SELECT COUNT(*) n FROM spaces').get().n <= 1)
@@ -3436,7 +3611,145 @@ async function route(req, res) {
         }
       }
 
+      /* ============================================================
+         LES RÔLES DE LA PLATEFORME
+         ⚠️ Gouvernance : on ne gère que les rôles de rang STRICTEMENT
+         inférieur au sien, et on n'accorde QUE des droits qu'on détient.
+         Sans ces deux règles, il suffisait d'un droit de composition pour
+         s'attribuer tout le reste — une porte ouverte qui se referme sur
+         son auteur.
+         ============================================================ */
+      /* ---- le Discord officiel de la plateforme ----
+         ⚠️ Réglage de gouvernance : qui peut le changer peut, de fait,
+         nommer n'importe qui dans l'équipe. Il porte donc le même droit
+         que la composition des rôles. */
+      if (p === '/api/platform/discord' && method === 'GET') {
+        if (!platNeed('plat.equipe.voir')) return;
+        const c = platConf();
+        return ok(res, {
+          guildId: c.guildId, roleMap: c.roleMap,
+          roles: PLAT.list(db).map(r => ({ key: r.key, label: r.label, rang: r.rang, desc: r.desc })),
+          pret: platDiscordPret(), secrets: { botToken: !!dconf().botToken, clientSecret: !!dconf().clientSecret },
+          redirectUri: redirectUriOf(dconf(), req),
+          peutRegler: platCan('plat.roles')
+        });
+      }
+      if (p === '/api/platform/discord' && method === 'POST') {
+        if (!platNeed('plat.roles')) return;
+        const b = await readBody(req);
+        if (b.guildId !== undefined) {
+          const v = String(b.guildId || '');
+          if (v && !/^[0-9]{5,25}$/.test(v))
+            return fail(res, 400, 'L’identifiant du serveur Discord doit être numérique.');
+          setSetting('plateforme.guildId', v, me.pseudo);
+        }
+        if (b.roleMap && typeof b.roleMap === 'object') {
+          const propre = {};
+          for (const r of PLAT.list(db)) {
+            const v = String(b.roleMap[r.key] || '');
+            if (!v) continue;
+            if (!/^[0-9]{5,25}$/.test(v)) return fail(res, 400, `Identifiant de rôle invalide pour « ${r.label} ».`);
+            propre[r.key] = v;
+          }
+          setSetting('plateforme.roleMap', JSON.stringify(propre), me.pseudo);
+        }
+        audit(me, 'plateforme.discord', 'liaison du Discord officiel', ip, me.spaceId || 1);
+        return ok(res, { ok: true, pret: platDiscordPret() });
+      }
+      if (p === '/api/platform/discord/roles' && method === 'GET') {
+        if (!platNeed('plat.roles')) return;
+        const c = platConf();
+        if (!dconf().botToken) return fail(res, 400, 'DISCORD_BOT_TOKEN manquant dans .env.');
+        if (!c.guildId) return fail(res, 400, 'Renseignez d’abord l’identifiant du serveur Discord officiel.');
+        try {
+          const roles = await DISCORD.guildRoles(Object.assign(dconf(), { guildId: c.guildId }));
+          return ok(res, { roles, guildId: c.guildId });
+        } catch (e) {
+          return fail(res, 502, e.message + ' Vérifiez que le bot est bien invité sur votre serveur Discord.');
+        }
+      }
+
+      if (p === '/api/platform/roles' && method === 'GET') {
+        if (!platNeed('plat.equipe.voir')) return;
+        const porteurs = db.prepare(`SELECT platform_role k, COUNT(*) n FROM staff
+                                     WHERE platform_admin = 1 GROUP BY platform_role`).all().map(DB.row);
+        return ok(res, {
+          roles: PLAT.list(db).map(r => Object.assign({}, r,
+            { membres: (porteurs.find(x => (x.k || 'direction') === r.key) || {}).n || 0 })),
+          perms: PLAT.PERMS, groupes: PLAT.GROUPES,
+          monRole: me.platRole, monRang: me.platRang, mesDroits: me.platPerms,
+          peutComposer: platCan('plat.roles')
+        });
+      }
+      if (p === '/api/platform/roles' && method === 'POST') {
+        if (!platNeed('plat.roles')) return;
+        const b = await readBody(req);
+        const label = String(b.label || '').trim().slice(0, 40);
+        if (label.length < 2) return fail(res, 400, 'Donnez un nom au rôle.');
+        const key = label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                      .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30);
+        if (!key) return fail(res, 400, 'Ce nom ne donne aucun identifiant utilisable.');
+        if (PLAT.byKey(db, key)) return fail(res, 409, 'Un rôle porte déjà ce nom.');
+        const rang = Math.max(0, Math.min(me.platRang - 1, Number(b.rang) || 0));
+        const voulus = (Array.isArray(b.perms) ? b.perms : []).filter(x => PLAT.PERM_IDS.includes(x));
+        const refuses = voulus.filter(x => !platCan(x));
+        if (refuses.length) return fail(res, 403, 'Vous ne pouvez accorder que des droits que vous détenez.');
+        db.prepare('INSERT INTO platform_roles(key,label,rang,perms,builtin,descr) VALUES(?,?,?,?,0,?)')
+          .run(key, label, rang, JSON.stringify(voulus), String(b.desc || '').slice(0, 200));
+        audit(me, 'plateforme.role.creation', `${label} (rang ${rang})`, ip, me.spaceId || 1);
+        return ok(res, { ok: true, key });
+      }
+      if (p.startsWith('/api/platform/roles/')) {
+        if (!platNeed('plat.roles')) return;
+        const key = decodeURIComponent(p.slice('/api/platform/roles/'.length));
+        const role = PLAT.byKey(db, key);
+        if (!role) return fail(res, 404, 'Rôle inconnu.');
+        // ⚠️ « Direction » ne se retouche pas : c'est le rôle qui peut
+        // tout rouvrir le jour où un réglage a tout fermé.
+        if (role.key === 'direction') return fail(res, 409, 'Le rôle Direction porte tous les droits, par construction.');
+        if (role.rang >= me.platRang) return fail(res, 403, 'Ce rôle est à votre niveau ou au-dessus.');
+
+        if (method === 'PATCH') {
+          const b = await readBody(req);
+          const sets = [], args = [];
+          if (b.label !== undefined) {
+            const v = String(b.label).trim().slice(0, 40);
+            if (v.length < 2) return fail(res, 400, 'Nom trop court.');
+            sets.push('label = ?'); args.push(v);
+          }
+          if (b.rang !== undefined) {
+            const v = Math.max(0, Math.min(me.platRang - 1, Number(b.rang) || 0));
+            sets.push('rang = ?'); args.push(v);
+          }
+          if (b.desc !== undefined) { sets.push('descr = ?'); args.push(String(b.desc).slice(0, 200)); }
+          if (Array.isArray(b.perms)) {
+            const voulus = b.perms.filter(x => PLAT.PERM_IDS.includes(x));
+            const refuses = voulus.filter(x => !platCan(x));
+            if (refuses.length) return fail(res, 403, 'Vous ne pouvez accorder que des droits que vous détenez.');
+            sets.push('perms = ?'); args.push(JSON.stringify(voulus));
+          }
+          if (!sets.length) return ok(res, { ok: true });
+          db.prepare(`UPDATE platform_roles SET ${sets.join(', ')} WHERE key = ?`).run(...args, key);
+          // Les droits changent tout de suite : une session ouverte ne
+          // doit pas garder un accès qu'on vient de retirer.
+          db.prepare(`DELETE FROM sessions WHERE staff_id IN
+                      (SELECT id FROM staff WHERE platform_role = ?)`).run(key);
+          audit(me, 'plateforme.role.modification', role.label, ip, me.spaceId || 1);
+          return ok(res, { ok: true });
+        }
+        if (method === 'DELETE') {
+          if (role.builtin) return fail(res, 409, 'Un rôle d’origine ne se supprime pas.');
+          const n = DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE platform_role = ?').get(key)).n;
+          if (n) return fail(res, 409, `${n} personne(s) portent ce rôle : changez-les d’abord.`);
+          db.prepare('DELETE FROM platform_roles WHERE key = ?').run(key);
+          audit(me, 'plateforme.role.suppression', role.label, ip, me.spaceId || 1);
+          return ok(res, { ok: true });
+        }
+        return fail(res, 405, 'Méthode non autorisée.');
+      }
+
       if (p === '/api/platform/members' && method === 'GET') {
+        if (!platNeed('plat.equipe.voir')) return;
         const sid = N(Q.space);
         const rows = (sid ? db.prepare('SELECT * FROM staff WHERE space_id = ? ORDER BY pseudo').all(sid)
                           : db.prepare('SELECT * FROM staff ORDER BY space_id, pseudo').all()).map(DB.row);
@@ -3445,10 +3758,14 @@ async function route(req, res) {
           const r = ROLESVC.resolve(db, x.space_id || 1, rs.length ? rs : [x.role]);
           return { id:x.id, pseudo:x.pseudo, spaceId:x.space_id, source:x.source, disabled:!!x.disabled,
                    platform:!!x.platform_admin, avatar:x.avatar, discordId:x.discord_id,
+                   platformRole: x.platform_admin ? (x.platform_role || 'direction') : null,
+                   platformRoleLabel: x.platform_admin
+                     ? ((PLAT.byKey(db, x.platform_role || 'direction') || {}).label || '—') : null,
                    roles:r.labels, rank:r.rank, last_login:x.last_login, estMoi:x.id === me.id };
         }) });
       }
       if (p.startsWith('/api/platform/members/')) {
+        if (!platNeed('plat.equipe.gerer')) return;
         const mid = Number(p.slice('/api/platform/members/'.length)) || 0;
         const cible = DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(mid));
         if (!cible) return fail(res, 404, 'Compte inconnu.');
@@ -3470,13 +3787,38 @@ async function route(req, res) {
             db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(mid);
             audit(me, 'plateforme.mutation', `${cible.pseudo} → espace #${dest.id}`, ip, dest.id);
           }
-          if (b.platform !== undefined) {
-            if (mid === me.id && !b.platform) {
+          if (b.platform !== undefined || b.platformRole !== undefined) {
+            // Retirer quelqu'un de l'équipe, c'est poser `platform` à
+            // faux ; lui donner un rôle, c'est nommer lequel. Les deux
+            // passent ici parce que c'est la même décision vue de deux
+            // côtés — et parce qu'un rôle sans appartenance ne veut rien dire.
+            const entre = b.platform !== undefined ? !!b.platform : true;
+            if (mid === me.id && !entre) {
               const autres = DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE platform_admin = 1 AND id <> ?').get(mid)).n;
               if (!autres) return fail(res, 409, 'Vous êtes le dernier administrateur de plateforme.');
             }
-            db.prepare('UPDATE staff SET platform_admin = ? WHERE id = ?').run(b.platform ? 1 : 0, mid);
-            audit(me, 'plateforme.admin', `${cible.pseudo} → ${b.platform ? 'oui' : 'non'}`, ip, cible.space_id);
+            let cle = cible.platform_role || 'direction';
+            if (b.platformRole !== undefined) {
+              const r = PLAT.byKey(db, String(b.platformRole));
+              if (!r) return fail(res, 404, 'Rôle de plateforme inconnu.');
+              // ⚠️ On ne nomme pas quelqu'un à son propre niveau : sinon
+              // le premier commercial promu pourrait révoquer celui qui
+              // vient de le nommer.
+              if (r.rang >= me.platRang)
+                return fail(res, 403, `« ${r.label} » est à votre niveau ou au-dessus.`);
+              cle = r.key;
+            }
+            // Le rang de la personne visée compte aussi : on ne rétrograde
+            // pas plus haut que soi.
+            if (cible.platform_admin && PLAT.rangDe(db, cible.platform_role) >= me.platRang && mid !== me.id)
+              return fail(res, 403, 'Ce compte est à votre niveau ou au-dessus.');
+            db.prepare('UPDATE staff SET platform_admin = ?, platform_role = ?, platform_role_manual = ? WHERE id = ?')
+              .run(entre ? 1 : 0, entre ? cle : null,
+                   entre && b.platformRole !== undefined ? 1 : 0, mid);
+            db.prepare('DELETE FROM sessions WHERE staff_id = ?').run(mid);
+            audit(me, 'plateforme.admin',
+                  `${cible.pseudo} → ${entre ? (PLAT.byKey(db, cle) || {}).label || cle : 'retiré de l’équipe'}`,
+                  ip, cible.space_id);
           }
           return ok(res, { ok: true });
         }
@@ -3491,6 +3833,7 @@ async function route(req, res) {
 
       // Visiter un espace : la session change, pas le compte.
       if (p === '/api/platform/acces' && (method === 'GET' || method === 'POST')) {
+        if (!platNeed('plat.voir')) return;
         if (method === 'POST') { await balayerAcces('manuel'); audit(me, 'acces.balayage', null, ip); }
         return ok(res, {
           actif: CFG.sweepMin > 0, intervalleMin: CFG.sweepMin, discordPret: discordGlobalOk(),
@@ -3506,6 +3849,7 @@ async function route(req, res) {
         });
       }
       if (p === '/api/platform/enter' && method === 'POST') {
+        if (!platNeed('plat.entrer')) return;
         const b = await readBody(req);
         const sid = Number(b.spaceId) || 0;
         // spaceId absent ou 0 = RESSORTIR. Entrer sans pouvoir ressortir
@@ -3571,6 +3915,7 @@ server.listen(CFG.port, CFG.host, () => {
   else console.log('');
   purge();
   PLANS.seed(db);
+  PLAT.seed(db);
   appliquerEcheances();
   planifierSauvegardes();
   rattraperRubriques();

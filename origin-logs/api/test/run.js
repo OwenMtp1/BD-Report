@@ -56,6 +56,8 @@ const SUITES = [
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
   { nom: 'interface', fichier: 'interface.test.mjs', port: 8912, discord: false,
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
+  { nom: 'plateforme', fichier: 'plateforme.test.mjs', port: 8916, discord: false,
+    comptes: [['Sup', 'fondateur', 'motdepassesup12345', { plateforme: true }]] },
   { nom: 'integration', fichier: 'integration.test.mjs', port: 8915, discord: false,
     comptes: [['Sup', 'fondateur', 'motdepassesup12345', { plateforme: true }],
               ['Nyx', 'fondateur', 'motdepassetest123']] },

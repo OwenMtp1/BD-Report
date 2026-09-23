@@ -459,6 +459,18 @@ function open(file) {
   // Une colonne à part se lit, se coche, se décoche, et se raconte au
   // client dans les termes où il l'a demandée.
   ensureColumn(db, 'spaces', 'keep_forever', 'INTEGER');
+  // ⚠️ L'ÉQUIPE DE LA PLATEFORME A SES PROPRES RÔLES, sans rapport avec
+  // ceux d'un espace client. `platform_admin` disait seulement OUI/NON ;
+  // `platform_role` dit LEQUEL — commercial, support, technique…
+  // Les comptes déjà marqués administrateurs deviennent « Direction » :
+  // une migration qui retire des accès est pire que le désordre qu'elle
+  // corrige, et personne ne doit se réveiller sans droits.
+  ensureColumn(db, 'staff', 'platform_role', 'TEXT');
+  // Un rôle plateforme posé À LA MAIN est une décision : la
+  // correspondance avec le Discord officiel ne doit pas la défaire à la
+  // prochaine connexion. Même principe que `manual_roles` côté client.
+  ensureColumn(db, 'staff', 'platform_role_manual', 'INTEGER');
+  db.prepare("UPDATE staff SET platform_role = 'direction' WHERE platform_admin = 1 AND platform_role IS NULL").run();
   db.exec('CREATE INDEX IF NOT EXISTS idx_st_space ON staff(space_id)');
   // COLLATE NOCASE : « Nyx » et « nyx » sont le même compte pour qui se
   // connecte, donc le même compte pour l'index.

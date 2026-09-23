@@ -113,6 +113,70 @@ carte) ; la barre affiche alors « visite — nom de l'espace · sortir », et u
 clic dessus ressort. En visite, ce compte garde tous ses droits : il passe
 avant le fondateur de l'espace visité.
 
+### L'équipe de la plateforme, et ses rôles
+
+⚠️ **Deux équipes qui n'ont rien à voir.** Le staff d'un **espace** modère un
+serveur de jeu : il lit des logs, bannit, traite des reports, et ses droits
+viennent des rôles Discord de *ce client*. L'équipe de la **plateforme**, la
+vôtre, ne modère personne : elle crée des espaces, les facture, les dépanne,
+les ferme. Les deux catalogues de droits ne se recouvrent en rien — les
+mélanger donnerait un commercial capable de bannir un joueur, ou un modérateur
+capable de supprimer l'espace qu'il modère.
+
+Cinq rôles d'origine, modifiables et complétables :
+
+| Rôle | Rang | Ce qu'il fait |
+|---|---|---|
+| **Direction** | 100 | tout, y compris composer les rôles |
+| **Technique** | 80 | met en service, dépanne, sauvegarde — pas les tarifs |
+| **Support** | 60 | répond, entre chez les clients — ne crée ni ne supprime |
+| **Commercial** | 50 | ouvre des comptes et pose les formules — n'entre pas dans les journaux |
+| **Observateur** | 10 | lecture seule |
+
+Écran : *Supervision* → **Équipe & rôles**. En console :
+`node staff.js platform <pseudo> <role>` et `node staff.js platform-roles`.
+
+⚠️ **La Direction porte tous les droits EN DUR**, jamais une liste enregistrée.
+Une liste se modifie : le jour où quelqu'un décoche la gouvernance sur le seul
+rôle qui pouvait la recocher, plus personne n'administre rien.
+
+⚠️ **Anti-escalade, deux règles.** On ne gère que les rôles de rang
+**strictement inférieur** au sien, et on n'accorde **que des droits qu'on
+détient**. Sans la seconde, un simple droit de composition suffisait à
+s'attribuer tout le reste.
+
+⚠️ **Chaque route porte son droit**, pas seulement chaque bouton. Un bouton
+retiré mais une route ouverte donne une protection d'apparence, celle qui tombe
+au premier `curl`. Et le refus **nomme le droit manquant** — « accès refusé »
+envoie chercher au mauvais endroit.
+
+⚠️ **Le dernier membre de l'équipe ne peut pas se retirer.** Se retirer ferme sa
+propre session sur-le-champ, sans retour possible : il faut qu'il reste
+quelqu'un.
+
+### Le Discord officiel de la plateforme
+
+Votre équipe peut se connecter avec **votre** serveur Discord, exactement comme
+le staff d'un client se connecte avec le sien. *Équipe & rôles* → section
+**Discord officiel** : l'identifiant de votre serveur, puis un rôle Discord par
+rôle de plateforme.
+
+⚠️ **Un rôle porté là donne un rôle SUR LA PLATEFORME**, jamais un droit sur les
+journaux d'un client — ceux-là se gagnent sur le Discord du client et nulle
+part ailleurs.
+
+⚠️ **Le Discord officiel passe avant les clients** à la connexion. Quelqu'un de
+votre équipe peut être staff chez un client par ailleurs ; s'il entrait d'abord
+dans cet espace-là, il se retrouverait modérateur d'un serveur de jeu au lieu de
+l'administration qu'il vient ouvrir.
+
+⚠️ **L'équipe est revérifiée comme le reste**, mais contre le Discord officiel.
+Quelqu'un qui quitte l'équipe perd l'administration au balayage suivant, sans
+que personne ait à y penser. Un rôle posé **à la main** dans l'écran, lui, n'est
+pas défait par Discord : c'est une décision.
+
+---
+
 ### Vérifier l'installation d'un seul clic
 
 Le bouton **Vérifier** de la supervision teste la plateforme et chaque espace
