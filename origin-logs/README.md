@@ -20,6 +20,9 @@ Le panneau s'adapte au serveur de chaque client : un bouton **Intégration**
 fait scanner son serveur, branche ce qui s'y trouve et la ressource pose les
 écouteurs elle-même — aucun fichier à déposer (voir `DEPLOIEMENT.md § 3 bis`).
 
+Comprendre le fonctionnement interne, et la mise en service pas à pas :
+**[COMMENT-CA-MARCHE.md](COMMENT-CA-MARCHE.md)**.
+
 Jamais fait ça ? **[BRANCHER-SUR-FIVEM.md](BRANCHER-SUR-FIVEM.md)** —
 guide débutant, tout sur un VPS, copier-coller de bout en bout.
 Installation détaillée (HTTPS, plusieurs serveurs, réglages) :
