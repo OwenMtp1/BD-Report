@@ -842,6 +842,15 @@ select.input{height:36px}
 /* ---------- connexion Discord ---------- */
 .btn.discord{background:#5865F2;border-color:#7983f5;color:#fff;font-weight:600}
 .btn.discord:hover{background:#6b76f5;border-color:#98a0f7;color:#fff}
+/* ⚠️ LE BOUTON EXISTE AVANT L'OAUTH, mais il ne PROMET rien qu'on ne
+   puisse tenir : tant que la liaison Discord n'est pas configurée, il est
+   présent mais grisé et inerte — cliquer mènerait à une erreur. Il
+   s'allume tout seul le jour où les deux secrets Discord sont en place. */
+.btn.discord.soon{background:var(--panel-2);border-color:var(--edge);color:var(--muted);
+  cursor:not-allowed;font-weight:500}
+.btn.discord.soon:hover{background:var(--panel-2);border-color:var(--edge);color:var(--muted)}
+.btn.discord .d-soon{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
+  text-transform:uppercase;opacity:.8;margin-left:2px}
 .or{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:11px}
 .or::before,.or::after{content:'';flex:1;height:1px;background:var(--edge)}
 .or[hidden]{display:none}
@@ -1121,7 +1130,7 @@ select.input{height:36px}
 
     <a class="btn discord block" id="gateDiscord" href="/api/auth/discord" hidden>
       <svg width="17" height="13" viewBox="0 0 71 55" fill="currentColor" aria-hidden="true"><path d="M60.1 4.9A58.5 58.5 0 0 0 45.6.5a41 41 0 0 0-1.9 3.8 54.1 54.1 0 0 0-16.2 0A38.4 38.4 0 0 0 25.6.5a58.3 58.3 0 0 0-14.6 4.4C1.8 18.6-.7 31.9.5 45.1a58.9 58.9 0 0 0 17.9 9 43.3 43.3 0 0 0 3.8-6.2 38.2 38.2 0 0 1-6-2.9l1.5-1.2a42 42 0 0 0 36 0l1.5 1.2a38.2 38.2 0 0 1-6 2.9 42.9 42.9 0 0 0 3.8 6.2 58.7 58.7 0 0 0 18-9c1.4-15.3-2.5-28.5-10-40.2ZM23.7 37c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.3 6.4-7.3 6.5 3.3 6.4 7.3c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.3 6.4-7.3 6.5 3.3 6.4 7.3c0 4-2.8 7.2-6.4 7.2Z"/></svg>
-      Continuer avec Discord
+      <span class="d-txt">Continuer avec Discord</span>
     </a>
     <div class="or" id="gateOr" hidden><span>ou</span></div>
 
@@ -7062,16 +7071,47 @@ async function showGate(msg) {
   if (dit) { msg = dit; history.replaceState(null, '', location.pathname + location.hash); }
   $('#gateErr').hidden = !msg; if (msg) $('#gateErr').textContent = msg;
 
-  let o = { discord:false, motDePasse:true, manque:[] };
-  try { o = await api('/api/auth/options'); } catch (e) {}
-  $('#gateDiscord').hidden = !o.discord;
-  $('#gateOr').hidden = !(o.discord && o.motDePasse);
+  // En démonstration il n'y a pas d'API à interroger : on montre l'écran
+  // tel qu'un serveur SANS Discord encore configuré le présente — mot de
+  // passe actif, bouton Discord en attente.
+  let o = { discord:false, motDePasse:true, manque:[], demo: MODE === 'demo' };
+  if (MODE !== 'demo') { try { o = await api('/api/auth/options'); } catch (e) {} }
+
+  // ⚠️ LE BOUTON DISCORD EST TOUJOURS LÀ. Tant que l'OAuth n'est pas
+  // branché, il est grisé et inerte (cliquer mènerait à une erreur) et
+  // porte « bientôt » ; il s'active tout seul dès que les deux secrets
+  // Discord sont posés côté serveur.
+  const dc = $('#gateDiscord');
+  dc.hidden = false;
+  const txt = dc.querySelector('.d-txt');
+  if (o.discord) {
+    dc.classList.remove('soon');
+    dc.setAttribute('href', '/api/auth/discord');
+    dc.removeAttribute('aria-disabled');
+    if (txt) txt.innerHTML = 'Continuer avec Discord';
+  } else {
+    dc.classList.add('soon');
+    dc.removeAttribute('href');           // pas cliquable
+    dc.setAttribute('aria-disabled', 'true');
+    if (txt) txt.innerHTML = 'Continuer avec Discord <span class="d-soon">bientôt</span>';
+  }
+
+  $('#gateOr').hidden = false;            // le « ou » a toujours du sens : deux voies
   $('#gatePwd').hidden = o.discord && !o.motDePasse;
-  $('#gateNote').innerHTML = o.discord
-    ? 'L’accès passe par votre compte Discord : il faut être sur le serveur d’Origin Roleplay et y porter le rôle staff.'
+  $('#gateNote').innerHTML = o.demo
+    ? 'Démonstration — entrez avec <code>demo</code> / <code>demo</code>. La connexion Discord s’activera une fois l’OAuth branché sur votre serveur.'
+    : o.discord
+    ? 'Vous pouvez aussi vous connecter avec Discord : il faut être sur le serveur d’Origin Roleplay et y porter le rôle staff.'
     : (o.manque && o.manque.length
-        ? 'Connexion Discord indisponible — il manque : ' + o.manque.map(esc).join(', ') + '.'
-        : 'Les comptes sont créés par un fondateur, en console : <code>node staff.js add &lt;pseudo&gt; moderateur</code>');
+        ? 'Connexion Discord pas encore branchée (il manque : ' + o.manque.map(esc).join(', ') + '). En attendant, connectez-vous au mot de passe.'
+        : 'Connexion Discord pas encore branchée. En attendant, connectez-vous au mot de passe.');
+
+  if (o.demo) {
+    // Pré-remplir le compte de démonstration : l'écran se teste sans rien
+    // deviner, et l'on voit que les deux voies existent.
+    $('#gatePseudo').value = 'demo';
+    $('#gatePass').value = 'demo';
+  }
   if (!$('#gatePwd').hidden) $('#gatePseudo').focus();
 }
 function applyMe(d) {
@@ -7091,6 +7131,18 @@ function applyMe(d) {
 $('#gateForm').addEventListener('submit', async ev => {
   ev.preventDefault();
   const b = $('#gateGo'); b.disabled = true; b.textContent = 'Connexion…';
+  // En démonstration, aucune API : le compte « demo / demo » ouvre
+  // l'aperçu. On refuse le reste pour que l'écran d'erreur se voie aussi.
+  if (MODE === 'demo') {
+    const ok = $('#gatePseudo').value.trim().toLowerCase() === 'demo'
+            && $('#gatePass').value === 'demo';
+    if (ok) { $('#gateErr').hidden = true; $('#gate').hidden = true; await startPanel(); }
+    else { $('#gateErr').hidden = false;
+           $('#gateErr').textContent = 'Démonstration : entrez demo / demo.';
+           $('#gatePass').focus(); }
+    b.disabled = false; b.textContent = 'Se connecter';
+    return;
+  }
   try {
     const d = await api('/api/auth/login', { method:'POST', body: JSON.stringify({
       pseudo: $('#gatePseudo').value.trim(), password: $('#gatePass').value }) });
@@ -7165,7 +7217,7 @@ async function startPanel() {
 (async function boot() {
   // Ouverte en fichier local, la page n'a aucune API à interroger :
   // la sonder produirait une erreur CORS dans la console pour rien.
-  if (location.protocol === 'file:') { MODE = 'demo'; DS = Demo; return startPanel(); }
+  if (location.protocol === 'file:') { MODE = 'demo'; DS = Demo; return showGate(); }
   let etat = 'demo';
   try {
     const r = await fetch('/api/auth/me', { credentials:'same-origin' });
@@ -7183,7 +7235,10 @@ async function startPanel() {
     else throw new Error('réponse inattendue');
   } catch (e) { etat = 'demo'; }
 
-  if (etat === 'demo') { MODE = 'demo'; DS = Demo; await startPanel(); }
+  // ⚠️ La démonstration passe désormais par l'écran de connexion, comme
+  // un vrai serveur : c'est ce que le staff voit en arrivant. On n'entre
+  // plus directement dans le panneau — on montre la porte d'abord.
+  if (etat === 'demo') { MODE = 'demo'; DS = Demo; await showGate(); }
   else { MODE = 'api'; DS = Api; if (etat === 'ouvert') await startPanel(); else await showGate(); }
 })();
 </script>

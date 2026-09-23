@@ -233,6 +233,29 @@ t('un rôle naît SANS aucun droit', /perms: \[\] \}\)/.test(P) && /naît <b>san
 t('⚠️ UNE SEULE implémentation : le raccourci du rail ouvre l’onglet, il ne rouvre pas une modale',
   /function ouvrirEquipePlateforme\(\) \{ goVue\('staff'\); \}/.test(P));
 
+sect('La page de connexion : mot de passe ET Discord');
+// ⚠️ Le bouton Discord EXISTE avant l'OAuth — mais grisé et inerte,
+// pas une fausse promesse : cliquer avant que la liaison soit branchée
+// mènerait à une erreur. Il s'allume tout seul une fois les secrets posés.
+t('l’écran de connexion existe', /id="gate"/.test(P) && /id="gateForm"/.test(P));
+t('champ pseudo et champ mot de passe', /id="gatePseudo"/.test(P) && /id="gatePass"/.test(P));
+t('un bouton Discord, avec un libellé qu’on peut changer',
+  /id="gateDiscord"/.test(P) && /class="d-txt"/.test(P));
+t('⚠️ sans OAuth, le bouton reste MONTRÉ mais grisé et non cliquable',
+  /dc\.classList\.add\('soon'\)/.test(P) && /dc\.removeAttribute\('href'\)/.test(P)
+  && /aria-disabled/.test(P));
+t('et il porte « bientôt »', /class="d-soon">bientôt/.test(P));
+t('avec OAuth, il redevient un vrai lien vers /api/auth/discord',
+  /dc\.setAttribute\('href', '\/api\/auth\/discord'\)/.test(P));
+t('⚠️ un bouton « soon » grisé a son propre style, pas celui du bouton actif',
+  /\.btn\.discord\.soon\{/.test(P) && /cursor:not-allowed/.test(P));
+t('⚠️ la démonstration MONTRE la page de connexion au lieu de la sauter',
+  /return showGate\(\);/.test(P) && /await showGate\(\); }\s*\n\s*else \{ MODE = 'api'/.test(P));
+t('en démo, on entre avec demo / demo', /=== 'demo'\s*\n?\s*&& \$\('#gatePass'\)\.value === 'demo'/.test(P)
+  || /value === 'demo'/.test(P));
+t('et un mauvais couple montre l’écran d’erreur, pas le panneau',
+  /Démonstration : entrez demo \/ demo/.test(P));
+
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);
 process.exit(n===T.length?0:1);
