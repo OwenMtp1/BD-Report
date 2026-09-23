@@ -24,6 +24,7 @@ server_scripts {
   'server/presence.lua',
   'server/inventaire.lua',
   'server/scan.lua',
+  'server/raccordements.lua',
   -- ⚠️ Les raccordements propres à CE serveur, générés par le panneau.
   -- Un motif plutôt qu'un fichier nommé : un motif qui ne correspond à
   -- rien est sans effet, alors qu'un fichier absent fait échouer le

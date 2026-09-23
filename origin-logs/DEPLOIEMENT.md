@@ -385,53 +385,63 @@ screenshot-basic) — chez un client donné, la moitié des rubriques restait do
 vide, et la seule issue était qu'un humain ouvre `EXEMPLES.md` et ajoute des
 lignes à la main. C'est exactement ce que personne ne fait.
 
-Deux commandes, côté serveur de jeu, et un écran côté panneau
-(**Espaces de logs → Intégration**).
+**Tout se passe sur un bouton** : *Espaces de logs* → carte du client →
+**Intégration**.
 
-### `origin_logs_inventaire` — qu'est-ce qui tourne ici ?
+### Ce que fait ce bouton
 
-Part **tout seul**, 15 secondes après le démarrage du serveur (après les autres
-ressources : un inventaire pris à la seconde zéro verrait un serveur à moitié
-allumé). La commande ne sert qu'à le redemander tout de suite.
+1. il **demande un scan** au serveur de jeu (⚠️ le panneau ne parle jamais au
+   serveur de jeu : il dépose une tâche, que la ressource vient chercher au
+   tour suivant — même chemin que les sanctions, aucun port de jeu à ouvrir) ;
+2. la ressource envoie son **inventaire** (ce qui tourne) puis **lit les
+   scripts serveur** des autres ressources et en extrait les **noms** des
+   évènements qu'elles écoutent ;
+3. le panneau les trie et **branche d'office** ce qui a survécu au filtre du
+   bruit et porte une rubrique ;
+4. la ressource **vient lire ses raccordements** (`GET /api/hooks`) et pose
+   les écouteurs elle-même, chaque minute.
 
-L'écran répond alors à la question qu'on se posait à chaque livraison :
+Il n'y a **aucun fichier à déposer**, et rien à redémarrer.
 
-- ce qui est **déjà branché** sans rien écrire ;
-- ce qui est **connu du panneau mais pas raccordé** (`Renewed-Banking`,
-  `qb-garages`, `ps-housing`…) ;
-- ce qui manque et qui gêne (`baseevents` absente = aucune mort journalisée) ;
-- tout le reste, que le panneau ne connaît pas encore.
+⚠️ **Le scan se déclenche à l'ouverture, mais pas à chaque ouverture.** Il fait
+relire tous les scripts d'une machine qui n'est pas la nôtre : on le demande
+quand il n'y en a jamais eu ou que le dernier date de plus d'une heure. Le
+bouton *Relancer le scan* reste là pour le reste.
 
-⚠️ Le catalogue (`api/ecosysteme.js`) **grossit à chaque client**. C'est sa
-raison d'être : la vingtième installation reconnaît ce que les dix-neuf
-précédentes ont appris. Ajouter une entrée là suffit, rien d'autre à toucher.
+⚠️ **Décocher un raccordement le coupe en moins d'une minute**, sans toucher au
+serveur de jeu : la ressource relit la liste, elle n'exécute pas un fichier
+figé. Un raccordement coupé **reste listé** — sinon le scan suivant le
+reproposerait comme une nouveauté, et l'on décocherait en boucle ce qu'on a
+déjà refusé.
 
-### `origin_logs_scan` — qu'est-ce que ce code sait faire ?
+⚠️ **Ce qui existe n'est jamais réécrit.** Un évènement décoché à la main, ou
+rangé dans une autre rubrique, porte une décision humaine : les scans suivants
+la respectent.
 
-Lit les scripts serveur des autres ressources et en extrait les **noms** des
-évènements qu'elles écoutent. Le panneau les trie, propose une rubrique pour
-chacun, et génère un fichier `.lua` à déposer dans
-`resources/origin_logs/server/sur_mesure/` chez le client.
+### Les garanties
 
 ⚠️ **Le code ne quitte JAMAIS la machine du client.** Seuls des noms
 d'évènements remontent. Beaucoup de ressources FiveM sont payantes et sous
 licence : envoyer leur source vers un panneau tiers serait un problème
 juridique et commercial, pas un détail d'implémentation.
 
-⚠️ **Rien ne part au démarrage.** Le scan lit tout le serveur : il se déclenche
-à la main, depuis la console, jamais dans le dos de l'administrateur.
+⚠️ **On n'utilise QUE `AddEventHandler`, jamais `RegisterNetEvent`** — et ce
+n'est pas un détail de style. Enregistrer en « net » un évènement qui ne
+l'était pas le rendrait déclenchable **par les joueurs** : n'importe qui
+pourrait alors appeler le gestionnaire d'origine, celui qui donne l'argent. On
+ajoute un écouteur, on n'ouvre rien.
 
-⚠️ **Le panneau propose, l'humain valide.** Chaque candidat se coche et sa
-rubrique se corrige. Un serveur raccordé à l'aveugle, c'est des centaines de
-milliers de lignes de bruit par jour et un panneau devenu illisible — les noms
-manifestement bavards (`hud`, `sync`, `tick`, `position`…) sont d'ailleurs
-écartés **avant** d'être proposés.
+⚠️ **FiveM ne sait pas retirer un écouteur.** Celui d'un raccordement coupé
+reste donc en place et se tait : il relit son réglage à chaque déclenchement
+plutôt que de le capturer, sinon décocher n'aurait d'effet qu'au prochain
+redémarrage du serveur.
 
-⚠️ **Le fichier généré n'utilise QUE `AddEventHandler`, jamais
-`RegisterNetEvent`** — et ce n'est pas un détail de style. Enregistrer en
-« net » un évènement qui ne l'était pas le rendrait déclenchable **par les
-joueurs** : n'importe qui pourrait alors appeler le gestionnaire d'origine,
-celui qui donne l'argent. On ajoute un écouteur, on n'ouvre rien.
+⚠️ **Les arguments d'un évènement inconnu sont ramenés à du texte** avant
+d'entrer dans la file. Une fonction ou une table cyclique aurait fait échouer
+l'encodage du **lot entier**, emportant des évènements valides avec elle.
+
+⚠️ **Un évènement qui s'emballe est mis en sourdine** au-delà de 120
+déclenchements par minute, et la console le dit.
 
 ### Ce que le scan ne peut pas faire
 
@@ -439,12 +449,27 @@ celui qui donne l'argent. On ajoute un écouteur, on n'ouvre rien.
   panneau les nomme au lieu de les passer sous silence : « code illisible » et
   « rien trouvé » ne se corrigent pas de la même façon.
 - Un `server_scripts { 'server/*.lua' }` **ne se déplie pas** : FiveM n'expose
-  aucune lecture de dossier. On tente les noms de fichiers les plus courants,
-  et la console dit combien de motifs sont restés non dépliés — ces
-  ressources-là sont lues **partiellement**.
+  aucune lecture de dossier. On tente les noms de fichiers les plus courants —
+  ces ressources-là sont lues **partiellement**.
 - **Il n'existe pas d'espion universel** dans FiveM : pour écouter un
   évènement, il faut connaître son nom. C'est précisément ce que le scan sert
   à trouver.
+
+### Le catalogue grossit avec vous
+
+`api/ecosysteme.js` connaît les ressources répandues (`Renewed-Banking`,
+`qb-garages`, `ps-housing`…) et leur rubrique. Une ressource du catalogue
+impose **sa** rubrique, vérifiée à la main, plutôt que l'indice tiré de son
+nom. Ajouter une entrée là suffit — rien d'autre à toucher, et la vingtième
+installation reconnaît ce que les dix-neuf précédentes ont appris.
+
+### En console, si besoin
+
+| Commande | Effet |
+|---|---|
+| `origin_logs_inventaire` | renvoie la liste des ressources tout de suite |
+| `origin_logs_scan` | relance le scan sans passer par le panneau |
+| `origin_logs_raccordements` | recharge les raccordements et dit combien sont actifs |
 
 ---
 

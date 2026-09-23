@@ -1024,6 +1024,26 @@ function appliquerEcheances() {
 /* Voir conservation.js : `jours: null` = on n'efface jamais. */
 const conservation = sp => CONSERV.pour(sp, PLANS.forSpace(db, sp), CFG.retention);
 
+/* ---------- poser les raccordements trouvés par un scan ----------
+   ⚠️ Ce qui existe DÉJÀ n'est jamais réécrit. Un évènement décoché à la
+   main, ou rangé dans une autre rubrique, porte une décision humaine : le
+   scan suivant la respecte, sinon on redécocherait en boucle ce qu'on a
+   déjà refusé une fois. */
+function poserRaccordements(spaceId) {
+  const lire = t => {
+    const r = DB.row(db.prepare(`SELECT * FROM ${t} WHERE space_id = ?`).get(spaceId));
+    if (!r) return null;
+    try { return Object.assign(JSON.parse(r.payload), { ts: r.ts }); } catch { return null; }
+  };
+  const a = ECO.analyser(lire('inventory'), lire('scans'));
+  const ins = db.prepare(`INSERT INTO hooks(space_id, ev, cat, sev, res, source, active, ts)
+                          VALUES(?,?,?, 'info', ?,?, 1, ?)
+                          ON CONFLICT(space_id, ev) DO NOTHING`);
+  let n = 0;
+  for (const c of a.candidats) n += DB.num(ins.run(spaceId, c.ev, c.cat, c.ressource, c.sur, now()).changes);
+  return n;
+}
+
 function purge() {
   // Chaque espace garde ses journaux aussi longtemps qu'il l'a décidé.
   let total = 0;
@@ -1298,7 +1318,25 @@ async function route(req, res) {
     db.prepare(`INSERT INTO ${table}(space_id, ts, payload) VALUES(?,?,?)
                 ON CONFLICT(space_id) DO UPDATE SET ts = excluded.ts, payload = excluded.payload`)
       .run(esp.id, now(), JSON.stringify(charge));
-    return ok(res, { recu: charge.ressources.length });
+    // ⚠️ Un scan RACCORDE, il ne se contente pas de proposer. Tant qu'il
+    // fallait cocher puis déposer un fichier, le client repartait avec la
+    // moitié de ses rubriques vides — la liste de propositions était un
+    // travail de plus, pas un résultat. Ce qui a survécu au filtre du
+    // bruit et porte une rubrique est donc activé d'office.
+    let poses = 0;
+    if (table === 'scans') poses = poserRaccordements(esp.id);
+    return ok(res, { recu: charge.ressources.length, raccordements: poses });
+  }
+
+  /* La ressource vient chercher ses raccordements : c'est ELLE qui pose
+     les écouteurs, il n'y a aucun fichier à déposer nulle part. */
+  if (p === '/api/hooks' && method === 'GET') {
+    const esp = spaceFromKey(req);
+    if (!esp) return fail(res, 401, 'Clé serveur invalide ou espace fermé.');
+    const rows = db.prepare(`SELECT ev, cat, sev, res FROM hooks
+                             WHERE space_id = ? AND active = 1 ORDER BY ev`).all(esp.id).map(DB.row);
+    return ok(res, { hooks: rows, version: DB.num(db.prepare(
+      'SELECT COALESCE(MAX(ts),0) v FROM hooks WHERE space_id = ?').get(esp.id).v) });
   }
 
   /* ---- dépôt des logs par la ressource FiveM ---- */
@@ -3086,12 +3124,61 @@ async function route(req, res) {
             if (!r) return null;
             try { return Object.assign(JSON.parse(r.payload), { ts: r.ts }); } catch { return null; }
           };
-          if (method === 'GET')
-            return ok(res, Object.assign(ECO.analyser(lire('inventory'), lire('scans')),
-                                         { espace: sp.name }));
-          if (method === 'POST') {
-            // Le fichier à déposer. On le rend en texte dans du JSON : le
-            // panneau en fait un téléchargement, sans route à protéger en plus.
+          const geste = morceaux[2] || '';
+          if (method === 'GET') {
+            const a = ECO.analyser(lire('inventory'), lire('scans'));
+            // Les raccordements POSÉS priment sur les candidats : c'est
+            // l'état réel du serveur de jeu, pas une proposition.
+            a.raccordements = db.prepare(`SELECT ev, cat, sev, res, source, active, vus
+                                          FROM hooks WHERE space_id = ? ORDER BY active DESC, ev`)
+              .all(sid).map(DB.row).map(h => Object.assign(h, { active: !!h.active }));
+            // Un scan demandé mais pas encore revenu : l'écran doit
+            // pouvoir dire « en attente » plutôt que « rien trouvé ».
+            const att = DB.row(db.prepare(`SELECT COUNT(*) n FROM actions
+              WHERE space_id = ? AND type = 'scan' AND status IN ('pending','sent')`).get(sid)).n;
+            return ok(res, Object.assign(a, { espace: sp.name, scanEnAttente: att > 0 }));
+          }
+
+          /* Demander un scan. ⚠️ Le panneau ne parle jamais au serveur de
+             jeu : il DÉPOSE une tâche, que la ressource vient chercher au
+             tour suivant. Aucun port de jeu à ouvrir, aucune commande à
+             distance — même chemin que les sanctions. */
+          if (geste === 'scan' && method === 'POST') {
+            const enCours = DB.row(db.prepare(`SELECT COUNT(*) n FROM actions
+              WHERE space_id = ? AND type = 'scan' AND status IN ('pending','sent')`).get(sid)).n;
+            if (enCours) return ok(res, { ok: true, dejaDemande: true });
+            iAction.run('scan', null, null, null, '{}', 'scan d’intégration',
+                        me.id, me.pseudo, now(), sid);
+            audit(me, 'plateforme.integration.scan', sp.name, ip, sid);
+            return ok(res, { ok: true });
+          }
+
+          /* Couper ou déplacer un raccordement. Effet en moins d'une
+             minute : la ressource relit cette table, elle n'exécute pas
+             un fichier figé. */
+          if (geste === 'hook' && method === 'POST') {
+            const b = await readBody(req);
+            const ev = String(b.ev || '').slice(0, 160);
+            if (!ev) return fail(res, 400, 'Quel évènement ?');
+            const sets = [], args = [];
+            if (b.active !== undefined) { sets.push('active = ?'); args.push(b.active ? 1 : 0); }
+            if (b.cat !== undefined) {
+              if (!CAT.CAT_IDS.includes(String(b.cat))) return fail(res, 400, 'Rubrique inconnue.');
+              sets.push('cat = ?'); args.push(String(b.cat));
+            }
+            if (!sets.length) return ok(res, { ok: true });
+            sets.push('ts = ?'); args.push(now());
+            const r = db.prepare(`UPDATE hooks SET ${sets.join(', ')} WHERE space_id = ? AND ev = ?`)
+              .run(...args, sid, ev);
+            if (!DB.num(r.changes)) return fail(res, 404, 'Ce raccordement n’existe pas.');
+            audit(me, 'plateforme.integration.hook', `${sp.name} — ${ev}`, ip, sid);
+            return ok(res, { ok: true });
+          }
+
+          /* Le fichier, pour qui préfère déposer du Lua à la main. Ce
+             n'est plus le chemin normal : la ressource lit ses
+             raccordements toute seule. */
+          if (geste === 'lua' && method === 'POST') {
             const b = await readBody(req);
             const choix = (Array.isArray(b.choix) ? b.choix : []).slice(0, 300);
             audit(me, 'plateforme.integration.fichier',

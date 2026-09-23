@@ -16,9 +16,9 @@ Le panneau **fonctionne seul**, sans rien installer : ouvert en fichier, il
 affiche un jeu de démonstration complet. Servi par l'API, il affiche vos
 vrais journaux derrière une connexion staff. C'est le même fichier.
 
-Le panneau s'adapte au serveur de chaque client : `origin_logs_inventaire`
-dit ce qui tourne chez lui, `origin_logs_scan` lit son code et propose les
-raccordements manquants (voir `DEPLOIEMENT.md § 3 bis`).
+Le panneau s'adapte au serveur de chaque client : un bouton **Intégration**
+fait scanner son serveur, branche ce qui s'y trouve et la ressource pose les
+écouteurs elle-même — aucun fichier à déposer (voir `DEPLOIEMENT.md § 3 bis`).
 
 Jamais fait ça ? **[BRANCHER-SUR-FIVEM.md](BRANCHER-SUR-FIVEM.md)** —
 guide débutant, tout sur un VPS, copier-coller de bout en bout.

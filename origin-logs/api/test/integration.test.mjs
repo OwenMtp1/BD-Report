@@ -123,14 +123,81 @@ const INV_LUA = readFileSync(new URL('../../resource/server/inventaire.lua', imp
 t('l’inventaire, lui, part tout seul — il ne coûte rien', /Origin\.EnvoyerInventaire\(\)/.test(INV_LUA));
 t('mais après les autres ressources, pas avant', /Wait\(15000\)/.test(INV_LUA));
 
-sect('Le fichier à déposer chez le client');
-const gen = await J('/api/platform/spaces/'+ID+'/integration',{method:'POST',body:JSON.stringify(
+sect('⚠️ Un scan RACCORDE, il ne propose pas');
+// Tant qu'il fallait cocher puis déposer un fichier, le client repartait
+// avec la moitié de ses rubriques vides : une liste de propositions est un
+// travail de plus, pas un résultat.
+t('les candidats sont posés d’office', (a2.raccordements||[]).length>=2,
+  (a2.raccordements||[]).length+' raccordements');
+t('et tous actifs', (a2.raccordements||[]).every(h=>h.active===true));
+const hk = await fetch(B+'/api/hooks',{headers:{'x-origin-key':CLE}});
+const hkb = await hk.json();
+t('la ressource vient les chercher elle-même — aucun fichier à déposer',
+  hk.status===200 && hkb.hooks.some(h=>h.ev==='renewed-banking:server:withdraw'));
+t('chacun porte sa rubrique', hkb.hooks.every(h=>h.ev && h.cat));
+t('⚠️ une clé fausse ne lit pas les raccordements d’un espace',
+  (await fetch(B+'/api/hooks',{headers:{'x-origin-key':'pas-la-bonne'}})).status===401);
+
+sect('Couper un raccordement, sans toucher au serveur de jeu');
+const coupe = await J('/api/platform/spaces/'+ID+'/integration/hook',{method:'POST',
+  body:JSON.stringify({ev:'braquage:server:payer',active:false})});
+t('on le coupe depuis le panneau', coupe.status===200);
+const hk2 = await (await fetch(B+'/api/hooks',{headers:{'x-origin-key':CLE}})).json();
+t('la ressource ne le reçoit plus', !hk2.hooks.some(h=>h.ev==='braquage:server:payer'));
+const a2b = (await J('/api/platform/spaces/'+ID+'/integration')).body;
+t('⚠️ mais il RESTE listé, coupé — sinon le prochain scan le reproposerait',
+  (a2b.raccordements||[]).some(h=>h.ev==='braquage:server:payer' && h.active===false));
+
+const dep = await poster('/api/scan', CLE, { ressources:[
+  { nom:'mon_braquage', evenements:['braquage:server:payer'] }] });
+t('un second scan n’en repose pas', (await dep.json()).raccordements===0);
+const a2c = (await J('/api/platform/spaces/'+ID+'/integration')).body;
+t('⚠️ et ne ressuscite pas ce qu’on a refusé',
+  (a2c.raccordements||[]).find(h=>h.ev==='braquage:server:payer').active===false);
+
+const rub = await J('/api/platform/spaces/'+ID+'/integration/hook',{method:'POST',
+  body:JSON.stringify({ev:'renewed-banking:server:withdraw',cat:'inventaire'})});
+t('on corrige une rubrique', rub.status===200);
+const hk3 = await (await fetch(B+'/api/hooks',{headers:{'x-origin-key':CLE}})).json();
+t('et la ressource la reçoit', hk3.hooks.find(h=>h.ev==='renewed-banking:server:withdraw').cat==='inventaire');
+t('une rubrique inventée est refusée',
+  (await J('/api/platform/spaces/'+ID+'/integration/hook',{method:'POST',
+    body:JSON.stringify({ev:'renewed-banking:server:withdraw',cat:'nawak'})})).status===400);
+
+sect('Le scan se demande depuis le panneau');
+// ⚠️ Le panneau ne parle jamais au serveur de jeu : il dépose une tâche,
+// que la ressource vient chercher. Aucun port de jeu à ouvrir.
+const dem = await J('/api/platform/spaces/'+ID+'/integration/scan',{method:'POST'});
+t('la demande passe', dem.status===200 && dem.body.ok===true);
+const att = (await J('/api/platform/spaces/'+ID+'/integration')).body;
+t('l’écran sait dire « en attente »', att.scanEnAttente===true);
+const dem2 = await J('/api/platform/spaces/'+ID+'/integration/scan',{method:'POST'});
+t('⚠️ deux clics ne font pas deux scans', dem2.body.dejaDemande===true);
+const pend = await (await fetch(B+'/api/actions/pending',{headers:{'x-origin-key':CLE}})).json();
+t('la ressource la trouve dans ses tâches', pend.actions.some(x=>x.type==='scan'));
+
+sect('Le fichier, pour qui préfère le déposer à la main');
+const gen = await J('/api/platform/spaces/'+ID+'/integration/lua',{method:'POST',body:JSON.stringify(
   {choix:[{ev:'braquage:server:payer',cat:'boutique_caisse',ressource:'mon_braquage'}]})});
-t('le panneau le génère', gen.status===200 && gen.body.retenus===1);
+t('le panneau le génère encore', gen.status===200 && gen.body.retenus===1);
 t('avec le bon évènement et la rubrique CHOISIE, pas la devinée',
   /AddEventHandler\('braquage:server:payer'/.test(gen.body.lua) && /cat = 'boutique_caisse'/.test(gen.body.lua));
 const trace = await J('/api/platform/journal?action=plateforme.integration');
-t('et la génération est tracée', (trace.body.entrees||[]).length>=1);
+t('et chaque geste est tracé', (trace.body.entrees||[]).length>=3,
+  (trace.body.entrees||[]).length+' entrées');
+
+sect('⚠️ La ressource pose les écouteurs, et sans ouvrir de porte');
+const RAC = readFileSync(new URL('../../resource/server/raccordements.lua', import.meta.url), 'utf8');
+t('⚠️ AddEventHandler seulement, jamais RegisterNetEvent',
+  /AddEventHandler\(ev,/.test(RAC) && !/^\s*RegisterNetEvent\s*\(/m.test(RAC));
+t('⚠️ un écouteur relit ses réglages à chaque coup — FiveM ne sait pas le retirer',
+  /local d = actifs\[ev\]/.test(RAC) && /if not d then return end/.test(RAC));
+t('⚠️ les arguments inconnus sont ramenés à du texte avant la file',
+  /local function sur\(/.test(RAC) && /args = sur\(/.test(RAC));
+t('un évènement trop bavard est mis en sourdine', /MAX_PAR_MINUTE/.test(RAC));
+const ACT = readFileSync(new URL('../../resource/server/actions.lua', import.meta.url), 'utf8');
+t('le scan s’exécute depuis une tâche déposée par le panneau',
+  /a\.type == 'scan'/.test(ACT) && /Origin\.Scanner/.test(ACT));
 
 sect('Cloisonnement et accès');
 const sp2 = await J('/api/platform/spaces',{method:'POST',body:JSON.stringify(

@@ -48,6 +48,30 @@ local function executer(a)
     -- dessine, puis l'API qui accuse en enregistrant la capture.
     return DemanderCapture(a, accuser)
 
+  elseif a.type == 'scan' then
+    -- ⚠️ Demandé DEPUIS LE PANNEAU, exécuté ici. Le panneau ne parle
+    -- jamais au serveur de jeu : il dépose la tâche, on vient la
+    -- chercher. Le scan relit tous les scripts serveur — il n'a donc
+    -- aucune raison de tourner tout seul en boucle.
+    Origin.EnvoyerInventaire()
+    CreateThread(function()
+      Origin.Scanner(function(code, _, ressources, protegees, lus)
+        local total = 0
+        for _, r in ipairs(ressources or {}) do total = total + #r.evenements end
+        if code == 200 then
+          -- Les raccordements sont posés par le panneau à la réception :
+          -- on les relit tout de suite plutôt que d'attendre le tour
+          -- suivant, sinon « lancer le scan » semblerait sans effet.
+          Origin.ChargerRaccordements()
+          accuser(a.id, true, ('%d évènement(s) dans %d ressource(s), %d fichier(s) lu(s), %d protégée(s)')
+            :format(total, #(ressources or {}), lus or 0, #(protegees or {})))
+        else
+          accuser(a.id, false, 'le panneau a refusé le scan (' .. tostring(code) .. ')')
+        end
+      end)
+    end)
+    return
+
   elseif a.type == 'give' then
     if not src then return accuser(a.id, false, 'joueur hors ligne') end
     -- Rendre un item ou de l'argent dépend de votre framework : on

@@ -56,6 +56,30 @@ CREATE TABLE IF NOT EXISTS scans(
   payload  TEXT    NOT NULL
 );
 
+-- Les raccordements ACTIFS d'un espace : quels évènements du serveur de
+-- jeu sont journalisés, et dans quelle rubrique.
+-- ⚠️ Ce n'est PAS un fichier généré qu'on dépose chez le client. La
+-- ressource vient lire cette table et pose ses écouteurs elle-même :
+-- décocher un raccordement dans le panneau le coupe en une minute, sans
+-- que personne n'ait à toucher au serveur de jeu. Un fichier, lui, aurait
+-- demandé un aller-retour humain pour chaque correction — et c'est
+-- exactement l'aller-retour qu'on cherche à supprimer.
+-- ⚠️ Une colonne « active » plutôt qu'une suppression : un évènement décoché doit
+-- RESTER visible, sinon le prochain scan le repropose comme une nouveauté
+-- et on décoche en boucle ce qu'on a déjà refusé.
+CREATE TABLE IF NOT EXISTS hooks(
+  space_id  INTEGER NOT NULL,
+  ev        TEXT    NOT NULL,
+  cat       TEXT    NOT NULL,
+  sev       TEXT    NOT NULL DEFAULT 'info',
+  res       TEXT,
+  source    TEXT,                          -- catalogue | indice | manuel
+  active    INTEGER NOT NULL DEFAULT 1,
+  vus       INTEGER NOT NULL DEFAULT 0,    -- combien de fois il s'est déclenché
+  ts        INTEGER NOT NULL,
+  PRIMARY KEY (space_id, ev)
+);
+
 
 -- FORMULES commerciales. Un espace de logs se vend : la formule borne ce
 -- qu'il peut faire, et c'est la seule chose qui distingue un client d'un
