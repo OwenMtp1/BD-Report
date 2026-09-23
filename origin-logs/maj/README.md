@@ -9,6 +9,7 @@ quelqu'un **aille chercher tout seul** les mises à jour dans un dépôt privé.
 | `maj.conf.exemple` | Les réglages, à copier dans `/etc/origin-logs-maj.conf` |
 | `origin-logs-maj.service` | Ce que systemd exécute |
 | `origin-logs-maj.timer` | Toutes les dix minutes, avec un décalage aléatoire |
+| `publier.sh` | **Côté éditeur** : extrait ce dossier et le pousse vers le dépôt de distribution |
 
 La mise en place **côté VPS** est décrite pas à pas dans
 `../INSTALLER-SUR-VPS.md`, étape 11 — c'est ce fichier qu'on envoie à la
@@ -27,47 +28,37 @@ dessus donnerait accès à tout cela à la machine d'un tiers.
 Sur GitHub : **New repository** → nom `origin-logs` → **Private** → ne cochez
 rien d'autre (ni README, ni .gitignore : le contenu arrive juste après).
 
-### 2. Y pousser le produit, avec son historique
+Dépôt en service : **`OwenMtp1/origin-logs`** (privé).
 
-Depuis un clone de `BD-Report` :
+### 2. Publier — une commande
 
-```bash
-git subtree split -P origin-logs -b origin-logs-seul
-git push git@github.com:VOTRE-COMPTE/origin-logs.git origin-logs-seul:main
-```
-
-`git subtree split` reconstruit une histoire qui ne contient que les commits
-touchant `origin-logs/`, avec le dossier remonté à la racine. Rien à nettoyer
-ensuite, et le « pourquoi » de chaque changement suit.
-
-### 3. Ensuite, à chaque fois
-
-Rien de particulier : on développe dans `BD-Report` comme d'habitude, puis
+On développe dans `BD-Report` comme d'habitude, on commite, puis :
 
 ```bash
-git subtree split -P origin-logs -b origin-logs-seul
-git push -f git@github.com:VOTRE-COMPTE/origin-logs.git origin-logs-seul:main
+bash origin-logs/maj/publier.sh
 ```
 
-Le `-f` est normal : `subtree split` refabrique l'histoire à chaque fois, les
-identifiants de commit changent. C'est sans danger — personne ne travaille
-dans ce dépôt, il ne sert qu'à distribuer.
+Le script extrait l'histoire de `origin-logs/` (dossier remonté à la racine,
+le « pourquoi » de chaque changement suit), la pousse, et s'arrête si quelque
+chose n'est pas commité — le dépôt de distribution doit refléter un état
+qu'on peut retrouver chez soi.
 
-### Publier une VERSION plutôt qu'un commit
+### 3. Publier une VERSION plutôt qu'un commit
 
 Dès qu'un vrai client écrit dans un de ces panneaux, réglez les VPS sur
 `SUIVRE=etiquette` et publiez explicitement :
 
 ```bash
-git tag v1.3 && git push git@github.com:VOTRE-COMPTE/origin-logs.git v1.3
+bash origin-logs/maj/publier.sh v1.3
 ```
 
 Les machines ne bougent que là. Entre deux étiquettes, vous poussez autant de
 code que vous voulez sans rien envoyer chez personne.
 
-⚠️ Le script trie les étiquettes **par numéro de version, pas par date** :
-`v1.10` passe après `v1.9`, et une correction publiée plus tard sur une
-ancienne version ne fait pas reculer un serveur déjà passé à la suivante.
+⚠️ Le script de mise à jour trie les étiquettes **par numéro de version, pas
+par date** : `v1.10` passe après `v1.9`, et une correction publiée plus tard
+sur une ancienne version ne fait pas reculer un serveur déjà passé à la
+suivante.
 
 ---
 
