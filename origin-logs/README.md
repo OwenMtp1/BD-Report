@@ -16,7 +16,10 @@ Le panneau **fonctionne seul**, sans rien installer : ouvert en fichier, il
 affiche un jeu de démonstration complet. Servi par l'API, il affiche vos
 vrais journaux derrière une connexion staff. C'est le même fichier.
 
-Installation pas à pas : **[DEPLOIEMENT.md](DEPLOIEMENT.md)**.
+Jamais fait ça ? **[BRANCHER-SUR-FIVEM.md](BRANCHER-SUR-FIVEM.md)** —
+guide débutant, tout sur un VPS, copier-coller de bout en bout.
+Installation détaillée (HTTPS, plusieurs serveurs, réglages) :
+**[DEPLOIEMENT.md](DEPLOIEMENT.md)**.
 
 ---
 
