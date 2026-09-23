@@ -530,12 +530,26 @@ BACKUP_KEEP=14           # combien on en garde
 ```
 
 ⚠️ **Une sauvegarde qui reste sur la même machine ne protège de rien** — ni d'un
-disque perdu, ni d'un VPS résilié. Sors-les :
+disque perdu, ni d'un VPS résilié, ni du jour où l'on cesse de travailler avec
+l'hébergeur.
+
+🛑 **C'est OWEN qui doit détenir la copie hors-site, pas seulement l'hébergeur du
+VPS.** La règle : la sauvegarde est *tirée* par la machine d'Owen depuis le VPS,
+elle n'est pas *poussée* par le VPS vers un endroit que l'hébergeur choisirait.
+Ainsi, quoi qu'il arrive au VPS, Owen garde des journaux à jour et peut
+réinstaller ailleurs en une heure.
+
+À faire **sur une machine qui appartient à Owen** (son poste, un autre serveur à
+lui), pas sur le VPS d'installation :
 
 ```bash
-# depuis une AUTRE machine, toutes les nuits
-rsync -az origin@IP-DU-VPS:/srv/origin-logs/api/data/backups/ ./sauvegardes-origin/
+# toutes les nuits, la machine d'Owen VIENT CHERCHER les sauvegardes
+rsync -az origin@IP-DU-VPS:/srv/origin-logs/api/data/backups/ ~/sauvegardes-origin-logs/
 ```
+
+Owen a besoin d'un accès SSH en lecture au VPS pour ça (une clé publique à lui,
+posée dans `~origin/.ssh/authorized_keys`). Cet accès est aussi ce qui lui
+permet, le jour venu, de tout récupérer sans dépendre de personne.
 
 ---
 
