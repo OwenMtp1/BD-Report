@@ -31,7 +31,11 @@ TESTER=${TESTER:-1}
 ATTENTE=${ATTENTE:-20}               # secondes accordées au service pour répondre
 
 dire() { printf '[maj] %s\n' "$*"; }
-gitc() { sudo -u "$UTILISATEUR" git -C "$DOSSIER" "$@"; }
+# ⚠️ `-H` N'EST PAS DÉCORATIF : sans lui, sudo garde le HOME de root, ssh
+# cherche la clé de déploiement dans /root/.ssh et ne la trouve pas. Le
+# `fetch` échoue alors avec « Permission denied (publickey) » — un message
+# qui envoie regarder du côté de GitHub, où tout est pourtant en ordre.
+gitc() { sudo -u "$UTILISATEUR" -H git -C "$DOSSIER" "$@"; }
 
 cd "$DOSSIER"
 
@@ -64,12 +68,12 @@ gitc log --oneline "$AVANT..$APRES" 2>/dev/null | sed 's/^/[maj]   · /' || true
 # porter en propre, et une modification locale faite « pour dépanner »
 # ferait échouer toutes les mises à jour suivantes en silence.
 gitc reset --hard --quiet "$APRES"
-[ -f "$DOSSIER/build.sh" ] && sudo -u "$UTILISATEUR" bash "$DOSSIER/build.sh" >/dev/null
+[ -f "$DOSSIER/build.sh" ] && sudo -u "$UTILISATEUR" -H bash "$DOSSIER/build.sh" >/dev/null
 
 revenir() {
   dire "RETOUR ARRIÈRE vers ${AVANT:0:8}"
   gitc reset --hard --quiet "$AVANT"
-  [ -f "$DOSSIER/build.sh" ] && sudo -u "$UTILISATEUR" bash "$DOSSIER/build.sh" >/dev/null
+  [ -f "$DOSSIER/build.sh" ] && sudo -u "$UTILISATEUR" -H bash "$DOSSIER/build.sh" >/dev/null
   systemctl restart "$SERVICE" || true
 }
 
@@ -79,7 +83,7 @@ revenir() {
 # AVANT qu'elle atteigne le client.
 if [ "$TESTER" = "1" ] && [ -f "$DOSSIER/api/test/run.js" ]; then
   dire "vérification du code…"
-  if ! sudo -u "$UTILISATEUR" sh -c "cd '$DOSSIER/api' && node test/run.js" >/tmp/origin-logs-maj-tests.log 2>&1; then
+  if ! sudo -u "$UTILISATEUR" -H sh -c "cd '$DOSSIER/api' && node test/run.js" >/tmp/origin-logs-maj-tests.log 2>&1; then
     dire "LES TESTS ÉCHOUENT — la mise à jour est annulée."
     tail -25 /tmp/origin-logs-maj-tests.log | sed 's/^/[maj]   /'
     revenir
