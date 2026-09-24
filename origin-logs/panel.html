@@ -129,9 +129,16 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
   display:flex;flex-direction:column;
 }
 .brand{
-  display:flex;align-items:center;gap:12px;flex:none;
+  display:flex;align-items:center;gap:12px;flex:none;width:100%;
   padding:18px 18px 16px;border-bottom:1px solid var(--line-soft);
+  background:none;border-left:none;border-right:none;border-top:none;
+  text-align:left;transition:background .16s var(--ease);
 }
+.brand[onclick],.brand:not([disabled]){cursor:pointer}
+.brand:hover{background:color-mix(in srgb,var(--vio) 8%,transparent)}
+.brand-caret{margin-left:auto;flex:none;color:var(--muted);display:grid;place-items:center;
+  transition:color .16s var(--ease), transform .16s var(--ease)}
+.brand:hover .brand-caret{color:var(--ink-2);transform:translateY(1px)}
 .mark{
   width:36px;height:36px;flex:none;border-radius:11px;
   background:linear-gradient(150deg,var(--vio-hi),var(--vio) 55%,var(--vio-2));
@@ -144,7 +151,8 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
     inset 0 -2px 6px rgba(20,10,40,.35),
     0 6px 18px -6px rgba(139,92,246,.6);
 }
-.brand-name{font-variation-settings:'wdth' 90;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:-.01em}
+.brand-text{min-width:0}
+.brand-name{font-variation-settings:'wdth' 90;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .brand-sub{font-size:11px;letter-spacing:.01em;color:var(--muted);margin-top:2px}
 
 /* ---------- le rail ----------
@@ -230,7 +238,15 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .nav-item[aria-current="true"] .nav-n{color:var(--vio-hi)}
 .nav-item.flagged .nav-n{color:var(--crit)}
 
-.rail-foot{flex:none;padding:12px 18px 18px;border-top:1px solid var(--edge-soft);display:grid;gap:7px}
+.rail-foot{flex:none;padding:12px 18px 18px;border-top:1px solid var(--line-soft);display:grid;gap:7px}
+/* Réglages du flux, descendus de la barre du haut : période, direct, export. */
+.flow-set{display:grid;gap:8px;padding:10px 0 4px;margin:2px 0;border-top:1px solid var(--line-soft)}
+.flow-set[hidden]{display:none}
+.flow-lbl{font-size:10.5px;font-weight:600;color:var(--muted)}
+.flow-set .seg{width:100%;height:32px}
+.flow-set .seg button{font-size:11px}
+.flow-acts{display:grid;grid-template-columns:1fr auto;gap:7px}
+.flow-acts .btn{justify-content:center}
 .foot-line{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted)}
 .foot-line b{color:var(--ink-2);font-weight:500;font-family:var(--mono);font-size:10.5px}
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 3px rgba(52,211,153,.18)}
@@ -405,7 +421,8 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .tag-mode[role="button"]:hover{filter:brightness(1.18)}
 .tag-mode.demo{background:rgba(245,165,36,.12);border:1px solid rgba(245,165,36,.36);color:#FFC55C}
 .tag-mode.live{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.34);color:#8FEBD3}
-.who{display:flex;align-items:center;gap:9px;padding-left:8px;border-left:1px solid var(--edge);margin-left:2px;flex:0 1 auto;min-width:0}
+.who{display:flex;align-items:center;gap:9px;padding:5px 6px 5px 10px;border:1px solid transparent;border-left:1px solid var(--line);border-radius:10px;margin-left:2px;flex:0 1 auto;min-width:0;cursor:pointer;transition:background .16s var(--ease), border-color .16s var(--ease)}
+.who:hover{background:color-mix(in srgb,var(--vio) 8%,transparent);border-color:var(--line);border-left-color:var(--line)}
 .who-name{font-size:12.5px;font-weight:500;line-height:1.15;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .who > span:nth-child(2){min-width:0;overflow:hidden}
 .who-role{font-size:11px;font-weight:600;letter-spacing:.01em;color:var(--vio-hi)}
@@ -1228,13 +1245,16 @@ select.input{height:36px}
          les pages, y compris quand on suivait dix autres serveurs. On ne
          savait donc jamais chez qui l'on venait d'entrer, et la
          plateforme portait le nom de son premier client. -->
-    <div class="brand">
+    <button class="brand" id="brandBtn" type="button" aria-haspopup="dialog">
       <div class="mark" id="brandMark" aria-hidden="true">OL</div>
       <div class="brand-text">
         <div class="brand-name" id="brandName">Origin Logs</div>
         <div class="brand-sub" id="brandSub">Plateforme</div>
       </div>
-    </div>
+      <span class="brand-caret" id="brandCaret" aria-hidden="true" hidden>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 6.5 8 10.5l4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+    </button>
     <div class="rail-wrap">
       <div class="nav" id="nav"></div>
       <div class="rail-more" id="railMore" aria-hidden="true">
@@ -1248,6 +1268,23 @@ select.input{height:36px}
         <div class="foot-line"><span class="pulse" id="pulse"></span><span>Flux <b id="liveState">en direct</b></span></div>
         <div class="foot-line">Dernier évènement <b id="lastTick">—</b></div>
         <div class="foot-line">Rétention <b id="retention">30 jours</b></div>
+      </div>
+      <!-- ⚠️ Période, direct et export ont QUITTÉ la barre du haut : ils
+           n'agissent que sur le journal d'un environnement, et là-haut ils
+           encombraient une barre qu'on veut au strict nécessaire (recherche,
+           environnement, profil). Ils vivent ici, sous l'état du flux. -->
+      <div class="flow-set" id="flowSettings" hidden>
+        <div class="flow-lbl">Période affichée</div>
+        <div class="seg" id="rangeSeg" role="group" aria-label="Période">
+          <button data-range="1" aria-pressed="false">1 h</button>
+          <button data-range="6" aria-pressed="false">6 h</button>
+          <button data-range="24" aria-pressed="true">24 h</button>
+          <button data-range="168" aria-pressed="false">7 j</button>
+        </div>
+        <div class="flow-acts">
+          <button class="btn sm live" id="liveBtn" aria-pressed="true"><span class="pulse" aria-hidden="true"></span> Direct</button>
+          <button class="btn sm" id="exportBtn">Exporter</button>
+        </div>
       </div>
       <button class="btn sm" id="teamBtn" hidden>Gérer l'équipe</button>
       <button class="btn sm" id="rolesBtn" hidden>Rôles &amp; accès</button>
@@ -1268,19 +1305,10 @@ select.input{height:36px}
         <kbd aria-hidden="true">/</kbd>
         <div class="suggest" id="suggest" hidden role="listbox" aria-label="Suggestions"></div>
       </div>
-      <div class="seg" id="rangeSeg" role="group" aria-label="Période">
-        <button data-range="1" aria-pressed="false">1 h</button>
-        <button data-range="6" aria-pressed="false">6 h</button>
-        <button data-range="24" aria-pressed="true">24 h</button>
-        <button data-range="168" aria-pressed="false">7 j</button>
-      </div>
-      <button class="btn live" id="liveBtn" aria-pressed="true"><span class="pulse" aria-hidden="true"></span> Direct</button>
-      <button class="btn" id="exportBtn">Exporter</button>
       <button class="icon-btn" id="helpBtn" title="Raccourcis clavier (?)" aria-label="Raccourcis clavier">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5.9 5.9a2.2 2.2 0 1 1 3 2.05c-.6.25-.9.75-.9 1.35v.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12.2" r=".9" fill="currentColor"/></svg>
       </button>
-      <span class="tag-mode demo" id="modeTag">démonstration</span>
-      <div class="who" id="whoBox" hidden>
+      <div class="who" id="whoBox" hidden role="button" tabindex="0" aria-haspopup="dialog" title="Voir mon profil">
         <span class="av" id="whoAv">—</span>
         <span><span class="who-name" id="whoName">—</span><br><span class="who-role" id="whoRole">—</span></span>
         <button class="icon-btn" id="logoutBtn" title="Se déconnecter">
@@ -5141,34 +5169,104 @@ async function chargerMesEspaces() {
 }
 
 function peindreSelecteur() {
-  if (!MES_ESPACES || MES_ESPACES.length < 2 || !ME.espace || ME.espace.visite) return;
-  const t = $('#modeTag');
-  t.innerHTML = `<span class="tag-nom">${esc(ME.espace.nom)}</span>`
-              + `<span class="tag-x" aria-hidden="true">▾</span>`;
-  t.title = `Vous êtes staff sur ${MES_ESPACES.length} serveurs. Cliquez pour changer.`;
-  t.setAttribute('role', 'button');
-  t.setAttribute('tabindex', '0');
-  t.onclick = choisirEspace;
+  // La marque, en haut à gauche, sait désormais si elle doit s'ouvrir :
+  // il suffit de la rafraîchir une fois la liste des serveurs connue.
+  majMarque();
 }
 
-function choisirEspace() {
-  openSheet('Changer de serveur',
-    `Votre compte Discord ouvre ${MES_ESPACES.length} espaces de logs`,
-    { name: 'Espaces', hue: 200 }, `
-    <div class="banner" style="--c:var(--vio)">Chaque serveur a ses propres rôles :
-      vous entrez avec les droits que <b>celui-ci</b> vous donne, jamais ceux d’à côté.</div>
-    ${MES_ESPACES.map(e => `
+/* La liste des environnements accessibles, quelle que soit la source. En
+   API elle vient des rôles Discord (relus à l'instant, via /api/mes-espaces) ;
+   en démonstration, des serveurs fictifs actifs. Chacun porte `actuel`. */
+function espacesAccessibles() {
+  if (MODE === 'api') {
+    return (MES_ESPACES || []).map(e => ({ id: e.id, nom: e.nom,
+      roles: e.roles || [], actuel: !!e.actuel || (ME.espace && e.id === ME.espace.id) }));
+  }
+  return (DEMO_ESPACES || []).filter(e => e.etat === 'actif').map(e => ({ id: e.id, nom: e.nom,
+    roles: [], actuel: !!(ME.espace && e.id === ME.espace.id) }));
+}
+
+/* ⚠️ UN SEUL point d'entrée aux environnements, ouvert depuis la marque :
+   changer de serveur ET ressortir vers la plateforme. Avant, le nom
+   d'environnement, le changement et la sortie étaient éparpillés dans une
+   étiquette de la barre du haut ; ils tiennent maintenant en un seul geste,
+   là où l'on lit déjà chez qui l'on est. */
+function ouvrirEspaces() {
+  const liste = espacesAccessibles();
+  const dans = !!ME.espace;
+  // Dans un environnement, la ligne du haut EST déjà l'environnement
+  // courant (avec « ressortir ») : on ne le répète pas dans la liste.
+  const aMontrer = dans ? liste.filter(e => !e.actuel) : liste;
+  const corps = `
+    ${dans ? `<div class="map-row" style="border:none">
+      <span><span class="map-name">${esc(ME.espace.nom || 'Environnement courant')}</span>
+        <span class="map-desc">vous y êtes en ce moment</span></span>
+      <button class="btn sm" data-sortir="1">Revenir à la plateforme</button>
+    </div>` : ''}
+    ${aMontrer.length ? `<div class="flow-lbl" style="margin-top:${dans ? '8px' : '0'}">${dans ? 'Aller ailleurs' : 'Environnements accessibles'}</div>` : ''}
+    ${aMontrer.map(e => `
       <div class="map-row" style="border:none">
         <span><span class="map-name">${esc(e.nom)}</span>
-          <span class="map-desc">${e.roles && e.roles.length
-            ? esc(e.roles.join(', ')) : 'aucun rôle du panneau'}</span></span>
+          <span class="map-desc">${e.roles.length ? esc(e.roles.join(', '))
+            : (MODE === 'api' ? 'aucun rôle du panneau' : 'environnement de démonstration')}</span></span>
         ${e.actuel
           ? '<span class="state" style="--c:var(--ok)">vous y êtes</span>'
           : `<button class="btn sm primary" data-goesp="${e.id}">Entrer</button>`}
-      </div>`).join('')}
-    <span class="lite-m">Cette liste vient de vos rôles Discord, relus à l’instant.
-      Perdre le rôle staff d’un serveur le retire d’ici — et le changement est
-      revérifié auprès de Discord au moment où vous entrez.</span>`);
+      </div>`).join('')
+      || (dans ? '<span class="lite-m">Aucun autre environnement accessible.</span>'
+               : '<span class="lite-m">Aucun environnement accessible pour l’instant.</span>')}
+    ${MODE === 'api' ? `<span class="lite-m">Cette liste vient de vos rôles Discord, relus à
+      l’instant : chaque serveur a ses propres rôles, et vous y entrez avec les droits que
+      <b>celui-ci</b> vous donne.</span>` : ''}`;
+  openSheet(dans ? 'Environnement' : 'Choisir un environnement',
+    dans ? 'Changer de serveur ou revenir à la plateforme'
+         : (liste.length + ' environnement' + (liste.length > 1 ? 's' : '') + ' accessible' + (liste.length > 1 ? 's' : '')),
+    { name: ME.espace ? (ME.espace.nom || 'Espaces') : 'Espaces', hue: 262 }, corps);
+}
+/* Compat : d'anciens chemins nommaient encore choisirEspace. */
+const choisirEspace = ouvrirEspaces;
+
+/* ---------- mon profil ----------
+   Le bloc en haut à droite s'ouvre sur ce que le compte sait de vous :
+   pseudo, Discord, environnements où vous êtes staff, et grade — ce
+   dernier seulement s'il existe (un compte peut n'avoir aucun grade
+   attribué). Rien n'est modifiable ici : c'est une carte d'identité. */
+function ouvrirProfil() {
+  const liste = espacesAccessibles();
+  // Le grade : le rôle sur la plateforme si l'on en a un, sinon le rôle
+  // dans l'environnement courant. Absent → on ne montre pas la ligne.
+  const grade = ME.platRoleLabel || (ME.espace ? ME.roleLabel : null)
+             || (!ME.espace ? ME.roleLabel : null) || null;
+  const grades = (ME.roles && ME.roles.length > 1)
+    ? ME.roles.map(r => esc(r.label)).join(', ') : (grade ? esc(grade) : null);
+  const ligne = (k, v) => `<div class="map-row" style="border:none">
+      <span class="map-name">${esc(k)}</span>
+      <span style="text-align:right;color:var(--ink-2)">${v}</span></div>`;
+  const corps = `
+    <div style="display:flex;align-items:center;gap:13px">
+      <span class="av lg" style="${avatarStyle({ name: ME.pseudo || '?', hue: 268 })}">${initials({ name: ME.pseudo || '?' })}</span>
+      <div><div style="font-size:17px;font-weight:700">${esc(ME.pseudo || '—')}</div>
+        ${grade ? `<div class="who-role" style="margin-top:2px">${esc(grade)}</div>` : ''}</div>
+    </div>
+    <div class="block">
+      <h3 class="eyebrow">Identité</h3>
+      ${ligne('Pseudo', esc(ME.pseudo || '—'))}
+      ${ME.discord
+        ? ligne('Discord', `<span class="mono">${esc(String(ME.discord))}</span>`)
+        : ligne('Discord', '<span class="lite-m">non relié</span>')}
+      ${grades ? ligne('Grade staff', grades) : ''}
+    </div>
+    <div class="block">
+      <h3 class="eyebrow">Environnements</h3>
+      ${liste.length ? liste.map(e => `<div class="map-row" style="border:none">
+          <span class="map-name">${esc(e.nom)}</span>
+          ${e.actuel ? '<span class="state" style="--c:var(--ok)">vous y êtes</span>'
+            : (e.roles && e.roles.length ? `<span class="lite-m">${esc(e.roles.join(', '))}</span>` : '')}
+        </div>`).join('')
+        : '<span class="lite-m">Aucun environnement rattaché à ce compte.</span>'}
+    </div>`;
+  openSheet('Mon profil', ME.plateforme ? 'Équipe Origin Logs' : 'Compte staff',
+    { name: ME.pseudo || '?', hue: 268 }, corps);
 }
 
 /* ============================================================
@@ -6220,6 +6318,9 @@ document.addEventListener('click', async ev => {
   }
   if (D.envedit) return ficheEnvironnement(D.envedit);
   if (D.goesp) {
+    // En démonstration, aucun serveur à rejoindre : on bascule l'espace
+    // fictif sans recharger (le rechargement ramènerait dehors).
+    if (MODE === 'demo') { closeSheet(); return poserEspaceDemo(Number(D.goesp)); }
     try { const r = await api('/api/espace', { method:'POST', body: JSON.stringify({ spaceId: Number(D.goesp) }) });
           toast('Bienvenue sur ' + r.espace.nom + '.');
           // On recharge la page : les rubriques, les droits et le flux
@@ -7141,41 +7242,47 @@ function peindreIdentite() {
   b('#auditBtn',    dans && can('audit.view'));
   b('#platformBtn', ME.plateforme);
   if ($('#platTeamBtn')) $('#platTeamBtn').hidden = !canPlat('plat.equipe.voir');
-  // La recherche, la période, le direct et l'export portent tous sur les
-  // journaux d'un environnement : dehors, ils ne cherchent rien.
-  for (const sel of ['#findBox', '#rangeSeg', '#liveBtn', '#railLive']) b(sel, dans);
+  // La recherche reste en haut ; la période, le direct et l'export sont
+  // descendus dans le pied du rail (« Réglages du flux ») — ils n'agissent
+  // que sur le journal d'un environnement, dehors ils ne cherchent rien.
+  b('#findBox', dans);
+  b('#railLive', dans);
+  b('#flowSettings', dans);
   b('#exportBtn', dans && can('logs.export'));
 
-  const tag = $('#modeTag'); if (!tag) return;
-  tag.onclick = null; tag.removeAttribute('role'); tag.removeAttribute('tabindex');
-  const apercu = MODE !== 'api';
-  if (dans && (ME.plateforme || apercu)) {
-    // Une visite doit se voir : on ne modère pas un autre serveur en
-    // croyant être chez soi. Et elle se quitte d'un clic — entrer sans
-    // pouvoir ressortir serait un aller simple.
-    // ⚠️ LA CROIX NE SE TRONQUE JAMAIS : le nom d'un client peut être
-    // long, et c'est la seule façon de RESSORTIR.
-    tag.className = 'tag-mode demo';
-    tag.innerHTML = `<span class="tag-nom">${apercu ? 'aperçu' : 'visite'} — ${esc(nom)}</span>`
-                  + `<span class="tag-x" aria-hidden="true">✕</span>`;
-    tag.title = apercu
-      ? 'Aperçu : vous êtes entré dans un environnement de démonstration. Cliquez pour ressortir.'
-      : 'Administration de plateforme : vous passez avant le fondateur de cet environnement. Cliquez pour ressortir.';
-    tag.setAttribute('role', 'button'); tag.setAttribute('tabindex', '0');
-    tag.onclick = sortirEspace;
-  } else if (dans) {
-    tag.className = 'tag-mode live';
-    tag.textContent = nom;
-    // ⚠️ Un modérateur peut être staff sur DEUX serveurs clients. Sans ce
-    // sélecteur, la connexion le posait dans le premier espace qui
-    // l'acceptait et le second était inatteignable.
-    if (MODE === 'api') chargerMesEspaces();
-  } else {
-    tag.className = 'tag-mode demo';
-    tag.textContent = apercu ? 'aperçu — aucun environnement' : 'plateforme — aucun environnement';
-    tag.title = 'Vous suivez tous les environnements. Entrez dans l’un d’eux '
-              + 'depuis « Liste des environnements ».';
-  }
+  // ⚠️ Le nom d'environnement, le changement de serveur et la sortie
+  // vivent désormais SUR LA MARQUE, en haut à gauche. On charge la liste
+  // des serveurs accessibles pour savoir si la marque doit s'ouvrir.
+  if (MODE === 'api') chargerMesEspaces();
+  majMarque();
+}
+
+/* La marque, en haut à gauche, est le point d'entrée des environnements :
+   elle porte le nom courant, et s'ouvre pour changer de serveur ou
+   ressortir vers la plateforme — dès qu'il y a plus d'un endroit où aller. */
+function majMarque() {
+  const btn = $('#brandBtn'); if (!btn) return;
+  const caret = $('#brandCaret');
+  const dans = !!ME.espace;
+  const cliquable = peutChangerEspace();
+  if (caret) caret.hidden = !cliquable;
+  btn.disabled = false;
+  btn.style.cursor = cliquable ? 'pointer' : 'default';
+  btn.title = !cliquable ? 'Origin Logs'
+    : dans ? 'Environnement « ' + (ME.espace.nom || '') + ' » — changer de serveur ou ressortir'
+           : 'Choisir un environnement';
+  btn.onclick = cliquable ? ouvrirEspaces : null;
+}
+
+/* Y a-t-il plus d'un endroit où aller ? Un staff mono-serveur qui n'a rien
+   à choisir garde une marque inerte ; un fondateur de plateforme, un staff
+   multi-serveurs ou quiconque est ENTRÉ quelque part (et peut ressortir)
+   ouvre le sélecteur. */
+function peutChangerEspace() {
+  if (MODE !== 'api') return true;                 // démo : plusieurs serveurs fictifs
+  if (ME.espace) return true;                       // dedans → au moins « ressortir »
+  if (ME.plateforme) return true;                   // la plateforme entre où elle veut
+  return !!(MES_ESPACES && MES_ESPACES.length >= 2);
 }
 
 /* ---------- entrer chez un client ----------
@@ -7307,6 +7414,7 @@ function applyMe(d) {
   ME.perms = d.perms || []; ME.cats = d.cats || [];
   ME.roles = d.staff.roles || [{ id: d.staff.role, label: d.staff.roleLabel }];
   ME.source = d.staff.source || 'local';
+  ME.discord = d.staff.discordId || null;
   ME.plateforme = !!d.staff.plateforme;
   // ⚠️ Deux jeux de droits, pas un. `perms` porte ce qu'on fait DANS un
   // espace, `platPerms` ce qu'on fait SUR la plateforme. Un écran qui
@@ -7342,9 +7450,19 @@ $('#gateForm').addEventListener('submit', async ev => {
     $('#gatePass').value = ''; $('#gatePass').focus();
   } finally { b.disabled = false; b.textContent = 'Se connecter'; }
 });
-$('#logoutBtn').addEventListener('click', async () => {
+$('#logoutBtn').addEventListener('click', async ev => {
+  ev.stopPropagation();            // ne pas ouvrir le profil en se déconnectant
   try { await api('/api/auth/logout', { method:'POST' }); } catch (e) {}
   location.reload();
+});
+// Le bloc profil (avatar + pseudo + grade) ouvre la carte d'identité ;
+// seul le bouton de déconnexion, à l'intérieur, échappe à ce clic.
+$('#whoBox').addEventListener('click', ev => {
+  if (ev.target.closest('#logoutBtn')) return;
+  ouvrirProfil();
+});
+$('#whoBox').addEventListener('keydown', ev => {
+  if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ouvrirProfil(); }
 });
 
 async function startPanel() {
@@ -7377,7 +7495,8 @@ async function startPanel() {
     // rôle qui a tout, et c'est ce qu'on veut donner à voir.
     ME.pseudo = 'Owen'; ME.role = 'fondateur'; ME.roleLabel = 'Fondateur';
     ME.roles = [{ id:'fondateur', label:'Fondateur' }];
-    ME.source = 'local'; ME.plateforme = true;
+    ME.source = 'discord'; ME.plateforme = true; ME.discord = '256487913004662784';
+    ME.platRoleLabel = 'Direction';
     // ⚠️ ON N'ARRIVE DANS AUCUN ENVIRONNEMENT. L'aperçu ouvrait
     // directement le panneau du premier client : on croyait que le
     // produit ÉTAIT ce serveur-là, et rien ne disait qu'on en surveille

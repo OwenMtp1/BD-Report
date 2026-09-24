@@ -61,8 +61,29 @@ t('⚠️ il ne se replie plus', /flex-wrap:nowrap/.test(cssBar));
 t('sa hauteur est fixe', /height:var\(--bar-h\)/.test(cssBar) && !/min-height:var\(--bar-h\)/.test(cssBar));
 t('le repli revient sous 900 px, où il n’y a plus le choix',
   /\.bar\{height:auto;min-height:var\(--bar-h\);flex-wrap:wrap/.test(mob));
-t('⚠️ et la croix pour RESSORTIR ne se tronque jamais',
-  /class="tag-nom"/.test(P) && /\.tag-x\{flex:none/.test(P));
+// ⚠️ La barre du haut a été allégée : plus de sélecteur de période, de
+// bouton « Direct », d'étiquette d'aperçu ni de bouton « Exporter ». Ils
+// sont descendus dans le pied du rail (« Réglages du flux »), et le choix
+// d'environnement est passé sur la marque, en haut à gauche.
+const barHtml = bloc(/<header class="bar">[\s\S]*?<\/header>/);
+t('la barre du haut ne porte plus période / direct / export / étiquette',
+  !/id="rangeSeg"/.test(barHtml) && !/id="liveBtn"/.test(barHtml)
+  && !/id="exportBtn"/.test(barHtml) && !/id="modeTag"/.test(barHtml));
+t('ces réglages vivent dans le pied du rail', /id="flowSettings"/.test(P)
+  && /class="flow-set"/.test(P) && /id="rangeSeg"/.test(P) && /id="liveBtn"/.test(P));
+t('⚠️ la marque, en haut à gauche, ouvre le choix d’environnement',
+  /id="brandBtn"/.test(P) && /function ouvrirEspaces/.test(P) && /btn\.onclick = cliquable \? ouvrirEspaces/.test(P));
+t('et de là on RESSORT vers la plateforme', /data-sortir="1">Revenir à la plateforme/.test(P));
+t('la marque ne s’ouvre que s’il y a où aller', /function peutChangerEspace/.test(P));
+
+sect('Le profil, en haut à droite, est une carte d’identité');
+t('le bloc profil s’ouvre', /id="whoBox"/.test(P) && /function ouvrirProfil/.test(P)
+  && /getElementById\('whoBox'\)|\$\('#whoBox'\)\.addEventListener\('click'/.test(P));
+t('il montre pseudo, Discord et environnements',
+  /ligne\('Pseudo'/.test(P) && /ligne\('Discord'/.test(P) && /Environnements/.test(P));
+t('⚠️ le grade ne s’affiche que si l’on en a un',
+  /grade \? `<div class="who-role"/.test(P) && /grades \? ligne\('Grade staff', grades\) : ''/.test(P));
+t('⚠️ se déconnecter n’ouvre pas le profil', /closest\('#logoutBtn'\)\) return/.test(P));
 
 sect('La recherche dit pourquoi une ligne répond');
 t('le terme visible est surligné', /function surligner/.test(P) && /fmtMsg\(e, STATE\.q\)/.test(P));
