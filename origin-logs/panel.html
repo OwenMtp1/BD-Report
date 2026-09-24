@@ -269,6 +269,10 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
   border-bottom:1px solid var(--line);
 }
 .bar > *{flex:none}
+/* Aide + profil restent collés à l'extrême droite, que la recherche soit
+   là (elle prend la place) ou masquée hors environnement (l'auto-marge
+   pousse le groupe). Le profil est TOUJOURS le dernier, tout à droite. */
+#helpBtn{margin-left:auto}
 .find{position:relative;flex:1 1 140px;min-width:80px}
 .find input{
   width:100%;height:36px;padding:0 34px 0 34px;border-radius:10px;
@@ -421,11 +425,22 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .tag-mode[role="button"]:hover{filter:brightness(1.18)}
 .tag-mode.demo{background:rgba(245,165,36,.12);border:1px solid rgba(245,165,36,.36);color:#FFC55C}
 .tag-mode.live{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.34);color:#8FEBD3}
-.who{display:flex;align-items:center;gap:9px;padding:5px 6px 5px 10px;border:1px solid transparent;border-left:1px solid var(--line);border-radius:10px;margin-left:2px;flex:0 1 auto;min-width:0;cursor:pointer;transition:background .16s var(--ease), border-color .16s var(--ease)}
-.who:hover{background:color-mix(in srgb,var(--vio) 8%,transparent);border-color:var(--line);border-left-color:var(--line)}
-.who-name{font-size:12.5px;font-weight:500;line-height:1.15;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.who > span:nth-child(2){min-width:0;overflow:hidden}
-.who-role{font-size:11px;font-weight:600;letter-spacing:.01em;color:var(--vio-hi)}
+/* Le profil est un vrai « chip » de compte, poussé à l'extrême droite de
+   la barre : texte aligné à droite (le grade collé sous le pseudo),
+   avatar, puis déconnexion. */
+.who{
+  display:flex;align-items:center;gap:10px;margin-left:6px;flex:none;min-width:0;
+  padding:5px 6px 5px 13px;border-radius:12px;border:1px solid var(--line);
+  background:color-mix(in srgb,var(--raise) 45%,transparent);cursor:pointer;
+  transition:background .16s var(--ease), border-color .16s var(--ease);
+}
+.who:hover{background:color-mix(in srgb,var(--vio) 12%,transparent);border-color:color-mix(in srgb,var(--vio) 40%,transparent)}
+.who-txt{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px;line-height:1.15;min-width:0}
+.who-name{font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.who-role{font-size:10.5px;font-weight:600;letter-spacing:.01em;color:var(--vio-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+/* Le bouton de déconnexion s'efface dans le chip : discret jusqu'au survol. */
+.icon-btn.ghost{border-color:transparent;background:transparent}
+.icon-btn.ghost:hover{border-color:var(--line);background:color-mix(in srgb,var(--crit) 14%,transparent);color:#FF8FA3}
 
 /* ---------- pastilles ---------- */
 .av{
@@ -1309,9 +1324,12 @@ select.input{height:36px}
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5.9 5.9a2.2 2.2 0 1 1 3 2.05c-.6.25-.9.75-.9 1.35v.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12.2" r=".9" fill="currentColor"/></svg>
       </button>
       <div class="who" id="whoBox" hidden role="button" tabindex="0" aria-haspopup="dialog" title="Voir mon profil">
+        <span class="who-txt">
+          <span class="who-name" id="whoName">—</span>
+          <span class="who-role" id="whoRole">—</span>
+        </span>
         <span class="av" id="whoAv">—</span>
-        <span><span class="who-name" id="whoName">—</span><br><span class="who-role" id="whoRole">—</span></span>
-        <button class="icon-btn" id="logoutBtn" title="Se déconnecter">
+        <button class="icon-btn ghost" id="logoutBtn" title="Se déconnecter">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 4.5V3a1 1 0 0 0-1-1H3.5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-1.5M7 8h7m0 0-2.2-2.2M14 8l-2.2 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
