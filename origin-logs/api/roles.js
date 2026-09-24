@@ -117,7 +117,10 @@ function resolve(db, spaceId, keys) {
   const tous = list(db, spaceId);
   const pris = tous.filter(r => (keys || []).includes(r.key));
   const ordre = CAT.CATS.map(c => c.id);
-  const perms = [...new Set([].concat(...pris.map(r => r.perms)))].filter(p => CAT.PERM_IDS.includes(p));
+  // ⚠️ On DÉPLIE les anciens droits groupés (accounts.manage, players.gdpr)
+  // AVANT de filtrer : une base pas encore migrée ne doit rien perdre.
+  const perms = CAT.expandAliasPerms([].concat(...pris.map(r => r.perms)))
+    .filter(p => CAT.PERM_IDS.includes(p));
   const cats = ordre.filter(c => pris.some(r => r.cats.includes(c)));
   return {
     keys: pris.map(r => r.key),
@@ -146,4 +149,25 @@ function makeKey(db, spaceId, label) {
   return base + '_' + Date.now().toString(36);
 }
 
-module.exports = { seed, list, byKey, basRole, backfillCat, resolve, fromDiscord, makeKey, invalidate };
+/* ⚠️ MIGRATION UNE FOIS : déplier les anciens droits groupés dans la base.
+   « accounts.manage » et « players.gdpr » deviennent leurs droits fins sur
+   chaque rôle qui les portait, tous espaces confondus. Idempotent — un rôle
+   qui ne porte aucun ancien identifiant est laissé tel quel. Appelé par
+   `migrate()` (server.js), sous un drapeau `settings`. */
+function backfillPerms(db) {
+  const roles = db.prepare('SELECT space_id, key, perms FROM roles').all();
+  const maj = db.prepare('UPDATE roles SET perms = ? WHERE space_id = ? AND key = ?');
+  let touches = 0;
+  for (const r of roles) {
+    let liste; try { liste = JSON.parse(r.perms || '[]'); } catch { liste = []; }
+    if (!Array.isArray(liste)) continue;
+    if (!liste.some(p => CAT.PERM_ALIAS[p])) continue;   // rien d'ancien ici
+    const deplie = CAT.expandAliasPerms(liste).filter(p => CAT.PERM_IDS.includes(p));
+    maj.run(JSON.stringify(deplie), r.space_id, r.key);
+    touches++;
+  }
+  if (touches) invalidate();
+  return touches;
+}
+
+module.exports = { seed, list, byKey, basRole, backfillCat, backfillPerms, resolve, fromDiscord, makeKey, invalidate };

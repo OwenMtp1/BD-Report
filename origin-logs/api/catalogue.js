@@ -53,34 +53,77 @@ const SEVS = [
   { id:'info',     label:'Info',       c:'var(--ok)'    }
 ];
 
+// Regroupement des droits, pour que l'éditeur de rôles se lise par thème
+// plutôt que comme une liste de trente lignes.
+const PERM_GROUPS = [
+  { id:'journaux', label:'Journaux' },
+  { id:'joueurs',  label:'Dossiers joueurs' },
+  { id:'actions',  label:'Actions en jeu' },
+  { id:'donnees',  label:'Données personnelles (RGPD)' },
+  { id:'equipe',   label:'Équipe & comptes' },
+  { id:'panneau',  label:'Réglages du panneau' }
+];
+
 // Droits atomiques. Un droit absent ne masque pas seulement un bouton :
-// l'API refuse la route correspondante (cf. requirePerm dans server.js).
+// l'API refuse la route correspondante (cf. `need` dans server.js).
+// ⚠️ CHAQUE GESTE QUI COMPTE A SON DROIT. On a délibérément éclaté les
+// anciens fourre-tout : « gérer les comptes » se décomposait en créer /
+// changer le rôle / réinitialiser le mot de passe / suspendre / SUPPRIMER,
+// et « RGPD » mélangeait l'export et l'EFFACEMENT — deux gestes dont l'un
+// est irréversible. On ne peut pas accorder l'un sans donner l'autre tant
+// qu'ils partagent une seule case.
 const PERMS = [
-  { id:'logs.view',            label:'Lire les journaux' },
-  { id:'logs.mark',            label:'Épingler et marquer traité' },
-  { id:'logs.export',          label:'Exporter en CSV (réservé au Fondateur)' },
-  { id:'players.view',         label:'Ouvrir un dossier joueur' },
-  { id:'players.identifiers',  label:'Voir les identifiants (license, Discord, Steam)' },
-  { id:'actions.warn',         label:'Avertir un joueur' },
-  { id:'actions.kick',         label:'Expulser un joueur' },
-  { id:'actions.ban',          label:'Bannir un joueur' },
-  { id:'actions.unban',        label:'Lever un bannissement' },
-  { id:'actions.give',         label:'Rendre un item ou de l’argent' },
-  { id:'actions.heal',         label:'Soigner un joueur (vie et armure)' },
-  { id:'actions.revive',       label:'Réanimer un joueur' },
-  { id:'actions.freeze',       label:'Geler ou dégeler un joueur' },
-  { id:'actions.message',      label:'Envoyer un message à un joueur en jeu' },
-  { id:'players.inventory',    label:'Voir l’inventaire d’un joueur' },
-  { id:'screens.request',      label:'Demander une capture de l’écran d’un joueur' },
-  { id:'players.gdpr',         label:'Exporter et effacer les données d’un joueur (RGPD)' },
-  { id:'team.stats',           label:'Voir l’activité de l’équipe (qui traite quoi)' },
-  { id:'players.notes',        label:'Écrire une note d’équipe sur un joueur' },
-  { id:'audit.view',           label:'Consulter le journal du panneau' },
-  { id:'accounts.manage',      label:'Gérer les comptes staff' },
-  { id:'settings.discord',     label:'Configurer la liaison Discord et les rôles' },
-  { id:'roles.manage',         label:'Créer les rôles et régler leurs accès' }
+  { id:'logs.view',            group:'journaux', label:'Lire les journaux' },
+  { id:'logs.mark',            group:'journaux', label:'Épingler et marquer un évènement traité' },
+  { id:'logs.export',          group:'journaux', label:'Exporter les journaux en CSV' },
+
+  { id:'players.view',         group:'joueurs',  label:'Ouvrir un dossier joueur' },
+  { id:'players.identifiers',  group:'joueurs',  label:'Voir les identifiants (license, Discord, Steam)' },
+  { id:'players.notes',        group:'joueurs',  label:'Écrire et retirer les notes d’équipe' },
+  { id:'players.inventory',    group:'joueurs',  label:'Voir l’inventaire d’un joueur' },
+  { id:'screens.request',      group:'joueurs',  label:'Demander une capture de l’écran d’un joueur' },
+
+  { id:'actions.warn',         group:'actions',  label:'Avertir un joueur' },
+  { id:'actions.kick',         group:'actions',  label:'Expulser un joueur' },
+  { id:'actions.ban',          group:'actions',  label:'Bannir un joueur' },
+  { id:'actions.unban',        group:'actions',  label:'Lever un bannissement' },
+  { id:'actions.give',         group:'actions',  label:'Rendre un item ou de l’argent' },
+  { id:'actions.heal',         group:'actions',  label:'Soigner un joueur (vie et armure)' },
+  { id:'actions.revive',       group:'actions',  label:'Réanimer un joueur' },
+  { id:'actions.freeze',       group:'actions',  label:'Geler ou dégeler un joueur' },
+  { id:'actions.message',      group:'actions',  label:'Envoyer un message à un joueur en jeu' },
+
+  { id:'players.export',       group:'donnees',  label:'Exporter les données d’un joueur (RGPD)' },
+  { id:'players.erase',        group:'donnees',  label:'Effacer les données d’un joueur (RGPD) — irréversible' },
+
+  { id:'team.stats',           group:'equipe',   label:'Voir l’activité de l’équipe (qui traite quoi)' },
+  { id:'accounts.view',        group:'equipe',   label:'Voir les comptes de l’équipe' },
+  { id:'accounts.create',      group:'equipe',   label:'Créer un compte staff' },
+  { id:'accounts.role',        group:'equipe',   label:'Changer le rôle d’un compte, le lier à Discord' },
+  { id:'accounts.password',    group:'equipe',   label:'Réinitialiser le mot de passe d’un compte' },
+  { id:'accounts.disable',     group:'equipe',   label:'Suspendre ou réactiver un compte' },
+  { id:'accounts.remove',      group:'equipe',   label:'Supprimer un compte staff — irréversible' },
+
+  { id:'audit.view',           group:'panneau',  label:'Consulter le journal du panneau' },
+  { id:'settings.discord',     group:'panneau',  label:'Configurer la liaison Discord et le bot' },
+  { id:'roles.manage',         group:'panneau',  label:'Créer les rôles et régler leurs accès' }
 ];
 const PERM_IDS = PERMS.map(p => p.id);
+
+// ⚠️ PASSERELLE DES ANCIENS DROITS. Les bases déjà en service portent
+// « accounts.manage » et « players.gdpr » : à l'ouverture, `resolve`
+// filtrait sur PERM_IDS et les aurait fait DISPARAÎTRE (un fondateur privé
+// de la gestion des comptes du jour au lendemain). On les déplie donc en
+// leurs droits fins — voir roles.js (backfillPerms) qui l'applique une fois
+// en base, et resolve() qui le rejoue à la volée pour ne rien perdre.
+const PERM_ALIAS = {
+  'accounts.manage': ['accounts.view','accounts.create','accounts.role','accounts.password','accounts.disable','accounts.remove'],
+  'players.gdpr':    ['players.export','players.erase']
+};
+// Déplie une liste de droits : remplace les anciens groupés par leurs
+// droits fins, laisse les autres tels quels, dédoublonne.
+const expandAliasPerms = list => [...new Set([].concat(...(list || [])
+  .map(p => PERM_ALIAS[p] || [p])))];
 
 // Raccourcis de catégories, par groupe : un rôle se décrit par les
 // métiers qu'il couvre, pas par une liste de dix-neuf identifiants.
@@ -205,6 +248,14 @@ const ROLES = {
 // renommer sans passerelle aurait dégradé tout le monde en silence.
 const ALIAS = { admin: 'administrateur', modo: 'moderateur' };
 const canon = r => (ROLES[r] ? r : (ALIAS[r] || 'moderateur'));
+// ⚠️ canon() ramène TOUT rôle inconnu à « moderateur » : c'est voulu pour
+// retrouver les MÉTADONNÉES d'un rôle INTÉGRÉ (roleOf), mais destructeur
+// pour une clé de rôle SUR MESURE (elle vit en base, pas dans ROLES). Pour
+// normaliser une clé stockée sans l'écraser, on applique seulement les
+// renommages hérités et on garde le reste : `resolve` la fera correspondre
+// au bon rôle de l'espace, et une clé vraiment orpheline ne matchera rien
+// (aucun droit) plutôt que d'hériter par erreur de « moderateur ».
+const canonKey = r => (ALIAS[r] || r);
 
 /* ---------- catégories retirées ----------
    Le catalogue a été refait sur les rubriques réellement voulues par le
@@ -268,6 +319,7 @@ const canSeeCat = (r, c) => catsOf(r).includes(c);
 
 const SEV_IDS = SEVS.map(s => s.id);
 
-module.exports = { CATS, SEVS, GROUPS, CAT_IDS, SEV_IDS, canonCat, CAT_ALIAS, CAT_FALLBACK, PERMS, PERM_IDS, ROLES, ROLE_IDS,
-                   roleOf, canon, permsOf, catsOf, rankOf, hasPerm, canSeeCat,
+module.exports = { CATS, SEVS, GROUPS, CAT_IDS, SEV_IDS, canonCat, CAT_ALIAS, CAT_FALLBACK,
+                   PERMS, PERM_IDS, PERM_GROUPS, PERM_ALIAS, expandAliasPerms, ROLES, ROLE_IDS,
+                   roleOf, canon, canonKey, permsOf, catsOf, rankOf, hasPerm, canSeeCat,
                    permsOfRoles, catsOfRoles, rankOfRoles, mainRole };

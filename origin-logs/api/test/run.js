@@ -72,7 +72,11 @@ const SUITES = [
   // Activation signée : le serveur démarre avec la clé PUBLIQUE de
   // l'éditeur (verrou actif) ; le test reçoit la clé PRIVÉE pour signer.
   { nom: 'licence', fichier: 'licence.test.mjs', port: 8917, discord: false, licence: true,
-    comptes: [['Sup', 'fondateur', 'motdepassesup12345', { plateforme: true }]] }
+    comptes: [['Sup', 'fondateur', 'motdepassesup12345', { plateforme: true }]] },
+  // Permissions FINES : chaque geste (supprimer un compte, effacer des
+  // données…) porte son propre droit, et un rôle qui ne l'a pas est refusé.
+  { nom: 'permissions', fichier: 'permissions.test.mjs', port: 8918, discord: false,
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] }
 ];
 
 const filtre = process.argv.slice(2).filter(a => !a.startsWith('-'));

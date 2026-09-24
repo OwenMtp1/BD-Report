@@ -294,7 +294,7 @@ function whoami(req) {
   // c'est une décision, elle ne doit pas être défaite à la synchro.
   const manuels = parseRoles(r.manual_roles);
   let roles = manuels.length ? manuels : parseRoles(r.roles);
-  if (!roles.length) roles = [CAT.canon(r.role)];
+  if (!roles.length) roles = [CAT.canonKey(r.role)];
 
   const platform = !!r.platform_admin;
   // ⚠️ L'ADMINISTRATION DE PLATEFORME N'A AUCUN ESPACE PAR DÉFAUT.
@@ -371,7 +371,9 @@ function whoami(req) {
            platRang: platform ? PLAT.rangDe(db, r.platform_role) : 0 };
 }
 function parseRoles(j) {
-  try { const v = JSON.parse(j || '[]'); return Array.isArray(v) ? v.map(CAT.canon) : []; }
+  // ⚠️ canonKey, PAS canon : ces tableaux peuvent contenir des rôles SUR
+  // MESURE (clés en base). canon les aurait tous ramenés à « moderateur ».
+  try { const v = JSON.parse(j || '[]'); return Array.isArray(v) ? v.map(CAT.canonKey) : []; }
   catch (e) { return []; }
 }
 
@@ -598,6 +600,18 @@ function rattraperRubriques() {
       if (r.touches) console.log(`  Rubrique « ${cat ? cat.label : id} » ouverte à ${r.touches} rôle(s) existants.`);
     } catch (e) { console.error('[rubriques]', e.message); }
   }
+}
+
+/* Déplier une fois les anciens droits groupés (accounts.manage,
+   players.gdpr) en droits fins sur les rôles déjà en base. */
+function rattraperPermissions() {
+  const cle = 'backfill.perms.v2';
+  if (getSetting(cle)) return;
+  try {
+    const n = ROLESVC.backfillPerms(db);
+    setSetting(cle, String(now()), 'migration');
+    if (n) console.log(`  Droits dépliés sur ${n} rôle(s) : gestion des comptes et RGPD détaillés.`);
+  } catch (e) { console.error('[permissions]', e.message); }
 }
 
 function planifierSauvegardes() {
@@ -2000,7 +2014,7 @@ async function route(req, res) {
     db.prepare('UPDATE staff SET last_login=? WHERE id=?').run(now(), row.id);
     audit({ id: row.id, pseudo: row.pseudo }, 'auth.connexion', null, ip, Number(row.space_id || 1));
     const manuels = parseRoles(row.manual_roles);
-    const sesRoles = manuels.length ? manuels : (parseRoles(row.roles).length ? parseRoles(row.roles) : [CAT.canon(row.role)]);
+    const sesRoles = manuels.length ? manuels : (parseRoles(row.roles).length ? parseRoles(row.roles) : [CAT.canonKey(row.role)]);
     const platform = !!row.platform_admin;
     const spId = Number(row.space_id || 1);
     const rr = ROLESVC.resolve(db, spId, sesRoles);
@@ -2092,7 +2106,8 @@ async function route(req, res) {
     // anonyme lui apprenait vos grades, leurs droits et leurs rangs.
     const sp = me ? me.spaceId : 0;
     return ok(res, {
-      cats: CAT.CATS, sevs: CAT.SEVS, groups: CAT.GROUPS, perms: CAT.PERMS,
+      cats: CAT.CATS, sevs: CAT.SEVS, groups: CAT.GROUPS,
+      perms: CAT.PERMS, permGroups: CAT.PERM_GROUPS,
       roles: sp ? ROLESVC.list(db, sp).map(r => ({ id: r.key, label: r.label, rank: r.rank,
         desc: r.desc, perms: r.perms, cats: r.cats })) : [],
       espace: me && me.space ? { id: me.space.id, nom: me.space.name, etat: me.space.state } : null,
@@ -2186,7 +2201,7 @@ async function route(req, res) {
         // ⚠️ On efface la note de quelqu'un d'autre seulement si l'on
         // encadre l'équipe : une note est un avis signé, pas un brouillon
         // commun, et l'effacer sans trace serait réécrire une décision.
-        if (n.by_id !== me.id && !me.perms.includes('accounts.manage'))
+        if (n.by_id !== me.id && !me.perms.includes('accounts.role'))
           return fail(res, 403, 'Cette note est d’un collègue : seul son auteur ou un responsable la retire.');
         db.prepare('DELETE FROM player_notes WHERE id = ?').run(n.id);
         audit(me, 'joueur.note.suppression', `${n.player_key} — de ${n.by_name}`, ip);
@@ -2275,7 +2290,7 @@ async function route(req, res) {
         const m = parNom.get(String(st.pseudo).toLowerCase()) || { pris:0, refuses:0, clos:0, attente:[], sanctions:0, actions:0, marques:0, dernier:0 };
         return {
           id: st.id, pseudo: st.pseudo, avatar: st.avatar, suspendu: !!st.disabled,
-          roles: ROLESVC.resolve(db, me.spaceId, (parseRoles(st.roles).length ? parseRoles(st.roles) : [CAT.canon(st.role)])).labels,
+          roles: ROLESVC.resolve(db, me.spaceId, (parseRoles(st.roles).length ? parseRoles(st.roles) : [CAT.canonKey(st.role)])).labels,
           reportsPris: m.pris, reportsRefuses: m.refuses, reportsClos: m.clos,
           attenteMoyenne: moy(m.attente), sanctions: m.sanctions,
           marquesTraite: m.marques, actionsPanneau: m.actions,
@@ -2593,7 +2608,10 @@ async function route(req, res) {
        « effacez-le ».
        ============================================================ */
     if (p.startsWith('/api/rgpd/')) {
-      if (!need('players.gdpr')) return;
+      // Exporter et EFFACER sont deux droits distincts : l'un rend une
+      // copie, l'autre détruit sans retour.
+      if (method === 'GET' && !need('players.export')) return;
+      if (method === 'DELETE' && !need('players.erase')) return;
       const brut = decodeURIComponent(p.slice('/api/rgpd/'.length));
       const cle = resolveKey(brut, me.spaceId);
       if (!cle) return fail(res, 404, 'Joueur inconnu dans cet espace.');
@@ -2792,8 +2810,9 @@ async function route(req, res) {
        resynchronisations. Sinon sa décision serait défaite en 15 minutes.
        ============================================================ */
     if (p === '/api/staff') {
-      if (!need('accounts.manage')) return;
+      // Voir la liste et créer un compte sont deux droits distincts.
       if (method === 'GET') {
+        if (!need('accounts.view')) return;
         const lignes = db.prepare(`SELECT id,pseudo,role,roles,manual_roles,source,discord_id,avatar,
                                           disabled,created_at,last_login,platform_admin
                                    FROM staff WHERE space_id = ?`).all(me.spaceId).map(DB.row);
@@ -2815,6 +2834,7 @@ async function route(req, res) {
         });
       }
       if (method === 'POST') {
+        if (!need('accounts.create')) return;
         const b = await readBody(req);
         const pseudo = String(b.pseudo || '').trim();
         const pass = String(b.password || '');
@@ -2845,7 +2865,10 @@ async function route(req, res) {
       }
     }
     if (p.startsWith('/api/staff/')) {
-      if (!need('accounts.manage')) return;
+      // Ouvrir la fiche suppose de voir l'équipe ; CHAQUE geste dessus
+      // (rôle, mot de passe, suspension, suppression) porte ensuite son
+      // propre droit, plus bas.
+      if (!need('accounts.view')) return;
       const id = Number(p.slice('/api/staff/'.length)) || 0;
       const target = DB.row(db.prepare('SELECT * FROM staff WHERE id = ? AND space_id = ?').get(id, me.spaceId));
       if (!target) return fail(res, 404, 'Compte inconnu dans cet espace.');
@@ -2860,6 +2883,7 @@ async function route(req, res) {
         // Attribution MANUELLE : c'est ce que demande un fondateur qui
         // veut trancher lui-même, sans passer par Discord.
         if (Array.isArray(b.roles)) {
+          if (!need('accounts.role')) return;
           const voulus = b.roles.filter(k => ROLESVC.byKey(db, me.spaceId, k));
           for (const k of voulus) {
             const r = ROLESVC.byKey(db, me.spaceId, k);
@@ -2883,6 +2907,7 @@ async function route(req, res) {
            personne se retrouvait dans un compte tout neuf sans rien.
            Relier, c'est dire « c'est la même personne ». */
         if (b.discordId !== undefined) {
+          if (!need('accounts.role')) return;
           const did = String(b.discordId || '').trim();
           // ⚠️ Un compte NÉ de Discord ne change pas d'identifiant :
           // celui-ci EST son identité. Le déplacer donnerait le compte —
@@ -2905,12 +2930,14 @@ async function route(req, res) {
           audit(me, 'staff.discord', `${target.pseudo} → ${did || 'délié'}`, ip);
         }
         if (b.password) {
+          if (!need('accounts.password')) return;
           if (target.source === 'discord') return fail(res, 409, 'Ce compte se connecte par Discord : il n’a pas de mot de passe.');
           if (String(b.password).length < 10) return fail(res, 400, 'Mot de passe trop court (10 caractères minimum).');
           db.prepare('UPDATE staff SET pass=? WHERE id=?').run(AUTH.hash(String(b.password)), id);
           db.prepare('DELETE FROM sessions WHERE staff_id=?').run(id);
         }
         if (b.disabled !== undefined) {
+          if (!need('accounts.disable')) return;
           if (id === me.id) return fail(res, 400, 'Vous ne pouvez pas désactiver votre propre compte.');
           db.prepare('UPDATE staff SET disabled=? WHERE id=?').run(b.disabled ? 1 : 0, id);
           if (b.disabled) db.prepare('DELETE FROM sessions WHERE staff_id=?').run(id);
@@ -2919,6 +2946,7 @@ async function route(req, res) {
         return ok(res, { ok: true });
       }
       if (method === 'DELETE') {
+        if (!need('accounts.remove')) return;
         if (id === me.id) return fail(res, 400, 'Vous ne pouvez pas supprimer votre propre compte.');
         db.prepare('DELETE FROM sessions WHERE staff_id=?').run(id);
         db.prepare('DELETE FROM staff WHERE id=?').run(id);
@@ -3838,7 +3866,7 @@ async function route(req, res) {
                   `${sp.name} → ${Number.isFinite(t) ? new Date(t).toLocaleDateString('fr-FR') : 'sans fin'}`, ip, sid);
           }
           if (b.proprietaire !== undefined) {
-            if (!platNeed('plat.espace.modifier')) return;
+            if (!platNeed('plat.espace.proprietaire')) return;
             const cand = b.proprietaire ? DB.row(db.prepare('SELECT * FROM staff WHERE id = ?').get(Number(b.proprietaire))) : null;
             if (b.proprietaire && !cand) return fail(res, 404, 'Ce compte n’existe pas.');
             if (cand && Number(cand.space_id) !== sid)
@@ -4228,6 +4256,7 @@ server.listen(CFG.port, CFG.host, () => {
   appliquerEcheances();
   planifierSauvegardes();
   rattraperRubriques();
+  rattraperPermissions();
   // Un premier balayage peu après le démarrage : un redémarrage est
   // justement le moment où l'on ignore ce qui s'est passé pendant l'arrêt.
   setTimeout(() => balayerAcces('démarrage').catch(e => console.error('[acces]', e.message)), 20000).unref();

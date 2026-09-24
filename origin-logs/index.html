@@ -1000,6 +1000,10 @@ select.input{height:36px}
 .check:has(input:checked){background:var(--vio-wash);border-color:var(--vio);color:var(--ink)}
 .check.fam:has(input:checked){background:color-mix(in srgb,var(--fam) 15%,transparent);border-color:color-mix(in srgb,var(--fam) 50%,transparent)}
 .grp-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fam,var(--muted));margin-bottom:5px}
+/* Droits regroupés par thème dans l'éditeur de rôles. */
+.perm-grp{margin-top:10px}
+.perm-grp:first-child{margin-top:2px}
+.perm-grp-t{font-size:11px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
 
 /* ---------- espaces de logs ---------- */
 .space-card{
@@ -3231,15 +3235,18 @@ function actionBar(key, name, banni) {
   // ⚠️ Séparé de la modération, et pour de bon : répondre à « donnez-moi
   // ce que vous avez sur moi » ou « effacez-le » n'est pas une sanction,
   // c'est une obligation. Les mélanger ferait chercher l'un dans l'autre.
-  if (!can('players.gdpr')) return mod;
+  // ⚠️ Exporter et EFFACER sont deux droits SÉPARÉS : on n'affiche chaque
+  // bouton qu'à qui le porte. Répondre à « donnez-moi ce que vous avez sur
+  // moi » et « effacez-le » ne sont pas la même responsabilité.
+  const rg = [];
+  if (can('players.export')) rg.push(`<button class="btn sm" data-rgpd="export" data-key="${esc(key)}" data-name="${esc(name)}">Exporter ses données</button>`);
+  if (can('players.erase'))  rg.push(`<button class="btn sm grave" data-rgpd="effacer" data-key="${esc(key)}" data-name="${esc(name)}">Effacer ses données</button>`);
+  if (!rg.length) return mod;
   // Et on les ÉLOIGNE : la séparation logique ne servait à rien tant que
   // les deux boutons rouges restaient à trente pixels l'un de l'autre.
   return mod + `<div class="block" style="margin-top:6px;padding-top:14px;border-top:1px solid var(--edge)">
     <h3 class="eyebrow">Données personnelles</h3>
-    <div class="tools">
-      <button class="btn sm" data-rgpd="export" data-key="${esc(key)}" data-name="${esc(name)}">Exporter ses données</button>
-      <button class="btn sm grave" data-rgpd="effacer" data-key="${esc(key)}" data-name="${esc(name)}">Effacer ses données</button>
-    </div>
+    <div class="tools">${rg.join('')}</div>
     <span class="lite-m">L’export rend un fichier remettable au joueur. L’effacement retire
     ses évènements, son dossier et ses captures ; un bannissement en cours est conservé
     sans son nom — sinon l’effacement servirait à lever une sanction.</span>
@@ -4278,7 +4285,7 @@ async function demoApi(path, opts) {
   const ecrit = opts && opts.method && opts.method !== 'GET';
   if (path.startsWith('/api/roles')) {
     if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true }; }
-    return { roles: demoRolesCatalogue(), perms: DEMO_PERMS, cats: CATS, groups: GROUPS,
+    return { roles: demoRolesCatalogue(), perms: DEMO_PERMS, permGroups: DEMO_PERM_GROUPS, cats: CATS, groups: GROUPS,
              monRang: 100, effectifs: { fondateur:1, administrateur:1, moderateur:2, helper:1, animateur:1, gerant_anticheat:1 } };
   }
   if (path.startsWith('/api/staff')) {
@@ -4332,6 +4339,7 @@ async function demoApi(path, opts) {
   return { ok:true };
 }
 let DEMO_PERMS = [];
+let DEMO_PERM_GROUPS = [];
 
 /* ---------- l'équipe de la plateforme, en démonstration ----------
    Miroir de api/plateforme.js : l'aperçu doit montrer EXACTEMENT les
@@ -4674,9 +4682,28 @@ function carteRole(r, effectif, d) {
       </div>
       <div>
         <div class="grp-label" style="--fam:var(--vio-hi)">Droits</div>
-        <div class="checks">${(d.perms || DEMO_PERMS).map(pm => `<label class="check">
-          <input type="checkbox" data-perm="${esc(pm.id)}" data-role="${esc(r.key)}" ${r.perms.includes(pm.id) ? 'checked' : ''}>
-          ${esc(pm.label)}</label>`).join('')}</div>
+        ${(() => {
+          const perms = d.perms || DEMO_PERMS;
+          const grps = (d.permGroups && d.permGroups.length) ? d.permGroups
+                     : [{ id:'', label:'Droits' }];
+          const carte = pm => `<label class="check">
+            <input type="checkbox" data-perm="${esc(pm.id)}" data-role="${esc(r.key)}" ${r.perms.includes(pm.id) ? 'checked' : ''}>
+            ${esc(pm.label)}</label>`;
+          // Un droit sans groupe connu ne disparaît pas : il tombe dans un
+          // dernier bloc « Autres ».
+          const casees = new Set();
+          let html = grps.map(g => {
+            const items = perms.filter(pm => (pm.group || '') === g.id);
+            items.forEach(pm => casees.add(pm.id));
+            if (!items.length) return '';
+            return `<div class="perm-grp"><div class="perm-grp-t">${esc(g.label)}</div>
+              <div class="checks">${items.map(carte).join('')}</div></div>`;
+          }).join('');
+          const restants = perms.filter(pm => !casees.has(pm.id));
+          if (restants.length) html += `<div class="perm-grp"><div class="perm-grp-t">Autres</div>
+            <div class="checks">${restants.map(carte).join('')}</div></div>`;
+          return html;
+        })()}
       </div>
       <div class="block">
         <div class="grp-label" style="--fam:var(--ink-2)">Rubriques accessibles</div>
@@ -6106,22 +6133,45 @@ async function choisirProprietaire(spaceId) {
    rôles qui seront livrés, pas une approximation.
    ============================================================ */
 (function () {
+  // Miroir de api/catalogue.js — mêmes droits, mêmes groupes.
+  DEMO_PERM_GROUPS = [
+    { id:'journaux', label:'Journaux' },
+    { id:'joueurs',  label:'Dossiers joueurs' },
+    { id:'actions',  label:'Actions en jeu' },
+    { id:'donnees',  label:'Données personnelles (RGPD)' },
+    { id:'equipe',   label:'Équipe & comptes' },
+    { id:'panneau',  label:'Réglages du panneau' }
+  ];
   DEMO_PERMS = [
-    { id:'logs.view',           label:'Lire les journaux' },
-    { id:'logs.mark',           label:'Épingler et marquer traité' },
-    { id:'logs.export',         label:'Exporter en CSV (réservé au Fondateur)' },
-    { id:'players.view',        label:'Ouvrir un dossier joueur' },
-    { id:'players.identifiers', label:'Voir les identifiants' },
-    { id:'actions.warn',        label:'Avertir un joueur' },
-    { id:'actions.kick',        label:'Expulser un joueur' },
-    { id:'actions.ban',         label:'Bannir un joueur' },
-    { id:'actions.unban',       label:'Lever un bannissement' },
-    { id:'actions.give',        label:'Rendre un item ou de l’argent' },
-    { id:'screens.request',     label:'Demander une capture de l’écran d’un joueur' },
-    { id:'audit.view',          label:'Consulter le journal du panneau' },
-    { id:'accounts.manage',     label:'Gérer les comptes staff' },
-    { id:'settings.discord',    label:'Configurer la liaison Discord' },
-    { id:'roles.manage',        label:'Créer les rôles et régler leurs accès' }
+    { id:'logs.view',           group:'journaux', label:'Lire les journaux' },
+    { id:'logs.mark',           group:'journaux', label:'Épingler et marquer un évènement traité' },
+    { id:'logs.export',         group:'journaux', label:'Exporter les journaux en CSV' },
+    { id:'players.view',        group:'joueurs',  label:'Ouvrir un dossier joueur' },
+    { id:'players.identifiers', group:'joueurs',  label:'Voir les identifiants (license, Discord, Steam)' },
+    { id:'players.notes',       group:'joueurs',  label:'Écrire et retirer les notes d’équipe' },
+    { id:'players.inventory',   group:'joueurs',  label:'Voir l’inventaire d’un joueur' },
+    { id:'screens.request',     group:'joueurs',  label:'Demander une capture de l’écran d’un joueur' },
+    { id:'actions.warn',        group:'actions',  label:'Avertir un joueur' },
+    { id:'actions.kick',        group:'actions',  label:'Expulser un joueur' },
+    { id:'actions.ban',         group:'actions',  label:'Bannir un joueur' },
+    { id:'actions.unban',       group:'actions',  label:'Lever un bannissement' },
+    { id:'actions.give',        group:'actions',  label:'Rendre un item ou de l’argent' },
+    { id:'actions.heal',        group:'actions',  label:'Soigner un joueur (vie et armure)' },
+    { id:'actions.revive',      group:'actions',  label:'Réanimer un joueur' },
+    { id:'actions.freeze',      group:'actions',  label:'Geler ou dégeler un joueur' },
+    { id:'actions.message',     group:'actions',  label:'Envoyer un message à un joueur en jeu' },
+    { id:'players.export',      group:'donnees',  label:'Exporter les données d’un joueur (RGPD)' },
+    { id:'players.erase',       group:'donnees',  label:'Effacer les données d’un joueur (RGPD) — irréversible' },
+    { id:'team.stats',          group:'equipe',   label:'Voir l’activité de l’équipe (qui traite quoi)' },
+    { id:'accounts.view',       group:'equipe',   label:'Voir les comptes de l’équipe' },
+    { id:'accounts.create',     group:'equipe',   label:'Créer un compte staff' },
+    { id:'accounts.role',       group:'equipe',   label:'Changer le rôle d’un compte, le lier à Discord' },
+    { id:'accounts.password',   group:'equipe',   label:'Réinitialiser le mot de passe d’un compte' },
+    { id:'accounts.disable',    group:'equipe',   label:'Suspendre ou réactiver un compte' },
+    { id:'accounts.remove',     group:'equipe',   label:'Supprimer un compte staff — irréversible' },
+    { id:'audit.view',          group:'panneau',  label:'Consulter le journal du panneau' },
+    { id:'settings.discord',    group:'panneau',  label:'Configurer la liaison Discord et le bot' },
+    { id:'roles.manage',        group:'panneau',  label:'Créer les rôles et régler leurs accès' }
   ];
   const TOUT = DEMO_PERMS.map(p => p.id);
   const g = id => CATS.filter(c => c.group === id).map(c => c.id);
@@ -6193,14 +6243,14 @@ async function openTeam() {
                    placeholder="identifiant Discord (17 à 20 chiffres)" inputmode="numeric">
           </div>` }
           <div class="tools">
-            <button class="btn sm primary" data-memsave="${m.id}">Enregistrer les rôles</button>
+            ${can('accounts.role') ? `<button class="btn sm primary" data-memsave="${m.id}">Enregistrer les rôles</button>` : ''}
             ${m.estMoi ? '' : `
-              <button class="btn sm" data-memoff="${m.id}" data-off="${m.disabled ? 1 : 0}">${m.disabled ? 'Réactiver' : 'Suspendre'}</button>
-              <button class="btn sm danger" data-memdel="${m.id}" data-memname="${esc(m.pseudo)}">Retirer du staff</button>`}
+              ${can('accounts.disable') ? `<button class="btn sm" data-memoff="${m.id}" data-off="${m.disabled ? 1 : 0}">${m.disabled ? 'Réactiver' : 'Suspendre'}</button>` : ''}
+              ${can('accounts.remove') ? `<button class="btn sm danger" data-memdel="${m.id}" data-memname="${esc(m.pseudo)}">Retirer du staff</button>` : ''}`}
           </div>
         </div>
       </div>`).join('')}</div>
-    <div class="block">
+    ${can('accounts.create') ? `<div class="block">
       <h3 class="eyebrow">Ajouter un compte par mot de passe</h3>
       <span class="lite-m">Réservé aux cas où Discord ne convient pas : un compte de secours, un prestataire.</span>
       <div class="field"><label for="nsPseudo">Pseudo</label><input class="input" id="nsPseudo" autocomplete="off"></div>
@@ -6208,7 +6258,7 @@ async function openTeam() {
       <div class="field"><label for="nsRole">Rôle</label>
         <select class="input" id="nsRole">${attribuables.map(r => `<option value="${r.id}">${esc(r.label)}</option>`).join('')}</select></div>
       <button class="btn primary" id="nsGo" style="justify-self:start">Créer le compte</button>
-    </div>`);
+    </div>` : ''}`);
 }
 
 /* Les raccordements se règlent à la coche, pas au bouton « Enregistrer » :
@@ -7276,7 +7326,7 @@ function peindreIdentite() {
   // ⚠️ Ces boutons agissent DANS un environnement : hors de tout espace
   // ils ouvriraient des écrans que l'API refuse (409).
   const b = (sel, on) => { const n = $(sel); if (n) n.hidden = !on; };
-  b('#teamBtn',     dans && can('accounts.manage'));
+  b('#teamBtn',     dans && can('accounts.view'));
   b('#rolesBtn',    dans && can('roles.manage'));
   b('#discordBtn',  dans && can('settings.discord'));
   b('#auditBtn',    dans && can('audit.view'));

@@ -40,7 +40,8 @@ const PERMS = [
   { id:'plat.journal',         groupe:'supervision', label:'Lire le journal d’administration' },
 
   { id:'plat.espace.creer',    groupe:'espaces', label:'Créer un espace client' },
-  { id:'plat.espace.modifier', groupe:'espaces', label:'Modifier un espace (nom, Discord, rétention, propriétaire)' },
+  { id:'plat.espace.modifier', groupe:'espaces', label:'Modifier un espace (nom, Discord, rétention)' },
+  { id:'plat.espace.proprietaire', groupe:'espaces', label:'Transférer la propriété d’un espace' },
   { id:'plat.espace.fermer',   groupe:'espaces', label:'Fermer et rouvrir un espace' },
   { id:'plat.espace.supprimer',groupe:'espaces', label:'Supprimer un espace et tous ses journaux' },
   { id:'plat.espace.cle',      groupe:'espaces', label:'Régénérer la clé d’ingestion, délivrer une clé de bot' },
@@ -72,7 +73,7 @@ const ROLES_DEFAUT = [
   { key:'technique', label:'Technique', rang:80, builtin:1,
     desc:'Met en service, dépanne, sauvegarde. Ne touche pas aux tarifs.',
     perms:['plat.voir','plat.verifier','plat.journal','plat.espace.creer','plat.espace.modifier',
-           'plat.espace.cle','plat.branchement','plat.integration','plat.entrer',
+           'plat.espace.proprietaire','plat.espace.cle','plat.branchement','plat.integration','plat.entrer',
            'plat.sauvegardes','plat.restaurer','plat.export','plat.equipe.voir'] },
   { key:'support', label:'Support', rang:60, builtin:1,
     desc:'Répond aux clients, entre chez eux pour comprendre. Ne crée ni ne supprime.',
@@ -80,7 +81,7 @@ const ROLES_DEFAUT = [
            'plat.integration','plat.equipe.voir'] },
   { key:'commercial', label:'Commercial', rang:50, builtin:1,
     desc:'Ouvre des comptes clients et pose les formules. N’entre pas dans leurs journaux.',
-    perms:['plat.voir','plat.espace.creer','plat.espace.modifier','plat.facturation',
+    perms:['plat.voir','plat.espace.creer','plat.espace.modifier','plat.espace.proprietaire','plat.facturation',
            'plat.formules','plat.branchement','plat.equipe.voir'] },
   { key:'observateur', label:'Observateur', rang:10, builtin:1,
     desc:'Lecture seule : l’état de la plateforme, sans aucune action.',
@@ -103,6 +104,21 @@ function seed(db) {
     if (existe.get(r.key)) continue;
     ins.run(r.key, r.label, r.rang, JSON.stringify(r.perms === '*' ? PERM_IDS : r.perms),
             r.builtin || 0, r.desc || null);
+  }
+  // ⚠️ Rattrapage idempotent : « transférer la propriété » a été détaché
+  // de « modifier ». Les rôles déjà en base qui pouvaient modifier gardent
+  // donc ce geste, plutôt que de le perdre en silence. La Direction ('*')
+  // l'a toujours par construction ; on ne touche pas aux rôles sur mesure
+  // qui n'avaient pas « modifier ».
+  const maj = db.prepare('UPDATE platform_roles SET perms = ? WHERE key = ?');
+  for (const r of db.prepare('SELECT key, perms FROM platform_roles').all()) {
+    if (r.key === 'direction') continue;
+    let l; try { l = JSON.parse(r.perms || '[]'); } catch { l = []; }
+    if (!Array.isArray(l)) continue;
+    if (l.includes('plat.espace.modifier') && !l.includes('plat.espace.proprietaire')) {
+      l.push('plat.espace.proprietaire');
+      maj.run(JSON.stringify(l), r.key);
+    }
   }
 }
 
