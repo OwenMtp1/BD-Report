@@ -108,7 +108,7 @@ les commandes `sudo -u origin` de ce document.
 🛑 **Donne à Owen la ligne affichée** (elle commence par `ssh-ed25519` et finit
 par `vps-origin-logs`). Il l'ajoute sur GitHub :
 
-> `github.com/OwenMtp1/origin-logs` -> **Settings** -> **Deploy keys** ->
+> `github.com/OwenMtp1/Origin-Logs` -> **Settings** -> **Deploy keys** ->
 > **Add deploy key** -> coller -> **laisser « Allow write access » DÉCOCHÉ**
 
 Cette machine doit pouvoir **lire** les mises à jour, jamais rien renvoyer.
@@ -122,7 +122,7 @@ sudo -u origin -H ssh -o StrictHostKeyChecking=accept-new -T git@github.com
 GitHub doit répondre quelque chose comme :
 
 ```
-Hi OwenMtp1/origin-logs! You've successfully authenticated,
+Hi OwenMtp1/Origin-Logs! You've successfully authenticated,
 but GitHub does not provide shell access.
 ```
 
@@ -137,7 +137,7 @@ attends, ne regénère pas la clé.
 ```bash
 sudo mkdir -p /srv/origin-logs
 sudo chown origin:origin /srv/origin-logs
-sudo -u origin -H git clone git@github.com:OwenMtp1/origin-logs.git /srv/origin-logs
+sudo -u origin -H git clone git@github.com:OwenMtp1/Origin-Logs.git /srv/origin-logs
 ```
 
 **Vérification** — ces quatre chemins doivent exister :
@@ -163,7 +163,7 @@ journal que personne ne lit. Si l'adresse est en `https`, corrige-la :
 
 ```bash
 sudo -u origin -H git -C /srv/origin-logs remote set-url origin \
-     git@github.com:OwenMtp1/origin-logs.git
+     git@github.com:OwenMtp1/Origin-Logs.git
 ```
 
 ---
@@ -575,7 +575,7 @@ jour ne peut ni les écraser ni les lire.
 |---|---|---|
 | `Cannot find module 'node:sqlite'` | Node trop ancien | Reprends l'étape 1. Aucun paquet npm ne remplace ça |
 | `Permission denied (publickey)` | La clé de déploiement n'est pas encore posée, **ou** un `sudo -u origin` sans `-H` | Vérifie le `-H`. Sinon attends qu'Owen ajoute la clé ; ne la regénère pas |
-| `could not read Username for 'https://github.com'` | Le dépôt a été cloné en `https` : la clé de déploiement ne sert qu'en SSH | `git remote set-url origin git@github.com:OwenMtp1/origin-logs.git` (voir étape 3) |
+| `could not read Username for 'https://github.com'` | Le dépôt a été cloné en `https` : la clé de déploiement ne sert qu'en SSH | `git remote set-url origin git@github.com:OwenMtp1/Origin-Logs.git` (voir étape 3) |
 | `SERVER_KEY est vide` au démarrage | `api/.env` absent, illisible, ou lancé du mauvais dossier | `WorkingDirectory` doit être `/srv/origin-logs/api` ; `sudo -u origin -H cat api/.env` doit fonctionner |
 | Le service redémarre en boucle | La vraie erreur est dans le journal | `journalctl -u origin-logs -n 40 --no-pager` |
 | `EADDRINUSE` | Le port 8080 est déjà pris | `ss -ltnp \| grep 8080` ; change `PORT=` dans `.env` **et** dans le Caddyfile |

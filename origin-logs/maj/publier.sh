@@ -19,7 +19,7 @@
 # ============================================================
 set -euo pipefail
 
-DEPOT=${DEPOT:-https://github.com/OwenMtp1/origin-logs}
+DEPOT=${DEPOT:-https://github.com/OwenMtp1/Origin-Logs}
 DOSSIER=${DOSSIER:-origin-logs}
 BRANCHE_TAMPON=origin-logs-seul
 ETIQUETTE=${1:-}

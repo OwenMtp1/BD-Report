@@ -28,7 +28,7 @@ dessus donnerait accès à tout cela à la machine d'un tiers.
 Sur GitHub : **New repository** → nom `origin-logs` → **Private** → ne cochez
 rien d'autre (ni README, ni .gitignore : le contenu arrive juste après).
 
-Dépôt en service : **`OwenMtp1/origin-logs`** (privé).
+Dépôt en service : **`OwenMtp1/Origin-Logs`** (privé).
 
 ### 2. Publier — une commande
 
