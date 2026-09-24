@@ -45,19 +45,29 @@ qu'on peut retrouver chez soi.
 
 ### 3. Publier une VERSION
 
-Les VPS sont livrés sur `SUIVRE=etiquette` (des joueurs tournent dessus) : ils
-ne prennent **que** les versions publiées. Une version se publie en donnant un
-numéro :
+⚠️ **Ce dépôt EST le canal de versions.** L'atelier, c'est l'autre dépôt (privé,
+celui où l'on développe au jour le jour). On ne pousse ICI que ce qui est bon
+pour les joueurs — donc **publier, c'est mettre en ligne**. Rien ne transite ici
+« pour voir » : l'aperçu se fait ailleurs (l'artefact de démonstration).
 
 ```bash
-bash origin-logs/maj/publier.sh v1.3
+bash origin-logs/maj/publier.sh          # publie l'état validé -> les VPS l'ont dans 10 min
+bash origin-logs/maj/publier.sh v1.3     # …avec un numéro de version en label
 ```
 
-Les machines ne bougent que là — dans les dix minutes, tests puis retour arrière
-si besoin. **Entre deux versions**, `publier.sh` sans numéro met à jour la
-branche du dépôt (utile pour l'aperçu) **sans rien envoyer chez personne** :
-tant qu'aucune nouvelle étiquette n'est posée, les serveurs des joueurs ne
-bougent pas.
+Les VPS suivent la branche de ce dépôt : puisqu'elle ne reçoit que des versions
+validées, ils ne prennent que des versions validées. Dans les dix minutes qui
+suivent un `publier.sh` : tests, redémarrage, retour arrière automatique si le
+panneau ne répond plus.
+
+⚠️ **Le numéro de version est un LABEL, pas ce que suit la machine.** Le VPS
+regarde le commit de branche, pas le tag. Le tag ne sert qu'à retrouver « la
+v1.3 » d'un coup d'œil, et son envoi est best-effort : s'il ne passe pas (des
+relais git coupent les pushs de tag), **la version est livrée quand même**.
+
+⚠️ **Ne rien pousser d'inachevé ici.** Comme ce dépôt est le canal de versions,
+un `publier.sh` lancé sur du code non validé partirait chez les joueurs. Le
+travail en cours reste dans l'atelier (l'autre dépôt) jusqu'à ce qu'il soit bon.
 
 ⚠️ Le script de mise à jour trie les étiquettes **par numéro de version, pas
 par date** : `v1.10` passe après `v1.9`, et une correction publiée plus tard

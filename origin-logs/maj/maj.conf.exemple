@@ -8,24 +8,24 @@ DOSSIER=/srv/origin-logs
 UTILISATEUR=origin
 SERVICE=origin-logs
 
-# ⚠️ CE QUE LA MACHINE SUIT — c'est le seul réglage qui se décide, et il
-# change tout.
+# ⚠️ CE QUE LA MACHINE SUIT.
 #
-#   branche    elle prend CHAQUE commit poussé, dans les minutes qui
-#              suivent. Confortable pendant qu'on construit ; à éviter
-#              dès que de vrais clients écrivent dans ce panneau, car
-#              aucune relecture ne s'intercale.
+# Ce dépôt-ci N'EST PAS l'atelier de l'éditeur : c'est son CANAL DE
+# VERSIONS. L'éditeur travaille dans un autre dépôt (privé, à lui) et ne
+# pousse ICI que les versions qu'il a validées. Autrement dit : tout ce
+# qui arrive dans ce dépôt est, par construction, une version bonne pour
+# les joueurs. La machine peut donc suivre la branche sans risque —
+# rien d'inachevé n'y transite.
 #
-#   etiquette  elle ne bouge QUE lorsque vous publiez une version
-#              (« git tag v1.3 && git push --tags »). On continue de
-#              pousser du code tous les jours sans que rien n'arrive ici.
+#   branche    elle prend chaque commit de la branche ci-dessous. Comme
+#              cette branche ne reçoit QUE des versions validées, cela
+#              revient à « ne prendre que les versions publiées ».
 #
-# Passer de l'un à l'autre : changez ce mot, rien d'autre.
+#   etiquette  variante : elle ne bouge qu'aux versions étiquetées
+#              (git tag). Utile si un jour l'atelier et le canal de
+#              versions ne font qu'un seul dépôt. Ce n'est pas le cas ici.
 #
-# Livré sur « etiquette » : ce panneau fait tourner un serveur avec de
-# vrais joueurs, on ne veut donc QUE des versions publiées et validées,
-# jamais un commit en cours de route.
-SUIVRE=etiquette
+SUIVRE=branche
 BRANCHE=main
 
 # L'adresse que le script interroge APRÈS redémarrage pour savoir si le

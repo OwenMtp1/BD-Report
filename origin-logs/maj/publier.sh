@@ -43,11 +43,18 @@ echo "  $(git log --oneline -1 "$BRANCHE_TAMPON")"
 git push -f "$DEPOT" "$BRANCHE_TAMPON:main"
 
 if [ -n "$ETIQUETTE" ]; then
-  # ⚠️ L'étiquette se pose sur le commit de l'histoire EXTRAITE, pas sur
-  # celui d'ici : c'est celle-là que les VPS voient.
+  # ⚠️ L'ÉTIQUETTE EST UN LABEL HUMAIN, PAS CE QUE LA MACHINE SUIT. Les
+  # VPS suivent la branche du canal de versions (ce dépôt ne reçoit que
+  # des versions validées) : le tag ne sert qu'à retrouver « la v1.3 »
+  # d'un coup d'œil. Son push est donc best-effort — s'il échoue (certains
+  # relais coupent les pushs de tag), la version est QUAND MÊME livrée,
+  # puisque c'est le commit de branche, déjà poussé, qui compte.
   git tag -f "$ETIQUETTE" "$SHA" >/dev/null
-  git push -f "$DEPOT" "refs/tags/$ETIQUETTE"
-  echo "  étiquette $ETIQUETTE publiée — les VPS réglés sur « etiquette » la prendront."
+  if git push -f "$DEPOT" "refs/tags/$ETIQUETTE" 2>/dev/null; then
+    echo "  étiquette $ETIQUETTE posée."
+  else
+    echo "  (étiquette $ETIQUETTE non poussée — sans effet sur la livraison, c'est un label)"
+  fi
 fi
 
 git branch -D "$BRANCHE_TAMPON" >/dev/null

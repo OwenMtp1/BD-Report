@@ -445,14 +445,15 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now origin-logs-maj.timer
 ```
 
-Le réglage est déjà celui qu'il faut : **`SUIVRE=etiquette`** (livré ainsi). Ce
-panneau fera tourner un serveur avec de vrais joueurs — la machine ne prendra
-donc **que les versions qu'Owen publie et valide** (`v1.0`, `v1.1`…), jamais un
-commit en cours de route. Rien à changer.
+Rien à changer au réglage : il est déjà bon. Ce dépôt est le **canal de
+versions** d'Owen — il y travaille dans un autre dépôt, à lui, et ne pousse ici
+que les versions qu'il a validées. Autrement dit, **tout ce qui arrive dans ce
+dépôt est déjà bon pour les joueurs** : la machine peut le suivre sans risque,
+rien d'inachevé n'y transite.
 
 À l'installation, la machine tourne sur la dernière version publiée. Ensuite,
-chaque fois qu'Owen publie une nouvelle version, elle arrive ici dans les dix
-minutes — tests puis retour arrière automatique si quelque chose ne répond plus.
+chaque fois qu'Owen publie, elle arrive ici dans les dix minutes — tests, puis
+retour arrière automatique si quelque chose ne répond plus.
 
 **Vérification** :
 
