@@ -13,17 +13,18 @@ suivre.
 2. **Un nom de domaine** pointant sur l'IP du VPS (enregistrement `A`), par
    exemple `logs.mon-serveur.fr`. Sans lui l'installation fonctionne, mais en
    `http://` sur l'IP : bon pour essayer, pas pour s'en servir.
-3. **Owen, joignable pendant vingt minutes.** L'installation lui demandera une
-   seule chose, une fois : ajouter une clé sur son dépôt, trois clics. C'est ce
-   qui permet ensuite au panneau de **se mettre à jour tout seul**, sans que
-   personne ait quoi que ce soit à faire.
+3. **Le dépôt GitHub, déjà en place sur VOTRE compte.** Vous hébergez ce projet
+   sur votre propre dépôt (voir `METTRE-SUR-MON-DEPOT.md`). L'installation y
+   ajoute une clé de lecture (trois clics, sur VOTRE dépôt) : c'est ce qui
+   permet au panneau de **se mettre à jour tout seul**. Les mises à jour, elles,
+   sont poussées sur ce dépôt par l'éditeur, à qui vous avez donné l'accès.
 
 Rien à acheter, rien d'autre à installer : le produit **n'a aucune dépendance
 npm**. Il tourne avec Node seul.
 
-Onze étapes, comptez une demi-heure. Si Owen préfère ne pas donner d'accès à son
-dépôt, voyez l'**annexe** à la fin : l'installation se fait alors depuis une
-archive, mais les mises à jour redeviennent manuelles.
+Onze étapes, comptez une demi-heure. Si vous préférez ne pas mettre de clé de
+déploiement, voyez l'**annexe** à la fin : l'installation se fait alors depuis
+une archive, mais les mises à jour redeviennent manuelles.
 
 ---
 
@@ -105,15 +106,16 @@ sudo -u origin -H cat /var/lib/origin-logs/.ssh/id_ed25519.pub
 ira chercher la clé dans `/root/.ssh`, où elle n'est pas. Garde-le sur **toutes**
 les commandes `sudo -u origin` de ce document.
 
-🛑 **Donne à Owen la ligne affichée** (elle commence par `ssh-ed25519` et finit
-par `vps-origin-logs`). Il l'ajoute sur GitHub :
+🛑 **Ajoute la ligne affichée sur TON dépôt** (elle commence par `ssh-ed25519`
+et finit par `vps-origin-logs`) :
 
-> `github.com/OwenMtp1/Origin-Logs` -> **Settings** -> **Deploy keys** ->
+> `github.com/TON-COMPTE/TON-DEPOT` -> **Settings** -> **Deploy keys** ->
 > **Add deploy key** -> coller -> **laisser « Allow write access » DÉCOCHÉ**
 
-Cette machine doit pouvoir **lire** les mises à jour, jamais rien renvoyer.
+Cette machine doit pouvoir **lire** les mises à jour, jamais rien renvoyer
+(l'éditeur pousse les mises à jour depuis son côté, avec son propre accès).
 
-**Vérification**, une fois qu'Owen a confirmé :
+**Vérification**, une fois la clé ajoutée :
 
 ```bash
 sudo -u origin -H ssh -o StrictHostKeyChecking=accept-new -T git@github.com
@@ -122,7 +124,7 @@ sudo -u origin -H ssh -o StrictHostKeyChecking=accept-new -T git@github.com
 GitHub doit répondre quelque chose comme :
 
 ```
-Hi OwenMtp1/Origin-Logs! You've successfully authenticated,
+Hi TON-COMPTE/TON-DEPOT! You've successfully authenticated,
 but GitHub does not provide shell access.
 ```
 
@@ -134,10 +136,13 @@ attends, ne regénère pas la clé.
 
 ## Étape 3 — Cloner
 
+⚠️ **Remplace `TON-COMPTE/TON-DEPOT`** par l'adresse réelle de ton dépôt GitHub
+(celui où tu as poussé le projet, cf. `METTRE-SUR-MON-DEPOT.md`).
+
 ```bash
 sudo mkdir -p /srv/origin-logs
 sudo chown origin:origin /srv/origin-logs
-sudo -u origin -H git clone git@github.com:OwenMtp1/Origin-Logs.git /srv/origin-logs
+sudo -u origin -H git clone git@github.com:TON-COMPTE/TON-DEPOT.git /srv/origin-logs
 ```
 
 **Vérification** — ces quatre chemins doivent exister :
@@ -163,7 +168,7 @@ journal que personne ne lit. Si l'adresse est en `https`, corrige-la :
 
 ```bash
 sudo -u origin -H git -C /srv/origin-logs remote set-url origin \
-     git@github.com:OwenMtp1/Origin-Logs.git
+     git@github.com:TON-COMPTE/TON-DEPOT.git
 ```
 
 ---
@@ -180,19 +185,6 @@ minimum, demande-le-lui s'il ne l'a pas dit :
 cd /srv/origin-logs/api
 sudo -u origin -H node setup.js NOM
 ```
-
-> **🔒 Si l'éditeur a verrouillé ce panneau (activation signée).** Quand la
-> ligne `LICENCE_PUBKEY=…` est présente dans `api/.env`, `setup.js` **refuse**
-> de créer le fondateur sans un **jeton d'activation** signé par l'éditeur. Il
-> ne prend alors ni pseudo ni mot de passe en argument : les deux sont **dans
-> le jeton**. Demande le jeton à l'éditeur, puis :
-> ```bash
-> cd /srv/origin-logs/api
-> sudo -u origin -H node setup.js --activation "LE-JETON-FOURNI"
-> ```
-> De même, **créer un environnement** dans le panneau demandera un jeton
-> d'activation (une clé signée par l'éditeur) : c'est l'éditeur qui délivre le
-> pseudo/mot de passe fondateur ET la clé de chaque environnement.
 
 🛑 **La sortie affiche deux choses qui ne seront plus jamais affichées :**
 
@@ -575,7 +567,7 @@ jour ne peut ni les écraser ni les lire.
 |---|---|---|
 | `Cannot find module 'node:sqlite'` | Node trop ancien | Reprends l'étape 1. Aucun paquet npm ne remplace ça |
 | `Permission denied (publickey)` | La clé de déploiement n'est pas encore posée, **ou** un `sudo -u origin` sans `-H` | Vérifie le `-H`. Sinon attends qu'Owen ajoute la clé ; ne la regénère pas |
-| `could not read Username for 'https://github.com'` | Le dépôt a été cloné en `https` : la clé de déploiement ne sert qu'en SSH | `git remote set-url origin git@github.com:OwenMtp1/Origin-Logs.git` (voir étape 3) |
+| `could not read Username for 'https://github.com'` | Le dépôt a été cloné en `https` : la clé de déploiement ne sert qu'en SSH | `git remote set-url origin git@github.com:TON-COMPTE/TON-DEPOT.git` (voir étape 3) |
 | `SERVER_KEY est vide` au démarrage | `api/.env` absent, illisible, ou lancé du mauvais dossier | `WorkingDirectory` doit être `/srv/origin-logs/api` ; `sudo -u origin -H cat api/.env` doit fonctionner |
 | Le service redémarre en boucle | La vraie erreur est dans le journal | `journalctl -u origin-logs -n 40 --no-pager` |
 | `EADDRINUSE` | Le port 8080 est déjà pris | `ss -ltnp \| grep 8080` ; change `PORT=` dans `.env` **et** dans le Caddyfile |
