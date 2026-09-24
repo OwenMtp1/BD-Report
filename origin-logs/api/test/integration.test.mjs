@@ -79,6 +79,17 @@ t('⚠️ screenshot-basic manque, et l’écran dira pourquoi c’est gênant',
 t('Renewed-Banking est connue mais pas branchée',
   a1.connues.some(c=>c.id==='Renewed-Banking' && c.cat==='boutique_caisse'));
 t('et mon_braquage tombe dans les inconnues', a1.inconnues.some(r=>r.nom==='mon_braquage'));
+// ⚠️ Les gestes sur les joueurs qui DÉPENDENT d'une ressource sont repérés
+// dans l'inventaire déjà reçu : ox_inventory est là → « Voir l'inventaire »
+// est prêt ; aucun métier ambulancier → « Réanimer » reste à confirmer.
+const invCap = a1.capacites.find(c=>c.geste==='inventaire');
+t('l’inventaire est détecté sur ox_inventory', invCap && invCap.ressource==='ox_inventory', JSON.stringify(invCap));
+const reaCap = a1.capacites.find(c=>c.geste==='reanimation');
+t('la réanimation reste à confirmer sans métier ambulancier',
+  reaCap && reaCap.ressource===null && reaCap.candidats.includes('esx_ambulancejob'), JSON.stringify(reaCap));
+t('les gestes universels sont annoncés', Array.isArray(a1.gestesUniversels)
+  && a1.gestesUniversels.includes('Soigner') && a1.gestesUniversels.includes('Geler / dégeler'),
+  JSON.stringify(a1.gestesUniversels));
 t('une clé fausse ne dépose rien', (await poster('/api/inventory','pas-la-bonne',{ressources:[]})).status===401);
 
 sect('Niveau 2 — le scan du code');

@@ -79,6 +79,51 @@ local function executer(a)
     --   RegisterNetEvent('origin_logs:rendre', function(src, payload) ... end)
     TriggerEvent('origin_logs:rendre', src, a.payload or {}, a.by, a.reason)
     return accuser(a.id, true, 'transmis à origin_logs:rendre')
+
+  elseif a.type == 'heal' then
+    if not src then return accuser(a.id, false, 'joueur hors ligne') end
+    -- Vie et armure au maximum : une native côté client, aucun framework
+    -- requis. Le client répond « fait » de son côté.
+    TriggerClientEvent('origin_logs:soigner', src)
+    return accuser(a.id, true, 'soigné')
+
+  elseif a.type == 'revive' then
+    if not src then return accuser(a.id, false, 'joueur hors ligne') end
+    -- On tente d'abord le système ambulancier du serveur, pour que le
+    -- framework SACHE que le joueur n'est plus mort. Sans système reconnu,
+    -- réanimation générique côté client (relève le corps, remet la vie) —
+    -- ça débloque un joueur coincé même si le framework l'ignore.
+    local via = Framework.ReanimerParJob(src)
+    if via then return accuser(a.id, true, 'réanimé via ' .. via) end
+    TriggerClientEvent('origin_logs:reanimer', src)
+    return accuser(a.id, true, 'réanimé (générique — aucun système ambulancier reconnu)')
+
+  elseif a.type == 'freeze' or a.type == 'unfreeze' then
+    if not src then return accuser(a.id, false, 'joueur hors ligne') end
+    local geler = a.type == 'freeze'
+    TriggerClientEvent('origin_logs:geler', src, geler)
+    return accuser(a.id, true, geler and 'gelé' or 'dégelé')
+
+  elseif a.type == 'message' then
+    if not src then return accuser(a.id, false, 'joueur hors ligne') end
+    -- Deux canaux, pour être vu quel que soit le HUD : le chat, et un
+    -- évènement que votre ressource peut transformer en notification.
+    TriggerClientEvent('chat:addMessage', src, {
+      color = { 139, 92, 246 }, multiline = true,
+      args = { 'STAFF' .. (a.by and (' — ' .. a.by) or ''), a.reason or '' }
+    })
+    TriggerClientEvent('origin_logs:message', src, a.reason, a.by)
+    return accuser(a.id, true, 'message affiché en jeu')
+
+  elseif a.type == 'inventory' then
+    if not src then return accuser(a.id, false, 'joueur hors ligne') end
+    -- ⚠️ Le RÉSULTAT est la charge utile : le panneau vient le relire.
+    -- On rend du JSON quand on a su lire, un message clair sinon — les
+    -- deux passent par le même « accuser », mais seul le succès porte
+    -- une liste.
+    local items, systeme = Framework.Inventaire(src)
+    if not items then return accuser(a.id, false, systeme or 'inventaire illisible') end
+    return accuser(a.id, true, json.encode({ systeme = systeme, items = items }))
   end
 
   accuser(a.id, false, 'type d\'action inconnu : ' .. tostring(a.type))

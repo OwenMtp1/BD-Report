@@ -113,6 +113,23 @@ t('le modérateur ne gère pas les comptes', stM.status===403);
 const noReason=await call('/api/actions',{method:'POST',body:JSON.stringify({type:'kick',key:'license:aaa',name:'Luca'})});
 t('un motif est obligatoire', noReason.status===400);
 
+// 11 bis. gestes « en jeu » — soigner sans motif, message avec texte, inventaire différé
+const heal=await(await call('/api/actions',{method:'POST',body:JSON.stringify({type:'heal',key:'license:aaa',name:'Luca Moreau'})})).json();
+t('soigner ne réclame pas de motif', heal.ok===true, JSON.stringify(heal));
+const msgVide=await call('/api/actions',{method:'POST',body:JSON.stringify({type:'message',key:'license:aaa',name:'Luca'})});
+t('un message vide est refusé', msgVide.status===400);
+const msg=await(await call('/api/actions',{method:'POST',body:JSON.stringify({type:'message',key:'license:aaa',name:'Luca Moreau',reason:'Rejoins le salon staff.'})})).json();
+t('un message avec texte passe', msg.ok===true);
+const inv=await(await call('/api/actions',{method:'POST',body:JSON.stringify({type:'inventory',key:'license:aaa',name:'Luca Moreau'})})).json();
+t('demande d’inventaire acceptée avec un id', inv.ok===true && typeof inv.id==='number', JSON.stringify(inv));
+const invAvant=await(await call('/api/actions/'+inv.id)).json();
+t('le résultat n’est pas là tout de suite', invAvant.status==='pending', invAvant.status);
+// Le serveur de jeu accuse avec la liste ; c'est le même chemin qu'une capture.
+await fetch(B+'/api/actions/ack',{method:'POST',headers:{'content-type':'application/json','x-origin-key':KEY},
+  body:JSON.stringify({id:inv.id,ok:true,result:JSON.stringify({systeme:'ox_inventory',items:[{name:'phone',label:'Téléphone',count:1}]})})});
+const invApres=await(await call('/api/actions/'+inv.id)).json();
+t('le panneau relit l’inventaire', invApres.status==='done' && JSON.parse(invApres.result).items[0].name==='phone', invApres.status);
+
 // 12. audit
 cookie=cookieF;
 const au=await(await call('/api/audit')).json();

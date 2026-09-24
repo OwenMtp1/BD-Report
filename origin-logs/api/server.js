@@ -1152,7 +1152,19 @@ const ACTION_PERM = { warn:'actions.warn', kick:'actions.kick', ban:'actions.ban
                       // Regarder l'écran de quelqu'un est une action de
                       // modération comme une autre : elle porte un motif,
                       // elle s'inscrit au journal, et elle est traçable.
-                      screenshot:'screens.request' };
+                      screenshot:'screens.request',
+                      // Les gestes « en jeu » : chacun son droit, chacun
+                      // tracé. `unfreeze` partage le droit de `freeze` —
+                      // geler et dégeler sont le même pouvoir.
+                      heal:'actions.heal', revive:'actions.revive',
+                      freeze:'actions.freeze', unfreeze:'actions.freeze',
+                      message:'actions.message', inventory:'players.inventory' };
+
+// ⚠️ TOUT EST TRACÉ, mais tout n'exige pas un motif. Une sanction
+// (avertir, expulser, bannir, capturer, rendre) se justifie ; réanimer ou
+// soigner un joueur coincé, non — l'imposer ferait inventer des motifs
+// vides. `message` n'a pas de motif : son motif EST le message.
+const ACTION_SANS_MOTIF = new Set(['unban', 'heal', 'revive', 'freeze', 'unfreeze', 'inventory']);
 const iAction = db.prepare(`INSERT INTO actions(type,target_key,target_name,target_sid,payload,reason,by_id,by_name,created_at,space_id)
                             VALUES(?,?,?,?,?,?,?,?,?,?)`);
 
@@ -1163,7 +1175,11 @@ function doAction(me, b, ip) {
   const key = resolveKey(S(b.key), me.spaceId), name = S(b.name) || 'Joueur inconnu';
   if (!key) return { error: 'Joueur non identifié.' };
   const reason = String(b.reason || '').trim().slice(0, 300);
-  if (type !== 'unban' && reason.length < 3) return { error: 'Un motif est obligatoire.' };
+  // `message` porte son texte dans `reason` : c'est le contenu, il est
+  // obligatoire. Les autres suivent la règle du motif.
+  if (type === 'message' && !reason) return { error: 'Un message est obligatoire.' };
+  else if (type !== 'message' && !ACTION_SANS_MOTIF.has(type) && reason.length < 3)
+    return { error: 'Un motif est obligatoire.' };
 
   const days = Math.max(0, Math.min(3650, Number(b.days) || 0));
   const expireAt = type === 'ban' && days > 0 ? now() + days * 86400000 : null;
@@ -1175,13 +1191,23 @@ function doAction(me, b, ip) {
     type === 'kick'  ? `${me.pseudo} a expulsé ${name} — ${reason}` :
     type === 'ban'   ? `${me.pseudo} a banni ${name} ${days ? 'pour ' + days + ' jour(s)' : 'définitivement'} — ${reason}` :
     type === 'unban' ? `${me.pseudo} a levé le bannissement de ${name}` :
+    type === 'heal'    ? `${me.pseudo} a soigné ${name}` :
+    type === 'revive'  ? `${me.pseudo} a réanimé ${name}` :
+    type === 'freeze'  ? `${me.pseudo} a gelé ${name}` :
+    type === 'unfreeze'? `${me.pseudo} a dégelé ${name}` :
+    type === 'message' ? `${me.pseudo} a écrit à ${name} : ${reason}` :
+    type === 'inventory' ? `${me.pseudo} a consulté l’inventaire de ${name}` :
                        `${me.pseudo} a rendu ${payload.label || 'un objet'} à ${name}`;
 
   ingest([{
     ts: now(),
-    cat: type === 'screenshot' ? 'ecran_joueur' : type === 'give' ? 'admin'
+    // Les gestes « en jeu » sont des actions staff : ils vivent dans la
+    // rubrique « Action staff », comme le noclip ou le spawn.
+    cat: type === 'screenshot' ? 'ecran_joueur'
+       : ['give','heal','revive','freeze','unfreeze','message','inventory'].includes(type) ? 'admin'
        : (type === 'ban' || type === 'unban') ? 'bans' : 'sanctions',
-    sev: type === 'ban' ? (days ? 'alerte' : 'critique') : type === 'unban' ? 'info' : 'notice',
+    sev: type === 'ban' ? (days ? 'alerte' : 'critique')
+       : ['unban','message','inventory','heal','unfreeze'].includes(type) ? 'info' : 'notice',
     actor: { name: me.pseudo, staff: true },
     target: { name, key },
     msg,
@@ -2725,6 +2751,16 @@ async function route(req, res) {
     if (p === '/api/actions' && method === 'GET') {
       const rows = db.prepare('SELECT * FROM actions WHERE space_id = ? ORDER BY created_at DESC LIMIT 100').all(me.spaceId).map(DB.row);
       return ok(res, { actions: rows });
+    }
+    // ⚠️ LE RÉSULTAT D'UNE ACTION SE RELIT ICI. L'inventaire ne revient
+    // pas tout de suite : le panneau dépose la demande, le serveur de jeu
+    // la traite puis accuse avec les items, et le panneau vient les
+    // chercher — exactement comme une capture d'écran.
+    if (p.startsWith('/api/actions/') && method === 'GET') {
+      const id = Number(p.slice('/api/actions/'.length)) || 0;
+      const a = DB.row(db.prepare('SELECT * FROM actions WHERE id = ? AND space_id = ?').get(id, me.spaceId));
+      if (!a) return fail(res, 404, 'Action inconnue.');
+      return ok(res, { id: a.id, type: a.type, status: a.status, result: a.result || null, doneAt: a.done_at });
     }
     if (p === '/api/audit' && method === 'GET') {
       if (!need('audit.view')) return;

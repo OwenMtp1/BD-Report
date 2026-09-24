@@ -155,6 +155,53 @@ function deviner(ev) {
 }
 
 /* ---------- le verdict ---------- */
+/* ============================================================
+   LES CAPACITÉS D'ACTION — « où sont les systèmes qui exécutent
+   les gestes du panneau ? »
+   ⚠️ Réanimer et voir l'inventaire NE SONT PAS UNIVERSELS : ils
+   dépendent du système d'inventaire et du métier ambulancier que CE
+   serveur fait tourner. On les repère dans la liste des ressources déjà
+   reçue (l'inventaire de niveau 1) : le staff sait ainsi, avant même
+   d'essayer, si « Voir l'inventaire » a une chance d'aboutir ici, et
+   avec quelle ressource.
+   Le premier reconnu gagne — l'ordre va du plus répandu au plus rare. */
+const CAPACITES = [
+  { geste:'inventaire', label:'Voir l’inventaire', ressources:[
+      { id:'ox_inventory', label:'ox_inventory' },
+      { id:'qb-inventory', label:'qb-inventory' },
+      { id:'qs-inventory', label:'qs-inventory' },
+      { id:'origen_inventory', label:'origen_inventory' },
+      { id:'codem-inventory', label:'codem-inventory' } ] },
+  { geste:'reanimation', label:'Réanimer', ressources:[
+      { id:'esx_ambulancejob', label:'esx_ambulancejob' },
+      { id:'qb-ambulancejob', label:'qb-ambulancejob' },
+      { id:'qbx_ambulancejob', label:'qbx_ambulancejob' },
+      { id:'wasabi_ambulance', label:'wasabi_ambulance' },
+      { id:'ars_ambulancejob', label:'ars_ambulancejob' } ] }
+];
+
+// ⚠️ Les gestes UNIVERSELS n'ont pas besoin de détection : soigner,
+// geler, écrire un message et expulser/bannir sont des natives ou des
+// décisions du panneau. On le DIT, pour qu'un « non détecté » sur
+// l'inventaire ne laisse pas croire que tout est en panne.
+const GESTES_UNIVERSELS = ['Soigner', 'Geler / dégeler', 'Envoyer un message',
+                           'Avertir', 'Expulser', 'Bannir'];
+
+function capacites(res, presente) {
+  const framework = res.length; // inutile ici, gardé lisible
+  return CAPACITES.map(c => {
+    const trouve = c.ressources.find(r => {
+      const p = presente(r.id);
+      return p && p.etat === 'started';
+    });
+    return { geste:c.geste, label:c.label,
+             // Le nom exact de la ressource qui l'assure, ou null : c'est
+             // ce qui distingue « prêt » de « à confirmer sur le serveur ».
+             ressource: trouve ? trouve.label : null,
+             candidats: c.ressources.map(r => r.label) };
+  });
+}
+
 function analyser(inventaire, scan) {
   const res = (inventaire && inventaire.ressources) || [];
   const parNom = new Map(res.map(r => [normal(r.nom), r]));
@@ -210,6 +257,9 @@ function analyser(inventaire, scan) {
     inconnues: inconnues.map(r => ({ nom:r.nom, etat:r.etat, version:r.version || '' })),
     protegees: (scan && scan.protegees) || [],
     candidats, ecartes,
+    // Ce que le panneau peut EXÉCUTER ici, et par quelle ressource.
+    capacites: capacites(res, presente),
+    gestesUniversels: GESTES_UNIVERSELS,
     rubriquesCouvertes: [...new Set(natives.filter(n => n.etat === 'branche')
       .flatMap(n => n.donne).concat(candidats.map(c => c.cat)))]
   };
@@ -274,4 +324,4 @@ function lua(choix, nomEspace) {
   return lignes.join('\n');
 }
 
-module.exports = { NATIF, CONNUES, INDICES, BRUIT, deviner, estBruit, analyser, lua };
+module.exports = { NATIF, CONNUES, INDICES, BRUIT, CAPACITES, deviner, estBruit, analyser, lua };

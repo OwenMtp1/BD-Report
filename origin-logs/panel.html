@@ -777,6 +777,12 @@ mark{
 .fact-k{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .fact-v{font-variation-settings:'wdth' 84;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;margin-top:3px}
 
+.inv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:6px}
+.inv-item{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  padding:7px 10px;border:1px solid var(--edge);border-radius:8px;background:var(--panel-soft,rgba(255,255,255,.02))}
+.inv-nom{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inv-nb{font-family:var(--mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
+
 .banner{
   padding:10px 13px;border-radius:8px;font-size:12.5px;
   border:1px solid var(--c);background:color-mix(in srgb,var(--c) 10%,transparent);color:var(--ink);
@@ -2280,7 +2286,25 @@ const Demo = {
       par: e.d.demandePar, motif: e.d.motif, priseA: e.t, demandeeA: e.t - 2400,
       poids: 0, largeur: 1920, hauteur: 1080, delai: 2400 })) };
   },
-  async action() { throw new Error('Mode démonstration : aucune sanction n’est envoyée à un serveur.'); },
+  // En démonstration, aucun serveur de jeu : les gestes « aboutissent »
+  // visuellement pour qu'on voie l'écran, mais rien ne part. L'inventaire
+  // rend un jeu d'exemple, histoire de montrer à quoi ressemble la vue.
+  async action(b) {
+    const t = (b && b.type) || '';
+    if (t === 'inventory') return { ok:true, id:'demo-inv', demo:true };
+    const dit = { heal:'soigné', revive:'réanimé', freeze:'gelé', unfreeze:'dégelé',
+                  message:'message affiché', warn:'averti', kick:'expulsé', ban:'banni',
+                  unban:'bannissement levé' }[t] || 'action';
+    return { ok:true, demo:true, message:'Démonstration : ' + dit + ' — rien n’est envoyé à un vrai serveur.' };
+  },
+  async actionResult() {
+    // La photo d'un inventaire de démonstration.
+    return { status:'done', result: JSON.stringify({ systeme:'ox_inventory (démonstration)', items:[
+      { name:'phone', label:'Téléphone', count:1 }, { name:'water', label:'Bouteille d’eau', count:3 },
+      { name:'bread', label:'Pain', count:2 }, { name:'lockpick', label:'Crochet', count:1 },
+      { name:'weapon_pistol', label:'Pistolet', count:1 }, { name:'ammo-9', label:'Munitions 9mm', count:48 },
+      { name:'bandage', label:'Bandage', count:5 }, { name:'money', label:'Argent liquide', count:1240 } ] }) };
+  },
   stream(cb) {
     const h = setInterval(() => {
       const e = makeEvent(Date.now()); e.html = true;
@@ -2313,6 +2337,9 @@ const Api = {
   screens(q) { return api('/api/screens?' + qs({ q, limit: 24 })); },
   mark(id, kind, on) { return api('/api/marks', { method: 'POST', body: JSON.stringify({ id, kind, on }) }); },
   action(b) { return api('/api/actions', { method: 'POST', body: JSON.stringify(b) }); },
+  // Le résultat d'une action différée (l'inventaire) : le serveur de jeu
+  // le renvoie une fois lu, le panneau vient le relire par son id.
+  actionResult(id) { return api('/api/actions/' + encodeURIComponent(id)); },
   stream(cb) {
     let src;
     try { src = new EventSource('/api/stream'); } catch (e) { return () => {}; }
@@ -3064,6 +3091,14 @@ function actionBar(key, name, banni) {
   if (can('actions.ban') && !banni) b.push(`<button class="btn sm danger" data-act="ban" data-key="${esc(key)}" data-name="${esc(name)}">Bannir</button>`);
   if (can('actions.unban') && banni) b.push(`<button class="btn sm" data-act="unban" data-key="${esc(key)}" data-name="${esc(name)}">Lever le bannissement</button>`);
   if (can('actions.give')) b.push(`<button class="btn sm" data-act="give" data-key="${esc(key)}" data-name="${esc(name)}">Rendre un bien</button>`);
+  // Gestes « en jeu » : ils agissent sur un joueur EN LIGNE. Le motif est
+  // facultatif (soigner n'est pas une sanction), mais tout reste au journal.
+  if (can('actions.heal'))   b.push(`<button class="btn sm" data-act="heal" data-key="${esc(key)}" data-name="${esc(name)}">Soigner</button>`);
+  if (can('actions.revive')) b.push(`<button class="btn sm" data-act="revive" data-key="${esc(key)}" data-name="${esc(name)}">Réanimer</button>`);
+  if (can('actions.freeze')) b.push(`<button class="btn sm" data-act="freeze" data-key="${esc(key)}" data-name="${esc(name)}">Geler</button>`);
+  if (can('actions.freeze')) b.push(`<button class="btn sm" data-act="unfreeze" data-key="${esc(key)}" data-name="${esc(name)}">Dégeler</button>`);
+  if (can('actions.message')) b.push(`<button class="btn sm" data-act="message" data-key="${esc(key)}" data-name="${esc(name)}">Envoyer un message</button>`);
+  if (can('players.inventory')) b.push(`<button class="btn sm" data-act="inventory" data-key="${esc(key)}" data-name="${esc(name)}">Voir l’inventaire</button>`);
   // Regarder l'écran de quelqu'un est une action de modération comme une
   // autre : elle porte un motif et s'inscrit au journal.
   if (can('screens.request')) b.push(`<button class="btn sm" data-act="screenshot" data-key="${esc(key)}" data-name="${esc(name)}">Demander une capture</button>`);
@@ -3262,20 +3297,37 @@ async function openDossier(key) {
 let pendingAction = null;
 const DUREES = [[0,'Définitif'],[1,'1 jour'],[3,'3 jours'],[7,'7 jours'],[14,'14 jours'],[30,'30 jours']];
 const TITRES = { warn:'Avertir', kick:'Expulser', ban:'Bannir', unban:'Lever le bannissement',
-                 give:'Rendre un bien', screenshot:'Demander une capture' };
+                 give:'Rendre un bien', screenshot:'Demander une capture',
+                 heal:'Soigner', revive:'Réanimer', freeze:'Geler', unfreeze:'Dégeler',
+                 message:'Envoyer un message', inventory:'Voir l’inventaire' };
+// ⚠️ Miroir de ACTION_SANS_MOTIF côté serveur : ces gestes n'exigent pas de
+// motif. Les tenir alignés évite qu'un bouton refuse ce que l'API accepte.
+const SANS_MOTIF = new Set(['unban','heal','revive','freeze','unfreeze','inventory']);
 
 function askAction(type, key, name) {
+  // L'inventaire n'est pas une décision à confirmer : c'est une lecture. Il
+  // suit son propre chemin (demander, attendre, afficher), sans dialogue.
+  if (type === 'inventory') return demanderInventaire(key, name);
   pendingAction = { type, key, name };
   $('#dlgTitle').textContent = `${TITRES[type]} — ${name}`;
   $('#dlgOk').className = 'btn ' + (type === 'ban' ? 'danger' : 'primary');
   $('#dlgOk').textContent = TITRES[type];
+  const enJeu = ['heal','revive','freeze','unfreeze','message'].includes(type);
   $('#dlgBody').innerHTML = `
     ${type === 'ban' ? `<div class="banner" style="--c:var(--warn)">Le joueur sera déconnecté et sa reconnexion refusée. La sanction entre au registre avec votre pseudo.</div>` : ''}
     ${type === 'unban' ? `<div class="banner" style="--c:var(--ok)">Le joueur pourra se reconnecter immédiatement.</div>` : ''}
     ${type === 'screenshot' ? `<div class="banner" style="--c:var(--check)">L’image de son écran sera prise <b>telle qu’elle est maintenant</b> et déposée dans « Écran du joueur ». Le joueur doit être <b>en ligne</b>. Votre pseudo, la date et le motif restent attachés à la capture, et chaque consultation ultérieure est inscrite au journal du panneau.</div>` : ''}
-    ${type !== 'unban' ? `<div class="field" style="margin-top:12px">
-      <label for="dlgReason">Motif${type === 'give' ? ' (ticket, contexte)' : ''}</label>
-      <input class="input" id="dlgReason" placeholder="${type === 'give' ? 'Remboursement — ticket #412' : type === 'screenshot' ? 'Soupçon de menu de triche — report #218' : 'RDM sur Legion Square'}" maxlength="300">
+    ${type === 'heal' ? `<div class="banner" style="--c:var(--ok)">Vie et armure remises au maximum. Le joueur doit être <b>en ligne</b>. Aucun framework requis.</div>` : ''}
+    ${type === 'revive' ? `<div class="banner" style="--c:var(--ok)">Le joueur est relevé s’il est à terre. On tente d’abord le système ambulancier du serveur, sinon une réanimation générique. Il doit être <b>en ligne</b>.</div>` : ''}
+    ${type === 'freeze' ? `<div class="banner" style="--c:var(--check)">Le joueur sera immobilisé sur place jusqu’au dégel. Il doit être <b>en ligne</b>.</div>` : ''}
+    ${type === 'unfreeze' ? `<div class="banner" style="--c:var(--ok)">Le joueur pourra de nouveau se déplacer.</div>` : ''}
+    ${type === 'message' ? `<div class="banner" style="--c:var(--check)">Votre message s’affiche en jeu (chat et notification), attribué au staff. Le joueur doit être <b>en ligne</b>.</div>` : ''}
+    ${type === 'message' ? `<div class="field" style="margin-top:12px">
+      <label for="dlgReason">Message au joueur</label>
+      <textarea class="input" id="dlgReason" rows="3" maxlength="300" placeholder="Merci de rejoindre le salon d’assistance pour régler votre situation."></textarea>
+    </div>` : (!SANS_MOTIF.has(type) || enJeu) ? `<div class="field" style="margin-top:12px">
+      <label for="dlgReason">Motif${type === 'give' ? ' (ticket, contexte)' : enJeu ? ' (facultatif)' : ''}</label>
+      <input class="input" id="dlgReason" placeholder="${type === 'give' ? 'Remboursement — ticket #412' : type === 'screenshot' ? 'Soupçon de menu de triche — report #218' : enJeu ? 'Débloqué après un bug de collision' : 'RDM sur Legion Square'}" maxlength="300">
     </div>` : ''}
     ${type === 'ban' ? `<div class="field" style="margin-top:10px">
       <label for="dlgDays">Durée</label>
@@ -3305,7 +3357,11 @@ async function confirmAction() {
   }
   const { type, key, name } = pendingAction;
   const reason = ($('#dlgReason') && $('#dlgReason').value.trim()) || '';
-  if (type !== 'unban' && reason.length < 3) return toast('Un motif d’au moins 3 caractères est obligatoire.');
+  // Le message EST son propre contenu : il est obligatoire. Les sanctions et
+  // la capture exigent un motif. Les gestes « en jeu » l'acceptent vide.
+  if (type === 'message' && reason.length < 1) return toast('Écrivez le message à envoyer.');
+  else if (type !== 'message' && !SANS_MOTIF.has(type) && reason.length < 3)
+    return toast('Un motif d’au moins 3 caractères est obligatoire.');
   const days = $('#dlgDays') ? Number($('#dlgDays').value) : 0;
   const label = $('#dlgLabel') ? $('#dlgLabel').value.trim() : '';
   $('#dlgOk').disabled = true;
@@ -3316,6 +3372,58 @@ async function confirmAction() {
     refresh();
   } catch (e) { toast(e.message || 'Action refusée.'); }
   finally { $('#dlgOk').disabled = false; }
+}
+
+/* ---------- lire l'inventaire d'un joueur ----------
+   ⚠️ DEUX TEMPS. Le serveur de jeu n'est pas au bout du fil : le panneau
+   dépose la demande, la ressource la lit à son tour de boucle, puis renvoie
+   le contenu. On attend donc le résultat par petites relances plutôt que de
+   figer l'écran, et on abandonne proprement si rien ne revient. */
+async function demanderInventaire(key, name) {
+  openSheet(name || 'Inventaire', 'Inventaire en jeu', { name: name || '?' },
+    `<div class="block"><h3 class="eyebrow">Inventaire</h3>
+      <span class="lite-m" id="invEtat">Demande envoyée au serveur de jeu…</span></div>`);
+  let dep;
+  try { dep = await DS.action({ type:'inventory', key, name }); }
+  catch (e) { const el = $('#invEtat'); if (el) el.textContent = e.message || 'Demande refusée.'; return; }
+  const id = dep && dep.id;
+  if (!id) { const el = $('#invEtat'); if (el) el.textContent = 'Le serveur n’a pas accepté la demande.'; return; }
+  // On relit le résultat jusqu'à 20 fois (≈ 20 s) : le temps qu'un tour de
+  // boucle de la ressource passe. La feuille peut être refermée entre-temps —
+  // on s'arrête alors sans rien afficher.
+  for (let i = 0; i < 20; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    if ($('#sheet').hidden) return;
+    let r;
+    try { r = await DS.actionResult(id); } catch (e) { continue; }
+    if (!r || r.status === 'pending' || !r.status) continue;
+    const el = $('#invEtat'); if (!el) return;
+    if (r.status !== 'done') {
+      // Un échec porte un message clair (« joueur hors ligne », « aucun
+      // système d'inventaire reconnu »…) : on l'affiche tel quel.
+      el.textContent = r.result || 'Action en échec.';
+      return;
+    }
+    let charge = null;
+    try { charge = JSON.parse(r.result); } catch (e) {}
+    if (!charge || !Array.isArray(charge.items)) {
+      // Le serveur a répondu, mais sans liste : c'est un message clair
+      // (« aucun système d'inventaire reconnu », « joueur hors ligne »…).
+      el.textContent = r.result || 'Inventaire illisible.';
+      return;
+    }
+    const bloc = $('#invEtat').closest('.block');
+    bloc.innerHTML = `<h3 class="eyebrow">Inventaire — ${esc(charge.systeme || 'système inconnu')}</h3>
+      ${charge.items.length ? `<div class="inv-grid">${charge.items.map(it => `
+        <div class="inv-item">
+          <span class="inv-nom">${esc(it.label || it.name || '?')}</span>
+          <span class="inv-nb">×${Number(it.count) || 1}</span>
+        </div>`).join('')}</div>`
+        : '<span class="lite-m">Sac vide.</span>'}`;
+    return;
+  }
+  const el = $('#invEtat');
+  if (el) el.textContent = 'Pas de réponse du serveur de jeu (le joueur est peut-être hors ligne).';
 }
 
 /* ============================================================
@@ -4856,6 +4964,23 @@ async function ficheIntegration(id, silencieux) {
       ${d.connues.length ? `<span class="lite-m">Connues du catalogue et présentes ici :
         ${d.connues.map(c => esc(c.label) + ' → ' + esc(cat(c.cat))).join(' · ')}.</span>` : ''}
     </div>
+
+    ${(d.capacites || []).length ? `<div class="block">
+      <h3 class="eyebrow">Gestes sur les joueurs</h3>
+      <span class="lite-m">Le scan repère aussi <b>quelle ressource</b> permet les gestes qui en
+        dépendent. Soigner, geler, écrire, avertir, expulser et bannir marchent partout —
+        ils ne dépendent d’aucune ressource.</span>
+      ${d.capacites.map(c => c.ressource
+        ? `<div class="map-row" style="border:none"><span><span class="map-name">${esc(c.label)}</span>
+             <span class="map-desc">assuré par <code>${esc(c.ressource)}</code></span></span>
+             <span class="state" style="--c:var(--ok)">détecté</span></div>`
+        : `<div class="map-row" style="border:none"><span><span class="map-name">${esc(c.label)}</span>
+             <span class="map-desc">aucune ressource reconnue — on tente une méthode générique.
+               Reconnues : ${esc(c.candidats.join(', '))}</span></span>
+             <span class="state" style="--c:var(--warn)">à confirmer</span></div>`).join('')}
+      ${(d.gestesUniversels || []).length ? `<span class="lite-m" style="margin-top:6px">
+        Toujours disponibles : ${d.gestesUniversels.map(esc).join(' · ')}.</span>` : ''}
+    </div>` : ''}
 
     ${d.quandScan ? `<div class="block">
       <h3 class="eyebrow">Ce que le scan a écarté</h3>

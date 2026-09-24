@@ -66,6 +66,11 @@ const PERMS = [
   { id:'actions.ban',          label:'Bannir un joueur' },
   { id:'actions.unban',        label:'Lever un bannissement' },
   { id:'actions.give',         label:'Rendre un item ou de l’argent' },
+  { id:'actions.heal',         label:'Soigner un joueur (vie et armure)' },
+  { id:'actions.revive',       label:'Réanimer un joueur' },
+  { id:'actions.freeze',       label:'Geler ou dégeler un joueur' },
+  { id:'actions.message',      label:'Envoyer un message à un joueur en jeu' },
+  { id:'players.inventory',    label:'Voir l’inventaire d’un joueur' },
   { id:'screens.request',      label:'Demander une capture de l’écran d’un joueur' },
   { id:'players.gdpr',         label:'Exporter et effacer les données d’un joueur (RGPD)' },
   { id:'team.stats',           label:'Voir l’activité de l’équipe (qui traite quoi)' },
@@ -90,7 +95,12 @@ const P = {
   // autre, donc il peut l'accorder à un rôle depuis « Rôles & accès ».
   lire:    ['logs.view', 'logs.mark', 'players.view'],
   moderer: ['actions.warn', 'actions.kick'],
-  bannir:  ['actions.ban', 'actions.unban']
+  bannir:  ['actions.ban', 'actions.unban'],
+  // Les gestes « en jeu » qui aident un joueur sans le sanctionner :
+  // réanimer, soigner, geler, écrire, regarder l'inventaire. On les
+  // regroupe pour qu'un rôle « de terrain » les reçoive d'un bloc.
+  terrain: ['actions.heal', 'actions.revive', 'actions.freeze',
+            'actions.message', 'players.inventory']
 };
 const u = (...l) => [...new Set([].concat(...l))];
 
@@ -120,7 +130,8 @@ const ROLES = {
   },
   gerant_anticheat: {
     label:'Gérant Brigade Anti-Cheat', rank:70,
-    perms: u(P.lire, P.moderer, P.bannir, ['players.identifiers', 'audit.view', 'screens.request', 'players.notes']),
+    perms: u(P.lire, P.moderer, P.bannir, ['players.identifiers', 'audit.view', 'screens.request', 'players.notes',
+             'players.inventory', 'actions.freeze']),
     cats: u(G.moderation, G.joueurs, G.rp),
     desc:'Pilote la lutte contre la triche : détections, bannissements, appels.'
   },
@@ -144,7 +155,7 @@ const ROLES = {
   },
   gerant_animation: {
     label:'Gérant Animation', rank:60,
-    perms: u(P.lire, ['actions.give']),
+    perms: u(P.lire, ['actions.give', 'actions.message', 'actions.heal', 'actions.revive']),
     cats: u(G.joueurs, G.rp, G.boutique),
     desc:'Prépare les events et dédommage les participants.'
   },
@@ -156,9 +167,9 @@ const ROLES = {
   },
   moderateur: {
     label:'Modérateur', rank:50,
-    perms: u(P.lire, P.moderer, ['players.notes']),
+    perms: u(P.lire, P.moderer, P.terrain, ['players.notes']),
     cats: u(G.moderation, G.joueurs, G.rp, G.biens),
-    desc:'Traite les signalements du quotidien : avertir, expulser.'
+    desc:'Traite les signalements du quotidien : avertir, expulser, aider en jeu.'
   },
   anticheat: {
     label:'Brigade Anti-Cheat', rank:45,
@@ -168,10 +179,11 @@ const ROLES = {
   },
   helper: {
     label:'Helper', rank:30,
-    perms: u(['logs.view', 'players.view'], ['actions.warn']),
+    perms: u(['logs.view', 'players.view'], ['actions.warn', 'actions.message', 'actions.heal', 'actions.revive']),
     // Le helper est celui qui PREND les tickets : lui refuser la rubrique
     // des reports reviendrait à lui cacher son propre travail. Il n'a pour
-    // autant rien à voir du reste de la modération.
+    // autant rien à voir du reste de la modération. Il peut aider un joueur
+    // coincé (réanimer, soigner, écrire), pas le sanctionner.
     cats: u(G.joueurs, ['reports']),
     desc:'Accompagne les joueurs, prend les reports et remonte ce qui dépasse.'
   },

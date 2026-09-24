@@ -256,6 +256,32 @@ t('en démo, on entre avec demo / demo', /=== 'demo'\s*\n?\s*&& \$\('#gatePass'\
 t('et un mauvais couple montre l’écran d’erreur, pas le panneau',
   /Démonstration : entrez demo \/ demo/.test(P));
 
+sect('Le profil joueur agit en jeu');
+// ⚠️ Huit gestes demandés sur la fiche d'un joueur. Chacun a son bouton,
+// gardé par sa permission, et le dialogue traite le motif selon le geste.
+t('les boutons existent et portent chacun leur droit',
+  /can\('actions\.heal'\)[\s\S]{0,80}data-act="heal"/.test(P)
+  && /can\('actions\.revive'\)[\s\S]{0,80}data-act="revive"/.test(P)
+  && /can\('actions\.freeze'\)[\s\S]{0,80}data-act="freeze"/.test(P)
+  && /data-act="unfreeze"/.test(P)
+  && /can\('actions\.message'\)[\s\S]{0,80}data-act="message"/.test(P)
+  && /can\('players\.inventory'\)[\s\S]{0,90}data-act="inventory"/.test(P));
+t('⚠️ le miroir de ACTION_SANS_MOTIF vit côté panneau aussi, aligné sur le serveur',
+  /const SANS_MOTIF = new Set\(\['unban','heal','revive','freeze','unfreeze','inventory'\]\)/.test(P));
+t('un message est obligatoire, un motif de geste ne l’est pas',
+  /type === 'message' && reason\.length < 1/.test(P)
+  && /type !== 'message' && !SANS_MOTIF\.has\(type\) && reason\.length < 3/.test(P));
+t('l’inventaire ne passe pas par le dialogue de confirmation',
+  /if \(type === 'inventory'\) return demanderInventaire/.test(P));
+t('⚠️ l’inventaire est LU en deux temps, par relances, sans figer l’écran',
+  /function demanderInventaire/.test(P) && /DS\.actionResult\(id\)/.test(P)
+  && /if \(\$\('#sheet'\)\.hidden\) return;/.test(P));
+t('un échec d’inventaire montre le message clair du serveur',
+  /r\.result \|\| 'Action en échec\.'/.test(P));
+t('la vue d’intégration dit quelle ressource assure chaque geste',
+  /Gestes sur les joueurs/.test(P) && /d\.capacites\.map/.test(P)
+  && /d\.gestesUniversels\.map/.test(P));
+
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);
 process.exit(n===T.length?0:1);

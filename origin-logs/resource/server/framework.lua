@@ -90,3 +90,99 @@ function Framework.TrouverParCle(key)
   end
   return nil
 end
+
+-- ============================================================
+-- LIRE L'INVENTAIRE D'UN JOUEUR
+-- ⚠️ IL N'EXISTE AUCUN CHEMIN UNIVERSEL. Chaque serveur choisit son
+-- système d'inventaire, et ils ne se lisent pas de la même façon. On
+-- essaie les plus répandus, du plus précis au plus général, et l'on rend
+-- `nil` si AUCUN ne répond — le panneau affiche alors « aucun système
+-- d'inventaire reconnu » plutôt qu'une liste vide trompeuse.
+-- Chaque tentative est sous pcall : un export absent ne doit pas casser
+-- l'action, juste passer au suivant.
+-- ============================================================
+local function normItem(nom, label, nombre)
+  return { name = nom or '?', label = label or nom or '?', count = tonumber(nombre) or 1 }
+end
+
+function Framework.Inventaire(src)
+  src = tonumber(src)
+  if not src then return nil, 'joueur introuvable' end
+
+  -- ox_inventory : de loin le plus courant aujourd'hui.
+  if GetResourceState('ox_inventory') == 'started' then
+    local ok, items = pcall(function() return exports.ox_inventory:GetInventoryItems(src) end)
+    if not ok or type(items) ~= 'table' then
+      ok, items = pcall(function() return exports.ox_inventory:GetInventory(src, false) end)
+      if ok and type(items) == 'table' and items.items then items = items.items end
+    end
+    if ok and type(items) == 'table' then
+      local out = {}
+      for _, it in pairs(items) do
+        if type(it) == 'table' and it.name then
+          out[#out + 1] = normItem(it.name, it.label or it.metadata and it.metadata.label, it.count or it.amount)
+        end
+      end
+      return out, 'ox_inventory'
+    end
+  end
+
+  -- QBCore / QBox : les items vivent dans PlayerData.
+  if (Framework.nom == 'qb' or Framework.nom == 'qbox') and Framework.core then
+    local ok, p = pcall(function()
+      if Framework.nom == 'qbox' then return exports.qbx_core:GetPlayer(src) end
+      return Framework.core.Functions.GetPlayer(src)
+    end)
+    if ok and p and p.PlayerData and type(p.PlayerData.items) == 'table' then
+      local out = {}
+      for _, it in pairs(p.PlayerData.items) do
+        if type(it) == 'table' and it.name then
+          out[#out + 1] = normItem(it.name, it.label, it.amount or it.count)
+        end
+      end
+      return out, (Framework.nom == 'qbox' and 'qbx_core' or 'qb-inventory')
+    end
+  end
+
+  -- ESX : getInventory() rend une liste plate.
+  if Framework.nom == 'esx' and Framework.core then
+    local ok, x = pcall(function() return Framework.core.GetPlayerFromId(src) end)
+    if ok and x then
+      local ok2, inv = pcall(function() return x.getInventory() end)
+      if ok2 and type(inv) == 'table' then
+        local out = {}
+        for _, it in pairs(inv) do
+          if type(it) == 'table' and it.name and (it.count or 0) > 0 then
+            out[#out + 1] = normItem(it.name, it.label, it.count)
+          end
+        end
+        return out, 'es_extended'
+      end
+    end
+  end
+
+  return nil, 'aucun système d’inventaire reconnu'
+end
+
+-- RÉANIMER — on privilégie le système ambulancier du serveur (sinon le
+-- framework continuerait de croire le joueur mort). À défaut, on rend
+-- `false` : l'appelant bascule alors sur une réanimation générique
+-- côté client. Rien n'est deviné — on n'appelle un export que si sa
+-- ressource tourne.
+function Framework.ReanimerParJob(src)
+  src = tonumber(src)
+  local systemes = {
+    { 'esx_ambulancejob',  function() TriggerClientEvent('esx_ambulancejob:revive', src) end },
+    { 'qb-ambulancejob',   function() TriggerClientEvent('hospital:client:Revive', src) end },
+    { 'qbx_ambulancejob',  function() TriggerClientEvent('qbx_medical:client:playerRevived', src) end },
+    { 'wasabi_ambulance',  function() TriggerEvent('wasabi_ambulance:revivePlayer', src) end },
+    { 'ars_ambulancejob',  function() TriggerClientEvent('ars_ambulancejob:client:revive', src) end }
+  }
+  for _, s in ipairs(systemes) do
+    if GetResourceState(s[1]) == 'started' then
+      local ok = pcall(s[2])
+      if ok then return s[1] end
+    end
+  end
+  return false
+end
