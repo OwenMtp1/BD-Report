@@ -4,3 +4,9 @@
 # la base : la publier reviendrait à publier tous les journaux.
 api/.env
 api/data/
+
+# ⚠️ ACTIVATION SIGNÉE — la clé PRIVÉE de l'éditeur ne doit JAMAIS être
+# commitée ni copiée sur un VPS : elle seule signe les activations. Le
+# jeton d'activation posé sur un VPS ne l'est pas non plus.
+api/licence-privee.pem
+api/activation.txt

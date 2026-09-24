@@ -25,6 +25,7 @@ const CONSERV = require('./conservation.js');
 const ECO = require('./ecosysteme.js');
 const PLAT = require('./plateforme.js');
 const BRANCH = require('./branchement.js');
+const LIC = require('./licence.js');
 
 /* ---------- configuration ---------- */
 // setup.js écrit un .env ; sans cette lecture, `npm start` réclamerait
@@ -2077,6 +2078,9 @@ async function route(req, res) {
                plateformeRole: me.platRole, plateformeRoleLabel: me.platRole
                  ? ((PLAT.byKey(db, me.platRole) || {}).label || me.platRole) : null },
       platPerms: me.platPerms,
+      // Verrou d'activation de l'éditeur : le panneau adapte l'écran de
+      // création d'environnement (jeton signé exigé) quand il est actif.
+      licence: { enforced: LIC.enforced() },
       espace: me.space ? { id: me.space.id, nom: me.space.name, etat: me.space.state,
                            visite: me.visiting, monEspace: me.homeSpaceId } : null,
       perms: me.perms, cats: me.cats });
@@ -3463,17 +3467,34 @@ async function route(req, res) {
         if (!platNeed('plat.espace.creer')) return;
         const b = await readBody(req);
         const nom = String(b.nom || '').trim().slice(0, 60);
-        if (nom.length < 2) return fail(res, 400, 'Donnez un nom à l’espace.');
+        // Sous activation signée, le nom vient du JETON : on ne l'exige pas
+        // dans le corps. Sinon, il reste obligatoire.
+        if (!LIC.enforced() && nom.length < 2) return fail(res, 400, 'Donnez un nom à l’espace.');
         const idOk = v => !v || /^[0-9]{5,25}$/.test(String(v));
         if (!idOk(b.guildId) || !idOk(b.staffRoleId))
           return fail(res, 400, 'Les identifiants Discord doivent être numériques.');
         // Une clé d'ingestion par espace : celle d'un serveur de jeu
         // n'ouvre jamais les journaux d'un autre.
-        const cle = crypto.randomBytes(24).toString('hex');
+        // ⚠️ ACTIVATION SIGNÉE. Si l'éditeur a posé sa clé publique sur ce
+        // VPS, la clé n'est PAS tirée au hasard ici : elle vient d'un jeton
+        // signé par l'éditeur (le nom aussi). Sans jeton valide, refus.
+        let cle, nomActive = nom;
+        if (LIC.enforced()) {
+          const t = LIC.verify(b.activation);
+          if (!t || t.typ !== 'env')
+            return fail(res, 403, 'Cet environnement doit être activé par un jeton signé de l’éditeur. Demandez-le, puis collez-le ici.');
+          if (t._expire) return fail(res, 403, 'Ce jeton d’activation a expiré. Demandez-en un nouveau à l’éditeur.');
+          if (db.prepare('SELECT 1 FROM spaces WHERE server_key = ?').get(String(t.cle)))
+            return fail(res, 409, 'Ce jeton a déjà servi à créer un environnement.');
+          cle = String(t.cle);
+          if (t.nom) nomActive = String(t.nom).slice(0, 60);
+        } else {
+          cle = crypto.randomBytes(24).toString('hex');
+        }
         const formule = b.formule && PLANS.byKey(db, String(b.formule)) ? String(b.formule) : null;
         const r = db.prepare(`INSERT INTO spaces(name,guild_id,staff_role_id,server_key,state,retention,keep_forever,created_at,created_by)
                               VALUES(?,?,?,?, 'actif', ?,?,?,?)`)
-          .run(nom, S(b.guildId), S(b.staffRoleId), cle,
+          .run(nomActive, S(b.guildId), S(b.staffRoleId), cle,
                Math.max(1, Math.min(3650, Number(b.retention) || CFG.retention)),
                b.conservationIllimitee ? 1 : 0, now(), me.pseudo);
         const sid = DB.num(r.lastInsertRowid);
@@ -3484,7 +3505,7 @@ async function route(req, res) {
         }
         ROLESVC.seed(db, sid);
         audit(me, 'plateforme.espace.creation',
-              `${nom} (#${sid})` + (formule ? ` — formule ${PLANS.byKey(db, formule).label}` : ''), ip, sid);
+              `${nomActive} (#${sid})` + (formule ? ` — formule ${PLANS.byKey(db, formule).label}` : ''), ip, sid);
         // ⚠️ Tracé DÈS LA CRÉATION, pas seulement quand on modifie : sinon
         // le journal ne montrerait que les espaces où quelqu'un a changé
         // d'avis, et pas ceux nés « jamais effacés ».
@@ -3839,7 +3860,21 @@ async function route(req, res) {
           }
           if (b.regenererCle) {
             if (!platNeed('plat.espace.cle')) return;
-            sets.push('server_key = ?'); args.push(crypto.randomBytes(24).toString('hex'));
+            // ⚠️ Sous activation signée, on ne tire pas une clé au hasard :
+            // il faut un nouveau jeton d'environnement signé par l'éditeur.
+            let nouvelleCle;
+            if (LIC.enforced()) {
+              const t = LIC.verify(b.activation);
+              if (!t || t.typ !== 'env')
+                return fail(res, 403, 'La clé ne peut être renouvelée qu’avec un jeton signé de l’éditeur.');
+              if (t._expire) return fail(res, 403, 'Ce jeton d’activation a expiré.');
+              if (db.prepare('SELECT 1 FROM spaces WHERE server_key = ? AND id <> ?').get(String(t.cle), sid))
+                return fail(res, 409, 'Ce jeton a déjà servi à un autre environnement.');
+              nouvelleCle = String(t.cle);
+            } else {
+              nouvelleCle = crypto.randomBytes(24).toString('hex');
+            }
+            sets.push('server_key = ?'); args.push(nouvelleCle);
             audit(me, 'plateforme.cle', `${sp.name} — clé régénérée`, ip, sid);
           }
           // La clé du bot Discord : délivrée à la demande, retirable seule.

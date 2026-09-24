@@ -181,6 +181,19 @@ cd /srv/origin-logs/api
 sudo -u origin -H node setup.js NOM
 ```
 
+> **🔒 Si l'éditeur a verrouillé ce panneau (activation signée).** Quand la
+> ligne `LICENCE_PUBKEY=…` est présente dans `api/.env`, `setup.js` **refuse**
+> de créer le fondateur sans un **jeton d'activation** signé par l'éditeur. Il
+> ne prend alors ni pseudo ni mot de passe en argument : les deux sont **dans
+> le jeton**. Demande le jeton à l'éditeur, puis :
+> ```bash
+> cd /srv/origin-logs/api
+> sudo -u origin -H node setup.js --activation "LE-JETON-FOURNI"
+> ```
+> De même, **créer un environnement** dans le panneau demandera un jeton
+> d'activation (une clé signée par l'éditeur) : c'est l'éditeur qui délivre le
+> pseudo/mot de passe fondateur ET la clé de chaque environnement.
+
 🛑 **La sortie affiche deux choses qui ne seront plus jamais affichées :**
 
 ```

@@ -5311,13 +5311,22 @@ document.addEventListener('input', ev => {
 function creerEnvironnement() {
   if (!ENVS) return toast('Rechargez la liste.');
   const d = ENVS;
-  openSheet('Créer un environnement', 'Un client = un environnement = une clé d’ingestion',
+  const verrou = !!((ME.licence || {}).enforced);
+  openSheet('Créer un environnement', verrou
+      ? 'Activation signée par l’éditeur — collez le jeton fourni'
+      : 'Un client = un environnement = une clé d’ingestion',
     { name: 'Nouveau', hue: 150 }, `
+    ${verrou ? `<div class="banner" style="--c:var(--vio)">Ce panneau est <b>verrouillé par l’éditeur</b> :
+      la clé d’ingestion et le nom viennent d’un <b>jeton d’activation signé</b>. Demandez-le à l’éditeur,
+      puis collez-le ci-dessous — inutile de saisir un nom, il est dans le jeton.</div>
+      <div class="block">
+        <div class="field"><label for="nsActivation">Jeton d’activation de l’éditeur</label>
+          <textarea class="input" id="nsActivation" rows="3" placeholder="eyJ0eXAiOiJlbnYi… .  …"></textarea></div>` : ''}
     ${d.discordGlobal ? '' : `<div class="banner" style="--c:var(--warn)">L’application Discord n’est pas
       configurée (<code>DISCORD_CLIENT_SECRET</code>, <code>DISCORD_BOT_TOKEN</code>) : l’équipe de ce
       client ne pourra pas se connecter avec Discord.</div>`}
     <div class="block">
-      <div class="field"><label for="nsNom">Nom de l’environnement</label>
+      <div class="field" ${verrou ? 'hidden' : ''}><label for="nsNom">Nom de l’environnement</label>
         <input class="input" id="nsNom" placeholder="Los Santos RP" maxlength="60"></div>
       <div class="map-row" style="border:none">
         <input class="input" id="nsGuild" placeholder="ID du serveur Discord du client" inputmode="numeric">
@@ -6387,11 +6396,16 @@ async function creerRole() {
   } catch (e) { toast(e.message); }
 }
 async function creerEspace() {
-  const nom = $('#nsNom').value.trim();
-  if (nom.length < 2) return toast('Donnez un nom à l’espace.');
+  const verrou = !!((ME.licence || {}).enforced);
+  const activation = $('#nsActivation') ? $('#nsActivation').value.trim() : '';
+  const nom = $('#nsNom') ? $('#nsNom').value.trim() : '';
+  if (verrou) {
+    if (!activation) return toast('Collez le jeton d’activation fourni par l’éditeur.');
+  } else if (nom.length < 2) return toast('Donnez un nom à l’espace.');
   try {
     const r = await api('/api/platform/spaces', { method:'POST', body: JSON.stringify({
-      nom, guildId: $('#nsGuild').value.trim(), staffRoleId: $('#nsStaff').value.trim(),
+      nom, activation,
+      guildId: $('#nsGuild').value.trim(), staffRoleId: $('#nsStaff').value.trim(),
       retention: Number($('#nsRet').value),
       conservationIllimitee: $('#nsForever').checked,
       formule: $('#nsPlan').value, echeance: $('#nsEch').value }) });
@@ -7440,6 +7454,7 @@ function applyMe(d) {
   ME.platPerms = d.platPerms || [];
   ME.platRole = d.staff.plateformeRole || null;
   ME.platRoleLabel = d.staff.plateformeRoleLabel || null;
+  ME.licence = d.licence || { enforced: false };
   ME.espace = d.espace || null;
 }
 $('#gateForm').addEventListener('submit', async ev => {

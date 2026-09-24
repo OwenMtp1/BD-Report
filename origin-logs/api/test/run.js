@@ -19,6 +19,7 @@ const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
+const crypto = require('node:crypto');
 
 const RACINE = path.join(__dirname, '..');
 const TRAVAIL = fs.mkdtempSync(path.join(os.tmpdir(), 'origin-logs-test-'));
@@ -67,7 +68,11 @@ const SUITES = [
   { nom: 'equipe', fichier: 'equipe.test.mjs', port: 8913, discord: false,
     botKey: 'cle-du-bot-de-test-0123456789',
     comptes: [['Nyx', 'fondateur', 'motdepassetest123', { discord: '777000111222333444' }],
-              ['Kaleb', 'moderateur', 'motdepassetest456']] }
+              ['Kaleb', 'moderateur', 'motdepassetest456']] },
+  // Activation signée : le serveur démarre avec la clé PUBLIQUE de
+  // l'éditeur (verrou actif) ; le test reçoit la clé PRIVÉE pour signer.
+  { nom: 'licence', fichier: 'licence.test.mjs', port: 8917, discord: false, licence: true,
+    comptes: [['Sup', 'fondateur', 'motdepassesup12345', { plateforme: true }]] }
 ];
 
 const filtre = process.argv.slice(2).filter(a => !a.startsWith('-'));
@@ -128,11 +133,21 @@ function lancer(cmd, args, env, silencieux) {
     semer(fichierDb, s.comptes);
 
     const base = 'http://127.0.0.1:' + s.port;
+    // Pour la suite « licence » : une paire de clés éphémère. Le serveur
+    // ne reçoit que la PUBLIQUE (il vérifie) ; le test reçoit la PRIVÉE
+    // (il signe), exactement comme l'éditeur et le VPS en production.
+    let licPub = '', licPriv = '';
+    if (s.licence) {
+      const kp = crypto.generateKeyPairSync('ed25519');
+      licPub = kp.publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
+      licPriv = kp.privateKey.export({ format: 'pem', type: 'pkcs8' });
+    }
     const env = {
       PORT: String(s.port), SERVER_KEY: CLE, DB_FILE: fichierDb,
       PANEL_DIR: path.join(RACINE, '..'),
       SCREEN_DIR: path.join(TRAVAIL, s.nom + '-screens'),
       ...(s.botKey ? { BOT_KEY: s.botKey } : {}),
+      ...(s.licence ? { LICENCE_PUBKEY: licPub } : {}),
       ...(s.discord ? {
         FAUX_DISCORD: 'http://127.0.0.1:' + FAUX_PORT,
         DISCORD_SITE: 'http://127.0.0.1:' + FAUX_PORT,
@@ -153,7 +168,8 @@ function lancer(cmd, args, env, silencieux) {
 
     console.log(`\n── ${s.nom} ` + '─'.repeat(Math.max(0, 50 - s.nom.length)));
     const code = await new Promise(r => {
-      const t = lancer(process.execPath, [path.join(__dirname, s.fichier)], { BASE: base, KEY: CLE });
+      const t = lancer(process.execPath, [path.join(__dirname, s.fichier)],
+        { BASE: base, KEY: CLE, ...(s.licence ? { LICENCE_PUBKEY: licPub, LIC_PRIV: licPriv } : {}) });
       t.on('exit', c => r(c === null ? 1 : c));
     });
     api.kill('SIGKILL');

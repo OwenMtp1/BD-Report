@@ -12,8 +12,46 @@ const crypto = require('node:crypto');
 const DB = require('./db.js');
 const AUTH = require('./auth.js');
 const CAT = require('./catalogue.js');
+const LIC = require('./licence.js');
 
-const pseudo = (process.argv[2] || '').trim();
+// ⚠️ ACTIVATION SIGNÉE (facultative). Si une clé publique d'éditeur est
+// posée sur ce VPS (LICENCE_PUBKEY dans .env), le compte fondateur ne
+// peut être créé QUE par un jeton signé par l'éditeur : le pseudo ET le
+// mot de passe viennent du jeton, pas de la ligne de commande. Sans clé
+// publique, rien ne change — on prend le pseudo en argument comme avant.
+let pseudo = (process.argv[2] || '').trim();
+let mdpImpose = null;      // mot de passe fixé par le jeton, le cas échéant
+
+if (LIC.enforced()) {
+  // Le jeton peut être passé en argument (--activation <jeton>) ou déposé
+  // dans un fichier api/activation.txt à côté de setup.js.
+  const iArg = process.argv.indexOf('--activation');
+  let jeton = iArg >= 0 ? (process.argv[iArg + 1] || '').trim() : '';
+  if (!jeton) {
+    try { jeton = fs.readFileSync(path.join(__dirname, 'activation.txt'), 'utf8').trim(); }
+    catch (e) { /* pas de fichier */ }
+  }
+  const t = jeton ? LIC.verify(jeton) : null;
+  if (!t || t.typ !== 'fondateur') {
+    console.error(`
+  Activation requise — Origin Logs
+
+  Ce panneau est verrouillé par l'éditeur : le compte fondateur ne peut
+  être créé qu'avec un jeton d'activation signé.
+
+    node setup.js --activation "<le jeton fourni par l'éditeur>"
+
+  (ou déposez le jeton dans api/activation.txt)
+
+  Le jeton fixe le pseudo ET le mot de passe : demandez-les à l'éditeur.
+`);
+    process.exit(1);
+  }
+  if (t._expire) { console.error('\n  Ce jeton d’activation a expiré. Demandez-en un nouveau à l’éditeur.\n'); process.exit(1); }
+  pseudo = String(t.pseudo || '').trim();
+  mdpImpose = String(t.mdp || '');
+}
+
 if (!pseudo || pseudo.length < 3) {
   console.error(`
   Mise en route — Origin Roleplay
@@ -72,7 +110,8 @@ let mdp = null;
 if (existe) {
   console.log(`\n  Le compte « ${pseudo} » existe déjà — il est conservé tel quel.`);
 } else {
-  mdp = crypto.randomBytes(12).toString('base64url');
+  // Mot de passe imposé par le jeton d'activation, sinon généré au hasard.
+  mdp = mdpImpose || crypto.randomBytes(12).toString('base64url');
   db.prepare('INSERT INTO staff(pseudo,pass,role,created_at) VALUES(?,?,?,?)')
     .run(pseudo, AUTH.hash(mdp), 'fondateur', Date.now());
 }
