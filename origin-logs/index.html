@@ -246,7 +246,27 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .nav-item[aria-current="true"] .nav-n{color:var(--vio-hi)}
 .nav-item.flagged .nav-n{color:var(--crit)}
 
-.rail-foot{flex:none;padding:12px 18px 18px;border-top:1px solid var(--line-soft);display:grid;gap:7px}
+.rail-foot{flex:none;padding:12px 18px 10px;border-top:1px solid var(--line-soft);display:grid;gap:7px}
+/* Section « Administration » du pied : intitulé + accès, façon Addveo. */
+.foot-admin{display:grid;gap:6px;padding-top:10px;margin-top:2px;border-top:1px solid var(--line-soft)}
+.foot-admin[hidden]{display:none}
+/* En-têtes de grande section (Supervision / Journaux) : plus affirmés que
+   les intitulés de groupe. */
+.nav-section{margin-top:14px;color:var(--ink-2);font-weight:700;letter-spacing:.04em}
+.nav-group.nav-section:first-child{margin-top:2px;animation:none}
+/* Le compte, tout en bas du rail (comme Addveo) : avatar, identité, sortie. */
+.rail-account{
+  flex:none;display:flex;align-items:center;gap:11px;
+  padding:12px 16px 14px;border-top:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel-2) 40%,transparent);
+  cursor:pointer;transition:background .16s var(--ease);
+}
+.rail-account[hidden]{display:none}
+.rail-account:hover{background:color-mix(in srgb,var(--vio) 10%,transparent)}
+.rail-account .who-txt{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.rail-account .who-name{font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rail-account .who-role{font-size:10.5px;font-weight:600;color:var(--vio-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rail-account .icon-btn{flex:none}
 /* Réglages du flux, descendus de la barre du haut : période, direct, export. */
 .flow-set{display:grid;gap:8px;padding:10px 0 4px;margin:2px 0;border-top:1px solid var(--line-soft)}
 .flow-set[hidden]{display:none}
@@ -1313,11 +1333,28 @@ select.input{height:36px}
           <button class="btn sm" id="exportBtn">Exporter</button>
         </div>
       </div>
-      <button class="btn sm" id="teamBtn" hidden>Gérer l'équipe</button>
-      <button class="btn sm" id="rolesBtn" hidden>Rôles &amp; accès</button>
-      <button class="btn sm" id="discordBtn" hidden>Liaison Discord</button>
-      <button class="btn sm" id="platformBtn" hidden>Espaces de logs</button>
-      <button class="btn sm" id="auditBtn" hidden>Journal du panneau</button>
+      <div class="foot-admin" id="footAdmin" hidden>
+        <div class="eyebrow" style="padding:0 2px 2px">Administration</div>
+        <button class="btn sm" id="teamBtn" hidden>Gérer l'équipe</button>
+        <button class="btn sm" id="rolesBtn" hidden>Rôles &amp; accès</button>
+        <button class="btn sm" id="discordBtn" hidden>Liaison Discord</button>
+        <button class="btn sm" id="platformBtn" hidden>Espaces de logs</button>
+        <button class="btn sm" id="auditBtn" hidden>Journal du panneau</button>
+      </div>
+    </div>
+    <!-- ⚠️ LE COMPTE EN BAS À GAUCHE, comme un vrai espace de travail : la
+         marque et l'environnement en haut, l'identité en bas, le contenu au
+         milieu. Cliquer ouvre la fiche profil ; l'icône écran ouvre le
+         panneau en pleine page. -->
+    <div class="rail-account" id="whoBox" hidden role="button" tabindex="0" aria-haspopup="dialog" title="Voir mon profil">
+      <span class="av" id="whoAv">—</span>
+      <span class="who-txt">
+        <span class="who-name" id="whoName">—</span>
+        <span class="who-role" id="whoRole">—</span>
+      </span>
+      <button class="icon-btn ghost" id="logoutBtn" title="Se déconnecter">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 4.5V3a1 1 0 0 0-1-1H3.5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-1.5M7 8h7m0 0-2.2-2.2M14 8l-2.2 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </div>
   </nav>
 
@@ -1335,16 +1372,6 @@ select.input{height:36px}
       <button class="icon-btn" id="helpBtn" title="Raccourcis clavier (?)" aria-label="Raccourcis clavier">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5.9 5.9a2.2 2.2 0 1 1 3 2.05c-.6.25-.9.75-.9 1.35v.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12.2" r=".9" fill="currentColor"/></svg>
       </button>
-      <div class="who" id="whoBox" hidden role="button" tabindex="0" aria-haspopup="dialog" title="Voir mon profil">
-        <span class="who-txt">
-          <span class="who-name" id="whoName">—</span>
-          <span class="who-role" id="whoRole">—</span>
-        </span>
-        <span class="av" id="whoAv">—</span>
-        <button class="icon-btn ghost" id="logoutBtn" title="Se déconnecter">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 4.5V3a1 1 0 0 0-1-1H3.5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-1.5M7 8h7m0 0-2.2-2.2M14 8l-2.2 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-      </div>
     </header>
 
     <div class="afilters" id="afilters" hidden aria-label="Filtres actifs"></div>
@@ -2643,23 +2670,32 @@ function buildNav() {
     if (!ME.espace) { host.innerHTML = html; return; }
     html += `<div class="nav-group eyebrow">${esc(ME.espace.nom)}</div>`;
   }
-  html += `
+  // ⚠️ Barre latérale façon « espace de travail » : une section SUPERVISION
+  // qui liste ce qu'on regarde (vue d'ensemble, joueurs, journaux, bans…),
+  // puis les JOURNAUX par métier. L'administration vit dans le pied du rail.
+  const bans = cats.find(c => c.id === 'bans');
+  html += `<div class="nav-group eyebrow nav-section">Supervision</div>
     <button class="nav-item" data-view="overview" style="--fam:var(--vio-hi)">
       <span class="nav-dot"></span><span class="nav-label">Vue d'ensemble</span><span class="nav-n"></span></button>
     ${can('players.view') ? `<button class="nav-item" data-view="online" style="--fam:var(--ok)"
         title="Qui est sur le serveur en ce moment">
-      <span class="nav-dot"></span><span class="nav-label">En ligne</span><span class="nav-n" id="nOnline">—</span></button>` : ''}
+      <span class="nav-dot"></span><span class="nav-label">Joueurs</span><span class="nav-n" id="nOnline">—</span></button>` : ''}
+    <button class="nav-item" data-cat="all" style="--fam:var(--ink-2)">
+      <span class="nav-dot"></span><span class="nav-label">Logs</span><span class="nav-n" id="nAll">—</span></button>
+    ${bans ? `<button class="nav-item nav-bans" data-cat="bans" style="--fam:${bans.fam}" title="${esc(bans.desc)}">
+      <span class="nav-dot"></span><span class="nav-label">Bans</span><span class="nav-n" data-n="bans">—</span></button>` : ''}
     ${can('team.stats') ? `<button class="nav-item" data-view="team" style="--fam:var(--f-staff)"
         title="Ce que traite chaque membre de l’équipe">
-      <span class="nav-dot"></span><span class="nav-label">Vue d'équipe</span><span class="nav-n"></span></button>` : ''}
-    <button class="nav-item" data-cat="all" style="--fam:var(--ink-2)">
-      <span class="nav-dot"></span><span class="nav-label">Flux complet</span><span class="nav-n" id="nAll">—</span></button>`;
+      <span class="nav-dot"></span><span class="nav-label">Vue d'équipe</span><span class="nav-n"></span></button>` : ''}`;
+  // Les JOURNAUX par métier — les rubriques (bans déjà remonté plus haut).
+  let premierGroupe = true;
   for (const g of GROUPS) {
-    const dans = cats.filter(c => c.group === g.id);
+    const dans = cats.filter(c => c.group === g.id && c.id !== 'bans');
     if (!dans.length) continue;
+    if (premierGroupe) { html += `<div class="nav-group eyebrow nav-section">Journaux</div>`; premierGroupe = false; }
     html += `<div class="nav-group eyebrow">${esc(g.label)}</div>`;
     html += dans.map(c => `
-      <button class="nav-item${c.id === 'bans' ? ' nav-bans' : ''}" data-cat="${c.id}" style="--fam:${c.fam}" title="${esc(c.desc)}">
+      <button class="nav-item" data-cat="${c.id}" style="--fam:${c.fam}" title="${esc(c.desc)}">
         <span class="nav-dot"></span>
         <span class="nav-label">${esc(c.label)}</span>
         <span class="nav-n" data-n="${c.id}">—</span></button>`).join('');
@@ -7326,11 +7362,17 @@ function peindreIdentite() {
   // ⚠️ Ces boutons agissent DANS un environnement : hors de tout espace
   // ils ouvriraient des écrans que l'API refuse (409).
   const b = (sel, on) => { const n = $(sel); if (n) n.hidden = !on; };
-  b('#teamBtn',     dans && can('accounts.view'));
-  b('#rolesBtn',    dans && can('roles.manage'));
-  b('#discordBtn',  dans && can('settings.discord'));
-  b('#auditBtn',    dans && can('audit.view'));
-  b('#platformBtn', ME.plateforme);
+  const adminItems = {
+    '#teamBtn':     dans && can('accounts.view'),
+    '#rolesBtn':    dans && can('roles.manage'),
+    '#discordBtn':  dans && can('settings.discord'),
+    '#auditBtn':    dans && can('audit.view'),
+    '#platformBtn': ME.plateforme
+  };
+  for (const [sel, on] of Object.entries(adminItems)) b(sel, on);
+  // La section « Administration » du pied ne s'affiche que s'il y a au
+  // moins un accès à montrer — sinon son intitulé flotterait seul.
+  b('#footAdmin', Object.values(adminItems).some(Boolean));
   if ($('#platTeamBtn')) $('#platTeamBtn').hidden = !canPlat('plat.equipe.voir');
   // La recherche reste en haut ; la période, le direct et l'export sont
   // descendus dans le pied du rail (« Réglages du flux ») — ils n'agissent
