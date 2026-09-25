@@ -303,6 +303,41 @@ t('la vue d’intégration dit quelle ressource assure chaque geste',
   /Gestes sur les joueurs/.test(P) && /d\.capacites\.map/.test(P)
   && /d\.gestesUniversels\.map/.test(P));
 
+sect('Les écrans d’analyse (Économie, Temps de jeu, Statistiques) sont des ONGLETS');
+// ⚠️ Rubriques « métier » façon Addveo : elles lisent ce qu’on sait déjà
+// (compteurs par rubrique, évènements chargés) et le disent, plutôt que
+// d’inventer un chiffre en attendant la remontée dédiée de la ressource.
+for (const [v, path, fn] of [
+  ['economy',  '/economie',     'renderEconomy'],
+  ['playtime', '/temps-de-jeu', 'renderPlaytime'],
+  ['stats',    '/statistiques', 'renderStats'],
+]) {
+  t(`${v} : la vue existe`, new RegExp(`id="view${v[0].toUpperCase()+v.slice(1)}"`).test(P));
+  t(`${v} : entrée dans le rail`, new RegExp(`data-view="${v}"`).test(P));
+  t(`${v} : son adresse`, P.includes(`'${path}'`));
+  t(`${v} : le clic du rail la route`, new RegExp(`dataset\\.view === '${v}'\\)\\s*return goVue\\('${v}'\\)`).test(P));
+  t(`${v} : sa fonction de rendu est branchée`, new RegExp(`STATE\\.view === '${v}'\\) ${fn}\\(\\)`).test(P)
+    && new RegExp(`function ${fn}\\(`).test(P));
+}
+t('⚠️ les écrans d’argent ne fabriquent pas de montant : le flux additionne les mouvements CHARGÉS',
+  /sur \$\{charges\.length\} mouvement\(s\) chargé\(s\)/.test(P));
+t('⚠️ le temps de jeu dit que l’activité est un PROXY tant que la durée réelle manque',
+  /proxy en attendant la durée réelle/.test(P));
+
+sect('Rôles & accès est une PLEINE PAGE, plus une fenêtre');
+// ⚠️ C’est l’écran qu’on ouvre pour comprendre qui peut quoi : une fenêtre
+// se referme dès qu’on clique ailleurs, une page reste.
+t('la vue existe', /id="viewRoles"/.test(P));
+t('entrée dans le rail en PLEINE PAGE (nav:true → data-view)',
+  /k:'roles',\s*nav:true/.test(P) && /a\.nav \? `data-view="\$\{a\.k\}"`/.test(P));
+t('son adresse', P.includes("'/roles'"));
+t('le clic du rail la route', /dataset\.view === 'roles'\)\s*return goVue\('roles'\)/.test(P));
+t('⚠️ rendreRoles PEINT LA VUE, il n’ouvre plus de openSheet',
+  /function rendreRoles\(\)[\s\S]{0,200}\$\('#viewRoles'\)/.test(P)
+  && !/function rendreRoles\(\)[\s\S]{0,400}openSheet\(/.test(P));
+t('⚠️ le rendu ne se refait pas sous les doigts (garde anti-reconstruction)',
+  /if \(!force && host\.querySelector\('#roleList'\)\) return;/.test(P));
+
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);
 process.exit(n===T.length?0:1);

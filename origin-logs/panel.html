@@ -1735,6 +1735,23 @@ select.input{height:36px}
         </div>
       </div>
     </section>
+
+    <!-- ============ ÉCONOMIE ============ -->
+    <!-- ⚠️ Écrans DATA façon Addveo : le contenu est peint par leur
+         fonction de rendu (renderEconomy / renderPlaytime / renderStats /
+         renderRolesPage). En attendant que la ressource FiveM remonte ces
+         données pour de vrai, ils s'alimentent des évènements du journal
+         (ce qu'on sait déjà) et le disent clairement. -->
+    <section class="view" id="viewEconomy" hidden aria-label="Économie"></section>
+
+    <!-- ============ TEMPS DE JEU ============ -->
+    <section class="view" id="viewPlaytime" hidden aria-label="Temps de jeu"></section>
+
+    <!-- ============ STATISTIQUES ============ -->
+    <section class="view" id="viewStats" hidden aria-label="Statistiques"></section>
+
+    <!-- ============ RÔLES (pleine page) ============ -->
+    <section class="view" id="viewRoles" hidden aria-label="Rôles et accès"></section>
     </main>
   </div>
 </div>
@@ -2578,6 +2595,11 @@ async function refresh(opts) {
     else if (STATE.view === 'bans') jobs.push(DS.bans(STATE.banState, STATE.banQ));
     else if (STATE.view === 'online') jobs.push(DS.online(STATE.onQ));
     else if (STATE.view === 'team')   jobs.push(DS.team(STATE.teamJours));
+    // L'écran Économie affiche les derniers mouvements d'argent : on va les
+    // chercher (rubriques d'argent uniquement), sans quoi la liste reste
+    // vide tant qu'on n'a pas ouvert le flux.
+    else if (STATE.view === 'economy') jobs.push(DS.query({
+      cats: ECO_CATS, sevs: [], from, to, q: '', limit: 40 }));
     const [stats, extra] = await Promise.all(jobs);
     if (token !== refreshToken) return;
     STATE.stats = stats;
@@ -2600,6 +2622,10 @@ function render() {
   $('#viewBans').hidden        = STATE.view !== 'bans';
   $('#viewOnline').hidden      = STATE.view !== 'online';
   $('#viewTeam').hidden        = STATE.view !== 'team';
+  $('#viewEconomy').hidden     = STATE.view !== 'economy';
+  $('#viewPlaytime').hidden    = STATE.view !== 'playtime';
+  $('#viewStats').hidden       = STATE.view !== 'stats';
+  $('#viewRoles').hidden       = STATE.view !== 'roles';
   $('#viewPlatform').hidden    = STATE.view !== 'platform';
   $('#viewSpaces').hidden      = STATE.view !== 'spaces';
   $('#viewPlans').hidden       = STATE.view !== 'plans';
@@ -2619,6 +2645,10 @@ function render() {
   else if (STATE.view === 'bans') renderBans();
   else if (STATE.view === 'online') renderOnline();
   else if (STATE.view === 'team') renderTeam();
+  else if (STATE.view === 'economy') renderEconomy();
+  else if (STATE.view === 'playtime') renderPlaytime();
+  else if (STATE.view === 'stats') renderStats();
+  else if (STATE.view === 'roles') renderRolesPage();
   else if (STATE.view === 'platform') rendrePlateforme();
   else if (STATE.view === 'spaces') rendreEnvs();   // charge à la volée si besoin
   else if (STATE.view === 'plans') rendreOffres();
@@ -2673,6 +2703,23 @@ function buildNav() {
     ${can('team.stats') ? `<button class="nav-item" data-view="team" style="--fam:var(--f-staff)"
         title="Ce que traite chaque membre de l’équipe">
       <span class="nav-dot"></span><span class="nav-label">Vue d'équipe</span><span class="nav-n"></span></button>` : ''}`;
+  // ⚠️ ANALYSE — les écrans « métier » d'Addveo : l'argent qui circule, le
+  // temps passé en jeu, les statistiques agrégées. Ils lisent le journal
+  // (ce qu'on sait déjà) en attendant que la ressource remonte ces mesures
+  // dédiées. Gardés par players.view : qui ne voit pas les joueurs n'a pas
+  // à voir leurs flux.
+  if (can('players.view')) {
+    html += `<div class="nav-group eyebrow nav-section">Analyse</div>
+      <button class="nav-item" data-view="economy" style="--fam:var(--f-bien)"
+          title="L’argent qui circule : dépôts, retraits, achats, salaires">
+        <span class="nav-dot"></span><span class="nav-label">Économie</span><span class="nav-n"></span></button>
+      <button class="nav-item" data-view="playtime" style="--fam:var(--f-monde)"
+          title="Le temps passé en jeu, par joueur et par jour">
+        <span class="nav-dot"></span><span class="nav-label">Temps de jeu</span><span class="nav-n"></span></button>
+      <button class="nav-item" data-view="stats" style="--fam:var(--f-play)"
+          title="Vue d’ensemble chiffrée : rubriques, gravité, heures de pointe">
+        <span class="nav-dot"></span><span class="nav-label">Statistiques</span><span class="nav-n"></span></button>`;
+  }
   // Les JOURNAUX par métier — les rubriques (bans déjà remonté plus haut).
   let premierGroupe = true;
   for (const g of GROUPS) {
@@ -2692,16 +2739,18 @@ function buildNav() {
   // rubrique qu'on ne peut pas ouvrir n'apparaît pas. `data-admin` ouvre
   // le panneau correspondant (les écrans existent déjà, on ne fait que les
   // rendre atteignables comme des onglets).
+  // `nav` : pleine page (data-view, avec le repère glissant) ; `admin` :
+  // panneau en fenêtre (data-admin). Rôles est devenu une pleine page.
   const admin = [
-    can('roles.manage')    ? { k:'roles',    label:'Rôles',            fam:'var(--f-staff)', desc:'Qui a le droit de voir et de faire quoi' } : null,
-    can('settings.discord')? { k:'settings',  label:'Réglages',         fam:'var(--f-play)',  desc:'Liaison Discord, correspondance des rôles' } : null,
-    can('accounts.view')   ? { k:'team',      label:'Équipe',           fam:'var(--ok)',      desc:'Les comptes qui accèdent à cet espace' } : null,
-    can('audit.view')      ? { k:'audit',     label:'Journal du panneau',fam:'var(--ink-2)',  desc:'Qui a consulté quoi, qui a sanctionné qui' } : null,
+    can('roles.manage')    ? { k:'roles',    nav:true,  label:'Rôles',            fam:'var(--f-staff)', desc:'Qui a le droit de voir et de faire quoi' } : null,
+    can('settings.discord')? { k:'settings',            label:'Réglages',         fam:'var(--f-play)',  desc:'Liaison Discord, correspondance des rôles' } : null,
+    can('accounts.view')   ? { k:'team',                label:'Équipe',           fam:'var(--ok)',      desc:'Les comptes qui accèdent à cet espace' } : null,
+    can('audit.view')      ? { k:'audit',               label:'Journal du panneau',fam:'var(--ink-2)',  desc:'Qui a consulté quoi, qui a sanctionné qui' } : null,
   ].filter(Boolean);
   if (admin.length) {
     html += `<div class="nav-group eyebrow nav-section">Administration</div>`;
     html += admin.map(a => `
-      <button class="nav-item" data-admin="${a.k}" style="--fam:${a.fam}" title="${esc(a.desc)}">
+      <button class="nav-item" ${a.nav ? `data-view="${a.k}"` : `data-admin="${a.k}"`} style="--fam:${a.fam}" title="${esc(a.desc)}">
         <span class="nav-dot"></span>
         <span class="nav-label">${esc(a.label)}</span>
         <span class="nav-n"></span></button>`).join('');
@@ -2951,6 +3000,208 @@ function drawChart(s) {
       out += `<text x="${(x + w / 2).toFixed(1)}" y="${H - 10}" text-anchor="middle">${cfg.fmt(start + i * size)}</text>`;
   }
   $('#chart').innerHTML = out;
+}
+
+/* ============================================================
+   ÉCRANS D'ANALYSE (façon Addveo) — Économie, Temps de jeu, Statistiques
+   ⚠️ Ils lisent CE QU'ON SAIT DÉJÀ : les compteurs par rubrique de
+   `STATE.stats.split` (exacts sur la fenêtre) et les évènements chargés
+   `STATE.list` (pour le détail). Les mesures dédiées — montants agrégés,
+   durée exacte des sessions — viendront de la ressource FiveM ; l'écran
+   le dit plutôt que d'inventer un chiffre.
+   ============================================================ */
+const ECO_CATS = ['inventaire','proprietes','boutique_caisse','boutique_monnaie','boutique_produits','jobs','casino','facture_ems'];
+function kpiCell(k, v, d, cls) {
+  return `<div class="status-cell ${cls || ''}">
+    <span class="status-k">${esc(k)}</span>
+    <span class="status-v">${v}</span>
+    ${d ? `<span class="status-d">${d}</span>` : ''}</div>`;
+}
+function attenteBanner(txt) {
+  return `<div class="banner" style="--c:var(--check);margin-bottom:14px">
+    <b>Lecture des journaux.</b> ${txt} Les mesures dédiées suivront la remontée de la ressource FiveM.</div>`;
+}
+
+function renderEconomy() {
+  const host = $('#viewEconomy'); if (!host) return;
+  const s = STATE.stats;
+  if (!s) { host.innerHTML = `<div class="head"><div><h1 class="title">Économie</h1></div></div><div class="void">Chargement…</div>`; return; }
+  const split = s.split || {};
+  const n = c => split[c] || 0;
+  const total = ECO_CATS.reduce((a, c) => a + n(c), 0);
+  const boutique = n('boutique_caisse') + n('boutique_monnaie') + n('boutique_produits');
+  // Somme des montants SUR LES MOUVEMENTS CHARGÉS (le journal complet vit
+  // côté serveur ; ici on additionne ce qui est à l'écran, et on le dit).
+  const charges = (STATE.list || []).filter(e => ECO_CATS.includes(e.cat));
+  const flux = charges.reduce((a, e) => a + (Number(e.d && e.d.montant) || 0), 0);
+  const cats = visibleCats();
+  const max = Math.max(1, ...ECO_CATS.map(n));
+
+  host.innerHTML = `
+    <div class="head"><div>
+      <h1 class="title">Économie</h1>
+      <div class="sub">L’argent qui circule — transactions, immobilier, boutique, entreprises, casino, EMS · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b></div>
+    </div></div>
+    ${attenteBanner('Ci-dessous, les mouvements enregistrés sur la période ; le flux additionne les montants des mouvements affichés.')}
+    <div class="status">
+      ${kpiCell('Mouvements', total.toLocaleString('fr-FR'), 'évènements d’argent sur la période')}
+      ${kpiCell('Flux affiché', flux ? money(flux) : '—', `sur ${charges.length} mouvement(s) chargé(s)`)}
+      ${kpiCell('Boutique', boutique.toLocaleString('fr-FR'), 'caisse, monnaie, produits')}
+      ${kpiCell('Casino', n('casino').toLocaleString('fr-FR'), 'mises, gains, pertes')}
+      ${kpiCell('Immobilier', n('proprietes').toLocaleString('fr-FR'), 'achats, ventes, loyers', n('proprietes') ? '' : '')}
+    </div>
+    <div class="grid two" style="margin-top:16px">
+      <div class="panel">
+        <div class="panel-head"><h3 class="eyebrow">Répartition des flux</h3><span class="lite-m">${total} évènements</span></div>
+        <div class="panel-body">
+          <div class="dist">${ECO_CATS.map(id => {
+            const c = cats.find(x => x.id === id); if (!c) return '';
+            const v = n(id);
+            return `<button class="dist-row" data-cat="${id}" style="--fam:${c.fam}">
+              <span><span class="dist-name">${esc(c.label)}</span>
+                <span class="dist-track"><span class="dist-bar" style="width:${Math.max(v ? 3 : 0, v / max * 100)}%;display:block"></span></span></span>
+              <span class="dist-n">${v || '·'}</span></button>`;
+          }).join('') || '<div class="void"><b>Aucune rubrique d’argent</b><span>Ce serveur n’en journalise aucune.</span></div>'}</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="eyebrow">Derniers mouvements</h3><span class="lite-m">chargés</span></div>
+        <div class="panel-body flush">
+          <div class="rows">${charges.slice(0, 12).map(e => `
+            <button class="row-lite" data-ev="${e.id}">
+              <span class="sev-sq" style="--c:${(CAT[e.cat] || {}).fam || 'var(--muted)'}"></span>
+              <span><span class="lite-t">${esc(strip(e.msg))}</span>
+                <span class="lite-m">${(CAT[e.cat] || {}).label || e.cat} · ${ago(e.t)}</span></span>
+              <span class="lite-m num">${e.d && e.d.montant ? money(e.d.montant) : (e.d && e.d.montantEuros ? e.d.montantEuros + ' €' : '·')}</span>
+            </button>`).join('') || '<div class="void"><b>Aucun mouvement chargé</b><span>Élargissez la période.</span></div>'}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderPlaytime() {
+  const host = $('#viewPlaytime'); if (!host) return;
+  const s = STATE.stats;
+  if (!s) { host.innerHTML = `<div class="head"><div><h1 class="title">Temps de jeu</h1></div></div><div class="void">Chargement…</div>`; return; }
+  const split = s.split || {};
+  const co = split.connexions || 0, dco = split.deconnexion || 0;
+  const online = Number(($('#nOnline') || {}).textContent) || null;
+
+  host.innerHTML = `
+    <div class="head"><div>
+      <h1 class="title">Temps de jeu</h1>
+      <div class="sub">Présence et fréquentation · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b></div>
+    </div></div>
+    ${attenteBanner('Ci-dessous, ce que les connexions permettent déjà de mesurer ; la durée exacte de chaque session arrivera avec la ressource.')}
+    <div class="status">
+      ${kpiCell('Joueurs uniques', s.uniques, 'sur la période')}
+      ${kpiCell('Connexions', co.toLocaleString('fr-FR'), 'arrivées sur le serveur')}
+      ${kpiCell('Déconnexions', dco.toLocaleString('fr-FR'), 'départs, crashs, coupures')}
+      ${kpiCell('En ligne', online != null ? online : '—', 'en ce moment')}
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-head"><h3 class="eyebrow">Joueurs les plus présents</h3>
+        <span class="lite-m">classés par activité — proxy en attendant la durée réelle</span></div>
+      <div class="panel-body flush">
+        <div class="rows">${(s.top || []).map(p => `
+          <button class="row-lite" data-player="${esc(p.key)}">
+            <span class="av sm" style="${avatarStyle(p)}">${initials(p)}</span>
+            <span><span class="lite-t">${esc(p.name)}</span>
+              <span class="lite-m">${p.sid != null ? '[' + p.sid + ']' : 'hors ligne'}</span></span>
+            <span class="lite-m">${p.n} évènement(s)</span></button>`).join('')
+          || '<div class="void"><b>Aucun joueur</b><span>Élargissez la période.</span></div>'}</div>
+      </div>
+    </div>`;
+}
+
+function renderStats() {
+  const host = $('#viewStats'); if (!host) return;
+  const s = STATE.stats;
+  if (!s) { host.innerHTML = `<div class="head"><div><h1 class="title">Statistiques</h1></div></div><div class="void">Chargement…</div>`; return; }
+  const delta = s.prev ? Math.round((s.total - s.prev) / s.prev * 100) : 0;
+  const dcl = delta > 4 ? 'up' : delta < -4 ? 'down' : 'flat';
+  const split = s.split || {};
+  const cats = visibleCats();
+  const max = Math.max(1, ...Object.values(split));
+  // Totaux par gravité, depuis les séries empilées.
+  const sev = {}; SEVS.forEach(x => sev[x.id] = 0);
+  const bySev = s.seriesBySev || {};
+  SEVS.forEach(x => { (bySev[x.id] || []).forEach(v => sev[x.id] += v || 0); });
+  const sevTotal = Math.max(1, SEVS.reduce((a, x) => a + sev[x.id], 0));
+  // Activité par créneau (les buckets de la période).
+  const series = s.series || [];
+  const smax = Math.max(1, ...series);
+
+  host.innerHTML = `
+    <div class="head"><div>
+      <h1 class="title">Statistiques</h1>
+      <div class="sub">Vue d’ensemble chiffrée · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b></div>
+    </div></div>
+    <div class="status">
+      ${kpiCell('Évènements', s.total.toLocaleString('fr-FR'), `<span class="delta ${dcl}">${s.prev ? (delta > 0 ? '+' : '') + delta + ' %' : '—'}</span> vs période précédente`)}
+      ${kpiCell('Joueurs uniques', s.uniques, 'auteurs d’au moins un évènement')}
+      ${kpiCell('Alertes', s.alerts, 'critiques et alertes', s.alerts ? 'warn' : '')}
+      ${kpiCell('Bannis', s.bansActifs != null ? s.bansActifs : '—', 'en cours', s.bansActifs ? 'crit' : '')}
+    </div>
+    <div class="grid two" style="margin-top:16px">
+      <div class="panel">
+        <div class="panel-head"><h3 class="eyebrow">Répartition par rubrique</h3>
+          <span class="lite-m">${Object.values(split).reduce((a, b) => a + b, 0)} évènements</span></div>
+        <div class="panel-body">
+          <div class="dist">${GROUPS.map(g => {
+            const dans = cats.filter(c => c.group === g.id);
+            if (!dans.length) return '';
+            const somme = dans.reduce((a, c) => a + (split[c.id] || 0), 0);
+            return `<div class="dist-group">
+              <div class="dist-row" style="padding-bottom:2px">
+                <span class="eyebrow" style="color:${g.fam}">${esc(g.label)}</span>
+                <span class="dist-n" style="color:var(--ink-2)">${somme}</span></div>
+              ${dans.map(c => {
+                const v = split[c.id] || 0;
+                return `<button class="dist-row" data-cat="${c.id}" style="--fam:${c.fam}">
+                  <span><span class="dist-name">${esc(c.label)}</span>
+                    <span class="dist-track"><span class="dist-bar" style="width:${Math.max(v ? 3 : 0, v / max * 100)}%;display:block"></span></span></span>
+                  <span class="dist-n">${v || '·'}</span></button>`;
+              }).join('')}</div>`;
+          }).join('')}</div>
+        </div>
+      </div>
+      <div style="display:grid;gap:16px;align-content:start">
+        <div class="panel">
+          <div class="panel-head"><h3 class="eyebrow">Par gravité</h3></div>
+          <div class="panel-body">
+            <div class="dist">${SEVS.map(x => `
+              <button class="dist-row" data-sev="${x.id}" style="--fam:${x.c}">
+                <span><span class="dist-name">${esc(x.label)}</span>
+                  <span class="dist-track"><span class="dist-bar" style="width:${Math.max(sev[x.id] ? 3 : 0, sev[x.id] / sevTotal * 100)}%;display:block"></span></span></span>
+                <span class="dist-n">${sev[x.id] || '·'}</span></button>`).join('')}</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3 class="eyebrow">Joueurs les plus actifs</h3></div>
+          <div class="panel-body flush">
+            <div class="rows">${(s.top || []).slice(0, 6).map(p => `
+              <button class="row-lite" data-player="${esc(p.key)}">
+                <span class="av sm" style="${avatarStyle(p)}">${initials(p)}</span>
+                <span><span class="lite-t">${esc(p.name)}</span>
+                  <span class="lite-m">${p.sid != null ? '[' + p.sid + ']' : 'hors ligne'}</span></span>
+                <span class="lite-m">${p.n}</span></button>`).join('')
+              || '<div class="void"><b>Aucun joueur</b></div>'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-head"><h3 class="eyebrow">Activité sur la période</h3>
+        <span class="lite-m">${series.length} créneaux</span></div>
+      <div class="panel-body">
+        <div style="display:flex;align-items:flex-end;gap:2px;height:90px">
+          ${series.map(v => `<span title="${v} évènement(s)" style="flex:1;min-width:2px;border-radius:2px 2px 0 0;
+            background:linear-gradient(180deg,var(--vio),var(--vio-2));
+            height:${Math.max(v ? 4 : 1, v / smax * 100)}%;opacity:${v ? .9 : .25}"></span>`).join('')
+          || '<div class="void"><b>Aucune donnée</b></div>'}</div>
+      </div>
+    </div>`;
 }
 
 /* ============================================================
@@ -3849,6 +4100,10 @@ function syncHash(replace) {
                : STATE.view === 'bans'        ? '/bans/' + STATE.banState
                : STATE.view === 'online'      ? '/en-ligne'
                : STATE.view === 'team'        ? '/equipe'
+               : STATE.view === 'economy'     ? '/economie'
+               : STATE.view === 'playtime'    ? '/temps-de-jeu'
+               : STATE.view === 'stats'       ? '/statistiques'
+               : STATE.view === 'roles'       ? '/roles'
                :                                '/flux/' + STATE.cat;
   const qp = [];
   if (STATE.view === 'bans')        { if (STATE.banQ) qp.push('q=' + encodeURIComponent(STATE.banQ)); }
@@ -3881,6 +4136,10 @@ function applyHash() {
                                 STATE.banState = ['actifs','expires','tous'].includes(seg[1]) ? seg[1] : 'actifs'; }
   else if (seg[0] === 'en-ligne') { STATE.view = 'online'; STATE.cat = 'all'; }
   else if (seg[0] === 'equipe')   { STATE.view = 'team';   STATE.cat = 'all'; }
+  else if (seg[0] === 'economie')     { STATE.view = 'economy';  STATE.cat = 'all'; }
+  else if (seg[0] === 'temps-de-jeu') { STATE.view = 'playtime'; STATE.cat = 'all'; }
+  else if (seg[0] === 'statistiques') { STATE.view = 'stats';    STATE.cat = 'all'; }
+  else if (seg[0] === 'roles')        { STATE.view = 'roles';    STATE.cat = 'all'; }
   else                        { STATE.view = 'overview'; STATE.cat = 'all'; }
   // Un lien vers un flux, collé par un collègue qui, lui, est dans un
   // espace : on ne montre pas une page vide, on ramène à la supervision.
@@ -4655,19 +4914,44 @@ function demoJournal(chemin) {
    ============================================================ */
 let ROLES_DATA = null, ROLE_OUVERT = null;
 
+// ⚠️ RÔLES EN PLEINE PAGE (façon Addveo), plus en fenêtre. `openRoles()`
+// reste le point d'entrée des enregistrements/suppressions : il RECHARGE
+// les données et force le rendu. La navigation, elle, passe par
+// goVue('roles') → renderRolesPage() (rendu paresseux, non forcé).
 async function openRoles() {
-  try { ROLES_DATA = await api('/api/roles'); } catch (e) { return toast(e.message); }
+  ROLES_DATA = null;                       // forcer un rechargement
+  if (STATE.view !== 'roles') { STATE.view = 'roles'; syncHash(); }
+  await renderRolesPage(true);
+}
+async function renderRolesPage(force) {
+  const host = $('#viewRoles'); if (!host) return;
+  // ⚠️ render() rappelle cette fonction à chaque rafraîchissement et à
+  // chaque évènement reçu : sans ce garde, la liste se reconstruirait sous
+  // les doigts, refermant l'éditeur ouvert et perdant la saisie en cours.
+  if (!force && host.querySelector('#roleList')) return;
+  if (!ROLES_DATA) {
+    host.innerHTML = `<div class="head"><div><h1 class="title">Rôles &amp; accès</h1></div></div>
+      <div class="void">Chargement…</div>`;
+    try { ROLES_DATA = await api('/api/roles'); }
+    catch (e) { host.innerHTML = `<div class="void"><b>${esc(e.message)}</b></div>`; return; }
+  }
   rendreRoles();
 }
 function rendreRoles() {
+  const host = $('#viewRoles'); if (!host) return;
   const d = ROLES_DATA;
   const eff = d.effectifs || {};
-  openSheet('Rôles & accès', `${d.roles.length} rôles · un rôle donne des droits ET des rubriques`,
-    { name:'Rôles', hue:280 }, `
+  host.innerHTML = `
+    <div class="head">
+      <div>
+        <h1 class="title">Rôles &amp; accès</h1>
+        <div class="sub">${d.roles.length} rôles · un rôle donne des <b>droits</b> ET des <b>rubriques</b></div>
+      </div>
+    </div>
     <div class="banner" style="--c:var(--vio)">Un rôle relié à un ID Discord est attribué automatiquement à la connexion.
-      Vous pouvez aussi l’attribuer à la main depuis <b>Gérer l’équipe</b> — une attribution manuelle l’emporte sur Discord.</div>
-    <div id="roleList">${d.roles.map(r => carteRole(r, eff[r.key] || 0, d)).join('')}</div>
-    <div class="block">
+      Vous pouvez aussi l’attribuer à la main depuis <b>Équipe</b> — une attribution manuelle l’emporte sur Discord.</div>
+    <div id="roleList" style="margin-top:14px">${d.roles.map(r => carteRole(r, eff[r.key] || 0, d)).join('')}</div>
+    <div class="block" style="margin-top:16px">
       <h3 class="eyebrow">Créer un rôle</h3>
       <div class="map-row" style="border:none">
         <input class="input" id="nrLabel" placeholder="Nom du rôle (ex. Responsable Whitelist)" maxlength="40">
@@ -4678,9 +4962,9 @@ function rendreRoles() {
         <button class="btn primary" id="nrGo">Créer le rôle</button>
       </div>
       <span class="lite-m">Le rang décide qui peut gérer qui. Vous ne pouvez pas créer un rôle à votre niveau (${d.monRang}) ou au-dessus.</span>
-    </div>`);
+    </div>`;
   if (ROLE_OUVERT) {
-    const el = document.querySelector(`[data-rolebody="${ROLE_OUVERT}"]`);
+    const el = host.querySelector(`[data-rolebody="${ROLE_OUVERT}"]`);
     if (el) el.hidden = false;
   }
 }
@@ -6859,6 +7143,10 @@ document.addEventListener('click', async ev => {
   if (t.dataset.view === 'overview') return goOverview();
   if (t.dataset.view === 'online') return goVue('online');
   if (t.dataset.view === 'team')   return goVue('team');
+  if (t.dataset.view === 'economy')  return goVue('economy');
+  if (t.dataset.view === 'playtime') return goVue('playtime');
+  if (t.dataset.view === 'stats')    return goVue('stats');
+  if (t.dataset.view === 'roles')    return goVue('roles');
   if (t.dataset.shot)   return ouvrirCapture(t.dataset.shot, t.dataset.shotname);
   if (t.dataset.act)    return askAction(t.dataset.act, t.dataset.key, t.dataset.name);
   if (t.dataset.notedel) {
