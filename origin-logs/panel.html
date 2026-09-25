@@ -9,47 +9,51 @@
    n'emprunte rien au fond de l'hôte.
    ============================================================ */
 :root{
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* Fonds — une nuit plus profonde et plus douce. Chaque niveau porte une
-     pointe de bleu-violet plutôt qu'un gris : les surfaces se distinguent
-     par la lumière, pas par un trait. */
-  --ground:#09080F;
-  --panel:#131020;
-  --panel-2:#1A1629;
-  --raise:#241E37;
-  --edge:#2E2545;
-  --edge-soft:#211A33;
-  /* Bordures « qui respirent » : au lieu d'un trait plein, un liseré
-     translucide qui capte la lumière du fond. */
-  --line:rgba(180,160,230,.10);
-  --line-soft:rgba(180,160,230,.06);
+  /* ⚠️ THÈME CLAIR (façon Addveo), accent VIOLET. Les surfaces montent du
+     fond gris très clair (ground) vers le blanc des cartes (panel) ; le
+     survol/actif prend un voile violet (raise). Tout est peint
+     explicitement pour ne rien emprunter au fond de l'hôte. */
+  --ground:#F5F4FA;
+  --panel:#FFFFFF;
+  --panel-2:#FBFAFE;
+  --raise:#F0ECFB;
+  --edge:#E7E3F2;
+  --edge-soft:#EFECF8;
+  /* Bordures « qui respirent » : un liseré violet translucide plutôt qu'un
+     trait gris franc. */
+  --line:rgba(90,60,170,.13);
+  --line-soft:rgba(90,60,170,.07);
 
-  --ink:#F5F1FC;
-  --ink-2:#C7BBE0;
+  --ink:#1E1A2B;
+  --ink-2:#4A4360;
   /* ⚠️ --muted PORTE LA MOITIÉ DU TEXTE DE L'ÉCRAN — intitulés de section,
      compteurs, horodatages, sous-titres. À 9,5-11,5 px il doit tenir le
-     seuil AA (4,5:1) sur les QUATRE fonds. #9E93B8 tient 5,5:1 dans le
-     pire cas (sur --raise). */
-  --muted:#9E93B8;
+     seuil AA (4,5:1) sur les QUATRE fonds ; sur fond CLAIR, le pire cas est
+     le blanc. #6B6478 tient ~5,6:1 sur blanc. */
+  --muted:#6B6478;
 
   --vio:#8B5CF6;
-  --vio-hi:#CBB0FF;
-  --vio-2:#6D4BE0;
-  --vio-wash:rgba(139,92,246,.13);
+  /* Sur fond clair, l'accent « fort » doit être SOMBRE pour rester lisible
+     (texte, pastilles, filet actif) — l'inverse du thème sombre. */
+  --vio-hi:#6D3BE8;
+  --vio-2:#5A2FC0;
+  --vio-wash:rgba(139,92,246,.10);
 
-  --crit:#FF4D6D;
-  --warn:#F5A524;
-  --check:#7CB0FF;
-  --ok:#34D399;
+  --crit:#E11D48;
+  --warn:#C2740A;
+  --check:#2563EB;
+  --ok:#0E9F6E;
 
-  /* familles de catégories — une teinte par métier, pas par catégorie */
-  --f-surv:#FF6B86;
-  --f-play:#B98CFF;
-  --f-bien:#F0A93C;
-  --f-monde:#37C4B4;
-  --f-staff:#79A6FF;
-  --f-shop:#E879C5;
+  /* familles de catégories — une teinte par métier, assez soutenue pour
+     se lire sur fond clair. */
+  --f-surv:#E8456B;
+  --f-play:#8B5CF6;
+  --f-bien:#C2740A;
+  --f-monde:#0E9488;
+  --f-staff:#3B6FE0;
+  --f-shop:#C43BA0;
 
   --ui:'Archivo','Helvetica Neue',Arial,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -57,15 +61,15 @@
   --rail:254px;
   --bar-h:60px;
 
-  /* Rayons et ombres : la matière du redesign. Des coins plus généreux et
-     une profondeur douce remplacent les boîtes plates à trait sec. */
+  /* Rayons et ombres : douces, colorées violet plutôt que noires, pour
+     l'aspect « cartes posées » d'Addveo. */
   --r-sm:9px;
   --r-md:13px;
   --r-lg:18px;
-  --sh-1:0 1px 2px rgba(0,0,0,.35);
-  --sh-2:0 14px 40px -18px rgba(0,0,0,.75);
-  --sh-3:0 24px 60px -24px rgba(0,0,0,.8);
-  --glass:blur(14px) saturate(1.2);
+  --sh-1:0 1px 2px rgba(60,40,110,.06);
+  --sh-2:0 12px 32px -16px rgba(60,40,110,.16);
+  --sh-3:0 22px 55px -22px rgba(60,40,110,.24);
+  --glass:blur(14px) saturate(1.15);
 
   /* Une seule courbe pour tout ce qui bouge : deux accélérations
      différentes dans le même écran se remarquent, et mal. */
@@ -79,11 +83,9 @@ body{
   font-family:var(--ui);font-size:14px;line-height:1.5;
   font-variation-settings:'wdth' 100;
   -webkit-font-smoothing:antialiased;
-  /* Ambiance : deux halos très diffus posent une profondeur de champ
-     derrière tout l'écran, pour que le fond ne soit pas un aplat mort. */
+  /* Un voile violet très diffus en haut à droite, sinon fond clair uni. */
   background:
-    radial-gradient(120% 90% at 100% -10%, rgba(139,92,246,.10), transparent 55%),
-    radial-gradient(90% 70% at -10% 0%, rgba(55,196,180,.05), transparent 50%),
+    radial-gradient(120% 90% at 100% -10%, rgba(139,92,246,.06), transparent 55%),
     var(--ground);
   background-attachment:fixed;
 }
@@ -141,8 +143,8 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .brand:hover .brand-caret{color:var(--ink-2);transform:translateY(1px)}
 .mark{
   width:36px;height:36px;flex:none;border-radius:11px;
-  background:linear-gradient(150deg,var(--vio-hi),var(--vio) 55%,var(--vio-2));
-  color:#140C24;display:grid;place-items:center;
+  background:linear-gradient(150deg,var(--vio),var(--vio-2));
+  color:#fff;display:grid;place-items:center;
   font-variation-settings:'wdth' 84;font-weight:800;font-size:15px;letter-spacing:-.02em;
   /* Un jeton en relief plutôt qu'un carré plat : reflet interne en haut,
      ombre portée douce, et une aura discrète qui l'ancre dans la nuit. */
@@ -541,11 +543,11 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
    le panneau existe pour poser. */
 .duty{
   margin-top:16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:22px;align-items:start;
-  border:1px solid rgba(255,77,109,.32);border-radius:var(--r-md);
-  background:linear-gradient(120deg,rgba(255,77,109,.12),rgba(20,14,31,.35) 55%);
-  padding:20px 22px;box-shadow:var(--sh-2);
+  border:1px solid color-mix(in srgb,var(--crit) 28%,transparent);border-radius:var(--r-md);
+  background:linear-gradient(120deg,color-mix(in srgb,var(--crit) 9%,var(--panel)),var(--panel) 60%);
+  padding:20px 22px;box-shadow:var(--sh-1);
 }
-.duty.clear{border-color:var(--line);background:linear-gradient(120deg,rgba(52,211,153,.08),var(--panel) 55%);align-items:center;box-shadow:var(--sh-1)}
+.duty.clear{border-color:var(--line);background:linear-gradient(120deg,color-mix(in srgb,var(--ok) 8%,var(--panel)),var(--panel) 60%);align-items:center;box-shadow:var(--sh-1)}
 .duty-n{
   font-variation-settings:'wdth' 72;font-weight:800;font-size:58px;line-height:.85;
   color:var(--crit);font-variant-numeric:tabular-nums;
@@ -840,14 +842,14 @@ mark{
 .kv dd.mono{font-size:11px;color:var(--ink)}
 .payload{
   margin:0;padding:13px 14px;border-radius:10px;
-  background:color-mix(in srgb,var(--ground) 75%,transparent);border:1px solid var(--line);
-  font-family:var(--mono);font-size:11.5px;line-height:1.7;color:#C8B8E4;
+  background:var(--panel-2);border:1px solid var(--line);
+  font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--ink-2);
   overflow-x:auto;white-space:pre;
 }
-.payload .k{color:#9A88BE}
-.payload .s{color:#8FE3C4}
+.payload .k{color:#7A4FD6}
+.payload .s{color:#0E8060}
 .payload .n{color:var(--warn)}
-.payload .b{color:#FF8399}
+.payload .b{color:var(--crit)}
 .tools{display:flex;gap:7px;flex-wrap:wrap}
 .trail{display:grid}
 .trail-row{
