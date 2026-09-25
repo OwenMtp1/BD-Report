@@ -241,9 +241,6 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .nav-item.flagged .nav-n{color:var(--crit)}
 
 .rail-foot{flex:none;padding:12px 18px 10px;border-top:1px solid var(--line-soft);display:grid;gap:7px}
-/* Section « Administration » du pied : intitulé + accès, façon Addveo. */
-.foot-admin{display:grid;gap:6px;padding-top:10px;margin-top:2px;border-top:1px solid var(--line-soft)}
-.foot-admin[hidden]{display:none}
 /* En-têtes de grande section (Supervision / Journaux) : plus affirmés que
    les intitulés de groupe. */
 .nav-section{margin-top:14px;color:var(--ink-2);font-weight:700;letter-spacing:.04em}
@@ -1327,14 +1324,9 @@ select.input{height:36px}
           <button class="btn sm" id="exportBtn">Exporter</button>
         </div>
       </div>
-      <div class="foot-admin" id="footAdmin" hidden>
-        <div class="eyebrow" style="padding:0 2px 2px">Administration</div>
-        <button class="btn sm" id="teamBtn" hidden>Gérer l'équipe</button>
-        <button class="btn sm" id="rolesBtn" hidden>Rôles &amp; accès</button>
-        <button class="btn sm" id="discordBtn" hidden>Liaison Discord</button>
-        <button class="btn sm" id="platformBtn" hidden>Espaces de logs</button>
-        <button class="btn sm" id="auditBtn" hidden>Journal du panneau</button>
-      </div>
+      <!-- ⚠️ L'ADMINISTRATION A QUITTÉ LE PIED : Rôles, Réglages, Équipe et
+           Journal sont désormais des RUBRIQUES du rail (buildNav), façon
+           espace de travail. Le pied ne garde que l'état du flux. -->
     </div>
     <!-- ⚠️ LE COMPTE EN BAS À GAUCHE, comme un vrai espace de travail : la
          marque et l'environnement en haut, l'identité en bas, le contenu au
@@ -2693,6 +2685,26 @@ function buildNav() {
         <span class="nav-dot"></span>
         <span class="nav-label">${esc(c.label)}</span>
         <span class="nav-n" data-n="${c.id}">—</span></button>`).join('');
+  }
+  // ⚠️ ADMINISTRATION dans le rail, façon « espace de travail » : Rôles,
+  // Réglages, Équipe et Journal du panneau sont des RUBRIQUES, pas des
+  // boutons noyés dans le pied. Chacune est gardée par son droit — une
+  // rubrique qu'on ne peut pas ouvrir n'apparaît pas. `data-admin` ouvre
+  // le panneau correspondant (les écrans existent déjà, on ne fait que les
+  // rendre atteignables comme des onglets).
+  const admin = [
+    can('roles.manage')    ? { k:'roles',    label:'Rôles',            fam:'var(--f-staff)', desc:'Qui a le droit de voir et de faire quoi' } : null,
+    can('settings.discord')? { k:'settings',  label:'Réglages',         fam:'var(--f-play)',  desc:'Liaison Discord, correspondance des rôles' } : null,
+    can('accounts.view')   ? { k:'team',      label:'Équipe',           fam:'var(--ok)',      desc:'Les comptes qui accèdent à cet espace' } : null,
+    can('audit.view')      ? { k:'audit',     label:'Journal du panneau',fam:'var(--ink-2)',  desc:'Qui a consulté quoi, qui a sanctionné qui' } : null,
+  ].filter(Boolean);
+  if (admin.length) {
+    html += `<div class="nav-group eyebrow nav-section">Administration</div>`;
+    html += admin.map(a => `
+      <button class="nav-item" data-admin="${a.k}" style="--fam:${a.fam}" title="${esc(a.desc)}">
+        <span class="nav-dot"></span>
+        <span class="nav-label">${esc(a.label)}</span>
+        <span class="nav-n"></span></button>`).join('');
   }
   host.innerHTML = html;
   _repereVu = false;          // rail reconstruit : on repart d'une mesure neuve
@@ -6311,11 +6323,8 @@ document.addEventListener('click', async ev => {
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
-    if (id === 'rolesBtn')    { ROLE_OUVERT = null; openRoles(); }
-    // ⚠️ Le bouton mène à l'ONGLET, il ne rouvre plus une fenêtre : deux
-    // chemins vers la même liste finissent par diverger, et c'est celui
-    // qu'on ferme par erreur qui contenait le bouton qu'on cherchait.
-    if (id === 'platformBtn') { STATE.view = 'spaces'; render(); chargerEnvs(); }
+    // Rôles, Réglages, Équipe, Journal et « Espaces » sont maintenant des
+    // rubriques du rail (data-admin / data-view), gérées plus haut.
     if (id === 'envNewBtn') return creerEnvironnement();
     if (id === 'envQClear') { ENV_Q = ''; $('#envQ').value = ''; $('#envQClear').hidden = true; return rendreEnvs(); }
     if (id === 'nrGo')        creerRole();
@@ -6828,8 +6837,19 @@ function goOverview() { STATE.view = 'overview'; syncHash(); render(); refresh()
 function goVue(v) { STATE.view = v; syncHash(); render(); refresh(); window.scrollTo({ top: 0 }); }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate],[data-notedel]');
+  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate],[data-notedel],[data-admin]');
   if (!t) return;
+
+  if (t.dataset.admin) {
+    // Les rubriques d'administration du rail ouvrent leur panneau. Les
+    // écrans existent déjà (ROLE_OUVERT/DROLES sont remis à zéro pour
+    // repartir d'une vue propre).
+    if (t.dataset.admin === 'roles')    { ROLE_OUVERT = null; return openRoles(); }
+    if (t.dataset.admin === 'settings') { DROLES = null; return openDiscordSettings(); }
+    if (t.dataset.admin === 'team')     return openTeam();
+    if (t.dataset.admin === 'audit')    return openAudit();
+    return;
+  }
 
   if (t.dataset.view === 'platform')    return goVue('platform');
   if (t.dataset.view === 'platformlog')  return goVue('platformlog');
@@ -6921,8 +6941,6 @@ document.addEventListener('click', async ev => {
   if (id === 'resetFilters')  clearFilter('tout');
   if (id === 'moreBtn')  loadMore();
   if (id === 'densityBtn') basculerDensite();
-  if (id === 'teamBtn')    openTeam();
-  if (id === 'discordBtn') { DROLES = null; openDiscordSettings(); }
   if (id === 'dcLoad')     chargerRolesDiscord();
   if (id === 'dcSave')     enregistrerDiscord().catch(e => toast(e.message));
   if (id === 'botSave')    enregistrerBot().catch(e => toast(e.message));
@@ -6933,7 +6951,6 @@ document.addEventListener('click', async ev => {
       .then(() => { toast('Bot retiré.'); chargerBot(); })
       .catch(e => toast(e.message));
   }
-  if (id === 'auditBtn') openAudit();
   if (id === 'nsGo') {
     try {
       await api('/api/staff', { method:'POST', body: JSON.stringify({
@@ -7353,20 +7370,11 @@ function peindreIdentite() {
   document.title = (dans ? nom + ' — journal serveur' : 'Origin Logs')
                  + (ME.pseudo ? ' (' + ME.pseudo + ')' : '');
 
-  // ⚠️ Ces boutons agissent DANS un environnement : hors de tout espace
-  // ils ouvriraient des écrans que l'API refuse (409).
+  // ⚠️ Les rubriques d'administration (Rôles, Réglages, Équipe, Journal)
+  // sont construites dans le rail par buildNav(), gardées par leur droit :
+  // elles n'agissent que DANS un environnement, donc n'apparaissent pas hors
+  // espace (buildNav s'arrête avant pour l'administration sans espace).
   const b = (sel, on) => { const n = $(sel); if (n) n.hidden = !on; };
-  const adminItems = {
-    '#teamBtn':     dans && can('accounts.view'),
-    '#rolesBtn':    dans && can('roles.manage'),
-    '#discordBtn':  dans && can('settings.discord'),
-    '#auditBtn':    dans && can('audit.view'),
-    '#platformBtn': ME.plateforme
-  };
-  for (const [sel, on] of Object.entries(adminItems)) b(sel, on);
-  // La section « Administration » du pied ne s'affiche que s'il y a au
-  // moins un accès à montrer — sinon son intitulé flotterait seul.
-  b('#footAdmin', Object.values(adminItems).some(Boolean));
   if ($('#platTeamBtn')) $('#platTeamBtn').hidden = !canPlat('plat.equipe.voir');
   // La recherche reste en haut ; la période, le direct et l'export sont
   // descendus dans le pied du rail (« Réglages du flux ») — ils n'agissent
