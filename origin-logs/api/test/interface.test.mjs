@@ -355,19 +355,29 @@ t('⚠️ « Vue d’équipe » n’est plus une rubrique séparée du rail',
 t('« Tableau de bord » a remplacé « Vue d’ensemble » dans le rail',
   /nav-label">Tableau de bord</.test(P));
 
-sect('Rôles & accès est une PLEINE PAGE, plus une fenêtre');
-// ⚠️ C’est l’écran qu’on ouvre pour comprendre qui peut quoi : une fenêtre
-// se referme dès qu’on clique ailleurs, une page reste.
-t('la vue existe', /id="viewRoles"/.test(P));
-t('entrée dans le rail en PLEINE PAGE (nav:true → data-view)',
-  /k:'roles',\s*nav:true/.test(P) && /a\.nav \? `data-view="\$\{a\.k\}"`/.test(P));
-t('son adresse', P.includes("'/roles'"));
-t('le clic du rail la route', /dataset\.view === 'roles'\)\s*return goVue\('roles'\)/.test(P));
-t('⚠️ rendreRoles PEINT LA VUE, il n’ouvre plus de openSheet',
-  /function rendreRoles\(\)[\s\S]{0,200}\$\('#viewRoles'\)/.test(P)
-  && !/function rendreRoles\(\)[\s\S]{0,400}openSheet\(/.test(P));
-t('⚠️ le rendu ne se refait pas sous les doigts (garde anti-reconstruction)',
-  /if \(!force && host\.querySelector\('#roleList'\)\) return;/.test(P));
+sect('L’administration est en PAGES, plus en fenêtres');
+// ⚠️ Rôles, Réglages, Comptes et Journal étaient des modales. Un back-office
+// se parcourt : on y revient, on y règle plusieurs choses de suite. Chacun
+// est une vue pleine (data-view), avec son adresse et son garde
+// anti-reconstruction, et n'ouvre plus openSheet.
+for (const [k, path, fn, marker] of [
+  ['roles',    '/roles',           'renderRolesPage',    '#roleList'],
+  ['settings', '/reglages',        'renderSettingsPage', '#dcClient'],
+  ['comptes',  '/comptes',         'renderComptesPage',  '#comptesList'],
+  ['audit',    '/journal-panneau', 'renderAuditPage',    '#auditTrail'],
+]) {
+  t(`${k} : la vue existe`, new RegExp(`id="view${k[0].toUpperCase()+k.slice(1)}"`).test(P));
+  t(`${k} : son adresse`, P.includes(`'${path}'`));
+  t(`${k} : le clic du rail la route`, new RegExp(`dataset\\.view === '${k}'\\)\\s*return goVue\\('${k}'\\)`).test(P));
+  t(`${k} : sa fonction de rendu est branchée dans render()`,
+    new RegExp(`STATE\\.view === '${k}'\\) ${fn}\\(\\)`).test(P) && new RegExp(`function ${fn}\\(`).test(P));
+  t(`${k} : garde anti-reconstruction`,
+    new RegExp(`if \\(!force && host\\.querySelector\\('${marker}'\\)\\) return;`).test(P));
+}
+t('⚠️ l’admin passe par data-view, plus par data-admin (routage)',
+  !/dataset\.admin/.test(P) && !/data-admin="/.test(P));
+t('⚠️ « Comptes » est distinct du sous-onglet Analyse « Équipe »',
+  /k:'comptes',\s*label:'Comptes'/.test(P) && !/label:'Équipe'.*accès/.test(P));
 
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);

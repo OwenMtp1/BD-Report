@@ -1822,6 +1822,15 @@ select.input{height:36px}
 
     <!-- ============ RÔLES (pleine page) ============ -->
     <section class="view" id="viewRoles" hidden aria-label="Rôles et accès"></section>
+
+    <!-- ============ ADMINISTRATION EN PAGES (Réglages, Comptes, Journal) ============
+         ⚠️ Ces trois écrans étaient des FENÊTRES. Un back-office se parcourt :
+         on y revient, on y règle plusieurs choses de suite, on garde l'onglet
+         ouvert. Une modale se referme dès qu'on clique ailleurs. Ils sont
+         désormais des vues pleines (même patron que Rôles). -->
+    <section class="view" id="viewSettings" hidden aria-label="Réglages"></section>
+    <section class="view" id="viewComptes" hidden aria-label="Comptes et accès"></section>
+    <section class="view" id="viewAudit" hidden aria-label="Journal du panneau"></section>
     </main>
   </div>
 </div>
@@ -2696,6 +2705,9 @@ function render() {
   $('#viewPlaytime').hidden    = STATE.view !== 'playtime';
   $('#viewStats').hidden       = STATE.view !== 'stats';
   $('#viewRoles').hidden       = STATE.view !== 'roles';
+  $('#viewSettings').hidden    = STATE.view !== 'settings';
+  $('#viewComptes').hidden     = STATE.view !== 'comptes';
+  $('#viewAudit').hidden       = STATE.view !== 'audit';
   $('#viewPlatform').hidden    = STATE.view !== 'platform';
   $('#viewSpaces').hidden      = STATE.view !== 'spaces';
   $('#viewPlans').hidden       = STATE.view !== 'plans';
@@ -2719,6 +2731,9 @@ function render() {
   else if (STATE.view === 'playtime') renderPlaytime();
   else if (STATE.view === 'stats') renderStats();
   else if (STATE.view === 'roles') renderRolesPage();
+  else if (STATE.view === 'settings') renderSettingsPage();
+  else if (STATE.view === 'comptes') renderComptesPage();
+  else if (STATE.view === 'audit') renderAuditPage();
   else if (STATE.view === 'platform') rendrePlateforme();
   else if (STATE.view === 'spaces') rendreEnvs();   // charge à la volée si besoin
   else if (STATE.view === 'plans') rendreOffres();
@@ -2794,23 +2809,20 @@ function buildNav() {
         <span class="nav-n" data-n="${c.id}">—</span></button>`).join('');
   }
   // ⚠️ ADMINISTRATION dans le rail, façon « espace de travail » : Rôles,
-  // Réglages, Équipe et Journal du panneau sont des RUBRIQUES, pas des
-  // boutons noyés dans le pied. Chacune est gardée par son droit — une
-  // rubrique qu'on ne peut pas ouvrir n'apparaît pas. `data-admin` ouvre
-  // le panneau correspondant (les écrans existent déjà, on ne fait que les
-  // rendre atteignables comme des onglets).
-  // `nav` : pleine page (data-view, avec le repère glissant) ; `admin` :
-  // panneau en fenêtre (data-admin). Rôles est devenu une pleine page.
+  // Rôles, Réglages, Comptes et Journal sont désormais TOUS des pages pleines
+  // (data-view, avec le repère glissant du rail), plus des fenêtres. Chacune
+  // reste gardée par son droit — une rubrique qu'on ne peut pas ouvrir
+  // n'apparaît pas.
   const admin = [
-    can('roles.manage')    ? { k:'roles',    nav:true,  label:'Rôles',            fam:'var(--f-staff)', desc:'Qui a le droit de voir et de faire quoi' } : null,
-    can('settings.discord')? { k:'settings',            label:'Réglages',         fam:'var(--f-play)',  desc:'Liaison Discord, correspondance des rôles' } : null,
-    can('accounts.view')   ? { k:'team',                label:'Équipe',           fam:'var(--ok)',      desc:'Les comptes qui accèdent à cet espace' } : null,
-    can('audit.view')      ? { k:'audit',               label:'Journal du panneau',fam:'var(--ink-2)',  desc:'Qui a consulté quoi, qui a sanctionné qui' } : null,
+    can('roles.manage')    ? { k:'roles',    label:'Rôles',             fam:'var(--f-staff)', desc:'Qui a le droit de voir et de faire quoi' } : null,
+    can('settings.discord')? { k:'settings', label:'Réglages',          fam:'var(--f-play)',  desc:'Liaison Discord, correspondance des rôles' } : null,
+    can('accounts.view')   ? { k:'comptes',  label:'Comptes',           fam:'var(--ok)',      desc:'Les comptes qui accèdent à cet espace, leurs rôles' } : null,
+    can('audit.view')      ? { k:'audit',    label:'Journal du panneau',fam:'var(--ink-2)',  desc:'Qui a consulté quoi, qui a sanctionné qui' } : null,
   ].filter(Boolean);
   if (admin.length) {
     html += `<div class="nav-group eyebrow nav-section">Administration</div>`;
     html += admin.map(a => `
-      <button class="nav-item" ${a.nav ? `data-view="${a.k}"` : `data-admin="${a.k}"`} style="--fam:${a.fam}" title="${esc(a.desc)}">
+      <button class="nav-item" data-view="${a.k}" style="--fam:${a.fam}" title="${esc(a.desc)}">
         <span class="nav-dot"></span>
         <span class="nav-label">${esc(a.label)}</span>
         <span class="nav-n"></span></button>`).join('');
@@ -3949,9 +3961,24 @@ function champRole(id, valeur) {
   return `<input class="input" data-map="${esc(id)}" value="${esc(valeur || '')}" placeholder="ID du rôle Discord" inputmode="numeric">`;
 }
 
+// ⚠️ EN PAGE « Réglages », plus en fenêtre « Liaison Discord ». `openDiscordSettings`
+// recharge la config et force le rendu (appelée après enregistrement ou après
+// chargement des rôles) ; la navigation passe par goVue('settings').
+let SETTINGS_DATA = null;
 async function openDiscordSettings() {
-  let d;
-  try { d = await api('/api/discord/config'); } catch (e) { return toast(e.message); }
+  SETTINGS_DATA = null;
+  if (STATE.view !== 'settings') { STATE.view = 'settings'; syncHash(); }
+  await renderSettingsPage(true);
+}
+async function renderSettingsPage(force) {
+  const host = $('#viewSettings'); if (!host) return;
+  if (!force && host.querySelector('#dcClient')) return;   // pas de reconstruction sous les doigts
+  let d = SETTINGS_DATA;
+  if (!d) {
+    host.innerHTML = `<div class="head"><div><h1 class="title">Réglages</h1></div></div><div class="void">Chargement…</div>`;
+    try { d = SETTINGS_DATA = await api('/api/discord/config'); }
+    catch (e) { host.innerHTML = `<div class="void"><b>${esc(e.message)}</b></div>`; return; }
+  }
   // L'état des deux secrets s'affiche TOUJOURS, liaison prête ou non : ils
   // vivent dans .env, hors de portée de l'écran, et c'est la seule façon de
   // savoir qu'ils sont posés sans aller lire le fichier sur le serveur.
@@ -3963,8 +3990,11 @@ async function openDiscordSettings() {
     ? `<div class="banner" style="--c:var(--ok)"><b>Liaison active.</b> Le staff se connecte avec Discord ; l’appartenance au serveur et le rôle staff sont vérifiés à chaque connexion, puis revérifiés toutes les 15 minutes. ${secrets}</div>`
     : `<div class="banner" style="--c:var(--warn)"><b>Liaison incomplète.</b> Renseignez le serveur et le rôle staff ci-dessous. ${secrets}</div>`;
 
-  openSheet('Liaison Discord', 'Un rôle Discord = les droits correspondants — espace « ' + (d.espace ? d.espace.nom : '') + ' »',
-    { name:'Discord', hue:235 }, `
+  host.innerHTML = `
+    <div class="head"><div>
+      <h1 class="title">Réglages</h1>
+      <div class="sub">Liaison Discord — un rôle Discord = les droits correspondants${d.espace ? ' · espace « ' + esc(d.espace.nom) + ' »' : ''}</div>
+    </div></div>
     ${etat}
     <div class="block">
       <h3 class="eyebrow">Serveur et accès</h3>
@@ -3998,7 +4028,7 @@ async function openDiscordSettings() {
     <div class="block" id="botBloc" style="border-top:1px solid var(--edge);padding-top:16px;margin-top:6px">
       <h3 class="eyebrow">Bot Discord — les journaux dans vos salons</h3>
       <div id="botCorps"><span class="lite-m">Chargement…</span></div>
-    </div>`);
+    </div>`;
   chargerBot();
 }
 
@@ -4148,14 +4178,34 @@ async function enregistrerDiscord(o) {
 }
 
 /* ---------- audit ---------- */
+// ⚠️ EN PAGE, plus en fenêtre. `openAudit` recharge et force le rendu ;
+// la navigation passe par goVue('audit') → renderAuditPage (rendu paresseux).
+let AUDIT_DATA = null;
 async function openAudit() {
-  let d;
-  try { d = await api('/api/audit'); } catch (e) { return toast(e.message); }
-  openSheet('Journal du panneau', 'Qui a consulté quoi, qui a sanctionné qui', { name:'Audit', hue:210 }, `
-    <div class="trail">${d.audit.map(a => `<div class="trail-row">
-      <span class="trail-t">${dayLabel(a.ts)} ${hhmmss(a.ts)}</span>
-      <span class="trail-m"><strong>${esc(a.pseudo || 'anonyme')}</strong> — ${esc(a.action)}${a.detail ? ' · ' + esc(a.detail) : ''}</span>
-    </div>`).join('') || '<span class="lite-m">Rien à afficher.</span>'}</div>`);
+  AUDIT_DATA = null;
+  if (STATE.view !== 'audit') { STATE.view = 'audit'; syncHash(); }
+  await renderAuditPage(true);
+}
+async function renderAuditPage(force) {
+  const host = $('#viewAudit'); if (!host) return;
+  if (!force && host.querySelector('#auditTrail')) return;   // pas de reconstruction sous les doigts
+  if (!AUDIT_DATA) {
+    host.innerHTML = `<div class="head"><div><h1 class="title">Journal du panneau</h1></div></div><div class="void">Chargement…</div>`;
+    try { AUDIT_DATA = await api('/api/audit'); }
+    catch (e) { host.innerHTML = `<div class="void"><b>${esc(e.message)}</b></div>`; return; }
+  }
+  const d = AUDIT_DATA;
+  host.innerHTML = `
+    <div class="head"><div>
+      <h1 class="title">Journal du panneau</h1>
+      <div class="sub">Qui a consulté quoi, qui a sanctionné qui</div>
+    </div></div>
+    <div class="panel"><div class="panel-body">
+      <div class="trail" id="auditTrail">${d.audit.map(a => `<div class="trail-row">
+        <span class="trail-t">${dayLabel(a.ts)} ${hhmmss(a.ts)}</span>
+        <span class="trail-m"><strong>${esc(a.pseudo || 'anonyme')}</strong> — ${esc(a.action)}${a.detail ? ' · ' + esc(a.detail) : ''}</span>
+      </div>`).join('') || '<span class="lite-m">Rien à afficher.</span>'}</div>
+    </div></div>`;
 }
 </script>
 
@@ -4183,6 +4233,9 @@ function syncHash(replace) {
                : STATE.view === 'playtime'    ? '/temps-de-jeu'
                : STATE.view === 'stats'       ? '/statistiques'
                : STATE.view === 'roles'       ? '/roles'
+               : STATE.view === 'settings'    ? '/reglages'
+               : STATE.view === 'comptes'     ? '/comptes'
+               : STATE.view === 'audit'       ? '/journal-panneau'
                :                                '/flux/' + STATE.cat;
   const qp = [];
   if (STATE.view === 'bans')        { if (STATE.banQ) qp.push('q=' + encodeURIComponent(STATE.banQ)); }
@@ -4219,6 +4272,9 @@ function applyHash() {
   else if (seg[0] === 'temps-de-jeu') { STATE.view = 'playtime'; STATE.cat = 'all'; }
   else if (seg[0] === 'statistiques') { STATE.view = 'stats';    STATE.cat = 'all'; }
   else if (seg[0] === 'roles')        { STATE.view = 'roles';    STATE.cat = 'all'; }
+  else if (seg[0] === 'reglages')     { STATE.view = 'settings'; STATE.cat = 'all'; }
+  else if (seg[0] === 'comptes')      { STATE.view = 'comptes';  STATE.cat = 'all'; }
+  else if (seg[0] === 'journal-panneau') { STATE.view = 'audit'; STATE.cat = 'all'; }
   else                        { STATE.view = 'overview'; STATE.cat = 'all'; }
   // Un lien vers un flux, collé par un collègue qui, lui, est dans un
   // espace : on ne montre pas une page vide, on ramène à la supervision.
@@ -6613,15 +6669,34 @@ async function choisirProprietaire(spaceId) {
 /* ============================================================
    Équipe : rôles cumulables, attribution manuelle
    ============================================================ */
+// ⚠️ EN PAGE « Comptes », plus en fenêtre « Gérer l'équipe » (et renommée :
+// le sous-onglet Analyse « Équipe » montre l'ACTIVITÉ, celui-ci gère les
+// ACCÈS — deux « Équipe » prêtaient à confusion). `openTeam` recharge et
+// force le rendu ; la navigation passe par goVue('comptes').
+let COMPTES_DATA = null;
 async function openTeam() {
-  let d;
-  try { d = await api('/api/staff'); } catch (e) { return toast(e.message); }
+  COMPTES_DATA = null;
+  if (STATE.view !== 'comptes') { STATE.view = 'comptes'; syncHash(); }
+  await renderComptesPage(true);
+}
+async function renderComptesPage(force) {
+  const host = $('#viewComptes'); if (!host) return;
+  if (!force && host.querySelector('#comptesList')) return;   // pas de reconstruction sous les doigts
+  if (!COMPTES_DATA) {
+    host.innerHTML = `<div class="head"><div><h1 class="title">Comptes &amp; accès</h1></div></div><div class="void">Chargement…</div>`;
+    try { COMPTES_DATA = await api('/api/staff'); }
+    catch (e) { host.innerHTML = `<div class="void"><b>${esc(e.message)}</b></div>`; return; }
+  }
+  const d = COMPTES_DATA;
   const attribuables = (d.roles || []).filter(r => r.rank < (d.monRang || 1000));
-  openSheet('Gérer l’équipe', `${d.staff.length} compte(s) · les rôles viennent de Discord, vous gardez le dernier mot`,
-    { name:'Équipe', hue:268 }, `
+  host.innerHTML = `
+    <div class="head"><div>
+      <h1 class="title">Comptes &amp; accès</h1>
+      <div class="sub">${d.staff.length} compte(s) · les rôles viennent de Discord, vous gardez le dernier mot</div>
+    </div></div>
     <div class="banner" style="--c:var(--vio)">Cocher un rôle ici l’attribue <b>à la main</b> : il l’emporte sur Discord et
       survit aux resynchronisations. Tout décocher rend la main à Discord.</div>
-    <div class="team">${d.staff.map(m => `
+    <div id="comptesList" class="team">${d.staff.map(m => `
       <div class="role-card ${m.disabled ? 'ferme' : ''}">
         <button class="role-head" data-memtoggle="${m.id}">
           <span class="av sm" style="${avatarStyle(m)}">${initials(m)}</span>
@@ -6663,7 +6738,7 @@ async function openTeam() {
       <div class="field"><label for="nsRole">Rôle</label>
         <select class="input" id="nsRole">${attribuables.map(r => `<option value="${r.id}">${esc(r.label)}</option>`).join('')}</select></div>
       <button class="btn primary" id="nsGo" style="justify-self:start">Créer le compte</button>
-    </div>` : ''}`);
+    </div>` : ''}`;
 }
 
 /* Les raccordements se règlent à la coche, pas au bouton « Enregistrer » :
@@ -6686,8 +6761,8 @@ document.addEventListener('click', async ev => {
     + '[data-spdel],[data-owner]');
   if (!t) {
     const id = ev.target.id;
-    // Rôles, Réglages, Équipe, Journal et « Espaces » sont maintenant des
-    // rubriques du rail (data-admin / data-view), gérées plus haut.
+    // Rôles, Réglages, Comptes, Journal et « Espaces » sont maintenant des
+    // pages du rail (routées par data-view, plus haut).
     if (id === 'envNewBtn') return creerEnvironnement();
     if (id === 'envQClear') { ENV_Q = ''; $('#envQ').value = ''; $('#envQClear').hidden = true; return rendreEnvs(); }
     if (id === 'nrGo')        creerRole();
@@ -7209,19 +7284,8 @@ function goVue(v) {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate],[data-notedel],[data-admin]');
+  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate],[data-notedel]');
   if (!t) return;
-
-  if (t.dataset.admin) {
-    // Les rubriques d'administration du rail ouvrent leur panneau. Les
-    // écrans existent déjà (ROLE_OUVERT/DROLES sont remis à zéro pour
-    // repartir d'une vue propre).
-    if (t.dataset.admin === 'roles')    { ROLE_OUVERT = null; return openRoles(); }
-    if (t.dataset.admin === 'settings') { DROLES = null; return openDiscordSettings(); }
-    if (t.dataset.admin === 'team')     return openTeam();
-    if (t.dataset.admin === 'audit')    return openAudit();
-    return;
-  }
 
   if (t.dataset.view === 'platform')    return goVue('platform');
   if (t.dataset.view === 'platformlog')  return goVue('platformlog');
@@ -7239,6 +7303,9 @@ document.addEventListener('click', async ev => {
   if (t.dataset.view === 'playtime') return goVue('playtime');
   if (t.dataset.view === 'stats')    return goVue('stats');
   if (t.dataset.view === 'roles')    return goVue('roles');
+  if (t.dataset.view === 'settings') return goVue('settings');
+  if (t.dataset.view === 'comptes')  return goVue('comptes');
+  if (t.dataset.view === 'audit')    return goVue('audit');
   if (t.dataset.shot)   return ouvrirCapture(t.dataset.shot, t.dataset.shotname);
   if (t.dataset.act)    return askAction(t.dataset.act, t.dataset.key, t.dataset.name);
   if (t.dataset.notedel) {
