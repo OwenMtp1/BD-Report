@@ -1,0 +1,41 @@
+# ============================================================
+# Origin Logs — réglages de la mise à jour automatique
+# À copier dans /etc/origin-logs-maj.conf
+# ============================================================
+
+# Où le panneau est installé, et sous quel utilisateur il tourne.
+DOSSIER=/srv/origin-logs
+UTILISATEUR=origin
+SERVICE=origin-logs
+
+# ⚠️ CE QUE LA MACHINE SUIT.
+#
+# Ce dépôt-ci N'EST PAS l'atelier de l'éditeur : c'est son CANAL DE
+# VERSIONS. L'éditeur travaille dans un autre dépôt (privé, à lui) et ne
+# pousse ICI que les versions qu'il a validées. Autrement dit : tout ce
+# qui arrive dans ce dépôt est, par construction, une version bonne pour
+# les joueurs. La machine peut donc suivre la branche sans risque —
+# rien d'inachevé n'y transite.
+#
+#   branche    elle prend chaque commit de la branche ci-dessous. Comme
+#              cette branche ne reçoit QUE des versions validées, cela
+#              revient à « ne prendre que les versions publiées ».
+#
+#   etiquette  variante : elle ne bouge qu'aux versions étiquetées
+#              (git tag). Utile si un jour l'atelier et le canal de
+#              versions ne font qu'un seul dépôt. Ce n'est pas le cas ici.
+#
+SUIVRE=branche
+BRANCHE=main
+
+# L'adresse que le script interroge APRÈS redémarrage pour savoir si le
+# panneau est vraiment debout. S'il ne répond pas, la version précédente
+# est remise.
+SANTE=http://127.0.0.1:8080/api/auth/options
+ATTENTE=20
+
+# Jouer la suite de tests avant de redémarrer. Elle monte ses propres
+# serveurs sur d'autres ports et sa propre base : elle ne dérange pas
+# celui qui tourne. La laisser à 1 est ce qui attrape une bêtise AVANT
+# qu'elle atteigne le client.
+TESTER=1
