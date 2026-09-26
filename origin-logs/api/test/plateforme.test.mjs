@@ -118,6 +118,26 @@ const auDessus = await J('/api/platform/roles/technique',{method:'PATCH',body:JS
 t('⚠️ ni ne touche à un rôle de rang supérieur au sien', auDessus.status===403,
   auDessus.body && auDessus.body.error);
 
+// ⚠️ ESCALADE CORRIGÉE : promouvoir dans l'équipe SANS préciser le rôle
+// posait « Direction » par défaut (le rôle le plus HAUT) ET sautait le
+// plafond de rang — un `{platform:true}` seul suffisait à hisser un compte
+// tout en haut. Le défaut est désormais le rôle le plus BAS, et le plafond
+// s'applique toujours : l'Adjoint (rang 70) promeut donc à « Observateur »
+// (rang 10), jamais au-dessus de lui.
+await J('/api/staff',{method:'POST',body:JSON.stringify(
+  {pseudo:'Cobaye',password:'motdepassecobaye12',role:'moderateur'})},patron);
+const cob = ((await J('/api/platform/members',{},patron)).body.members||[]).find(x=>x.pseudo==='Cobaye');
+await J('/api/platform/members/'+cob.id,{method:'PATCH',body:JSON.stringify({platform:true})},ckT);
+const cobApres = ((await J('/api/platform/members',{},patron)).body.members||[]).find(x=>x.pseudo==='Cobaye');
+t('⚠️ promouvoir sans rôle ne pose PLUS « Direction » par défaut',
+  cobApres && cobApres.platformRole==='observateur', cobApres && cobApres.platformRole);
+const versHaut = await J('/api/platform/members/'+cob.id,{method:'PATCH',body:JSON.stringify(
+  {platform:true, platformRole:'direction'})},ckT);
+t('⚠️ et un rôle explicite au-dessus de soi reste refusé',
+  versHaut.status===403, versHaut.body && versHaut.body.error);
+// On restaure l'état de l'équipe pour les contrôles suivants (dernier admin).
+await J('/api/platform/members/'+cob.id,{method:'PATCH',body:JSON.stringify({platform:false})},patron);
+
 sect('Le Discord officiel de la plateforme');
 const dc = await J('/api/platform/discord',{},patron);
 t('la liaison est lisible', dc.status===200 && Array.isArray(dc.body.roles));

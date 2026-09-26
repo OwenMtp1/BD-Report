@@ -178,6 +178,13 @@ const SEC_HEADERS = {
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
 };
+// ⚠️ HSTS UNIQUEMENT EN HTTPS. Envoyé en clair, il n'aurait aucun effet
+// (le navigateur l'ignore) mais surtout, posé une fois, il force le domaine
+// en HTTPS pour six mois : le mettre par erreur sur une machine servie en
+// HTTP la rendrait injoignable. Il ne s'ajoute donc que si l'app se sait
+// derrière TLS. Sans lui, une première visite reste interceptable (SSL-strip).
+if (CFG.secure)
+  SEC_HEADERS['strict-transport-security'] = 'max-age=15552000; includeSubDomains';
 
 const JSONH = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
 function send(res, code, obj, extra) {
@@ -4134,21 +4141,29 @@ async function route(req, res) {
               const autres = DB.row(db.prepare('SELECT COUNT(*) n FROM staff WHERE platform_admin = 1 AND id <> ?').get(mid)).n;
               if (!autres) return fail(res, 409, 'Vous êtes le dernier administrateur de plateforme.');
             }
-            let cle = cible.platform_role || 'direction';
-            if (b.platformRole !== undefined) {
-              const r = PLAT.byKey(db, String(b.platformRole));
+            // Le rang de la personne visée compte : on ne touche pas à un
+            // compte à son niveau ou au-dessus.
+            if (cible.platform_admin && PLAT.rangDe(db, cible.platform_role) >= me.platRang && mid !== me.id)
+              return fail(res, 403, 'Ce compte est à votre niveau ou au-dessus.');
+            let cle = null;
+            if (entre) {
+              // ⚠️ ESCALADE CORRIGÉE. Le rôle par défaut était « direction »
+              // (le plus haut) et le plafond de rang n'était vérifié QUE si
+              // `platformRole` était fourni : envoyer `{platform:true}` sans
+              // rôle hissait donc le compte tout en haut, au-dessus de celui
+              // qui le nommait. Le défaut est désormais le rôle le plus BAS
+              // (ou celui déjà porté), et le plafond s'applique TOUJOURS.
+              const roles = PLAT.list(db);                 // triés par rang décroissant
+              const basRole = roles.length ? roles[roles.length - 1].key : null;
+              const voulu = b.platformRole !== undefined ? String(b.platformRole)
+                          : (cible.platform_role || basRole);
+              const r = voulu ? PLAT.byKey(db, voulu) : null;
               if (!r) return fail(res, 404, 'Rôle de plateforme inconnu.');
-              // ⚠️ On ne nomme pas quelqu'un à son propre niveau : sinon
-              // le premier commercial promu pourrait révoquer celui qui
-              // vient de le nommer.
+              // On ne nomme jamais quelqu'un à son propre niveau ou au-dessus.
               if (r.rang >= me.platRang)
                 return fail(res, 403, `« ${r.label} » est à votre niveau ou au-dessus.`);
               cle = r.key;
             }
-            // Le rang de la personne visée compte aussi : on ne rétrograde
-            // pas plus haut que soi.
-            if (cible.platform_admin && PLAT.rangDe(db, cible.platform_role) >= me.platRang && mid !== me.id)
-              return fail(res, 403, 'Ce compte est à votre niveau ou au-dessus.');
             db.prepare('UPDATE staff SET platform_admin = ?, platform_role = ?, platform_role_manual = ? WHERE id = ?')
               .run(entre ? 1 : 0, entre ? cle : null,
                    entre && b.platformRole !== undefined ? 1 : 0, mid);

@@ -28,6 +28,12 @@ const h = cat.r.headers;
 t('nosniff', h.get('x-content-type-options')==='nosniff');
 t('pas d’affichage en cadre', h.get('x-frame-options')==='DENY');
 t('politique de contenu', /frame-ancestors 'none'/.test(h.get('content-security-policy')||''));
+// ⚠️ HSTS n'est posé QU'EN HTTPS : servi en clair, il n'aurait aucun effet
+// et, une fois mémorisé, forcerait le domaine en HTTPS pendant des mois —
+// de quoi rendre injoignable une machine servie en HTTP. Le test tourne en
+// clair : l'en-tête doit donc être ABSENT ici.
+t('⚠️ pas de HSTS en HTTP (il rendrait le domaine injoignable)',
+  !h.get('strict-transport-security'), h.get('strict-transport-security')||'absent');
 
 sect('Écritures : origine vérifiée');
 const r0 = await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},
