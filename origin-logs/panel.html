@@ -258,13 +258,19 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .rail-account .who-role{font-size:10.5px;font-weight:600;color:var(--vio-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rail-account .icon-btn{flex:none}
 /* Réglages du flux, descendus de la barre du haut : période, direct, export. */
-.flow-set{display:grid;gap:8px;padding:10px 0 4px;margin:2px 0;border-top:1px solid var(--line-soft)}
-.flow-set[hidden]{display:none}
-.flow-lbl{font-size:10.5px;font-weight:600;color:var(--muted)}
-.flow-set .seg{width:100%;height:32px}
-.flow-set .seg button{font-size:11px}
-.flow-acts{display:grid;grid-template-columns:1fr auto;gap:7px}
-.flow-acts .btn{justify-content:center}
+/* Barre contextuelle de période, en tête des écrans temporels. */
+.periodbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 22px 0}
+.periodbar[hidden]{display:none}
+.pb-lbl{font-size:11.5px;font-weight:600;color:var(--muted)}
+.periodbar .seg{height:32px}
+.periodbar .seg button{font-size:11.5px;padding:0 10px}
+.pb-acts{margin-left:auto;display:flex;gap:7px}
+.pb-custom{flex-basis:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:4px}
+.pb-custom[hidden]{display:none}
+.pb-custom label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+.pb-custom .input{height:32px;width:auto}
+.seg.custom::before{opacity:0}
+#rangeCustomBtn[aria-pressed="true"]{border-color:var(--vio);color:var(--vio-hi);background:var(--vio-wash)}
 .foot-line{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted)}
 .foot-line b{color:var(--ink-2);font-weight:500;font-family:var(--mono);font-size:10.5px}
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 3px rgba(52,211,153,.18)}
@@ -1262,6 +1268,8 @@ select.input{height:36px}
   #helpBtn{margin-left:auto}
 
   .view{padding:0 16px 40px}
+  .periodbar{padding:12px 16px 0}
+  .pb-acts{margin-left:0}
   .head{padding:18px 0 14px}
   /* Deux tuiles par ligne au maximum : à trois, chaque nombre devenait
      illisible. */
@@ -1365,26 +1373,12 @@ select.input{height:36px}
         <div class="foot-line">Dernier évènement <b id="lastTick">—</b></div>
         <div class="foot-line">Rétention <b id="retention">30 jours</b></div>
       </div>
-      <!-- ⚠️ Période, direct et export ont QUITTÉ la barre du haut : ils
-           n'agissent que sur le journal d'un environnement, et là-haut ils
-           encombraient une barre qu'on veut au strict nécessaire (recherche,
-           environnement, profil). Ils vivent ici, sous l'état du flux. -->
-      <div class="flow-set" id="flowSettings" hidden>
-        <div class="flow-lbl">Période affichée</div>
-        <div class="seg" id="rangeSeg" role="group" aria-label="Période">
-          <button data-range="1" aria-pressed="false">1 h</button>
-          <button data-range="6" aria-pressed="false">6 h</button>
-          <button data-range="24" aria-pressed="true">24 h</button>
-          <button data-range="168" aria-pressed="false">7 j</button>
-        </div>
-        <div class="flow-acts">
-          <button class="btn sm live" id="liveBtn" aria-pressed="true"><span class="pulse" aria-hidden="true"></span> Direct</button>
-          <button class="btn sm" id="exportBtn">Exporter</button>
-        </div>
-      </div>
-      <!-- ⚠️ L'ADMINISTRATION A QUITTÉ LE PIED : Rôles, Réglages, Équipe et
-           Journal sont désormais des RUBRIQUES du rail (buildNav), façon
-           espace de travail. Le pied ne garde que l'état du flux. -->
+      <!-- ⚠️ Les CONTRÔLES du flux (période, direct, export) sont remontés
+           EN TÊTE des écrans temporels (#periodBar), là où on les cherche.
+           Le pied ne garde que l'ÉTAT passif (flux en direct, dernier
+           évènement, rétention). Un seul endroit pour agir, un seul pour lire. -->
+      <!-- L'administration (Rôles, Réglages, Comptes, Journal) est dans le
+           corps du rail (buildNav). -->
     </div>
     <!-- ⚠️ LE COMPTE EN BAS À GAUCHE, comme un vrai espace de travail : la
          marque et l'environnement en haut, l'identité en bas, le contenu au
@@ -1430,6 +1424,33 @@ select.input{height:36px}
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5.9 5.9a2.2 2.2 0 1 1 3 2.05c-.6.25-.9.75-.9 1.35v.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12.2" r=".9" fill="currentColor"/></svg>
       </button>
     </header>
+
+    <!-- ⚠️ CONTRÔLES DU FLUX EN TÊTE (période, plage libre, direct, export).
+         Ils ne s'affichent que sur les écrans temporels (Tableau de bord,
+         Logs, Analyse) — ailleurs, une période n'a pas de sens. -->
+    <div class="periodbar" id="periodBar" hidden>
+      <span class="pb-lbl">Période</span>
+      <div class="seg" id="rangeSeg" role="group" aria-label="Période affichée">
+        <button data-range="1" aria-pressed="false">1 h</button>
+        <button data-range="6" aria-pressed="false">6 h</button>
+        <button data-range="24" aria-pressed="true">24 h</button>
+        <button data-range="72" aria-pressed="false">3 j</button>
+        <button data-range="168" aria-pressed="false">7 j</button>
+        <button data-range="720" aria-pressed="false">30 j</button>
+      </div>
+      <button class="btn sm" id="rangeCustomBtn" aria-expanded="false" title="Choisir une plage de dates">Plage…</button>
+      <div class="pb-acts">
+        <button class="btn sm live" id="liveBtn" aria-pressed="true"><span class="pulse" aria-hidden="true"></span> Direct</button>
+        <button class="btn sm" id="exportBtn">Exporter</button>
+      </div>
+      <!-- La plage libre se déplie sous la barre ; deux dates et « Appliquer ». -->
+      <div class="pb-custom" id="rangeCustom" hidden>
+        <label>Du <input class="input" type="date" id="rangeFrom"></label>
+        <label>au <input class="input" type="date" id="rangeTo"></label>
+        <button class="btn sm primary" id="rangeApply">Appliquer</button>
+        <span class="lite-m" id="rangeMsg"></span>
+      </div>
+    </div>
 
     <div class="afilters" id="afilters" hidden aria-label="Filtres actifs"></div>
 
@@ -2599,7 +2620,10 @@ const STATE = { view:'overview', cat:'all', range:24, q:'', sevs:new Set(),
                 list:[], total:0, cursor:null, sevCounts:{}, stats:null, bans:null,
                 onQ:'', online:null, team:null, teamJours:7,
                 // Les évènements arrivés pendant qu'on lisait plus bas.
-                enAttente:[], compact:false, analyseTab:'stats' };
+                enAttente:[], compact:false, analyseTab:'stats',
+                // Plage personnalisée : quand STATE.range === 'custom', la
+                // fenêtre est [from, to] (timestamps) au lieu d'un nombre d'heures.
+                from:null, to:null };
 
 /* ⚠️ LA LISTE DES VUES DE PLATEFORME VIT À UN SEUL ENDROIT. Elle était
    recopiée dans trois conditions (le rafraîchissement, le repli sans
@@ -2611,9 +2635,30 @@ const CHART_CFG = {
   1:  { n:12, fmt:t => pad(new Date(t).getHours())+':'+pad(new Date(t).getMinutes()), every:3, title:'60 dernières minutes' },
   6:  { n:12, fmt:t => pad(new Date(t).getHours())+'h'+pad(new Date(t).getMinutes()), every:3, title:'6 dernières heures' },
   24: { n:24, fmt:t => pad(new Date(t).getHours())+'h',                               every:4, title:'24 dernières heures' },
-  168:{ n:14, fmt:t => DAYS[new Date(t).getDay()]+' '+pad(new Date(t).getHours())+'h', every:2, title:'7 derniers jours' }
+  72: { n:12, fmt:t => DAYS[new Date(t).getDay()]+' '+pad(new Date(t).getHours())+'h', every:2, title:'3 derniers jours' },
+  168:{ n:14, fmt:t => DAYS[new Date(t).getDay()]+' '+pad(new Date(t).getHours())+'h', every:2, title:'7 derniers jours' },
+  720:{ n:15, fmt:t => pad(new Date(t).getDate())+'/'+pad(new Date(t).getMonth()+1),   every:2, title:'30 derniers jours' }
 };
-const windowFrom = () => Date.now() - STATE.range * 3600000;
+// Les presets sûrs (en heures). La plage libre, elle, vit dans STATE.from/to.
+const RANGES = [1, 6, 24, 72, 168, 720];
+// ⚠️ UN SEUL endroit décide de la fenêtre. Preset = un nombre d'heures ;
+// « custom » = une plage [from, to] explicite. Tous les appelants passent par
+// windowFrom/windowTo/chartCfg, jamais par Date.now() en dur, sinon une plage
+// passée du mois dernier se ferait quand même couper à « maintenant ».
+const estCustom = () => STATE.range === 'custom' && STATE.from && STATE.to;
+const windowFrom = () => estCustom() ? STATE.from : Date.now() - STATE.range * 3600000;
+const windowTo   = () => estCustom() ? STATE.to : Date.now();
+function chartCfg() {
+  if (!estCustom()) return CHART_CFG[STATE.range] || CHART_CFG[24];
+  // Fenêtre libre : on découpe en ~16 créneaux et on choisit le format selon
+  // l'ampleur (heures si court, jours si long).
+  const span = STATE.to - STATE.from, jours = span / 86400000;
+  const fmt = jours > 2
+    ? t => pad(new Date(t).getDate())+'/'+pad(new Date(t).getMonth()+1)
+    : t => pad(new Date(t).getHours())+'h';
+  const d = x => pad(new Date(x).getDate())+'/'+pad(new Date(x).getMonth()+1);
+  return { n:16, fmt, every:3, title:'du ' + d(STATE.from) + ' au ' + d(STATE.to) };
+}
 const catsParam  = () => (STATE.cat === 'all' ? null : [STATE.cat]);
 const visibleCats = () => (MODE === 'api' ? CATS.filter(c => ME.cats.includes(c.id)) : CATS);
 
@@ -2626,7 +2671,7 @@ async function chargerComptesRail() {
   if (_comptesEnVol) return;
   _comptesEnVol = true;
   try {
-    STATE.stats = await DS.stats(windowFrom(), Date.now(), CHART_CFG[STATE.range].n);
+    STATE.stats = await DS.stats(windowFrom(), windowTo(), chartCfg().n);
     renderNav();
   } catch (e) { /* le rail gardera ses tirets : mieux qu'un faux zéro */ }
   finally { _comptesEnVol = false; }
@@ -2666,9 +2711,9 @@ async function refresh(opts) {
   // ne ferait qu'afficher une erreur là où il n'y a rien à afficher.
   if (sansEspace()) { renderNav(); renderActiveFilters(); return; }
   const token = ++refreshToken;
-  const from = windowFrom(), to = Date.now();
+  const from = windowFrom(), to = windowTo();
   try {
-    const jobs = [DS.stats(from, to, CHART_CFG[STATE.range].n)];
+    const jobs = [DS.stats(from, to, chartCfg().n)];
     if (STATE.view === 'stream') jobs.push(DS.query({
       cats: catsParam(), sevs: [...STATE.sevs], from, to, q: STATE.q, limit: STATE.limit }));
     else if (STATE.view === 'bans') jobs.push(DS.bans(STATE.banState, STATE.banQ));
@@ -2713,6 +2758,9 @@ function render() {
   $('#viewPlans').hidden       = STATE.view !== 'plans';
   $('#viewStaff').hidden       = STATE.view !== 'staff';
   $('#viewPlatformLog').hidden = STATE.view !== 'platformlog';
+  // La barre de période ne vaut que pour les écrans à fenêtre temporelle.
+  const VUES_TEMPS = ['overview', 'stream', 'economy', 'playtime', 'stats'];
+  const pb = $('#periodBar'); if (pb) pb.hidden = !(ME.espace && VUES_TEMPS.includes(STATE.view));
   // ⚠️ L'entrée ne se rejoue qu'au CHANGEMENT de vue. `render()` est
   // rappelé à chaque rafraîchissement, à chaque marque posée, à chaque
   // évènement reçu en direct : rejouer l'animation à chaque fois ferait
@@ -2921,7 +2969,7 @@ function renderOverview() {
   const delta = s.prev ? Math.round((s.total - s.prev) / s.prev * 100) : 0;
   const dcl = delta > 4 ? 'up' : delta < -4 ? 'down' : 'flat';
 
-  $('#overviewSub').innerHTML = `Fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b>` +
+  $('#overviewSub').innerHTML = `Fenêtre <b>${chartCfg().title.toLowerCase()}</b>` +
     (MODE === 'api' ? ` · <b>${esc(ME.pseudo)}</b> a accès à <b>${ME.cats.length}</b> catégories`
                     : ' · jeu de démonstration');
 
@@ -3028,7 +3076,7 @@ function renderOverview() {
    de chat ou 3 détections. L'empilement par gravité montre QUAND la
    soirée a dérapé. */
 function drawChart(s) {
-  const cfg = CHART_CFG[STATE.range];
+  const cfg = chartCfg();
   const size = s.bucketSize || 3600000, start = s.from;
   const bySev = s.seriesBySev || null;
   const order = ['info', 'notice', 'alerte', 'critique'];
@@ -3136,7 +3184,7 @@ function renderEconomy() {
   const max = Math.max(1, ...ECO_CATS.map(n));
 
   host.innerHTML = analyseHead('economy',
-      `L’argent qui circule — transactions, immobilier, boutique, entreprises, casino, EMS · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b>`) + `
+      `L’argent qui circule — transactions, immobilier, boutique, entreprises, casino, EMS · fenêtre <b>${chartCfg().title.toLowerCase()}</b>`) + `
     ${attenteBanner('Ci-dessous, les mouvements enregistrés sur la période ; le flux additionne les montants des mouvements affichés.')}
     <div class="status">
       ${kpiCell('Mouvements', total.toLocaleString('fr-FR'), 'évènements d’argent sur la période')}
@@ -3183,7 +3231,7 @@ function renderPlaytime() {
   const online = Number(($('#nOnline') || {}).textContent) || null;
 
   host.innerHTML = analyseHead('playtime',
-      `Présence et fréquentation · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b>`) + `
+      `Présence et fréquentation · fenêtre <b>${chartCfg().title.toLowerCase()}</b>`) + `
     ${attenteBanner('Ci-dessous, ce que les connexions permettent déjà de mesurer ; la durée exacte de chaque session arrivera avec la ressource.')}
     <div class="status">
       ${kpiCell('Joueurs uniques', s.uniques, 'sur la période')}
@@ -3225,7 +3273,7 @@ function renderStats() {
   const smax = Math.max(1, ...series);
 
   host.innerHTML = analyseHead('stats',
-      `Vue d’ensemble chiffrée · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b>`) + `
+      `Vue d’ensemble chiffrée · fenêtre <b>${chartCfg().title.toLowerCase()}</b>`) + `
     <div class="status">
       ${kpiCell('Évènements', s.total.toLocaleString('fr-FR'), `<span class="delta ${dcl}">${s.prev ? (delta > 0 ? '+' : '') + delta + ' %' : '—'}</span> vs période précédente`)}
       ${kpiCell('Joueurs uniques', s.uniques, 'auteurs d’au moins un évènement')}
@@ -3340,12 +3388,12 @@ function renderStream() {
     $('#catQClear').hidden = !STATE.q;
   }
   renderSevBar();
-  $('#streamCount').innerHTML = `<b>${STATE.total.toLocaleString('fr-FR')}</b> évènement(s) · ${CHART_CFG[STATE.range].title.toLowerCase()}`;
+  $('#streamCount').innerHTML = `<b>${STATE.total.toLocaleString('fr-FR')}</b> évènement(s) · ${chartCfg().title.toLowerCase()}`;
 
   const host = $('#rows');
   if (!STATE.list.length) {
     host.innerHTML = `<div class="void"><b>Aucun évènement</b>
-      <span>Rien ne correspond à ces filtres sur ${CHART_CFG[STATE.range].title.toLowerCase()}.</span>
+      <span>Rien ne correspond à ces filtres sur ${chartCfg().title.toLowerCase()}.</span>
       <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         ${STATE.range !== 168 ? `<button class="btn sm" id="widenRange">Chercher sur 7 jours</button>` : ''}
         <button class="btn sm" id="resetFilters">Tout réinitialiser</button>
@@ -4242,7 +4290,8 @@ function syncHash(replace) {
   else if (STATE.view === 'online') { if (STATE.onQ)  qp.push('q=' + encodeURIComponent(STATE.onQ)); }
   else if (STATE.view === 'team')   { if (STATE.teamJours !== 7) qp.push('j=' + STATE.teamJours); }
   else if (STATE.q) qp.push('q=' + encodeURIComponent(STATE.q));
-  if (STATE.range !== 24) qp.push('p=' + STATE.range);
+  if (estCustom()) qp.push('p=custom', 'from=' + STATE.from, 'to=' + STATE.to);
+  else if (STATE.range !== 24) qp.push('p=' + STATE.range);
   if (STATE.sevs.size) qp.push('s=' + [...STATE.sevs].join(','));
   const h = '#' + chemin + (qp.length ? '?' + qp.join('&') : '');
   if (location.hash === h) return;
@@ -4289,8 +4338,14 @@ function applyHash() {
   else if (STATE.view === 'team')   { const j = Number(p.get('j'));
                                       STATE.teamJours = [1, 7, 30].includes(j) ? j : 7; }
   else { STATE.q = p.get('q') || ''; }
-  const per = Number(p.get('p'));
-  STATE.range = [1, 6, 24, 168].includes(per) ? per : 24;
+  // Période : un preset (heures) ou une plage libre « custom » avec deux dates.
+  const perBrut = p.get('p');
+  if (perBrut === 'custom' && Number(p.get('from')) && Number(p.get('to'))) {
+    STATE.range = 'custom'; STATE.from = Number(p.get('from')); STATE.to = Number(p.get('to'));
+  } else {
+    const per = Number(perBrut);
+    STATE.range = RANGES.includes(per) ? per : 24; STATE.from = STATE.to = null;
+  }
   STATE.sevs = new Set((p.get('s') || '').split(',').filter(Boolean));
   STATE.limit = 120; STATE.list = [];
   const champ = $('#q'); if (champ) champ.value = STATE.q;
@@ -4308,14 +4363,57 @@ function applyHash() {
 function placerPeriode() {
   const seg = $('#rangeSeg'); if (!seg) return;
   const b = [...seg.querySelectorAll('[data-range]')];
+  const custom = STATE.range === 'custom';
+  b.forEach(x => x.setAttribute('aria-pressed', String(!custom && Number(x.dataset.range) === STATE.range)));
   const i = Math.max(0, b.findIndex(x => Number(x.dataset.range) === STATE.range));
   seg.style.setProperty('--n', b.length);
   seg.style.setProperty('--i', i);
+  // En plage libre, aucun preset n'est actif : on efface le repère glissant
+  // et on allume le bouton « Plage… ».
+  seg.classList.toggle('custom', custom);
+  const cb = $('#rangeCustomBtn');
+  if (cb) cb.setAttribute('aria-pressed', String(custom));
+}
+
+/* ---------- plage de dates personnalisée ---------- */
+const isoJour = t => { const d = new Date(t); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+function basculerPlage() {
+  const rc = $('#rangeCustom'), cb = $('#rangeCustomBtn'); if (!rc) return;
+  const ouvrir = rc.hidden;
+  rc.hidden = !ouvrir;
+  if (cb) cb.setAttribute('aria-expanded', String(ouvrir));
+  if (ouvrir) {
+    // Préremplir avec la fenêtre affichée, pour partir de quelque chose.
+    const f = $('#rangeFrom'), to = $('#rangeTo'), msg = $('#rangeMsg');
+    if (f) f.value = isoJour(windowFrom());
+    if (to) to.value = isoJour(windowTo());
+    if (msg) msg.textContent = '';
+    if (f) f.focus();
+  }
+}
+function appliquerPlage() {
+  const f = $('#rangeFrom'), to = $('#rangeTo'), msg = $('#rangeMsg');
+  const lire = el => el && el.value ? new Date(el.value + 'T00:00:00') : null;
+  const df = lire(f); let dt = lire(to);
+  if (!df || !dt) { if (msg) msg.textContent = 'Choisissez les deux dates.'; return; }
+  dt = new Date(dt.getTime() + 86399999);   // fin de journée incluse
+  if (dt <= df) { if (msg) msg.textContent = 'La fin doit suivre le début.'; return; }
+  STATE.range = 'custom'; STATE.from = df.getTime(); STATE.to = dt.getTime(); STATE.limit = 120;
+  // Une plage passée n'est pas « en direct » : on met le flux en pause.
+  if (STATE.live) {
+    STATE.live = false;
+    const lb = $('#liveBtn'); if (lb) { lb.classList.remove('live'); lb.setAttribute('aria-pressed', 'false'); }
+    const ls = $('#liveState'); if (ls) ls.textContent = 'en pause';
+    const pl = $('#pulse'); if (pl) pl.classList.add('off');
+  }
+  const rc = $('#rangeCustom'); if (rc) rc.hidden = true;
+  const cb = $('#rangeCustomBtn'); if (cb) cb.setAttribute('aria-expanded', 'false');
+  placerPeriode(); syncHash(); refresh();
 }
 window.addEventListener('popstate', () => { if (applyHash()) { render(); refresh(); } });
 
 /* ---------- filtres actifs, écrits et retirables ---------- */
-const NOM_PERIODE = { 1:'1 heure', 6:'6 heures', 24:'24 heures', 168:'7 jours' };
+const NOM_PERIODE = { 1:'1 heure', 6:'6 heures', 24:'24 heures', 72:'3 jours', 168:'7 jours', 720:'30 jours' };
 function renderActiveFilters() {
   const host = $('#afilters'); if (!host) return;
   const bits = [];
@@ -4323,7 +4421,7 @@ function renderActiveFilters() {
     bits.push(['Catégorie', (CAT[STATE.cat] || {}).label || STATE.cat, 'cat']);
   if (STATE.q) bits.push(['Recherche', '« ' + STATE.q + ' »', 'q']);
   [...STATE.sevs].forEach(id => bits.push(['Gravité', (SEV[id] || {}).label || id, 'sev:' + id]));
-  if (STATE.range !== 24) bits.push(['Période', NOM_PERIODE[STATE.range], 'range']);
+  if (STATE.range !== 24) bits.push(['Période', estCustom() ? chartCfg().title : (NOM_PERIODE[STATE.range] || STATE.range + ' h'), 'range']);
   host.hidden = !bits.length;
   host.innerHTML = bits.map(([k, v, id]) =>
     `<span class="af"><span class="af-label">${esc(k)}</span><b>${esc(v)}</b>
@@ -4333,8 +4431,8 @@ function renderActiveFilters() {
 function clearFilter(quoi) {
   if (quoi === 'cat')   { STATE.cat = 'all'; STATE.view = 'stream'; }
   else if (quoi === 'q'){ STATE.q = ''; $('#q').value = ''; $('#catQ').value = ''; }
-  else if (quoi === 'range') STATE.range = 24;
-  else if (quoi === 'tout') { STATE.q = ''; $('#q').value = ''; $('#catQ').value = ''; STATE.sevs.clear(); STATE.range = 24; STATE.cat = 'all'; }
+  else if (quoi === 'range') { STATE.range = 24; STATE.from = STATE.to = null; }
+  else if (quoi === 'tout') { STATE.q = ''; $('#q').value = ''; $('#catQ').value = ''; STATE.sevs.clear(); STATE.range = 24; STATE.from = STATE.to = null; STATE.cat = 'all'; }
   else if (quoi.startsWith('sev:')) STATE.sevs.delete(quoi.slice(4));
   STATE.limit = 120;
   document.querySelectorAll('[data-range]').forEach(b =>
@@ -6769,6 +6867,8 @@ document.addEventListener('click', async ev => {
     if (id === 'nsSpaceGo')   creerEspace();
     if (id === 'sauvNow')     sauvegarderMaintenant();
     if (id === 'sauvRestore') $('#sauvFile').click();
+    if (id === 'rangeCustomBtn') return basculerPlage();
+    if (id === 'rangeApply')     return appliquerPlage();
     return;
   }
   ev.preventDefault(); ev.stopImmediatePropagation();
@@ -7336,8 +7436,10 @@ document.addEventListener('click', async ev => {
     STATE.limit = 120; syncHash(); return refresh();
   }
   if (t.dataset.range) {
-    STATE.range = Number(t.dataset.range); STATE.limit = 120;
-    document.querySelectorAll('[data-range]').forEach(b => b.setAttribute('aria-pressed', b === t));
+    // Un preset annule la plage libre et referme son dépliant.
+    STATE.range = Number(t.dataset.range); STATE.from = STATE.to = null; STATE.limit = 120;
+    const rc = $('#rangeCustom'); if (rc) rc.hidden = true;
+    const cb = $('#rangeCustomBtn'); if (cb) cb.setAttribute('aria-expanded', 'false');
     placerPeriode();
     syncHash(); return refresh();
   }
@@ -7409,7 +7511,7 @@ document.addEventListener('click', async ev => {
 async function loadMore() {
   if (!STATE.cursor) return;
   try {
-    const p = await DS.query({ cats: catsParam(), sevs: [...STATE.sevs], from: windowFrom(), to: Date.now(),
+    const p = await DS.query({ cats: catsParam(), sevs: [...STATE.sevs], from: windowFrom(), to: windowTo(),
                                q: STATE.q, limit: 100, cursorTs: STATE.cursor.ts, cursorId: STATE.cursor.id });
     STATE.list = STATE.list.concat(p.events); STATE.cursor = p.cursor;
     remember(p.events); renderStream();
@@ -7433,7 +7535,7 @@ $('#exportBtn').addEventListener('click', () => {
   if (!can('logs.export')) return toast('Votre rôle ne permet pas l’export.');
   if (MODE === 'api') {
     window.location.href = '/api/export?' + qs({ cat: catsParam(), sev: [...STATE.sevs],
-      from: windowFrom(), to: Date.now(), q: STATE.q });
+      from: windowFrom(), to: windowTo(), q: STATE.q });
     return toast('Export CSV en cours de téléchargement…');
   }
   if (!STATE.list.length) return toast('Rien à exporter — ouvrez d’abord un flux.');
@@ -7830,7 +7932,8 @@ function peindreIdentite() {
   // que sur le journal d'un environnement, dehors ils ne cherchent rien.
   b('#findBox', dans);
   b('#railLive', dans);
-  b('#flowSettings', dans);
+  // #periodBar est affiché/masqué par render() selon la vue (écrans temporels
+  // seulement) ; ici on ne règle que le droit d'export.
   b('#exportBtn', dans && can('logs.export'));
 
   // ⚠️ Le nom d'environnement, le changement de serveur et la sortie

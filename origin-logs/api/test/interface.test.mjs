@@ -73,14 +73,27 @@ t('⚠️ les tuiles de KPI se réduisent à deux colonnes, puis une',
   && /\.status\{grid-template-columns:1fr\}/.test(P));
 // ⚠️ La barre du haut a été allégée : plus de sélecteur de période, de
 // bouton « Direct », d'étiquette d'aperçu ni de bouton « Exporter ». Ils
-// sont descendus dans le pied du rail (« Réglages du flux »), et le choix
-// d'environnement est passé sur la marque, en haut à gauche.
+// remontés dans une barre contextuelle EN TÊTE des écrans temporels
+// (#periodBar), et le choix d'environnement est passé sur la marque.
 const barHtml = bloc(/<header class="bar">[\s\S]*?<\/header>/);
-t('la barre du haut ne porte plus période / direct / export / étiquette',
+t('la barre du haut (recherche) ne porte pas période / direct / export',
   !/id="rangeSeg"/.test(barHtml) && !/id="liveBtn"/.test(barHtml)
   && !/id="exportBtn"/.test(barHtml) && !/id="modeTag"/.test(barHtml));
-t('ces réglages vivent dans le pied du rail', /id="flowSettings"/.test(P)
-  && /class="flow-set"/.test(P) && /id="rangeSeg"/.test(P) && /id="liveBtn"/.test(P));
+// ⚠️ 1.6 + 3.10 : les CONTRÔLES du flux sont remontés en tête, dans une
+// barre contextuelle unique (#periodBar), plus dispersés dans le pied.
+t('les contrôles du flux vivent dans #periodBar, en tête',
+  /id="periodBar"/.test(P) && /id="rangeSeg"/.test(P) && /id="liveBtn"/.test(P)
+  && /id="exportBtn"/.test(P) && !/id="flowSettings"/.test(P));
+t('#periodBar ne s’affiche que sur les écrans temporels',
+  /const VUES_TEMPS = \['overview', 'stream', 'economy', 'playtime', 'stats'\]/.test(P)
+  && /pb\.hidden = !\(ME\.espace && VUES_TEMPS\.includes\(STATE\.view\)\)/.test(P));
+// ⚠️ 4.2 : presets étendus + plage de dates libre.
+t('presets étendus (3 j, 30 j) et plage personnalisée',
+  /data-range="72"/.test(P) && /data-range="720"/.test(P)
+  && /id="rangeCustomBtn"/.test(P) && /function appliquerPlage/.test(P));
+t('⚠️ la fenêtre passe TOUJOURS par windowFrom/windowTo/chartCfg',
+  /const windowTo\s*=/.test(P) && /function chartCfg\(/.test(P)
+  && !/DS\.stats\(windowFrom\(\), Date\.now\(\)/.test(P));
 t('⚠️ la marque, en haut à gauche, ouvre le choix d’environnement',
   /id="brandBtn"/.test(P) && /function ouvrirEspaces/.test(P) && /btn\.onclick = cliquable \? ouvrirEspaces/.test(P));
 t('et de là on RESSORT vers la plateforme', /data-sortir="1">Revenir à la plateforme/.test(P));
