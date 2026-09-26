@@ -50,17 +50,27 @@ t('le pied reste épinglé', /\.rail-foot\{flex:none/.test(P));
 t('un dégradé annonce la suite', /id="railMore"/.test(P) && /function jaugerRail/.test(P));
 t('et il disparaît une fois en bas', /more\.classList\.toggle\('on', reste > 8\)/.test(P));
 
-sect('Mobile : les rubriques gardent leur nom');
+sect('Téléphone : le rail devient un TIROIR, plus une bande');
 const mob = bloc(/@media \(max-width:900px\)\{[\s\S]*?\n\}/);
-t('⚠️ le libellé n’est plus masqué', !/\.nav-item \.nav-label\{display:none\}/.test(mob));
-t('il est explicitement rendu', /\.nav-item \.nav-label\{display:block/.test(mob));
+// ⚠️ Une bande horizontale de ~30 rubriques débordait la page et n'en
+// montrait que trois. Le rail garde sa forme verticale riche et glisse par
+// dessus le contenu, appelé par ☰.
+t('⚠️ le rail passe hors-champ à gauche', /\.rail\{[^]*?position:fixed/.test(mob) && /transform:translateX\(-100%\)/.test(mob));
+t('et se tire par-dessus le contenu', /\.rail\.open\{transform:none\}/.test(mob));
+t('un bouton ☰ l’ouvre, réservé au téléphone', /id="navToggle"/.test(P)
+  && /\.nav-toggle\{display:none\}/.test(P) && /\.nav-toggle\{display:grid\}/.test(mob));
+t('un voile le referme d’un tap à côté', /id="navScrim"/.test(P) && /function fermerNav/.test(P));
+t('⚠️ choisir une rubrique referme le tiroir', /if \(ev\.target\.closest\('\.nav-item'\)\) fermerNav\(\)/.test(P));
+t('⚠️ le libellé des rubriques n’est jamais masqué', !/\.nav-item \.nav-label\{display:none\}/.test(mob));
 
 sect('Un bandeau qui ne change pas de hauteur');
 const cssBar = bloc(/\n\.bar\{[^}]*\}/);
-t('⚠️ il ne se replie plus', /flex-wrap:nowrap/.test(cssBar));
+t('⚠️ il ne se replie pas sur grand écran', /flex-wrap:nowrap/.test(cssBar));
 t('sa hauteur est fixe', /height:var\(--bar-h\)/.test(cssBar) && !/min-height:var\(--bar-h\)/.test(cssBar));
-t('le repli revient sous 900 px, où il n’y a plus le choix',
-  /\.bar\{height:auto;min-height:var\(--bar-h\);flex-wrap:wrap/.test(mob));
+t('⚠️ le contenu ne déborde pas latéralement en mobile', /\.main\{min-width:0;max-width:100%;overflow-x:hidden\}/.test(mob));
+t('⚠️ les tuiles de KPI se réduisent à deux colonnes, puis une',
+  /\.status\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/.test(mob)
+  && /\.status\{grid-template-columns:1fr\}/.test(P));
 // ⚠️ La barre du haut a été allégée : plus de sélecteur de période, de
 // bouton « Direct », d'étiquette d'aperçu ni de bouton « Exporter ». Ils
 // sont descendus dans le pied du rail (« Réglages du flux »), et le choix

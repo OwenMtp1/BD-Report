@@ -292,6 +292,14 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
    là (elle prend la place) ou masquée hors environnement (l'auto-marge
    pousse le groupe). Le profil est TOUJOURS le dernier, tout à droite. */
 #helpBtn{margin-left:auto}
+/* Le menu ☰ et le nom d'espace dans la barre n'existent QUE sur téléphone
+   (le rail y devient un tiroir). Sur grand écran, rien à ouvrir. */
+.nav-toggle{display:none}
+.bar-brand{display:none}
+/* Le voile du tiroir ne sert aussi que sur téléphone. */
+.nav-scrim{position:fixed;inset:0;z-index:44;background:rgba(6,4,11,.5);backdrop-filter:blur(2px);border:none}
+.nav-scrim[hidden]{display:none}
+@media (min-width:901px){ .nav-scrim{display:none} }
 .find{position:relative;flex:1 1 140px;min-width:80px}
 .find input{
   width:100%;height:36px;padding:0 34px 0 34px;border-radius:10px;
@@ -1198,44 +1206,78 @@ select.input{height:36px}
    ============================================================ */
 @media (min-width:1300px){ .app.insp-open .main{padding-right:min(430px,32vw)} }
 @media (max-width:1150px){ .grid.two{grid-template-columns:minmax(0,1fr)} }
+/* ============================================================
+   TÉLÉPHONE — le rail devient un TIROIR, plus une bande horizontale
+   ⚠️ Un bandeau horizontal de ~30 rubriques (2100 px) débordait la page et
+   n'en montrait que trois : illisible et cause du défilement latéral. Le
+   rail garde donc sa forme verticale RICHE (sections, repère glissant,
+   compte en pied) mais glisse par-dessus le contenu, appelé par ☰.
+   ============================================================ */
 @media (max-width:900px){
   .app{grid-template-columns:minmax(0,1fr)}
-  .rail{position:static;height:auto;min-width:0;flex-direction:row;align-items:center;gap:4px;
-        overflow-x:auto;overscroll-behavior-x:contain;border-right:none;border-bottom:1px solid var(--edge);padding:0 12px}
-  .brand{border-bottom:none;padding:10px 10px 10px 0;flex:none}
-  .brand-text,.rail-foot{display:none}
-  .nav{flex-direction:row;padding:8px 0;gap:4px;flex:none}
-  .nav-group{display:none}
-  /* ⚠️ LE LIBELLÉ RESTE. Le rail replié en bandeau masquait les noms et
-     ne laissait qu'une rangée de pastilles colorées avec des compteurs :
-     vingt-deux rubriques, aucune identifiable. Une couleur de famille
-     dit le métier, jamais la rubrique — « Boutique : caisse » et
-     « Boutique : produits » partagent exactement la même. Le bandeau
-     défile déjà horizontalement : il a la place de les nommer. */
-  .nav-item{grid-template-columns:auto auto auto;padding:6px 12px;flex:none}
-  .nav-item .nav-label{display:block;font-size:12.5px;max-width:none}
-  /* ⚠️ Le rail est HORIZONTAL ici : le repère glissant, qui se déplace en
-     hauteur sur toute la largeur, deviendrait une barre posée en travers
-     des onglets. L'onglet actif reprend donc son propre fond. */
-  .nav-slide{display:none}
-  .nav-item[aria-current="true"]{background:var(--raise);box-shadow:inset 0 -2px 0 var(--vio-hi)}
-  .nav-item:hover{transform:none}
-  .bar{height:auto;min-height:var(--bar-h);flex-wrap:wrap;padding:10px 16px}
-  .main{min-width:0}
-  .view{padding:0 16px 36px}
+  /* Le contenu occupe toute la largeur ; rien ne doit déborder à droite. */
+  .main{min-width:0;max-width:100%;overflow-x:hidden}
+  .main > main{min-width:0}
+
+  /* Rail hors-champ, à gauche, tiré par-dessus le contenu. */
+  .rail{
+    position:fixed;top:0;left:0;z-index:45;height:100dvh;
+    width:min(284px,84vw);min-width:0;
+    border-right:1px solid var(--line);box-shadow:22px 0 60px -30px rgba(30,20,60,.5);
+    transform:translateX(-100%);transition:transform .24s var(--ease);
+  }
+  .rail.open{transform:none}
+  /* Le tiroir garde TOUT : marque, rubriques nommées, réglages du flux,
+     compte. C'est le rail complet, simplement escamotable. */
+  .rail-foot{display:flex}
+
+  /* La barre : ☰, nom d'espace, recherche, aide/profil. */
+  .bar{height:auto;min-height:var(--bar-h);gap:8px;padding:10px 14px}
+  .nav-toggle{display:grid}
+  .bar-brand{
+    display:flex;align-items:center;min-width:0;flex:0 1 auto;
+    font-weight:700;font-size:14px;color:var(--ink);letter-spacing:-.01em;
+    background:none;border:none;padding:2px 2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42vw;
+  }
+  /* La recherche passe à la ligne dessous si la barre est trop serrée. */
+  .bar{flex-wrap:wrap}
+  .find{order:3;flex:1 1 100%;min-width:0}
+  #helpBtn{margin-left:auto}
+
+  .view{padding:0 16px 40px}
   .head{padding:18px 0 14px}
+  /* Deux tuiles par ligne au maximum : à trois, chaque nombre devenait
+     illisible. */
+  .status{grid-template-columns:repeat(2,minmax(0,1fr))}
   .duty{grid-template-columns:1fr;gap:10px}
   .duty-n{font-size:46px}
+  .grid.two{grid-template-columns:minmax(0,1fr)}
+  /* Le graphique a un plancher de 520 px sur grand écran (lisibilité) ; sur
+     téléphone il rétrécit au conteneur — le viewBox le met à l'échelle,
+     plutôt que de faire déborder toute la page. */
+  .chart{min-width:0;width:100%}
   .insp{inset:auto 0 0 0;width:100%;height:88dvh;border-left:none;border-top:1px solid var(--edge);
         border-radius:14px 14px 0 0;transform:translateY(100%)}
   .insp.open{transform:none}
   .feed-scroll{max-height:none}
+  /* Les fenêtres (rôles était une fenêtre, ne l'est plus ; restent Réglages,
+     Équipe, fiches…) prennent presque tout l'écran. */
+  .sheet{width:calc(100vw - 20px);max-height:92dvh}
 }
 @media (max-width:620px){
   .ev{grid-template-columns:58px 3px minmax(0,1fr)}
   .ev-time{padding-left:10px}
   .ev-res{display:none}
   .kv{grid-template-columns:86px minmax(0,1fr)}
+}
+/* Très petits écrans : une seule tuile de KPI par ligne se lit mieux que
+   deux compressées. */
+@media (max-width:430px){
+  .status{grid-template-columns:1fr}
+  .status-cell{border-right:none;border-bottom:1px solid var(--line-soft)}
+  .status-cell:last-child{border-bottom:none}
+  .bar-brand{max-width:34vw}
 }
 @media (prefers-reduced-motion:reduce){ *{transition-duration:.01ms !important;animation-duration:.01ms !important} }
 </style>
@@ -1344,8 +1386,21 @@ select.input{height:36px}
     </div>
   </nav>
 
+  <!-- ⚠️ Le voile du tiroir de navigation (mobile). Sur grand écran le rail
+       est toujours là ; sur téléphone il glisse par-dessus le contenu, et ce
+       voile le referme d'un tap à côté. -->
+  <div class="nav-scrim" id="navScrim" hidden></div>
+
   <div class="main">
     <header class="bar">
+      <!-- ☰ n'apparaît QUE sur téléphone (le rail y est un tiroir). Sur grand
+           écran le rail est permanent, ce bouton n'aurait rien à ouvrir. -->
+      <button class="icon-btn nav-toggle" id="navToggle" aria-label="Ouvrir la navigation" aria-expanded="false" aria-controls="nav">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <!-- Le nom de l'espace, dans la barre, sur téléphone : la marque vit
+           dans le tiroir refermé, on ne saurait plus chez qui l'on est. -->
+      <button class="bar-brand" id="barBrand" type="button" aria-label="Ouvrir la navigation"></button>
       <div class="find" id="findBox">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/>
@@ -7655,6 +7710,9 @@ function peindreIdentite() {
   }
   if ($('#brandName')) $('#brandName').textContent = nom;
   if ($('#brandSub'))  $('#brandSub').textContent = dans ? 'Journal serveur' : 'Plateforme';
+  // Le nom d'espace dans la barre (téléphone) : la marque du tiroir est
+  // cachée quand il est refermé.
+  if ($('#barBrand')) $('#barBrand').textContent = nom;
   document.title = (dans ? nom + ' — journal serveur' : 'Origin Logs')
                  + (ME.pseudo ? ' (' + ME.pseudo + ')' : '');
 
@@ -7887,6 +7945,41 @@ $('#whoBox').addEventListener('click', ev => {
 $('#whoBox').addEventListener('keydown', ev => {
   if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ouvrirProfil(); }
 });
+
+/* ============================================================
+   TIROIR DE NAVIGATION (téléphone)
+   ⚠️ Le rail est permanent sur grand écran ; sur téléphone il glisse par
+   dessus le contenu. Ouvrir/fermer ne touche QUE des classes — aucun rendu
+   n'est refait, et sur grand écran ces gestes n'ont aucun effet visible (le
+   rail y est déjà là, le voile masqué par média).
+   ============================================================ */
+function navOuvert() { return $('#app') && $('.rail') && $('.rail').classList.contains('open'); }
+function ouvrirNav() {
+  const r = $('.rail'); if (!r) return;
+  r.classList.add('open');
+  const s = $('#navScrim'); if (s) s.hidden = false;
+  const t = $('#navToggle'); if (t) t.setAttribute('aria-expanded', 'true');
+}
+function fermerNav() {
+  const r = $('.rail'); if (!r) return;
+  r.classList.remove('open');
+  const s = $('#navScrim'); if (s) s.hidden = true;
+  const t = $('#navToggle'); if (t) t.setAttribute('aria-expanded', 'false');
+}
+function basculerNav() { navOuvert() ? fermerNav() : ouvrirNav(); }
+$('#navToggle') && $('#navToggle').addEventListener('click', basculerNav);
+$('#barBrand') && $('#barBrand').addEventListener('click', ouvrirNav);
+$('#navScrim') && $('#navScrim').addEventListener('click', fermerNav);
+// Choisir une rubrique dans le tiroir le referme : on veut voir l'écran
+// qu'on vient d'ouvrir, pas rester devant le menu.
+$('#nav') && $('#nav').addEventListener('click', ev => {
+  if (ev.target.closest('.nav-item')) fermerNav();
+});
+// La marque du tiroir (choix d'environnement) le referme aussi.
+$('#brandBtn') && $('#brandBtn').addEventListener('click', () => { if (navOuvert()) fermerNav(); });
+addEventListener('keydown', ev => { if (ev.key === 'Escape' && navOuvert()) fermerNav(); });
+// Retour au grand écran : le tiroir n'a plus de raison d'être ouvert.
+addEventListener('resize', () => { if (innerWidth > 900) fermerNav(); });
 
 async function startPanel() {
   $('#gate').hidden = true;
