@@ -173,7 +173,10 @@ const commandeInstall = (origine, code) =>
 const SEC_HEADERS = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'same-origin',
-  'x-frame-options': 'DENY',
+  // ⚠️ `frame-ancestors 'none'` (CSP) fait déjà le travail de
+  // `X-Frame-Options: DENY` et va plus loin (il gère les cadres imbriqués).
+  // Poser les deux, c'était deux réglages à tenir en accord pour une seule
+  // protection ; on garde la directive CSP, standard et unique.
   'content-security-policy':
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"

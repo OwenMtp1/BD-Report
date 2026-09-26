@@ -26,8 +26,9 @@ t('les journaux exigent une session', ev.status===401, 'HTTP '+ev.status);
 sect('En-têtes de sécurité, y compris en JSON');
 const h = cat.r.headers;
 t('nosniff', h.get('x-content-type-options')==='nosniff');
-t('pas d’affichage en cadre', h.get('x-frame-options')==='DENY');
-t('politique de contenu', /frame-ancestors 'none'/.test(h.get('content-security-policy')||''));
+t('pas d’affichage en cadre (via la CSP, plus X-Frame-Options en double)',
+  /frame-ancestors 'none'/.test(h.get('content-security-policy')||'') && !h.get('x-frame-options'),
+  h.get('x-frame-options')||'absent');
 // ⚠️ HSTS n'est posé QU'EN HTTPS : servi en clair, il n'aurait aucun effet
 // et, une fois mémorisé, forcerait le domaine en HTTPS pendant des mois —
 // de quoi rendre injoignable une machine servie en HTTP. Le test tourne en

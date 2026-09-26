@@ -104,8 +104,14 @@ t('le surlignage ne touche pas au balisage', /replace\(\/>\(\[\^<\]\+\)<\/g/.tes
 
 sect('Le reste de la liste');
 t('les compteurs du rail se chargent dès l’entrée', /chargerComptesRail/.test(P));
-t('un mode compact existe et se souvient',
-  /basculerDensite/.test(P) && /origin_densite/.test(P) && /\.feed\.compact \.ev\{/.test(P));
+// ⚠️ La densité est AUTOMATIQUE : plus de bouton « compact/aéré » à régler
+// ni de préférence à retenir. Elle se déduit de la place à l'écran et se
+// recalcule au redimensionnement.
+t('la densité s’adapte toute seule à l’écran',
+  /function appliquerDensite/.test(P) && /innerHeight < 760 \|\| innerWidth < 900/.test(P)
+  && /\.feed\.compact \.ev\{/.test(P));
+t('⚠️ plus de bouton ni de préférence de densité à gérer',
+  !/basculerDensite/.test(P) && !/origin_densite/.test(P) && !/id="densityBtn"/.test(P));
 t('le code de rubrique se laisse lire', /title="\$\{esc\(cat\.label\)\}"/.test(P));
 t('⚠️ la file d’alertes montre l’ÂGE, pas une heure sans date',
   /class="lite-m" title="\$\{new Date\(e\.t\)\.toLocaleString/.test(P));

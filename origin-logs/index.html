@@ -11,10 +11,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 /* ============================================================
-   ORIGIN ROLEPLAY — console de journalisation
-   Monde visuel unique : une console de nuit. Pas de thème clair,
-   c'est un choix — tout est peint explicitement pour que la page
-   n'emprunte rien au fond de l'hôte.
+   ORIGIN LOGS — console de journalisation
+   Thème CLAIR (façon Addveo), accent violet. Tout est peint
+   explicitement pour que la page n'emprunte rien au fond de l'hôte.
    ============================================================ */
 :root{
   color-scheme: light;
@@ -44,7 +43,7 @@
 
   --vio:#8B5CF6;
   /* Sur fond clair, l'accent « fort » doit être SOMBRE pour rester lisible
-     (texte, pastilles, filet actif) — l'inverse du thème sombre. */
+     (texte, pastilles, filet actif). */
   --vio-hi:#6D3BE8;
   --vio-2:#5A2FC0;
   --vio-wash:rgba(139,92,246,.10);
@@ -155,7 +154,7 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
   color:#fff;display:grid;place-items:center;
   font-variation-settings:'wdth' 84;font-weight:800;font-size:15px;letter-spacing:-.02em;
   /* Un jeton en relief plutôt qu'un carré plat : reflet interne en haut,
-     ombre portée douce, et une aura discrète qui l'ancre dans la nuit. */
+     ombre portée douce, et un halo violet discret qui l'ancre. */
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.45),
     inset 0 -2px 6px rgba(20,10,40,.35),
@@ -1520,8 +1519,6 @@ select.input{height:36px}
         <div class="feed-foot">
           <span class="count" id="foot">—</span>
           <span style="display:flex;gap:8px;align-items:center;margin-left:auto">
-            <button class="btn sm" id="densityBtn" aria-pressed="false"
-              title="Réduire la hauteur des lignes pour en voir davantage">Affichage compact</button>
             <button class="btn sm" id="moreBtn" hidden>Charger 100 évènements de plus</button>
           </span>
         </div>
@@ -3281,16 +3278,17 @@ function renderSevBar() {
    pire des deux mondes — un réglage qu'on remarque sans le conserver.
    ⚠️ localStorage peut lever (navigation privée) : on ne le laisse jamais
    empêcher l'affichage. */
-function basculerDensite(silencieux) {
-  if (!silencieux) STATE.compact = !STATE.compact;
+/* ⚠️ DENSITÉ AUTOMATIQUE, plus un bouton à régler soi-même. Le choix
+   « compact / aéré » demandait à l'utilisateur de deviner ce qui l'arrange,
+   puis de s'en souvenir. La bonne densité se déduit de la place : un petit
+   écran (peu de hauteur, ou replié en mobile) veut voir plus de lignes,
+   un grand écran peut respirer. On recalcule au redimensionnement. */
+function appliquerDensite() {
+  STATE.compact = innerHeight < 760 || innerWidth < 900;
   const f = document.querySelector('#viewStream .feed');
   if (f) f.classList.toggle('compact', STATE.compact);
-  const b = $('#densityBtn');
-  if (b) { b.setAttribute('aria-pressed', String(STATE.compact));
-           b.textContent = STATE.compact ? 'Affichage aéré' : 'Affichage compact'; }
-  if (!silencieux) { try { localStorage.setItem('origin_densite', STATE.compact ? 'compact' : 'aere'); } catch (e) {} }
 }
-try { STATE.compact = localStorage.getItem('origin_densite') === 'compact'; } catch (e) {}
+addEventListener('resize', appliquerDensite);
 
 function renderStream() {
   // ⚠️ ANCRAGE. La pastille retient les arrivées du direct, mais le
@@ -3376,7 +3374,7 @@ function renderStream() {
   }).join('');
   $('#foot').textContent = `${STATE.list.length} sur ${STATE.total} affichés`;
   $('#moreBtn').hidden = !STATE.cursor;
-  basculerDensite(true);
+  appliquerDensite();
   poserAncre();
 }
 
@@ -7291,7 +7289,6 @@ document.addEventListener('click', async ev => {
   if (id === 'bansToEvents')  goStream('bans');
   if (id === 'resetFilters')  clearFilter('tout');
   if (id === 'moreBtn')  loadMore();
-  if (id === 'densityBtn') basculerDensite();
   if (id === 'dcLoad')     chargerRolesDiscord();
   if (id === 'dcSave')     enregistrerDiscord().catch(e => toast(e.message));
   if (id === 'botSave')    enregistrerBot().catch(e => toast(e.message));
