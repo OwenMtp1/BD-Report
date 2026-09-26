@@ -139,8 +139,17 @@ trop bavarde n'écrit à personne.
 | Résumer au-delà de | au-delà, le bot **résume** au lieu de détailler |
 
 Ce qui reste dans `bot/.env`, côté éditeur : `PANEL_URL`, `BOT_KEY`,
-`POLL_MS` (cadence, 5 s), `INVENTORY_MS` (à quelle fréquence on redemande
+`POLL_MS` (cadence du sondage, 5 s), `WAKE_POLL_MS` (filet quand le temps
+réel est branché, 30 s), `INVENTORY_MS` (à quelle fréquence on redemande
 la liste des espaces, 2 min) et `VERBOSE`.
+
+**Temps réel.** Le bot ouvre une connexion `SSE` (`/api/relay/stream`) par
+espace servi : dès qu'un lot de journaux arrive au panneau, il est réveillé
+et va chercher les évènements *tout de suite*, sans attendre le prochain
+sondage. ⚠️ **Le sondage reste la source de vérité** (`bot/lib/reveil.js`) :
+le temps réel ne fait que supprimer la latence. Si le flux se coupe, le
+sondage de repli (`WAKE_POLL_MS`) rattrape tout au même repère — le pire
+cas est un peu de retard, jamais une ligne perdue.
 
 ⚠️ **Mentionner sur tout revient à ne mentionner sur rien.** Par défaut,
 seule la gravité `critique` déclenche une mention. Au bout de trois jours

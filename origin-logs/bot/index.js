@@ -24,6 +24,7 @@ const D = require('./lib/discord.js');
 const P = require('./lib/panneau.js');
 const ETAT = require('./lib/etat.js');
 const R = require('./lib/rendu.js');
+const { creerReveil } = require('./lib/reveil.js');
 
 const L = (...a) => console.log(...a);
 const arg = n => process.argv.includes(n);
@@ -32,6 +33,7 @@ let tout = ETAT.chargerTout(CFG.etatFichier);
 let arret = false;
 let espaces = [];                 // ce que le panneau nous dit de servir
 const connus = new Map();         // id -> { catalogue, prets, panne }
+let reveil = null;                // réveil temps réel (SSE) — voir lib/reveil.js
 
 /* ---------- l'inventaire ---------- */
 async function recharger(premier) {
@@ -220,6 +222,11 @@ async function principal() {
     catch (e) { L(`  ✕ ${esp.nom} — ${e.message}`); }
   }
   if (arg('--salons')) { L('\n  Salons préparés. Arrêt demandé.\n'); return; }
+
+  // Réveil temps réel : une connexion par espace servi, qui ne fait que dire
+  // « du neuf est arrivé, sonde tout de suite ». Le sondage reste maître.
+  reveil = creerReveil(CFG);
+  reveil.sync(espaces);
   L('');
 
   let dernierInventaire = Date.now();
@@ -235,6 +242,8 @@ async function principal() {
         for (const esp of espaces) if (!connus.has(esp.id)) {
           try { await preparer(esp); } catch (e) { L(`  ✕ ${esp.nom} — ${e.message}`); }
         }
+        // La liste a pu changer : on aligne les connexions de réveil dessus.
+        if (reveil) reveil.sync(espaces);
       } catch (e) { if (CFG.verbeux) L('  inventaire indisponible : ' + e.message); }
     }
 
@@ -253,12 +262,19 @@ async function principal() {
         if (n === 1) L(`  [${esp.nom}] ${e.message} — on réessaie, sans perdre le repère.`);
       }
     }
-    await D.dormir(CFG.sondageMs);
+    // ⚠️ Branché en SSE, on ATTEND d'être réveillé (latence quasi nulle),
+    // mais jamais plus longtemps que le filet reveilMs — un flux coupé sans
+    // prévenir serait sinon un trou. Sans SSE, on retombe sur le sondage
+    // régulier. Dans les deux cas, `tour()` reprend au même repère et ne
+    // perd rien.
+    if (reveil) await reveil.attendre(reveil.connecte() ? CFG.reveilMs : CFG.sondageMs);
+    else await D.dormir(CFG.sondageMs);
   }
 }
 
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => {
   arret = true;
+  try { reveil && reveil.fermer(); } catch (e) {}
   ETAT.enregistrer(CFG.etatFichier, tout);
   L('\n  Arrêt — repères enregistrés.\n');
   process.exit(0);

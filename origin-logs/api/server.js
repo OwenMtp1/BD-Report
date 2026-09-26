@@ -823,6 +823,23 @@ setInterval(() => {
   for (const c of streams) { try { c.res.write(': ping\n\n'); } catch { streams.delete(c); } }
 }, 25000).unref();
 
+/* ---------- réveil du bot en TEMPS RÉEL ----------
+   ⚠️ Le bot sondait en boucle : latence = un demi-intervalle en moyenne, et
+   des requêtes à vide le reste du temps. Ici, chaque espace peut avoir des
+   abonnés SSE (le bot) qu'on RÉVEILLE dès qu'un lot arrive — le bot va alors
+   chercher les évènements tout de suite. Le sondage reste, en filet, mais
+   long : plus besoin qu'il soit court. */
+const relaySubs = new Map();   // spaceId -> Set<res>
+function relayWake(spaceId) {
+  const set = relaySubs.get(Number(spaceId));
+  if (!set || !set.size) return;
+  for (const res of set) { try { res.write('event: nouveaux\ndata: {}\n\n'); } catch { set.delete(res); } }
+}
+setInterval(() => {
+  for (const [, set] of relaySubs)
+    for (const res of set) { try { res.write(': ping\n\n'); } catch { set.delete(res); } }
+}, 25000).unref();
+
 /* ---------- ingestion ---------- */
 const iEvent = db.prepare(`INSERT INTO events
   (ts,cat,sev,server,actor_key,actor_name,actor_sid,actor_staff,target_key,target_name,msg,data,res,search,space_id)
@@ -1606,6 +1623,7 @@ async function route(req, res) {
     const list = Array.isArray(b) ? b : (b.events || []);
     if (!Array.isArray(list)) return fail(res, 400, 'Attendu : un tableau d’évènements.');
     const n = ingest(list.slice(0, 500), S(b.server) || esp.name, esp.id);
+    if (n) relayWake(esp.id);   // réveille le bot abonné : pas d'attente du prochain sondage
     return ok(res, { recus: n, espace: esp.name });
   }
   /* ---- battement de présence, envoyé par la ressource ----
@@ -1706,6 +1724,24 @@ async function route(req, res) {
       return fail(res, 401, 'Clé de relais invalide ou espace fermé.');
     }
     if (method !== 'GET') return fail(res, 405, 'Le relais ne fait que lire.');
+
+    // ⚠️ TEMPS RÉEL : le bot s'abonne ici et reste connecté ; on le RÉVEILLE
+    // (event: nouveaux) dès qu'un lot est ingéré pour cet espace. Il va alors
+    // relire /api/relay/events tout de suite, au lieu d'attendre son sondage.
+    // Ne compte pas dans le débit des requêtes : c'est UNE connexion longue.
+    if (p === '/api/relay/stream') {
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache',
+                           'connection': 'keep-alive', 'x-accel-buffering': 'no' });
+      res.write('retry: 5000\n\n');
+      let set = relaySubs.get(esp.id);
+      if (!set) { set = new Set(); relaySubs.set(esp.id, set); }
+      set.add(res);
+      // Un premier « nouveaux » à la connexion : si des évènements sont
+      // arrivés pendant que le bot était hors ligne, il les prend aussitôt.
+      res.write('event: nouveaux\ndata: {}\n\n');
+      req.on('close', () => { set.delete(res); if (!set.size) relaySubs.delete(esp.id); });
+      return;
+    }
     if (debit('relayq:' + esp.id, 120, 60000)) return fail(res, 429, 'Trop d’appels.');
 
     // De quoi le bot a besoin pour préparer ses salons : le nom de

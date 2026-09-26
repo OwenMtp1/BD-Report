@@ -34,6 +34,12 @@ const CFG = {
 
   // Cadence. 5 s suffit pour du « direct » ressenti.
   sondageMs: Math.max(2000, Number(process.env.POLL_MS || 5000)),
+  // ⚠️ FILET quand le réveil temps réel (SSE) est branché : on ne sonde
+  // plus toutes les 5 s, on ATTEND d'être réveillé — mais jamais plus
+  // longtemps que ça, pour rattraper ce qu'un flux coupé aurait laissé
+  // passer. Le sondage reste la source de vérité (cf. lib/reveil.js), le
+  // SSE ne fait que supprimer la latence.
+  reveilMs:  Math.max(5000, Number(process.env.WAKE_POLL_MS || 30000)),
   parLot:    Math.max(1, Math.min(200, Number(process.env.BATCH || 100))),
   // À quelle fréquence on redemande la liste des espaces : c'est ce qui
   // fait qu'un client branché à 14 h est servi quelques minutes après,
