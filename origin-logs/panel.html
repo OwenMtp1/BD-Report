@@ -293,7 +293,10 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 #helpBtn{margin-left:auto}
 /* Le menu ☰ et le nom d'espace dans la barre n'existent QUE sur téléphone
    (le rail y devient un tiroir). Sur grand écran, rien à ouvrir. */
-.nav-toggle{display:none}
+/* ⚠️ `.bar` en préfixe pour passer DEVANT `.icon-btn{display:grid}` (même
+   spécificité, défini plus bas) : sans lui, le ☰ mobile s'affichait aussi
+   sur grand écran. La règle mobile plus bas porte le même préfixe. */
+.bar .nav-toggle{display:none}
 .bar-brand{display:none}
 /* Le voile du tiroir ne sert aussi que sur téléphone. */
 .nav-scrim{position:fixed;inset:0;z-index:44;background:rgba(6,4,11,.5);backdrop-filter:blur(2px);border:none}
@@ -494,6 +497,20 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
    l'impression d'attendre l'interface au lieu de la conduire. */
 .view{padding:0 22px 44px;min-width:0}
 .view[hidden]{display:none}
+/* Sous-onglets de l'écran « Analyse » (Statistiques / Économie / Temps de
+   jeu / Équipe) : une seule rubrique dans le rail, quatre angles ici. */
+.subtabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px;border-bottom:1px solid var(--line-soft);padding-bottom:2px}
+.subtab{
+  display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px 9px 0 0;
+  font-size:13px;font-weight:600;color:var(--muted);position:relative;top:1px;
+  border:1px solid transparent;border-bottom:none;background:none;
+  transition:color .16s var(--ease), background .16s var(--ease);
+}
+.subtab:hover{color:var(--ink-2);background:var(--vio-wash)}
+.subtab[aria-pressed="true"]{
+  color:var(--vio-hi);background:var(--panel);
+  border-color:var(--line);box-shadow:0 -2px 0 var(--vio-hi) inset;
+}
 .view.entre > .head,
 .view.entre > .cat-find,
 .view.entre > .filters,
@@ -1232,7 +1249,7 @@ select.input{height:36px}
 
   /* La barre : ☰, nom d'espace, recherche, aide/profil. */
   .bar{height:auto;min-height:var(--bar-h);gap:8px;padding:10px 14px}
-  .nav-toggle{display:grid}
+  .bar .nav-toggle{display:grid}
   .bar-brand{
     display:flex;align-items:center;min-width:0;flex:0 1 auto;
     font-weight:700;font-size:14px;color:var(--ink);letter-spacing:-.01em;
@@ -1557,9 +1574,10 @@ select.input{height:36px}
 
     <!-- ============ VUE D'ÉQUIPE ============ -->
     <section class="view" id="viewTeam" hidden aria-label="Activité de l’équipe">
-      <div class="head">
+      <div class="head"><div><h1 class="title">Analyse</h1></div></div>
+      <div id="teamTabs"></div>
+      <div class="head" style="padding-top:2px">
         <div>
-          <h1 class="title">Vue d'équipe</h1>
           <div class="sub">Ce que chacun traite. Les chiffres viennent des journaux, pas d’une déclaration.</div>
         </div>
         <div class="seg" id="teamSeg" role="group" aria-label="Période">
@@ -2572,7 +2590,7 @@ const STATE = { view:'overview', cat:'all', range:24, q:'', sevs:new Set(),
                 list:[], total:0, cursor:null, sevCounts:{}, stats:null, bans:null,
                 onQ:'', online:null, team:null, teamJours:7,
                 // Les évènements arrivés pendant qu'on lisait plus bas.
-                enAttente:[], compact:false };
+                enAttente:[], compact:false, analyseTab:'stats' };
 
 /* ⚠️ LA LISTE DES VUES DE PLATEFORME VIT À UN SEUL ENDROIT. Elle était
    recopiée dans trois conditions (le rafraîchissement, le repli sans
@@ -2744,33 +2762,23 @@ function buildNav() {
   const bans = cats.find(c => c.id === 'bans');
   html += `<div class="nav-group eyebrow nav-section">Supervision</div>
     <button class="nav-item" data-view="overview" style="--fam:var(--vio-hi)">
-      <span class="nav-dot"></span><span class="nav-label">Vue d'ensemble</span><span class="nav-n"></span></button>
+      <span class="nav-dot"></span><span class="nav-label">Tableau de bord</span><span class="nav-n"></span></button>
     ${can('players.view') ? `<button class="nav-item" data-view="online" style="--fam:var(--ok)"
         title="Qui est sur le serveur en ce moment">
       <span class="nav-dot"></span><span class="nav-label">Joueurs</span><span class="nav-n" id="nOnline">—</span></button>` : ''}
     <button class="nav-item" data-cat="all" style="--fam:var(--ink-2)">
       <span class="nav-dot"></span><span class="nav-label">Logs</span><span class="nav-n" id="nAll">—</span></button>
     ${bans ? `<button class="nav-item nav-bans" data-cat="bans" style="--fam:${bans.fam}" title="${esc(bans.desc)}">
-      <span class="nav-dot"></span><span class="nav-label">Bans</span><span class="nav-n" data-n="bans">—</span></button>` : ''}
-    ${can('team.stats') ? `<button class="nav-item" data-view="team" style="--fam:var(--f-staff)"
-        title="Ce que traite chaque membre de l’équipe">
-      <span class="nav-dot"></span><span class="nav-label">Vue d'équipe</span><span class="nav-n"></span></button>` : ''}`;
-  // ⚠️ ANALYSE — les écrans « métier » d'Addveo : l'argent qui circule, le
-  // temps passé en jeu, les statistiques agrégées. Ils lisent le journal
-  // (ce qu'on sait déjà) en attendant que la ressource remonte ces mesures
-  // dédiées. Gardés par players.view : qui ne voit pas les joueurs n'a pas
-  // à voir leurs flux.
+      <span class="nav-dot"></span><span class="nav-label">Bans</span><span class="nav-n" data-n="bans">—</span></button>` : ''}`;
+  // ⚠️ UNE SEULE RUBRIQUE « Analyse » (Statistiques, Économie, Temps de jeu,
+  // Équipe en sous-onglets). Trois entrées « métier » à moitié vides + une
+  // « Vue d'équipe » séparée, c'était quatre rubriques pour une seule
+  // question. Gardée par players.view.
   if (can('players.view')) {
     html += `<div class="nav-group eyebrow nav-section">Analyse</div>
-      <button class="nav-item" data-view="economy" style="--fam:var(--f-bien)"
-          title="L’argent qui circule : dépôts, retraits, achats, salaires">
-        <span class="nav-dot"></span><span class="nav-label">Économie</span><span class="nav-n"></span></button>
-      <button class="nav-item" data-view="playtime" style="--fam:var(--f-monde)"
-          title="Le temps passé en jeu, par joueur et par jour">
-        <span class="nav-dot"></span><span class="nav-label">Temps de jeu</span><span class="nav-n"></span></button>
-      <button class="nav-item" data-view="stats" style="--fam:var(--f-play)"
-          title="Vue d’ensemble chiffrée : rubriques, gravité, heures de pointe">
-        <span class="nav-dot"></span><span class="nav-label">Statistiques</span><span class="nav-n"></span></button>`;
+      <button class="nav-item" data-view="analyse" style="--fam:var(--f-play)"
+          title="Statistiques, économie, temps de jeu, activité de l’équipe">
+        <span class="nav-dot"></span><span class="nav-label">Analyse</span><span class="nav-n"></span></button>`;
   }
   // Les JOURNAUX par métier — les rubriques (bans déjà remonté plus haut).
   let premierGroupe = true;
@@ -2831,6 +2839,8 @@ function renderNav() {
   document.querySelectorAll('.nav-item').forEach(b => {
     const on = (b.dataset.view && b.dataset.view === STATE.view)
             || (STATE.view === 'overview' && b.dataset.view === 'overview')
+            // La rubrique « Analyse » reste active pour tous ses sous-onglets.
+            || (b.dataset.view === 'analyse' && ANALYSE_TABS.includes(STATE.view))
             || (STATE.view === 'bans' && b.dataset.cat === 'bans')
             || (STATE.view === 'stream' && b.dataset.cat === STATE.cat);
     b.setAttribute('aria-current', on ? 'true' : 'false');
@@ -3063,6 +3073,30 @@ function drawChart(s) {
    le dit plutôt que d'inventer un chiffre.
    ============================================================ */
 const ECO_CATS = ['inventaire','proprietes','boutique_caisse','boutique_monnaie','boutique_produits','jobs','casino','facture_ems'];
+// ⚠️ UNE SEULE RUBRIQUE « Analyse » dans le rail, QUATRE angles ici. Statistiques,
+// Économie et Temps de jeu répondaient chacun à une facette de la même question
+// (« que disent les chiffres ? ») et «  Vue d'équipe » en était une de plus : trois
+// entrées à moitié vides valaient moins qu'un écran qui assume ses onglets. La barre
+// de sous-onglets est partagée par les quatre écrans (chacun garde sa vue et son
+// rendu ; on ne fait que les relier). « Équipe » n'apparaît qu'avec le droit team.stats.
+const ANALYSE_TABS = ['stats', 'economy', 'playtime', 'team'];
+function analyseTabs(actif) {
+  const tabs = [
+    { v:'stats',    label:'Statistiques' },
+    { v:'economy',  label:'Économie' },
+    { v:'playtime', label:'Temps de jeu' },
+  ];
+  if (can('team.stats')) tabs.push({ v:'team', label:'Équipe' });
+  return `<div class="subtabs" role="tablist" aria-label="Analyse">${tabs.map(t => `
+    <button class="subtab" role="tab" data-view="${t.v}" aria-pressed="${t.v === actif ? 'true' : 'false'}">${t.label}</button>`).join('')}</div>`;
+}
+// En-tête commun des écrans d'analyse : titre constant « Analyse », la barre
+// de sous-onglets, puis la ligne de contexte propre à l'onglet.
+function analyseHead(actif, sous) {
+  return `<div class="head"><div><h1 class="title">Analyse</h1></div></div>
+    ${analyseTabs(actif)}
+    ${sous ? `<div class="sub" style="margin:-8px 0 16px">${sous}</div>` : ''}`;
+}
 function kpiCell(k, v, d, cls) {
   return `<div class="status-cell ${cls || ''}">
     <span class="status-k">${esc(k)}</span>
@@ -3077,7 +3111,7 @@ function attenteBanner(txt) {
 function renderEconomy() {
   const host = $('#viewEconomy'); if (!host) return;
   const s = STATE.stats;
-  if (!s) { host.innerHTML = `<div class="head"><div><h1 class="title">Économie</h1></div></div><div class="void">Chargement…</div>`; return; }
+  if (!s) { host.innerHTML = analyseHead('economy', 'Économie') + `<div class="void">Chargement…</div>`; return; }
   const split = s.split || {};
   const n = c => split[c] || 0;
   const total = ECO_CATS.reduce((a, c) => a + n(c), 0);
@@ -3089,11 +3123,8 @@ function renderEconomy() {
   const cats = visibleCats();
   const max = Math.max(1, ...ECO_CATS.map(n));
 
-  host.innerHTML = `
-    <div class="head"><div>
-      <h1 class="title">Économie</h1>
-      <div class="sub">L’argent qui circule — transactions, immobilier, boutique, entreprises, casino, EMS · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b></div>
-    </div></div>
+  host.innerHTML = analyseHead('economy',
+      `L’argent qui circule — transactions, immobilier, boutique, entreprises, casino, EMS · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b>`) + `
     ${attenteBanner('Ci-dessous, les mouvements enregistrés sur la période ; le flux additionne les montants des mouvements affichés.')}
     <div class="status">
       ${kpiCell('Mouvements', total.toLocaleString('fr-FR'), 'évènements d’argent sur la période')}
@@ -3134,16 +3165,13 @@ function renderEconomy() {
 function renderPlaytime() {
   const host = $('#viewPlaytime'); if (!host) return;
   const s = STATE.stats;
-  if (!s) { host.innerHTML = `<div class="head"><div><h1 class="title">Temps de jeu</h1></div></div><div class="void">Chargement…</div>`; return; }
+  if (!s) { host.innerHTML = analyseHead('playtime', 'Temps de jeu') + `<div class="void">Chargement…</div>`; return; }
   const split = s.split || {};
   const co = split.connexions || 0, dco = split.deconnexion || 0;
   const online = Number(($('#nOnline') || {}).textContent) || null;
 
-  host.innerHTML = `
-    <div class="head"><div>
-      <h1 class="title">Temps de jeu</h1>
-      <div class="sub">Présence et fréquentation · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b></div>
-    </div></div>
+  host.innerHTML = analyseHead('playtime',
+      `Présence et fréquentation · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b>`) + `
     ${attenteBanner('Ci-dessous, ce que les connexions permettent déjà de mesurer ; la durée exacte de chaque session arrivera avec la ressource.')}
     <div class="status">
       ${kpiCell('Joueurs uniques', s.uniques, 'sur la période')}
@@ -3169,7 +3197,7 @@ function renderPlaytime() {
 function renderStats() {
   const host = $('#viewStats'); if (!host) return;
   const s = STATE.stats;
-  if (!s) { host.innerHTML = `<div class="head"><div><h1 class="title">Statistiques</h1></div></div><div class="void">Chargement…</div>`; return; }
+  if (!s) { host.innerHTML = analyseHead('stats', 'Statistiques') + `<div class="void">Chargement…</div>`; return; }
   const delta = s.prev ? Math.round((s.total - s.prev) / s.prev * 100) : 0;
   const dcl = delta > 4 ? 'up' : delta < -4 ? 'down' : 'flat';
   const split = s.split || {};
@@ -3184,11 +3212,8 @@ function renderStats() {
   const series = s.series || [];
   const smax = Math.max(1, ...series);
 
-  host.innerHTML = `
-    <div class="head"><div>
-      <h1 class="title">Statistiques</h1>
-      <div class="sub">Vue d’ensemble chiffrée · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b></div>
-    </div></div>
+  host.innerHTML = analyseHead('stats',
+      `Vue d’ensemble chiffrée · fenêtre <b>${CHART_CFG[STATE.range].title.toLowerCase()}</b>`) + `
     <div class="status">
       ${kpiCell('Évènements', s.total.toLocaleString('fr-FR'), `<span class="delta ${dcl}">${s.prev ? (delta > 0 ? '+' : '') + delta + ' %' : '—'}</span> vs période précédente`)}
       ${kpiCell('Joueurs uniques', s.uniques, 'auteurs d’au moins un évènement')}
@@ -3444,6 +3469,7 @@ const duree = m => (m == null ? '—' : m < 60 ? m + ' min' : (m / 60).toFixed(1
 
 function renderTeam() {
   const d = STATE.team;
+  const tt = $('#teamTabs'); if (tt) tt.innerHTML = analyseTabs('team');
   document.querySelectorAll('[data-jours]').forEach(b =>
     b.setAttribute('aria-pressed', String(Number(b.dataset.jours) === STATE.teamJours)));
   if (!d) { $('#teamRows').innerHTML = ''; return; }
@@ -7171,7 +7197,16 @@ function goBans() {
   syncHash(); render(); refresh(); window.scrollTo({ top: 0 });
 }
 function goOverview() { STATE.view = 'overview'; syncHash(); render(); refresh(); }
-function goVue(v) { STATE.view = v; syncHash(); render(); refresh(); window.scrollTo({ top: 0 }); }
+function goVue(v) {
+  // « analyse » n'est pas une vue en soi : c'est la rubrique du rail, qui
+  // ouvre le dernier sous-onglet consulté. On le résout ici aussi, pour que
+  // la fonction reste juste quel que soit l'appelant.
+  if (v === 'analyse') v = STATE.analyseTab || 'stats';
+  // Mémorise le dernier sous-onglet d'analyse pour que la rubrique « Analyse »
+  // y revienne.
+  if (ANALYSE_TABS.includes(v)) STATE.analyseTab = v;
+  STATE.view = v; syncHash(); render(); refresh(); window.scrollTo({ top: 0 });
+}
 
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate],[data-notedel],[data-admin]');
@@ -7195,6 +7230,10 @@ document.addEventListener('click', async ev => {
   if (t.dataset.view === 'staff')        return goVue('staff');
   if (t.dataset.view === 'overview') return goOverview();
   if (t.dataset.view === 'online') return goVue('online');
+  // « Analyse » (rail) ouvre le dernier sous-onglet consulté ; les
+  // sous-onglets (Statistiques/Économie/Temps de jeu/Équipe) sont des
+  // data-view directs, gérés juste après.
+  if (t.dataset.view === 'analyse') return goVue(STATE.analyseTab || 'stats');
   if (t.dataset.view === 'team')   return goVue('team');
   if (t.dataset.view === 'economy')  return goVue('economy');
   if (t.dataset.view === 'playtime') return goVue('playtime');

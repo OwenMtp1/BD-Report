@@ -319,19 +319,30 @@ t('la vue d’intégration dit quelle ressource assure chaque geste',
   /Gestes sur les joueurs/.test(P) && /d\.capacites\.map/.test(P)
   && /d\.gestesUniversels\.map/.test(P));
 
-sect('Les écrans d’analyse (Économie, Temps de jeu, Statistiques) sont des ONGLETS');
-// ⚠️ Rubriques « métier » façon Addveo : elles lisent ce qu’on sait déjà
-// (compteurs par rubrique, évènements chargés) et le disent, plutôt que
-// d’inventer un chiffre en attendant la remontée dédiée de la ressource.
+sect('« Analyse » : UNE rubrique, quatre sous-onglets');
+// ⚠️ Statistiques, Économie, Temps de jeu et Équipe répondaient chacun à une
+// facette de « que disent les chiffres ? ». Quatre rubriques à moitié vides
+// valaient moins qu'un seul écran assumant ses onglets. La barre de
+// sous-onglets est partagée ; chaque vue et chaque fonction de rendu restent.
+t('une SEULE rubrique « Analyse » dans le rail', /data-view="analyse"/.test(P)
+  && !/data-view="economy" style/.test(P));
+t('elle ouvre le dernier sous-onglet consulté',
+  /dataset\.view === 'analyse'\) return goVue\(STATE\.analyseTab \|\| 'stats'\)/.test(P)
+  && /if \(ANALYSE_TABS\.includes\(v\)\) STATE\.analyseTab = v/.test(P));
+t('et reste active pour tous ses sous-onglets',
+  /b\.dataset\.view === 'analyse' && ANALYSE_TABS\.includes\(STATE\.view\)/.test(P));
+t('la barre de sous-onglets est partagée', /function analyseTabs\(/.test(P)
+  && /const ANALYSE_TABS = \['stats', 'economy', 'playtime', 'team'\]/.test(P));
+t('⚠️ « Équipe » n’est un sous-onglet que si on peut la voir',
+  /if \(can\('team\.stats'\)\) tabs\.push\(\{ v:'team'/.test(P));
 for (const [v, path, fn] of [
   ['economy',  '/economie',     'renderEconomy'],
   ['playtime', '/temps-de-jeu', 'renderPlaytime'],
   ['stats',    '/statistiques', 'renderStats'],
 ]) {
   t(`${v} : la vue existe`, new RegExp(`id="view${v[0].toUpperCase()+v.slice(1)}"`).test(P));
-  t(`${v} : entrée dans le rail`, new RegExp(`data-view="${v}"`).test(P));
   t(`${v} : son adresse`, P.includes(`'${path}'`));
-  t(`${v} : le clic du rail la route`, new RegExp(`dataset\\.view === '${v}'\\)\\s*return goVue\\('${v}'\\)`).test(P));
+  t(`${v} : le sous-onglet la route`, new RegExp(`dataset\\.view === '${v}'\\)\\s*return goVue\\('${v}'\\)`).test(P));
   t(`${v} : sa fonction de rendu est branchée`, new RegExp(`STATE\\.view === '${v}'\\) ${fn}\\(\\)`).test(P)
     && new RegExp(`function ${fn}\\(`).test(P));
 }
@@ -339,6 +350,10 @@ t('⚠️ les écrans d’argent ne fabriquent pas de montant : le flux addition
   /sur \$\{charges\.length\} mouvement\(s\) chargé\(s\)/.test(P));
 t('⚠️ le temps de jeu dit que l’activité est un PROXY tant que la durée réelle manque',
   /proxy en attendant la durée réelle/.test(P));
+t('⚠️ « Vue d’équipe » n’est plus une rubrique séparée du rail',
+  !/data-view="team" style/.test(P));
+t('« Tableau de bord » a remplacé « Vue d’ensemble » dans le rail',
+  /nav-label">Tableau de bord</.test(P));
 
 sect('Rôles & accès est une PLEINE PAGE, plus une fenêtre');
 // ⚠️ C’est l’écran qu’on ouvre pour comprendre qui peut quoi : une fenêtre
