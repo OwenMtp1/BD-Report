@@ -603,6 +603,10 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .chart{display:block;width:100%;min-width:520px;height:auto}
 .chart text{font-family:var(--mono);font-size:9.5px;fill:var(--muted)}
 .chart .rule{stroke:var(--edge-soft);stroke-width:1}
+/* Survol d'une colonne : elle s'éclaire (le détail vient de son <title>). */
+.chart g{cursor:default}
+.chart g:hover rect:not(.hit){opacity:1;filter:brightness(1.08)}
+.chart g .hit:hover{fill:color-mix(in srgb,var(--vio) 8%,transparent)}
 .legend{display:flex;gap:14px;flex-wrap:wrap}
 .legend span{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
 .legend i{width:9px;height:9px;border-radius:2px;background:var(--c);display:block}
@@ -862,6 +866,8 @@ mark{
 .insp-head{display:flex;align-items:flex-start;gap:9px;padding:15px 16px;border-bottom:1px solid var(--line-soft)}
 .insp-title{flex:1;font-size:15px;font-weight:600;line-height:1.3;font-variation-settings:'wdth' 92;text-wrap:balance}
 .insp-body{overflow-y:auto;padding:16px;display:grid;gap:18px;align-content:start}
+/* Barre de navigation entre évènements, en tête de l'inspecteur. */
+.insp-nav{display:flex;gap:7px;align-items:center;margin:-2px 0 2px}
 .block{display:grid;gap:9px;min-width:0}
 .kv{display:grid;grid-template-columns:100px minmax(0,1fr);gap:7px 12px;font-size:12.5px}
 .kv dt{font-size:11px;font-weight:600;letter-spacing:.01em;color:var(--muted);padding-top:2px}
@@ -1196,6 +1202,7 @@ select.input{height:36px}
 }
 .af-x:hover{background:var(--vio);color:#fff}
 .af-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--vio-hi)}
+.af-count{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;align-self:center}
 
 /* ---------- action rapide sur une ligne ----------
    Vider la file d'alertes ne devrait pas demander d'ouvrir chaque
@@ -3376,6 +3383,11 @@ function renderStream() {
   const f = $('#feedScroll');
   const ancre = (f && f.scrollTop > 40) ? { haut: f.scrollTop, total: f.scrollHeight } : null;
   remember(STATE.list);
+  // Lien profond « ?ev= » : la liste est là, on ouvre l'évènement demandé.
+  if (STATE.pendingEv != null && SEEN.has(STATE.pendingEv)) {
+    const cible = STATE.pendingEv; STATE.pendingEv = null;
+    setTimeout(() => openInspector(cible), 0);
+  }
   const c = STATE.cat === 'all' ? null : CAT[STATE.cat];
   $('#streamTitle').textContent = c ? c.label : 'Flux complet';
   $('#streamDesc').textContent = c ? c.desc : 'Toutes les catégories auxquelles votre rôle donne accès.';
@@ -3392,8 +3404,16 @@ function renderStream() {
 
   const host = $('#rows');
   if (!STATE.list.length) {
-    host.innerHTML = `<div class="void"><b>Aucun évènement</b>
-      <span>Rien ne correspond à ces filtres sur ${chartCfg().title.toLowerCase()}.</span>
+    // ⚠️ ÉTAT VIDE PÉDAGOGIQUE. Sur une rubrique précise sans aucun filtre,
+    // le vide dit souvent « la ressource ne remonte pas encore ceci » plutôt
+    // que « rien ne correspond » : on l'explique et on pointe le branchement.
+    const cat = STATE.cat !== 'all' ? CAT[STATE.cat] : null;
+    const sansFiltre = !STATE.q && !STATE.sevs.size;
+    const pedago = cat && sansFiltre;
+    host.innerHTML = `<div class="void"><b>${pedago ? 'Rien dans « ' + esc(cat.label) +' » pour l’instant' : 'Aucun évènement'}</b>
+      <span>${pedago
+        ? 'Aucun journal de cette rubrique sur ' + chartCfg().title.toLowerCase() + '. Si le serveur en produit, vérifiez que la ressource Origin Logs est bien lancée et à jour côté jeu.'
+        : 'Rien ne correspond à ces filtres sur ' + chartCfg().title.toLowerCase() + '.'}</span>
       <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         ${STATE.range !== 168 ? `<button class="btn sm" id="widenRange">Chercher sur 7 jours</button>` : ''}
         <button class="btn sm" id="resetFilters">Tout réinitialiser</button>
@@ -3703,7 +3723,17 @@ function openInspector(id) {
               : (e.target && e.target.key ? e.target : null);
   const dejaBanni = e.cat === 'bans' && e.d && e.d.type === 'ban';
 
+  // Barre de navigation : passer à l'évènement voisin sans refermer, et
+  // copier un lien qui rouvre exactement CET évènement (utile pour le
+  // signaler à un collègue). Au clavier : j / k.
+  const idx = (STATE.list || []).findIndex(x => x.id === e.id);
+  const aPrec = idx > 0, aSuiv = idx >= 0 && idx < (STATE.list.length - 1);
   $('#inspBody').innerHTML = `
+    <div class="insp-nav">
+      <button class="btn sm" data-evnav="prev" ${aPrec ? '' : 'disabled'} title="Précédent (k)">‹ Précédent</button>
+      <button class="btn sm" data-evnav="next" ${aSuiv ? '' : 'disabled'} title="Suivant (j)">Suivant ›</button>
+      <button class="btn sm" id="inspLink" style="margin-left:auto" title="Copier un lien vers cet évènement">Copier le lien</button>
+    </div>
     <dl class="kv">
       <dt>Identifiant</dt><dd class="mono">${esc(String(e.id))}</dd>
       <dt>Horodatage</dt><dd class="mono">${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${hhmmss(e.t)} · ${ago(e.t)}</dd>
@@ -3754,6 +3784,29 @@ function closeInspector() {
   $('#app').classList.remove('insp-open');
   STATE.sel = null;
   document.querySelectorAll('.ev').forEach(r => r.setAttribute('aria-selected', 'false'));
+}
+// ⚠️ Passer à l'évènement voisin DANS LA LISTE CHARGÉE, sans refermer :
+// trier une soirée se fait au fil, pas en rouvrant chaque ligne.
+function voisinEvent(dir) {
+  const list = STATE.list || [];
+  const i = list.findIndex(x => x.id === STATE.sel);
+  if (i < 0) return;
+  const j = dir === 'next' ? i + 1 : i - 1;
+  if (j < 0 || j >= list.length) return;
+  openInspector(list[j].id);
+  const row = document.querySelector(`.ev[data-ev="${list[j].id}"]`);
+  if (row && row.scrollIntoView) row.scrollIntoView({ block:'nearest' });
+}
+// Copier un lien qui ROUVRE cet évènement (hash du flux + ?ev=<id>).
+function copierLienEvent() {
+  if (STATE.sel == null) return;
+  const e = SEEN.get(STATE.sel);
+  const base = location.origin + location.pathname;
+  const cat = (e && e.cat) ? e.cat : 'all';
+  const url = base + '#/flux/' + cat + '?ev=' + encodeURIComponent(STATE.sel);
+  const ok = () => toast('Lien de l’évènement copié.');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(ok).catch(() => toast(url));
+  else toast(url);
 }
 
 /* ---------- feuille ---------- */
@@ -4348,6 +4401,9 @@ function applyHash() {
   }
   STATE.sevs = new Set((p.get('s') || '').split(',').filter(Boolean));
   STATE.limit = 120; STATE.list = [];
+  // Un lien « ?ev=<id> » (copié depuis l'inspecteur) rouvre l'évènement une
+  // fois la liste chargée (renderStream l'ouvre quand SEEN le connaît).
+  const ev = p.get('ev'); STATE.pendingEv = ev ? (Number(ev) || ev) : null;
   const champ = $('#q'); if (champ) champ.value = STATE.q;
   const champCat = $('#catQ'); if (champCat) champCat.value = STATE.q;
   const champBan = $('#banQ'); if (champBan) champBan.value = STATE.banQ;
@@ -4422,11 +4478,16 @@ function renderActiveFilters() {
   if (STATE.q) bits.push(['Recherche', '« ' + STATE.q + ' »', 'q']);
   [...STATE.sevs].forEach(id => bits.push(['Gravité', (SEV[id] || {}).label || id, 'sev:' + id]));
   if (STATE.range !== 24) bits.push(['Période', estCustom() ? chartCfg().title : (NOM_PERIODE[STATE.range] || STATE.range + ' h'), 'range']);
+  // ⚠️ COMBIEN de lignes ces filtres laissent-ils ? Sans ce compte, on
+  // affine à l'aveugle. Sur le flux, on connaît le total (STATE.total).
+  const compte = STATE.view === 'stream'
+    ? `<span class="af-count">${STATE.total.toLocaleString('fr-FR')} résultat${STATE.total > 1 ? 's' : ''}</span>` : '';
   host.hidden = !bits.length;
   host.innerHTML = bits.map(([k, v, id]) =>
     `<span class="af"><span class="af-label">${esc(k)}</span><b>${esc(v)}</b>
       <button class="af-x" data-clear="${esc(id)}" title="Retirer ce filtre" aria-label="Retirer ${esc(k)}">×</button></span>`).join('')
-    + (bits.length > 1 ? `<button class="btn sm" data-clear="tout">Tout effacer</button>` : '');
+    + (bits.length > 1 ? `<button class="btn sm" data-clear="tout">Tout effacer</button>` : '')
+    + compte;
 }
 function clearFilter(quoi) {
   if (quoi === 'cat')   { STATE.cat = 'all'; STATE.view = 'stream'; }
@@ -4621,6 +4682,7 @@ const RACCOURCIS = [
   [['↑','↓'], 'Parcourir les suggestions ou le flux'],
   [['Entrée'], 'Ouvrir la suggestion retenue'],
   [['Échap'], 'Fermer, ou vider la recherche'],
+  [['j','/','k'], 'Évènement suivant / précédent (inspecteur ouvert)'],
   [['g','puis','o'], 'Vue d’ensemble'],
   [['g','puis','f'], 'Flux complet'],
   [['g','puis','b'], 'Bannissements'],
@@ -4664,6 +4726,11 @@ document.addEventListener('keydown', e => {
   }
   if (dansChamp) return;
 
+  // Inspecteur ouvert : j / k passent à l'évènement suivant / précédent.
+  if ($('#inspector').classList.contains('open') && (e.key === 'j' || e.key === 'k')) {
+    e.preventDefault(); e.stopImmediatePropagation();
+    return voisinEvent(e.key === 'j' ? 'next' : 'prev');
+  }
   if (e.key === '?' || (e.key === '/' && e.shiftKey)) { e.preventDefault(); e.stopImmediatePropagation(); return openHelp(); }
   if (chordG) {
     chordG = false;
@@ -6869,6 +6936,7 @@ document.addEventListener('click', async ev => {
     if (id === 'sauvRestore') $('#sauvFile').click();
     if (id === 'rangeCustomBtn') return basculerPlage();
     if (id === 'rangeApply')     return appliquerPlage();
+    if (id === 'inspLink')       return copierLienEvent();
     return;
   }
   ev.preventDefault(); ev.stopImmediatePropagation();
@@ -7384,7 +7452,7 @@ function goVue(v) {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate],[data-notedel]');
+  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate],[data-notedel],[data-evnav]');
   if (!t) return;
 
   if (t.dataset.view === 'platform')    return goVue('platform');
@@ -7406,6 +7474,7 @@ document.addEventListener('click', async ev => {
   if (t.dataset.view === 'settings') return goVue('settings');
   if (t.dataset.view === 'comptes')  return goVue('comptes');
   if (t.dataset.view === 'audit')    return goVue('audit');
+  if (t.dataset.evnav)  return voisinEvent(t.dataset.evnav);
   if (t.dataset.shot)   return ouvrirCapture(t.dataset.shot, t.dataset.shotname);
   if (t.dataset.act)    return askAction(t.dataset.act, t.dataset.key, t.dataset.name);
   if (t.dataset.notedel) {

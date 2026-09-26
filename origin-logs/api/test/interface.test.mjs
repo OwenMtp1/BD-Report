@@ -108,6 +108,24 @@ t('⚠️ le grade ne s’affiche que si l’on en a un',
   /grade \? `<div class="who-role"/.test(P) && /grades \? ligne\('Grade staff', grades\) : ''/.test(P));
 t('⚠️ se déconnecter n’ouvre pas le profil', /closest\('#logoutBtn'\)\) return/.test(P));
 
+sect('Interactions : filtres, inspecteur, graphes, états vides');
+// 1.8 — filtres retirables (déjà) + compteur de résultats.
+t('les filtres actifs sont retirables un par un', /data-clear="\$\{esc\(id\)\}"/.test(P) && /data-clear="tout"/.test(P));
+t('⚠️ 1.8 : le nombre de résultats est affiché', /class="af-count"/.test(P)
+  && /résultat\$\{STATE\.total > 1/.test(P));
+// 1.9 — inspecteur : évènement voisin (j/k) + lien copiable.
+t('⚠️ 1.9 : précédent/suivant dans l’inspecteur', /data-evnav="prev"/.test(P) && /data-evnav="next"/.test(P)
+  && /function voisinEvent/.test(P));
+t('j / k passent d’un évènement à l’autre',
+  /classList\.contains\('open'\) && \(e\.key === 'j' \|\| e\.key === 'k'\)/.test(P));
+t('un lien rouvre exactement cet évènement', /id="inspLink"/.test(P) && /function copierLienEvent/.test(P)
+  && /STATE\.pendingEv/.test(P));
+// 4.6 — les colonnes du graphe réagissent au survol.
+t('⚠️ 4.6 : survol des colonnes du graphique', /\.chart g:hover rect:not\(\.hit\)/.test(P));
+// 1.3 — état vide pédagogique sur une rubrique sans logs.
+t('⚠️ 1.3 : l’état vide d’une rubrique explique et pointe le branchement',
+  /Rien dans « ' \+ esc\(cat\.label\)/.test(P) && /la ressource Origin Logs est bien lancée/.test(P));
+
 sect('La recherche dit pourquoi une ligne répond');
 t('le terme visible est surligné', /function surligner/.test(P) && /fmtMsg\(e, STATE\.q\)/.test(P));
 t('⚠️ et le champ de la charge utile est NOMMÉ quand il ne se voit pas',
