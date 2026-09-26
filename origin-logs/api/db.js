@@ -343,6 +343,11 @@ function open(file) {
   // resynchronisation Discord ne doit pas défaire sa décision.
   ensureColumn(db, 'staff', 'manual_roles', 'TEXT');
   ensureColumn(db, 'staff', 'platform_admin', 'INTEGER NOT NULL DEFAULT 0');
+  // Double authentification (TOTP) pour les comptes à mot de passe local.
+  // `totp_secret` = secret actif (activé) ; `totp_pending` = secret en cours
+  // d'inscription, tant que le titulaire n'a pas prouvé qu'il lit ses codes.
+  ensureColumn(db, 'staff', 'totp_secret',  'TEXT');
+  ensureColumn(db, 'staff', 'totp_pending', 'TEXT');
   // Un administrateur de plateforme visite un espace sans changer le
   // sien : la visite vit sur la SESSION, pas sur le compte.
   ensureColumn(db, 'sessions', 'space_id', 'INTEGER');

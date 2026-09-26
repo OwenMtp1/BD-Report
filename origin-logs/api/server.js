@@ -15,6 +15,7 @@ const url = require('node:url');
 
 const DB = require('./db.js');
 const AUTH = require('./auth.js');
+const TOTP = require('./totp.js');
 const CAT = require('./catalogue.js');
 const DISCORD = require('./discord.js');
 const ROLESVC = require('./roles.js');
@@ -2017,6 +2018,19 @@ async function route(req, res) {
       audit(null, 'auth.echec', pseudo, ip, Number((candidats[0] && candidats[0].space_id) || 1));
       return fail(res, 401, 'Pseudo ou mot de passe incorrect.');
     }
+    // ⚠️ DEUXIÈME FACTEUR. Le mot de passe est bon ; si ce compte a activé la
+    // double authentification, un code valide est EXIGÉ avant toute session.
+    // Sans code, on le demande (totpRequired) sans compter d'échec — le mot
+    // de passe était juste. Un mauvais code, lui, freine (anti-force-brute).
+    if (row.totp_secret) {
+      const code = String(b.totp || '').trim();
+      if (!code) return send(res, 401, { error: 'Entrez le code de votre application d’authentification.', totpRequired: true });
+      if (!TOTP.verify(row.totp_secret, code)) {
+        AUTH.noteFail(ip); AUTH.noteFail('compte:' + pseudo.toLowerCase());
+        audit({ id: row.id, pseudo: row.pseudo }, 'auth.totp.echec', null, ip, Number(row.space_id || 1));
+        return send(res, 401, { error: 'Code de double authentification incorrect.', totpRequired: true });
+      }
+    }
     AUTH.clearFails(ip); AUTH.clearFails('compte:' + pseudo.toLowerCase());
     const token = AUTH.newToken(), exp = now() + CFG.sessionDays * 86400000;
     db.prepare('INSERT INTO sessions(token,staff_id,created_at,expires_at,ua) VALUES(?,?,?,?,?)')
@@ -2089,7 +2103,11 @@ async function route(req, res) {
 
   if (p === '/api/auth/me') {
     if (!me) return fail(res, 401, 'Session expirée.');
+    // La double authentification : active ? et disponible (comptes à mot de
+    // passe seulement — les comptes Discord passent déjà par l'OAuth).
+    const _t = DB.row(db.prepare('SELECT totp_secret FROM staff WHERE id = ?').get(me.id)) || {};
     return ok(res, {
+      totp: { actif: !!_t.totp_secret, disponible: me.source !== 'discord' },
       staff: { pseudo: me.pseudo, role: me.role, roleLabel: me.roleLabel,
                roles: me.roleLabels && me.roleLabels.length ? me.roleLabels
                     : me.roles.map(r => ({ id: r, label: r })),
@@ -2109,6 +2127,51 @@ async function route(req, res) {
                            visite: me.visiting, monEspace: me.homeSpaceId } : null,
       perms: me.perms, cats: me.cats });
   }
+
+  /* ============================================================
+     DOUBLE AUTHENTIFICATION (TOTP) — pour les comptes à mot de passe
+     ⚠️ Le titulaire l'active LUI-MÊME et prouve d'abord qu'il lit ses codes
+     (on ne verrouille jamais un compte sur un secret jamais testé). Les
+     comptes Discord n'en ont pas besoin : leur second facteur, c'est l'OAuth
+     du serveur.
+     ============================================================ */
+  if (p === '/api/auth/totp/setup' && method === 'POST') {
+    if (!me) return fail(res, 401, 'Connexion requise.');
+    if (me.source === 'discord') return fail(res, 409, 'Ce compte se connecte par Discord : sa double authentification est gérée côté Discord.');
+    const row = DB.row(db.prepare('SELECT totp_secret FROM staff WHERE id = ?').get(me.id)) || {};
+    if (row.totp_secret) return fail(res, 409, 'La double authentification est déjà active. Désactivez-la d’abord pour la reconfigurer.');
+    const secret = TOTP.genSecret();
+    db.prepare('UPDATE staff SET totp_pending = ? WHERE id = ?').run(secret, me.id);
+    return ok(res, { secret, otpauth: TOTP.otpauthUrl(secret, { compte: me.pseudo }) });
+  }
+  if (p === '/api/auth/totp/enable' && method === 'POST') {
+    if (!me) return fail(res, 401, 'Connexion requise.');
+    const b = await readBody(req);
+    const row = DB.row(db.prepare('SELECT totp_pending, totp_secret FROM staff WHERE id = ?').get(me.id)) || {};
+    if (row.totp_secret) return fail(res, 409, 'La double authentification est déjà active.');
+    if (!row.totp_pending) return fail(res, 409, 'Commencez par générer un secret (Configurer).');
+    if (!TOTP.verify(row.totp_pending, String(b.code || '')))
+      return fail(res, 400, 'Code incorrect : vérifiez l’heure de votre téléphone et réessayez.');
+    db.prepare('UPDATE staff SET totp_secret = totp_pending, totp_pending = NULL WHERE id = ?').run(me.id);
+    audit(me, 'auth.totp.active', null, ip, Number(me.spaceId || me.homeSpaceId || 1));
+    return ok(res, { ok: true });
+  }
+  if (p === '/api/auth/totp/disable' && method === 'POST') {
+    if (!me) return fail(res, 401, 'Connexion requise.');
+    const b = await readBody(req);
+    const row = DB.row(db.prepare('SELECT totp_secret, pass FROM staff WHERE id = ?').get(me.id)) || {};
+    if (!row.totp_secret) return ok(res, { ok: true });   // déjà désactivée
+    // ⚠️ On exige une PREUVE pour désactiver : un code valide OU le mot de
+    // passe. Sinon, une session ouverte laissée sans surveillance suffirait
+    // à retirer le second facteur.
+    const okCode = TOTP.verify(row.totp_secret, String(b.code || ''));
+    const okPass = b.password && AUTH.verify(String(b.password), row.pass);
+    if (!okCode && !okPass) return fail(res, 400, 'Confirmez avec un code valide ou votre mot de passe.');
+    db.prepare('UPDATE staff SET totp_secret = NULL, totp_pending = NULL WHERE id = ?').run(me.id);
+    audit(me, 'auth.totp.desactive', null, ip, Number(me.spaceId || me.homeSpaceId || 1));
+    return ok(res, { ok: true });
+  }
+
   if (p === '/api/catalogue') {
     // ⚠️ SANS SESSION, AUCUN RÔLE. La page de connexion a besoin des
     // rubriques et des gravités pour s'afficher, pas de votre

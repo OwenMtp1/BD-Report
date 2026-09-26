@@ -1348,6 +1348,13 @@ select.input{height:36px}
         <label for="gatePass">Mot de passe</label>
         <input class="input" id="gatePass" name="password" type="password" autocomplete="current-password">
       </div>
+      <!-- Champ de double authentification : caché tant que le compte n'en
+           demande pas. Il apparaît quand le serveur répond « totpRequired ». -->
+      <div class="field" id="gateTotpField" style="margin-top:10px" hidden>
+        <label for="gateTotp">Code de double authentification</label>
+        <input class="input" id="gateTotp" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" placeholder="6 chiffres">
+      </div>
       <button class="btn primary block" id="gateGo" type="submit" style="margin-top:14px">Se connecter</button>
     </div>
     <div class="gate-note" id="gateNote">
@@ -2399,7 +2406,9 @@ async function api(path, opts = {}) {
     showGate('Votre session a expiré. Reconnectez-vous.'); throw new Error('401');
   }
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.error || ('Erreur ' + r.status));
+  // ⚠️ On garde le CORPS sur l'erreur (err.body) : certains refus portent un
+  // drapeau utile (ex. totpRequired à la connexion) que le seul message perd.
+  if (!r.ok) { const err = new Error(body.error || ('Erreur ' + r.status)); err.body = body; err.status = r.status; throw err; }
   return body;
 }
 
@@ -4892,6 +4901,12 @@ let DEMO_ROLES = [];
 async function demoApi(path, opts) {
   const corps = opts && opts.body ? JSON.parse(opts.body) : null;
   const ecrit = opts && opts.method && opts.method !== 'GET';
+  // Double authentification en démo : on montre l'écran sans rien enregistrer.
+  if (path === '/api/auth/totp/setup')
+    return { secret:'JBSWY3DPEHPK3PXPJBSWY3DP', otpauth:'otpauth://totp/Origin%20Logs:demo?secret=JBSWY3DPEHPK3PXPJBSWY3DP&issuer=Origin%20Logs' };
+  if (path === '/api/auth/totp/enable' || path === '/api/auth/totp/disable') {
+    toast('Mode démonstration : rien n’est enregistré.'); return { ok:true };
+  }
   if (path.startsWith('/api/roles')) {
     if (ecrit) { toast('Mode démonstration : rien n’est enregistré.'); return { ok:true }; }
     return { roles: demoRolesCatalogue(), perms: DEMO_PERMS, permGroups: DEMO_PERM_GROUPS, cats: CATS, groups: GROUPS,
@@ -5943,6 +5958,16 @@ function ouvrirProfil() {
         : ligne('Discord', '<span class="lite-m">non relié</span>')}
       ${grades ? ligne('Grade staff', grades) : ''}
     </div>
+    ${(ME.totp && ME.totp.disponible) ? `<div class="block">
+      <h3 class="eyebrow">Sécurité — double authentification</h3>
+      ${ME.totp.actif
+        ? `<div class="map-row" style="border:none"><span class="map-name">État</span>
+             <span class="state" style="--c:var(--ok)">activée</span></div>
+           <span class="lite-m">Un code de votre application est demandé à chaque connexion, en plus du mot de passe.</span>
+           <div class="tools" style="margin-top:8px"><button class="btn sm danger" id="s2faOff" data-tfa="off">Désactiver</button></div>`
+        : `<span class="lite-m">Ajoutez un second facteur : un code temporaire lu dans une application (Google Authenticator, Aegis…), en plus du mot de passe.</span>
+           <div class="tools" style="margin-top:8px"><button class="btn sm primary" id="s2faSetup" data-tfa="setup">Configurer</button></div>`}
+    </div>` : ''}
     <div class="block">
       <h3 class="eyebrow">Environnements</h3>
       ${liste.length ? liste.map(e => `<div class="map-row" style="border:none">
@@ -5954,6 +5979,47 @@ function ouvrirProfil() {
     </div>`;
   openSheet('Mon profil', ME.plateforme ? 'Équipe Origin Logs' : 'Compte staff',
     { name: ME.pseudo || '?', hue: 268 }, corps);
+}
+
+/* ---------- double authentification (TOTP) ---------- */
+async function ouvrir2FASetup() {
+  let d;
+  try { d = await api('/api/auth/totp/setup', { method:'POST' }); } catch (e) { return toast(e.message); }
+  openSheet('Double authentification', 'Ajoutez le compte dans votre application, puis confirmez un code',
+    { name:'2FA', hue:150 }, `
+    <div class="banner" style="--c:var(--vio)">Ouvrez votre application d’authentification (Google Authenticator, Aegis, 1Password…),
+      ajoutez un compte avec la clé ci-dessous, puis entrez le code affiché pour confirmer.</div>
+    <div class="field"><label for="s2faSecret">Clé secrète (saisie manuelle)</label>
+      <input class="input mono" id="s2faSecret" value="${esc(d.secret)}" readonly onclick="this.select()"></div>
+    <div class="field"><label for="s2faUri">Lien otpauth (certaines apps l’importent directement)</label>
+      <input class="input mono" id="s2faUri" value="${esc(d.otpauth)}" readonly onclick="this.select()" style="font-size:11px"></div>
+    <div class="field"><label for="s2faCode">Code à 6 chiffres</label>
+      <input class="input" id="s2faCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 chiffres"></div>
+    <div class="tools"><button class="btn primary" id="s2faEnableGo">Activer</button></div>`);
+  setTimeout(() => { const c = $('#s2faCode'); if (c) c.focus(); }, 60);
+}
+async function activer2FA() {
+  const code = (($('#s2faCode') || {}).value || '').trim();
+  try { await api('/api/auth/totp/enable', { method:'POST', body: JSON.stringify({ code }) }); }
+  catch (e) { return toast(e.message); }
+  ME.totp = { actif:true, disponible:true };
+  toast('Double authentification activée.'); closeSheet(); ouvrirProfil();
+}
+function desactiver2FA() {
+  openSheet('Désactiver la double authentification', 'Confirmez avec un code de votre application',
+    { name:'2FA', hue:0 }, `
+    <div class="banner" style="--c:var(--warn)">Sans second facteur, seul le mot de passe protégera ce compte.</div>
+    <div class="field"><label for="s2faOffCode">Code à 6 chiffres</label>
+      <input class="input" id="s2faOffCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 chiffres"></div>
+    <div class="tools"><button class="btn danger" id="s2faDisableGo">Désactiver</button></div>`);
+  setTimeout(() => { const c = $('#s2faOffCode'); if (c) c.focus(); }, 60);
+}
+async function confirmerDesactiver2FA() {
+  const code = (($('#s2faOffCode') || {}).value || '').trim();
+  try { await api('/api/auth/totp/disable', { method:'POST', body: JSON.stringify({ code }) }); }
+  catch (e) { return toast(e.message); }
+  ME.totp = { actif:false, disponible:true };
+  toast('Double authentification désactivée.'); closeSheet(); ouvrirProfil();
 }
 
 /* ============================================================
@@ -6945,6 +7011,10 @@ document.addEventListener('click', async ev => {
     if (id === 'rangeCustomBtn') return basculerPlage();
     if (id === 'rangeApply')     return appliquerPlage();
     if (id === 'inspLink')       return copierLienEvent();
+    if (id === 's2faSetup')      return ouvrir2FASetup();
+    if (id === 's2faOff')        return desactiver2FA();
+    if (id === 's2faEnableGo')   return activer2FA();
+    if (id === 's2faDisableGo')  return confirmerDesactiver2FA();
     return;
   }
   ev.preventDefault(); ev.stopImmediatePropagation();
@@ -8186,6 +8256,7 @@ function applyMe(d) {
   ME.platRole = d.staff.plateformeRole || null;
   ME.platRoleLabel = d.staff.plateformeRoleLabel || null;
   ME.licence = d.licence || { enforced: false };
+  ME.totp = d.totp || { actif: false, disponible: false };
   ME.espace = d.espace || null;
 }
 $('#gateForm').addEventListener('submit', async ev => {
@@ -8204,14 +8275,25 @@ $('#gateForm').addEventListener('submit', async ev => {
     return;
   }
   try {
-    const d = await api('/api/auth/login', { method:'POST', body: JSON.stringify({
-      pseudo: $('#gatePseudo').value.trim(), password: $('#gatePass').value }) });
+    const corps = { pseudo: $('#gatePseudo').value.trim(), password: $('#gatePass').value };
+    const totp = $('#gateTotp').value.trim();
+    if (totp) corps.totp = totp;
+    const d = await api('/api/auth/login', { method:'POST', body: JSON.stringify(corps) });
     applyMe(d);
     $('#gate').hidden = true;
     await startPanel();
   } catch (e) {
-    $('#gateErr').hidden = false; $('#gateErr').textContent = e.message || 'Connexion impossible.';
-    $('#gatePass').value = ''; $('#gatePass').focus();
+    // ⚠️ Double authentification : le serveur réclame un code. On révèle le
+    // champ (sans vider le mot de passe déjà validé) et on met la main dessus.
+    if (e.body && e.body.totpRequired) {
+      $('#gateTotpField').hidden = false;
+      $('#gateErr').hidden = false;
+      $('#gateErr').textContent = e.message || 'Entrez votre code de double authentification.';
+      $('#gateTotp').value = ''; $('#gateTotp').focus();
+    } else {
+      $('#gateErr').hidden = false; $('#gateErr').textContent = e.message || 'Connexion impossible.';
+      $('#gatePass').value = ''; $('#gatePass').focus();
+    }
   } finally { b.disabled = false; b.textContent = 'Se connecter'; }
 });
 $('#logoutBtn').addEventListener('click', async ev => {
@@ -8296,6 +8378,9 @@ async function startPanel() {
     ME.roles = [{ id:'fondateur', label:'Fondateur' }];
     ME.source = 'discord'; ME.plateforme = true; ME.discord = '256487913004662784';
     ME.platRoleLabel = 'Direction';
+    // Compte de démo relié à Discord : sa double authentification passe par
+    // Discord, pas par un TOTP local (le bloc « Sécurité » reste donc masqué).
+    ME.totp = { actif:false, disponible:false };
     // ⚠️ ON N'ARRIVE DANS AUCUN ENVIRONNEMENT. L'aperçu ouvrait
     // directement le panneau du premier client : on croyait que le
     // produit ÉTAIT ce serveur-là, et rien ne disait qu'on en surveille

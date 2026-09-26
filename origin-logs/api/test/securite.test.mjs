@@ -58,6 +58,32 @@ t('une écriture depuis l’hôte utilisé passe', parHote.status!==403, 'HTTP '
 const lecture = await J('/api/events?limit=1',{headers:{origin:'https://site-mechant.example'}});
 t('une simple lecture n’est pas bloquée pour autant', lecture.status===200, 'HTTP '+lecture.status);
 
+sect('Double authentification (TOTP) sur un compte à mot de passe');
+// ⚠️ AVANT le test anti-force-brute : celui-ci déclenche exprès le frein IP,
+// qui bloquerait ensuite nos connexions de contrôle.
+const _M = await import('../totp.js'); const TOTP = _M.default || _M;
+const setup = await J('/api/auth/totp/setup', { method:'POST' });
+t('on obtient un secret et un lien otpauth', setup.status===200 && /^[A-Z2-7]+$/.test(setup.body.secret||'')
+  && /^otpauth:\/\/totp\//.test(setup.body.otpauth||''), 'HTTP '+setup.status);
+const mauvaisCode = await J('/api/auth/totp/enable', { method:'POST', body: JSON.stringify({ code:'000000' }) });
+t('⚠️ un mauvais code n’active pas', mauvaisCode.status===400, 'HTTP '+mauvaisCode.status);
+const enable = await J('/api/auth/totp/enable', { method:'POST', body: JSON.stringify({ code: TOTP.code(setup.body.secret) }) });
+t('un code valide active la double authentification', enable.status===200, enable.body?.error);
+const sansCode = await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({pseudo:'Nyx',password:'motdepassetest123'})});
+const sansCodeBody = await sansCode.json().catch(()=>({}));
+t('⚠️ le mot de passe SEUL ne connecte plus (code réclamé)',
+  sansCode.status===401 && sansCodeBody.totpRequired===true, 'HTTP '+sansCode.status);
+t('⚠️ et aucune session n’est ouverte sans le code',
+  !/origin_sid=/.test(sansCode.headers.get('set-cookie')||''), sansCode.headers.get('set-cookie')||'aucun cookie');
+const avecCode = await fetch(B+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({pseudo:'Nyx',password:'motdepassetest123',totp:TOTP.code(setup.body.secret)})});
+t('mot de passe + code → connexion', avecCode.status===200, 'HTTP '+avecCode.status);
+const off = await J('/api/auth/totp/disable', { method:'POST', body: JSON.stringify({ code: TOTP.code(setup.body.secret) }) });
+t('on peut la désactiver avec un code valide', off.status===200, off.body?.error);
+t('⚠️ le secret n’est jamais renvoyé (pas de fuite via /me)',
+  ((await J('/api/auth/me')).body.totp || {}).secret === undefined);
+
 sect('Frein anti-force-brute');
 // Six essais : le sixième doit être freiné, quelle que soit l'adresse
 // annoncée dans l'en-tête — c'est tout l'objet de TRUST_PROXY=0.
