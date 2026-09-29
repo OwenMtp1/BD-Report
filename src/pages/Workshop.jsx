@@ -4,7 +4,7 @@ import {
   Users2, ShieldCheck, Rocket, Building2, UserPlus, Sparkles, Wrench,
 } from 'lucide-react'
 import {
-  useStore, uid, ENV_MODULES, defaultEnvModules, CLIENT_PERMISSION_GROUPS, previewTabs,
+  useStore, uid, ENV_MODULES, defaultEnvModules, CLIENT_PERMISSION_GROUPS, defaultManagerPerms, previewTabs,
   DEFAULT_PHASES, fmtMoney, envModuleOn,
   defaultNewsRules,
 } from '../store.jsx'
@@ -185,7 +185,10 @@ function Wizard({ store, onDone, onCancel }) {
   if (!rolesInit) {
     const all = previewTabs(draftEnv, offers, null).map(t => t.brick)
     setRoles(rs => rs.map(r => (r.id === 'erole-manager'
-      ? { ...r, tabs: [...all], perms: CLIENT_PERMISSION_GROUPS.flatMap(g => g.perms).map(p => p.id) }
+      // ⚠️ `defaultManagerPerms()`, pas « tout » : `team.pinless` ouvre l'espace privé d'un
+      // collaborateur et se coche à la main, ici comme ailleurs. Un droit pré-coché est un
+      // droit que personne n'a décidé.
+      ? { ...r, tabs: [...all], perms: defaultManagerPerms() }
       : { ...r, tabs: all.filter(b => !['Gestion Manager', 'Gestion Administration', 'Gérez mes équipes', 'Organigramme', 'Écosystème', 'KPI Entreprise', 'Pilotage équipe', 'Intégration HubSpot', 'Objectifs & quotas'].includes(b)) })))
     setRolesInit(true)
   }

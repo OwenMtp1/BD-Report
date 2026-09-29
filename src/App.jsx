@@ -476,9 +476,12 @@ function SubEnvPicker() {
   const [pinFor, setPinFor] = useState(null)
   const [pinToSet, setPinToSet] = useState(null)
   // Encadrer, c'est pouvoir entrer chez les autres — avec leur code, qui reste demandé.
+  // Sauf à porter `team.pinless`, la clé côté client : elle ouvre la porte, elle doit donc
+  // aussi la rendre cliquable — un droit qui bute sur un cadenas ne donne rien.
   // Les espaces de démonstration et de formation échappent au verrou : on y incarne des
   // casquettes qui n'ont pas toujours de droit d'encadrement, et rien n'y est réel.
-  const canOpenOthers = store.demo || store.hasClientPerm('team.view') || store.hasClientPerm('team.manage')
+  const canOpenOthers = store.demo || store.hasClientPerm('team.view')
+    || store.hasClientPerm('team.manage') || store.hasClientPerm('team.pinless')
 
   if (pinFor) return <PinGate title={`${pinFor.prenom} ${pinFor.nom}`} expected={pinFor.pin} onOk={() => store.enterSubEnv(pinFor.id)} onBack={() => setPinFor(null)} />
   // ⚠️ UN ESPACE SANS CODE NE S'OUVRE PLUS : on le fait DÉFINIR. Impossible d'en
@@ -509,7 +512,10 @@ function SubEnvPicker() {
               className={`card w-44 h-44 flex flex-col items-center justify-center gap-2 transition fade-in ${open ? 'hover:scale-105' : 'opacity-55 cursor-not-allowed'}`}
               onClick={() => {
                 if (!open) return
-                if (store.skipsPin()) return store.enterSubEnv(s.id)   // permission staff : on passe
+                // Une permission ouvre la porte — `env.access` côté staff, `team.pinless`
+                // côté client. La décision vit dans le store : deux réponses à la même
+                // question finiraient par diverger (cf. `selectableEnvs`).
+                if (store.skipsSubPin(s)) return store.enterSubEnv(s.id)
                 if (s.pin) return setPinFor(s)                          // code posé : on le demande
                 // Pas de code : on ne laisse plus entrer, on le fait poser. Et seul son
                 // propriétaire peut le faire — définir le code de quelqu'un d'autre

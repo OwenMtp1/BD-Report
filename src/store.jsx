@@ -847,6 +847,14 @@ export const CLIENT_PERMISSION_GROUPS = [
       { id: 'team.orgchart', label: "Modifier l'organigramme" },
       { id: 'team.services', label: 'Gérer les services' },
       { id: 'team.channels', label: 'Créer et administrer les canaux de conversation' },
+      // 🔑 Le pendant CLIENT de la permission staff `env.access`. Encadrer une équipe ne
+      // donnait pas le code de ses collaborateurs : depuis que le code est obligatoire, un
+      // manager devait le demander à chacun — ce qui, en pratique, se termine par un code
+      // partagé de bouche à oreille, donc par un verrou qui ne verrouille plus rien.
+      // ⚠️ IL NE S'ACCORDE JAMAIS TOUT SEUL : ni par défaut sur le rôle Manager intégré,
+      // ni par rattrapage de migration, ni par le repli sur `account.role`. Lire l'espace
+      // privé d'un collègue est une décision du client, pas un effet de bord d'un rôle.
+      { id: 'team.pinless', label: "Entrer dans l'espace d'un collaborateur sans son code" },
     ],
   },
   {
@@ -885,6 +893,23 @@ export const CLIENT_PERMISSION_GROUPS = [
 export const CLIENT_PERMISSIONS = CLIENT_PERMISSION_GROUPS.flatMap(g => g.perms)
 export const CLIENT_PERMISSION_IDS = CLIENT_PERMISSIONS.map(p => p.id)
 
+/**
+ * 🔑 LE SEUL DROIT CLIENT QUI NE S'ACCORDE JAMAIS TOUT SEUL.
+ *
+ * Tous les autres suivent la règle « le Manager intégré reçoit tout, un droit neuf lui est
+ * rattrapé à la migration » — parce qu'oublier d'en donner un fait seulement perdre un écran,
+ * et que le manager peut se le rendre. Celui-ci ouvre l'espace PRIVÉ d'un collaborateur : le
+ * donner par défaut changerait, chez tous les clients déjà installés, ce que leurs équipes
+ * croient protégé, sans que personne ne l'ait décidé ni même remarqué.
+ *
+ * Il est donc exclu de `defaultManagerPerms()`, exclu du rattrapage de `migrate`, et exclu du
+ * repli sur `account.role` (voir `clientPermIn`) : il n'existe que coché à la main.
+ */
+export const PINLESS_PERM = 'team.pinless'
+
+/** Périmètre de départ du rôle Manager intégré : tout, sauf ce qui se décide à la main. */
+export const defaultManagerPerms = () => CLIENT_PERMISSION_IDS.filter(p => p !== PINLESS_PERM)
+
 // Onglets ouverts au Membre par défaut : son activité, pas le pilotage de l'équipe.
 const MEMBER_TABS = ['Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches',
   'Mes contacts', 'Mes notes', 'Primes & Commissions', 'Simulateur de primes', 'Conversations',
@@ -897,7 +922,7 @@ const CLOSER_TABS = ['Dashboard', 'Closing', 'Passation au closer', 'Mes Rendez-
 
 export function defaultEnvRoles() {
   return [
-    { id: 'erole-manager', name: 'Manager', builtin: true, color: 'amber', tabs: [...ALL_BRICKS], perms: [...CLIENT_PERMISSION_IDS] },
+    { id: 'erole-manager', name: 'Manager', builtin: true, color: 'amber', tabs: [...ALL_BRICKS], perms: defaultManagerPerms() },
     { id: 'erole-membre', name: 'Membre', builtin: true, color: 'emerald', tabs: [...MEMBER_TABS], perms: [] },
     // Le closer porte `deals.close` : c'est son métier, pas une faveur d'encadrement.
     { id: CLOSING_ROLE_ID, name: 'Closer', builtin: true, color: 'sky', tabs: [...CLOSER_TABS], perms: ['deals.close'] },
@@ -4212,14 +4237,22 @@ export function migrate(db) {
   // Même principe pour les DROITS de management ajoutés après coup : le rôle Manager intégré
   // les reçoit une fois. Sans cela, un manager déjà installé perdrait l'accès à une brique
   // neuve sans que personne comprenne pourquoi — et ne pourrait pas se le rendre lui-même.
+  // ⚠️ SAUF `team.pinless` : il ouvre l'espace privé d'un collaborateur. Le rattraper
+  // donnerait, du jour au lendemain et chez tous les clients installés, un droit que
+  // personne n'a demandé — sur la seule chose que le code d'accès protège. Il est inscrit
+  // comme DÉJÀ DISTRIBUÉ sans être accordé : le repère est un fait (« ce droit est passé
+  // par ici »), donc il ne reviendra jamais par ce chemin, et l'accorder reste un geste.
   db._autoSeed.envRolePerms = Array.isArray(db._autoSeed.envRolePerms) ? db._autoSeed.envRolePerms : []
   const newPerms = CLIENT_PERMISSION_IDS.filter(p => !db._autoSeed.envRolePerms.includes(p))
   if (newPerms.length) {
-    ;(db.environments || []).forEach(e => {
-      ;(e.roles || []).forEach(r => {
-        if (r.id === 'erole-manager') r.perms = [...new Set([...(r.perms || []), ...newPerms])]
+    const granted = newPerms.filter(p => p !== PINLESS_PERM)
+    if (granted.length) {
+      ;(db.environments || []).forEach(e => {
+        ;(e.roles || []).forEach(r => {
+          if (r.id === 'erole-manager') r.perms = [...new Set([...(r.perms || []), ...granted])]
+        })
       })
-    })
+    }
     db._autoSeed.envRolePerms = [...db._autoSeed.envRolePerms, ...newPerms]
   }
   // Idem côté staff : un droit neuf va aux rôles intégrés qui portent déjà le droit voisin,
@@ -4778,6 +4811,27 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (!this.canEnterClientEnvs()) return false
         const env = db.environments.find(e => e.id === (envId || session?.envId))
         return !!env
+      },
+      /**
+       * Passer outre le code d'un ESPACE — la porte d'un collaborateur, pas celle de
+       * l'entreprise.
+       *
+       * Deux clés l'ouvrent, et elles n'appartiennent pas aux mêmes personnes :
+       *  · `env.access` côté STAFF, qui ouvre tout l'environnement (intervention de l'éditeur) ;
+       *  · `team.pinless` côté CLIENT, borné à l'environnement où le rôle est porté.
+       *
+       * ⚠️ Le code de l'ENVIRONNEMENT n'est pas concerné : il est partagé par l'équipe, donc
+       * connu du manager. Ce qu'on ouvre ici est un secret personnel, et c'est la seule raison
+       * pour laquelle ce droit existe séparément.
+       *
+       * ⚠️ Le sien aussi : un manager qui entre chez tout le monde sans rien saisir, mais
+       * saisit son propre code, c'est exactement l'absurdité retirée de `skipsPin` — la
+       * réserve ne gênait que celui qui connaît le code.
+       */
+      skipsSubPin(sub) {
+        if (!sub) return false
+        if (this.skipsPin(sub.envId)) return true
+        return this.clientPermIn(sub.envId, PINLESS_PERM)
       },
       /**
        * Ouvrir l'environnement d'un client DIRECTEMENT sur l'écran où vit une brique.
@@ -6073,13 +6127,35 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         const env = db.environments.find(e => e.id === sub.envId)
         return (env?.roles || []).find(r => r.id === sub.roleId) || null
       },
-      // Le compte porte-t-il ce droit de management ? Sans rôle attribué, on s'en remet au
-      // comportement historique fondé sur le rôle du compte.
-      hasClientPerm(permId) {
-        const r = this.myEnvRole()
-        if (!r) return isClientManagerRole(account?.role)
-        return (r.perms || []).includes(permId)
+      /**
+       * Le droit de management d'un compte DANS UN ENVIRONNEMENT — y compris quand aucun
+       * espace n'est encore ouvert.
+       *
+       * ⚠️ `myEnvRole` part de `session.subEnvId` : au SÉLECTEUR D'ESPACES, il n'y en a
+       * pas encore, et la question se retrouvait donc tranchée par le repli sur
+       * `account.role`. Autrement dit, sur le seul écran où l'on décide qui entre où, les
+       * cases cochées dans « Rôles et accès » ne décidaient de rien. On retrouve donc le
+       * rôle par l'espace que le compte POSSÈDE dans cet environnement, ce qui redonne à
+       * l'éditeur de rôles l'autorité qu'il annonce.
+       *
+       * L'espace ouvert reste prioritaire quand il y en a un : c'est le rôle réellement porté.
+       */
+      clientPermIn(envId, permId) {
+        const eid = envId || session?.envId
+        const cur = db.subenvs.find(x => x.id === session?.subEnvId)
+        const sub = (cur && cur.envId === eid) ? cur
+          : db.subenvs.find(s => s.envId === eid && s.ownerId === account?.id)
+        const env = db.environments.find(e => e.id === eid)
+        const role = sub?.roleId ? (env?.roles || []).find(r => r.id === sub.roleId) : null
+        // ⚠️ `team.pinless` n'a PAS de repli sur le rôle du compte. Tous les autres droits
+        // retombent sur « ce compte est Manager », un héritage antérieur aux rôles : c'est
+        // acceptable pour un écran de pilotage, jamais pour la clé de l'espace privé d'un
+        // collègue. Sans rôle explicitement porteur, la réponse est non.
+        if (!role) return permId === PINLESS_PERM ? false : isClientManagerRole(account?.role)
+        return (role.perms || []).includes(permId)
       },
+      // Le compte porte-t-il ce droit de management dans l'environnement courant ?
+      hasClientPerm(permId) { return this.clientPermIn(session?.envId, permId) },
       envRoles(envId) { return (db.environments.find(e => e.id === envId)?.roles) || [] },
       saveEnvRoles(envId, roles) {
         setDb(d => {

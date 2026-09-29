@@ -214,6 +214,7 @@ export const UI_DICT = [
   ['Contenu & base de connaissances', 'Content & knowledge base', 'Contenido y base de conocimientos'],
   ['Créer / modifier / supprimer les offres', 'Create / edit / delete plans', 'Crear / modificar / eliminar planes'],
   ['Créer et administrer les canaux de conversation', 'Create and administer conversation channels', 'Crear y administrar los canales de conversación'],
+  ["Entrer dans l'espace d'un collaborateur sans son code", "Enter a team member's space without their code", 'Entrar en el espacio de un colaborador sin su código'],
   ['Créer et administrer les canaux du staff', 'Create and administer staff channels', 'Crear y administrar los canales del staff'],
   ['Créer et modifier des utilisateurs', 'Create and edit users', 'Crear y modificar usuarios'],
   ['Créer et piloter la mise en place des projets', 'Create and steer project rollouts', 'Crear y dirigir la puesta en marcha de los proyectos'],

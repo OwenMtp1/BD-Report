@@ -1224,6 +1224,58 @@ async function main() {
     const demoDb = s.buildDemoDb({})
     const demoAdmin = (demoDb.accounts || []).find(a => s.SUPPORT_ROLES.includes(a.role))
     ok(!demoAdmin, 'la démo commerciale embarque un compte support : elle exposerait les droits de l\'éditeur')
+
+    // -------------------------------------------------------------------------
+    // 4. LE PENDANT CLIENT — `team.pinless`, et il ne s'accorde JAMAIS tout seul.
+    //
+    // 🔑 C'est la seule permission du produit qui ouvre un SECRET PERSONNEL. Les trois
+    // chemins par lesquels un droit se répand dans cette base — le rôle Manager intégré,
+    // le rattrapage de migration, le repli sur `account.role` — doivent tous l'ignorer.
+    // Il suffit qu'un seul le laisse passer pour que des équipes déjà installées voient,
+    // sans un mot, s'ouvrir ce que leur code d'accès protégeait.
+    ok(s.CLIENT_PERMISSION_IDS.includes(s.PINLESS_PERM), 'La permission `team.pinless` manque au catalogue client')
+
+    // a. Le rôle Manager intégré ne le porte pas.
+    const mgr = s.defaultEnvRoles().find(r => r.id === 'erole-manager')
+    ok(!(mgr.perms || []).includes(s.PINLESS_PERM),
+      'Le rôle Manager intégré porte `team.pinless` d\'office : tout manager entrerait chez ses collaborateurs sans leur code')
+    ok((mgr.perms || []).includes('team.manage'),
+      'Le rôle Manager intégré a perdu ses autres droits : l\'exclusion doit viser `team.pinless`, pas le reste')
+
+    // b. Le rattrapage de migration ne le distribue pas — et ne le distribuera jamais,
+    //    puisqu'il est inscrit comme déjà passé par là.
+    {
+      const d = s.migrate({
+        accounts: [{ id: '01', role: 'Fondateur' }],
+        environments: [{ id: 'e1', name: 'X', roles: [{ id: 'erole-manager', name: 'Manager', builtin: true, tabs: [], perms: ['team.view'] }] }],
+        subenvs: [], data: {},
+      })
+      const r = d.environments.find(e => e.id === 'e1').roles.find(x => x.id === 'erole-manager')
+      ok(!(r.perms || []).includes(s.PINLESS_PERM),
+        'migrate accorde `team.pinless` au Manager d\'une base existante : un droit que personne n\'a demandé')
+      ok((d._autoSeed.envRolePerms || []).includes(s.PINLESS_PERM),
+        '`team.pinless` n\'est pas marqué comme distribué : le rattrapage le donnera au prochain chargement')
+    }
+
+    // c. Pas de repli sur `account.role`. Tous les autres droits retombent sur « ce compte
+    //    est Manager » ; celui-ci doit être coché sur un rôle, ou refusé.
+    const perm = src.slice(src.indexOf('clientPermIn(envId, permId)'), src.indexOf('clientPermIn(envId, permId)') + 900)
+    ok(/PINLESS_PERM \? false/.test(perm),
+      'clientPermIn laisse `team.pinless` retomber sur le rôle du compte : il s\'accorderait sans être coché')
+    // Et il se résout SANS espace ouvert, sinon l'éditeur de rôles ne déciderait de rien
+    // sur le seul écran où la question se pose.
+    ok(/ownerId === account\?\.id/.test(perm),
+      'clientPermIn ne retrouve pas le rôle par l\'espace possédé : au sélecteur, les cases du rôle sont ignorées')
+
+    // d. La porte et le cadenas au même endroit : `skipsSubPin` décide, l'écran obéit.
+    const app = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'App.jsx'), 'utf8')
+    ok(/store\.skipsSubPin\(s\)/.test(app),
+      'Le sélecteur d\'espaces rejuge le code lui-même au lieu de passer par `store.skipsSubPin`')
+    ok(/hasClientPerm\('team\.pinless'\)/.test(app),
+      'Le droit ouvre le code mais pas le cadenas du sélecteur : il ne donnerait rien')
+    const sub = src.slice(src.indexOf('skipsSubPin(sub)'), src.indexOf('skipsSubPin(sub)') + 300)
+    ok(/skipsPin\(sub\.envId\)/.test(sub) && /clientPermIn\(sub\.envId, PINLESS_PERM\)/.test(sub),
+      'skipsSubPin oublie l\'une des deux clés (staff `env.access` / client `team.pinless`)')
   }
 
   process.stdout.write((problems.length ? 'PROBLÈMES:\n- ' + problems.join('\n- ') : 'AUDIT OK') + '\n')

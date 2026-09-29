@@ -215,6 +215,27 @@ npm run dev        # serveur de dev
   appliqué en une fois après confirmation. ⚠️ Les `tabs` d'un rôle **restreignent EN PLUS de l'offre** dans
   `canSee` (`store.myEnvRole()`), et `store.hasClientPerm(id)` lit ses `perms` (repli sur `account.role` sans rôle
   attribué) : un sous-espace sans `roleId` n'est pas restreint, et le staff n'est jamais filtré.
+  ⚠️ **`hasClientPerm` délègue à `clientPermIn(envId, permId)`**, qui répond MÊME SANS ESPACE OUVERT en
+  retrouvant le rôle par l'espace que le compte POSSÈDE dans l'environnement. `myEnvRole` part de
+  `session.subEnvId` : au **sélecteur d'espaces** il n'y en a pas encore, et la question se retrouvait donc
+  tranchée par le repli sur `account.role` — sur le seul écran où l'on décide qui entre où, les cases de
+  « Rôles et accès » ne décidaient de rien.
+  🔑 **`team.pinless` (`PINLESS_PERM`) — le pendant CLIENT de `env.access`** : « Entrer dans l'espace d'un
+  collaborateur sans son code ». Depuis que le code est obligatoire, un manager devait le demander à chacun,
+  ce qui se termine en pratique par un code partagé de bouche à oreille — donc par un verrou qui ne verrouille
+  plus rien. `store.skipsSubPin(sub)` porte les DEUX clés (staff `env.access` via `skipsPin`, client
+  `team.pinless` via `clientPermIn`) et le sélecteur s'en remet à lui ; le code de l'**environnement** n'est
+  pas concerné (il est partagé, donc déjà connu du manager). Le sien aussi est ouvert : saisir son propre code
+  tout en entrant partout ailleurs est l'absurdité déjà retirée de `skipsPin`.
+  ⚠️ **C'est le SEUL droit client qui ne s'accorde jamais tout seul** — les trois chemins par lesquels un droit
+  se répand l'ignorent : absent de `defaultManagerPerms()` (donc du rôle Manager intégré et de l'assistant de
+  l'Atelier), **inscrit comme déjà distribué dans `_autoSeed.envRolePerms` sans être accordé** (le rattrapage
+  ne le rendra donc jamais), et **sans repli sur `account.role`** dans `clientPermIn`. Les autres droits font
+  perdre un écran quand on oublie de les donner ; celui-ci ouvre un secret personnel, et le livrer coché
+  changerait, chez tous les clients installés, ce que leurs équipes croient protégé. `npm run audit` fige les
+  trois chemins, `npm run smoke` éprouve la résolution à l'exécution (la session du smoke étant Fondateur,
+  `env.access` répondrait « oui » avant la clé client : c'est `clientPermIn` qui est testé, le câblage est
+  figé par l'audit).
 - **`src/pages/Ecosystem.jsx`** — onglet **« Créer votre écosystème »** de `ManagerHub` (brick `Écosystème`) : le
   manager compose ses **étapes de pipeline** (`data.phases`, ordonnables, renommables), coche celles qui
   **déclenchent une prime** (`data.primePhases`), fixe le **jour de bascule** du mois de paiement

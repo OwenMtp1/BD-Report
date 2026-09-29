@@ -34,7 +34,7 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider, buildDemoDb, demoSession, applyRdvAutomations, rdvNeedsSqlDate, fmtDate,
-          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, icpKindOf, phaseProbability, CLIENT_PERMISSION_IDS, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES,
+          phaseAtLeast, qualifyPhase, milestonePhase, isWonPhase, isLostPhase, phaseRank, firstPhase, nextPhase, icpVerdict, icpKindOf, phaseProbability, CLIENT_PERMISSION_IDS, PINLESS_PERM, defaultManagerPerms, STAFF_PERMISSION_IDS, isClientManagerRole, isElevatedRole, challengeScore, applyPrimeRules, fillTemplate, defaultEnvRoles, ENV_MODULES,
           handoffState, handoffStats, quotaAchieved, buildStatement, monthlyPaidPrimes,
           dealAnnualValue, pipelineValue, wonValue, valueBySource,
           closingState, closingStats, closingPhases } = await import('../src/store.jsx')
@@ -91,10 +91,15 @@ async function main() {
     for (const p of ['env.build', 'env.modules', 'projects.others']) {
       if (!STAFF_PERMISSION_IDS.includes(p)) throw new Error('Droit staff manquant au catalogue : ' + p)
     }
-    // Le rôle Manager intégré doit porter TOUS les droits client : c'est lui qui administre.
+    // Le rôle Manager intégré doit porter tous les droits client — c'est lui qui administre —
+    // À UNE EXCEPTION PRÈS, et elle est volontaire : `team.pinless` ouvre l'espace PRIVÉ d'un
+    // collaborateur. Un droit livré coché est un droit que personne n'a décidé, et celui-là
+    // change ce que des équipes croient protégé. Il se coche à la main, ou il n'existe pas.
     const mgr = defaultEnvRoles().find(r => r.id === 'erole-manager')
-    const missing = CLIENT_PERMISSION_IDS.filter(p => !(mgr.perms || []).includes(p))
+    const missing = defaultManagerPerms().filter(p => !(mgr.perms || []).includes(p))
     if (missing.length) throw new Error("Le rôle Manager n'a pas les droits : " + missing.join(', '))
+    if ((mgr.perms || []).includes(PINLESS_PERM)) throw new Error('Le rôle Manager intégré porte `team.pinless` d\'office')
+    if (!CLIENT_PERMISSION_IDS.includes(PINLESS_PERM)) throw new Error('`team.pinless` manque au catalogue client')
     // Chaque module optionnel doit être décidable par le staff, sinon il s'impose au client.
     const modules = ENV_MODULES.map(m => m.id)
     for (const m of ['handoff', 'committee', 'quotas', 'oneToOne', 'challenges', 'statements']) {
@@ -2133,6 +2138,48 @@ async function main() {
       if (nOrg < 0 || nMe < 0) throw new Error("Le nombre de deals analysés n'est affiché dans aucune des deux vues")
       if (nOrg !== nMe + 1) throw new Error(`La vue entreprise doit inclure les deals des collègues (${nOrg} contre ${nMe} + 1 attendu)`)
       if (text().includes('Profil du collègue')) throw new Error("Revenir à « Mon ICP » doit remasquer les profils des collègues")
+    }
+
+    // ---- LE PENDANT CLIENT DU DROIT D'ENTRER : `team.pinless`.
+    //
+    // 🔑 C'est le SEUL droit client sans repli sur `account.role`. Tous les autres retombent
+    // sur « ce compte est Manager », un héritage antérieur aux rôles ; celui-ci ouvre l'espace
+    // privé d'un collègue, et un droit pareil ne s'hérite pas — il se coche.
+    //
+    // ⚠️ Ce qui est éprouvé ici, c'est la RÉSOLUTION du droit, à l'exécution et hors de tout
+    // espace ouvert. Le câblage (les deux clés dans `skipsSubPin`, le sélecteur qui s'en
+    // remet à lui) est figé par `npm run audit` : la session du smoke est Fondateur, donc
+    // `env.access` répondrait « oui » avant même que la clé client soit consultée — un test
+    // qui passerait sans rien prouver.
+    {
+      const env0 = dbNow().environments.find(e => e.id === 'env-peoplespheres')
+      const tabs = [...(((env0.roles || []).find(r => r.id === 'erole-manager') || {}).tabs || [])]
+      await act(async () => {
+        win.__bdrStore.saveEnvRoles('env-peoplespheres', [...(env0.roles || []),
+          { id: 'erole-cle', name: 'Manager (avec la clé)', color: 'amber', tabs, perms: ['team.view', 'team.pinless'] },
+          { id: 'erole-sans', name: 'Manager (sans la clé)', color: 'amber', tabs, perms: ['team.view'] }])
+      })
+      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      const can = () => win.__bdrStore.clientPermIn('env-peoplespheres', 'team.pinless')
+
+      // Sans rôle attribué : REFUSÉ — alors que le compte est Fondateur, et que le droit
+      // voisin, lui, passe encore par le repli. C'est toute la garantie, en deux lignes.
+      if (can()) throw new Error("`team.pinless` est accordé sans rôle porteur : le repli sur le rôle du compte l'a distribué")
+      if (!win.__bdrStore.clientPermIn('env-peoplespheres', 'team.view')) {
+        throw new Error("Le repli sur le rôle du compte a disparu pour les AUTRES droits : l'exclusion devait viser `team.pinless` seul")
+      }
+
+      const setRole = async (rid) => {
+        await act(async () => { win.__bdrStore.assignSubRole('sub-owen', rid) })
+        await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      }
+      await setRole('erole-cle')
+      if (!can()) throw new Error("Un rôle qui porte `team.pinless` ne l'accorde pas : la case ne décide de rien")
+      // ⚠️ Et le rôle VOISIN, identique à une case près, doit refuser. Sans ce second
+      // contrôle, un « toujours oui » passerait le premier sans qu'on s'en aperçoive.
+      await setRole('erole-sans')
+      if (can()) throw new Error("Un rôle SANS la case accorde quand même `team.pinless`")
+      await setRole(null)
     }
   }
 
