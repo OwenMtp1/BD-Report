@@ -2079,4 +2079,22 @@ export const UI_DICT = [
   ["Rien n'a été remplacé : corrigez au cas par cas depuis la fiche.", 'Nothing was replaced: fix them one by one from the record.', 'No se ha reemplazado nada: corrígelo caso por caso desde la ficha.'],
   ['Contacts', 'Contacts', 'Contactos'],
   ['Entreprises', 'Companies', 'Empresas'],
+
+  // ---- Carte d'état Pipedrive (Paramètres → Intégrations) ----
+  ['Pipedrive', 'Pipedrive', 'Pipedrive'],
+  ["Envoyez vos affaires, contacts et entreprises dans Pipedrive, et réimportez-en vos contacts et organisations.", 'Push your deals, contacts and companies to Pipedrive, and import its contacts and organisations back.', 'Envía tus oportunidades, contactos y empresas a Pipedrive, e importa de vuelta sus contactos y organizaciones.'],
+  ["Chemin d'appel :", 'Call path:', 'Vía de llamada:'],
+  ['Compte préparé :', 'Account prepared:', 'Cuenta preparada:'],
+  ['Pipeline visé :', 'Target pipeline:', 'Pipeline de destino:'],
+  ['jeton local (ce navigateur)', 'local token (this browser)', 'token local (este navegador)'],
+  ['relais de BD Report', "BD Report's relay", 'relé de BD Report'],
+  ['relais dédié', 'dedicated relay', 'relé dedicado'],
+  ['aucun — relais non publié', 'none — no relay published', 'ninguna: no hay relé publicado'],
+  ['non — à faire avant la première synchro', 'no — do this before the first sync', 'no: hazlo antes de la primera sincronización'],
+  ['Ouvrir la console Pipedrive', 'Open the Pipedrive console', 'Abrir la consola de Pipedrive'],
+  ['Préparer Pipedrive', 'Prepare Pipedrive', 'Preparar Pipedrive'],
+  ["La console crée les champs BD Report dans votre compte et fait correspondre vos étapes. Sans cette préparation, un second envoi crée des doublons au lieu de mettre à jour.", 'The console creates the BD Report fields in your account and maps your stages. Without this step, a second push creates duplicates instead of updating.', 'La consola crea los campos de BD Report en tu cuenta y asigna tus fases. Sin este paso, un segundo envío crea duplicados en lugar de actualizar.'],
+  ["Relais hérité de celui publié par l'équipe BD Report — rien à saisir. Ne le remplacez que pour viser un autre relais.", "Relay inherited from the one published by the BD Report team — nothing to enter. Only replace it to target a different relay.", 'Relé heredado del publicado por el equipo de BD Report: no hay nada que introducir. Solo reemplázalo para apuntar a otro relé.'],
+  ["Aucun relais publié : l'équipe BD Report doit renseigner son URL dans Paramètres → Intégrations.", 'No relay published: the BD Report team must set its URL in Settings → Integrations.', 'No hay relé publicado: el equipo de BD Report debe indicar su URL en Ajustes → Integraciones.'],
+  ['URL du relais (héritée)', 'Relay URL (inherited)', 'URL del relé (heredada)'],
 ]

@@ -108,7 +108,10 @@ export default function Pipedrive() {
               `defaultValue`) à contrôlé (l'URL, en `value`) — d'où un avertissement, et
               surtout une valeur qui peut survivre d'un mode à l'autre. */}
           {cfg.mode === 'relay' ? (
-            <Field key="relay" label="URL du relais">
+            <Field key="relay" label={cfg.relayInherited ? 'URL du relais (héritée)' : 'URL du relais'}>
+              {/* ⚠️ HÉRITÉE DU RELAIS DES SIGNAUX : c'est le même worker Cloudflare, les
+                  routes /pipedrive/* y vivent. Rien à saisir ici tant que l'éditeur a
+                  publié son URL — la remplir n'a de sens que pour viser un AUTRE relais. */}
               <input className="input !w-80" placeholder="https://mon-relais.workers.dev" value={cfg.relayUrl || ''}
                 onChange={e => store.setPipedriveConfig({ relayUrl: e.target.value.trim() })} />
             </Field>
@@ -120,6 +123,15 @@ export default function Pipedrive() {
           )}
           <button className="btn-ghost" disabled={!!busy} onClick={test}><RefreshCw size={14} /> Tester la connexion</button>
         </div>
+        {cfg.mode === 'relay' && cfg.relayInherited && (
+          <p className="text-xs text-muted">Relais hérité de celui publié par l'équipe BD Report — rien à saisir. Ne le remplacez que pour viser un autre relais.</p>
+        )}
+        {cfg.mode === 'relay' && !cfg.relayUrl && (
+          <p className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
+            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+            <span>Aucun relais publié : l'équipe BD Report doit renseigner son URL dans Paramètres → Intégrations.</span>
+          </p>
+        )}
         {cfg.mode === 'direct' && (
           <p className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
             <AlertTriangle size={13} className="shrink-0 mt-0.5" />

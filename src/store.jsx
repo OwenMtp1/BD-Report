@@ -701,11 +701,20 @@ export function defaultPipedriveConfig() {
     stageMap: {}, fieldKeys: null, syncMeetings: true, syncNotes: true, autoPush: false,
   }
 }
-export function effectivePipedriveConfig(platform, envCfg, envId) {
+export function effectivePipedriveConfig(platform, envCfg, envId, newsRelayUrl = '') {
   const base = { ...defaultPipedriveConfig(), ...(platform || {}) }
   const cfg = { ...base, ...(envCfg || {}) }
   cfg.stageMap = { ...(base.stageMap || {}), ...((envCfg || {}).stageMap || {}) }
-  cfg.relayUrl = (envCfg?.relayUrl || platform?.relayUrl || '')
+  // ⚠️ LE RELAIS PIPEDRIVE EST CELUI DES SIGNAUX — c'est le MÊME worker Cloudflare,
+  // les routes `/pipedrive/*` y vivent. L'éditeur publie donc son URL UNE FOIS
+  // (Paramètres → Intégrations) et chaque client en hérite, exactement comme pour
+  // l'enrichissement et les signaux. Faire ressaisir cette URL à chaque entreprise
+  // cliente était une faute de ma part : une même infrastructure ne se règle pas
+  // à N endroits, et la première faute de frappe donne un « relais injoignable »
+  // que personne ne sait expliquer.
+  // L'ordre reste : réglage explicite du client > réglage éditeur > relais des signaux.
+  cfg.relayUrl = (envCfg?.relayUrl || platform?.relayUrl || newsRelayUrl || '')
+  cfg.relayInherited = !envCfg?.relayUrl && !platform?.relayUrl && !!newsRelayUrl
   cfg.tenantId = envId || ''
   return cfg
 }
@@ -4508,7 +4517,7 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
 
   // Pipedrive : même mécanique, même découpage éditeur / entreprise cliente.
   const pdEnvCfg = session?.envId ? (db.environments || []).find(e => e.id === session.envId)?.pipedrive : null
-  const pdCfg = effectivePipedriveConfig(db.integrations?.pipedrive, pdEnvCfg, session?.envId)
+  const pdCfg = effectivePipedriveConfig(db.integrations?.pipedrive, pdEnvCfg, session?.envId, db.integrations?.news?.relayUrl)
   useEffect(() => { applyPipedriveConfig(pdCfg) }, [pdCfg.mode, pdCfg.relayUrl, pdCfg.tenantId, pdCfg.tenantKey, JSON.stringify(pdCfg.fieldKeys)]) // eslint-disable-line
 
   // Envoi automatique vers HubSpot des RDV créés/modifiés (option « autoPush »).

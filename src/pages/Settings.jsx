@@ -196,6 +196,70 @@ function NewsRelayCard({ store }) {
 // Carte HubSpot : résumé de la connexion de CETTE entreprise + accès à la console.
 // (La configuration réelle vit dans « Administration → Intégration HubSpot » ; aucun
 // jeton HubSpot n'est stocké dans l'état synchronisé — le connecteur les garde.)
+/**
+ * Carte d'ÉTAT d'une intégration — pas un second endroit où la régler.
+ *
+ * ⚠️ Cette carte ne configure rien, et c'est voulu : la configuration vit dans la
+ * console de l'intégration. Deux écrans qui règlent le même objet finissent par se
+ * contredire (c'est la règle déjà posée pour l'Atelier et les Livraisons). Ici on
+ * répond à une seule question — « est-ce branché, et depuis quand ? » — depuis
+ * l'endroit où l'on cherche ses réglages, et on ouvre la console.
+ *
+ * ⚠️ UN SEUL COMPOSANT pour HubSpot et Pipedrive : les deux cartes ont exactement la
+ * même forme. En écrire deux aurait condamné chaque retouche à être faite deux fois,
+ * et la seconde à être oubliée — comme l'a été la carte Pipedrive elle-même.
+ */
+function IntegrationSummaryCard({ title, enabled, intro, rows, actionLabel, page, note }) {
+  return (
+    <div className="card p-4 space-y-3 max-w-2xl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold flex items-center gap-2"><Plug size={17} className="text-brand" /> {title}</h3>
+        <span className={`chip !text-[10px] ${enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-surface text-muted'}`}>
+          {enabled ? 'Activée' : 'Désactivée'}
+        </span>
+      </div>
+      <p className="text-sm text-muted">{intro}</p>
+      <div className="rounded-xl bg-surface p-3 text-xs space-y-0.5">
+        {rows.filter(Boolean).map((r, i) => <div key={i}>{r}</div>)}
+      </div>
+      <button className="btn-primary !py-1.5 text-sm w-fit"
+        onClick={() => window.dispatchEvent(new CustomEvent('app-navigate', { detail: page }))}>
+        <Plug size={15} /> {actionLabel}
+      </button>
+      {note && <p className="text-xs text-muted">{note}</p>}
+    </div>
+  )
+}
+
+function PipedriveSummaryCard({ store }) {
+  const cfg = store.pipedrive()
+  // ⚠️ « Prêt » ne veut pas dire « connecté » : il faut un chemin d'appel ET les champs
+  // personnalisés créés dans le compte. Sans eux, un second envoi ferait des doublons —
+  // le dire ici évite de découvrir le problème après coup.
+  const relais = cfg.mode === 'direct' ? !!store.pipedriveToken() : !!cfg.relayUrl
+  const prets = !!cfg.fieldKeys?.deal?.bdr_rdv_id
+  return (
+    <IntegrationSummaryCard
+      title="Pipedrive"
+      enabled={relais && prets}
+      intro="Envoyez vos affaires, contacts et entreprises dans Pipedrive, et réimportez-en vos contacts et organisations."
+      rows={[
+        <>Entreprise : <b>{store.currentEnv?.name || '—'}</b></>,
+        <>Chemin d'appel : {relais
+          ? <b>{cfg.mode === 'direct' ? 'jeton local (ce navigateur)' : (cfg.relayInherited ? 'relais de BD Report' : 'relais dédié')}</b>
+          : <span className="text-amber-600">aucun — relais non publié</span>}</>,
+        <>Compte préparé : {prets
+          ? <b>oui</b>
+          : <span className="text-amber-600">non — à faire avant la première synchro</span>}</>,
+        cfg.pipelineId ? <>Pipeline visé : <b>{cfg.pipelineId}</b></> : null,
+      ]}
+      actionLabel={prets ? 'Ouvrir la console Pipedrive' : 'Préparer Pipedrive'}
+      page="pipedrive"
+      note="La console crée les champs BD Report dans votre compte et fait correspondre vos étapes. Sans cette préparation, un second envoi crée des doublons au lieu de mettre à jour."
+    />
+  )
+}
+
 function HubspotSummaryCard({ store }) {
   const cfg = store.hubspot()
   const connected = cfg.mode === 'oauth' ? !!(cfg.portalId && cfg.tenantKey) : !!cfg.portalId
@@ -439,6 +503,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
         <div className="space-y-3">
         <SupabaseCard />
         <HubspotSummaryCard store={store} />
+        <PipedriveSummaryCard store={store} />
         <NewsRelayCard store={store} />
         </div>
       )}
