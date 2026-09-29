@@ -55,6 +55,39 @@ vous développez en local).
 > Conséquence pratique : pour interroger le relais en ligne de commande une fois la variable
 > posée, ajoutez l'en-tête — `curl -H "Origin: https://bdreport.js.org" .../diag`.
 
+## 0. Déployer sans copier-coller (recommandé)
+
+⚠️ **Le copier-coller dans l'éditeur du tableau de bord n'est plus une méthode viable.**
+Ce fichier fait ~1 450 lignes, et son `export default` — le gestionnaire que Cloudflare
+cherche — se trouve dans le dernier sixième. Une copie tronquée le perd **en silence**,
+et Cloudflare répond : *« No event handlers were registered. This script does nothing. »*
+Le relais est alors déployé, vide, et tout ce qui en dépend tombe.
+
+Le workflow **`.github/workflows/deploy-worker.yml`** s'en charge. Deux secrets à créer
+une seule fois, **depuis un navigateur** :
+
+1. **Cloudflare** → *My Profile* → *API Tokens* → **Create Token** → modèle
+   « Edit Cloudflare Workers ». Copiez le jeton.
+2. Notez aussi votre **Account ID** (page d'accueil Cloudflare, colonne de droite).
+3. **GitHub** → votre dépôt → *Settings* → *Secrets and variables* → *Actions* →
+   **New repository secret**, deux fois :
+   · `CLOUDFLARE_API_TOKEN` = le jeton
+   · `CLOUDFLARE_ACCOUNT_ID` = l'identifiant de compte
+
+Ensuite, le relais se redéploie **à chaque modification de `news/worker.js`**, et le
+workflow **refuse de publier un fichier sans gestionnaire** — le défaut décrit ci-dessus
+devient impossible. On peut aussi le lancer à la main : onglet *Actions* →
+« Deploy relay worker » → *Run workflow*.
+
+⚠️ **Vérifiez le nom du worker.** `wrangler.toml` déclare `name = "bdr-news"`. Si votre
+worker déployé porte un autre nom, le déploiement en CRÉERAIT un second, à une nouvelle
+URL — et l'application continuerait de parler à l'ancien. Alignez le `name` sur celui de
+votre worker avant le premier lancement.
+
+⚠️ **Les secrets ne sont pas touchés** : `GEMINI_API_KEY`, `PIPEDRIVE_API_TOKEN` et les
+autres survivent au déploiement. En revanche les `[vars]` de `wrangler.toml` remplacent
+celles du tableau de bord — `ALLOWED_ORIGINS` y est déjà renseignée.
+
 ## 3. Déposer la clé, puis publier
 
 ```bash

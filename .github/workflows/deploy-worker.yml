@@ -1,0 +1,60 @@
+# ============================================================================
+#  Déploiement du relais Cloudflare (news/worker.js).
+#
+#  ⚠️ POURQUOI CE WORKFLOW EXISTE. Le relais se recollait à la main dans l'éditeur
+#  du tableau de bord Cloudflare. Le fichier fait maintenant ~1 450 lignes, et son
+#  `export default` — le gestionnaire que Cloudflare cherche — se trouve dans le
+#  DERNIER SIXIÈME. Une copie tronquée le perd donc en silence, et Cloudflare répond
+#  « No event handlers were registered. This script does nothing. » : le relais est
+#  déployé, vide, et tout ce qui en dépend tombe sans qu'aucun test ne l'ait vu.
+#
+#  Ce fichier ne va que grossir. Le copier-coller n'était pas une méthode, c'était un
+#  sursis.
+#
+#  ⚠️ LES SECRETS NE SONT PAS TOUCHÉS. `wrangler deploy` ne supprime pas les secrets
+#  posés au tableau de bord (GEMINI_API_KEY, PIPEDRIVE_API_TOKEN…) : ils survivent au
+#  déploiement. En revanche les `[vars]` de wrangler.toml REMPLACENT celles du tableau
+#  de bord — ALLOWED_ORIGINS y est déjà renseignée avec les bonnes origines.
+# ============================================================================
+name: Deploy relay worker
+
+on:
+  workflow_dispatch:        # bouton « Run workflow » dans l'onglet Actions
+  push:
+    branches: [claude/adoring-tesla-t0fwpc, main]
+    paths:
+      - 'news/worker.js'
+      - 'news/wrangler.toml'
+      - '.github/workflows/deploy-worker.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Garde-fou : on refuse de déployer un fichier sans gestionnaire, plutôt que de
+      # publier un relais vide et de le découvrir en production. C'est exactement le
+      # défaut que ce workflow est censé rendre impossible.
+      - name: Check the worker exposes a handler
+        run: |
+          node --check news/worker.js
+          grep -q '^export default {' news/worker.js || {
+            echo "::error::news/worker.js n'expose aucun export default — Cloudflare déploierait un script vide."
+            exit 1
+          }
+          grep -q 'async fetch(request, env)' news/worker.js || {
+            echo "::error::L'export default ne porte pas de fetch(request, env)."
+            exit 1
+          }
+          echo "✓ gestionnaire présent ($(wc -l < news/worker.js) lignes)"
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: news
+
+      - name: Where it landed
+        run: echo "Relais déployé. Vérifiez /health puis /diag (avec l'en-tête Origin)."
