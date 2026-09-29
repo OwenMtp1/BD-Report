@@ -339,6 +339,44 @@ export async function pullDeals({ max = 200, stageMap = DEFAULT_STAGE_MAP } = {}
   })
 }
 
+/**
+ * Entreprises HubSpot → fiches BD Report.
+ * ⚠️ Cet import N'EXISTAIT PAS : on savait envoyer des entreprises, jamais en lire.
+ * Les champs sont exactement ceux de la fiche (`ENRICHABLE`) — en inventer un donnerait
+ * une donnée qu'aucun écran ne sait afficher.
+ */
+export async function pullCompanies({ max = 200 } = {}) {
+  const props = ['name', 'domain', 'website', 'city', 'country', 'numberofemployees', 'annualrevenue', 'industry', 'linkedin_company_page', 'bdr_secteur']
+  const rows = await crm.listAll('companies', { limit: 100, properties: props }, { max })
+  return rows.map(r => {
+    const p = r.properties || {}
+    return {
+      hubspotId: r.id,
+      nom: p.name || p.domain || '',
+      site: p.website || (p.domain ? `https://${p.domain}` : ''),
+      linkedin: p.linkedin_company_page || '',
+      localisation: [p.city, p.country].filter(Boolean).join(', '),
+      effectif: p.numberofemployees || '',
+      ca: p.annualrevenue || '',
+      secteur: p.bdr_secteur || p.industry || '',
+    }
+  })
+}
+
+/**
+ * Tout ce qui s'importe, sous la forme que `crmImport.js` attend. C'est le SEUL
+ * point d'entrée de l'import : les écrans n'appellent plus les `pull*` un par un,
+ * sinon chacun devrait redécider quoi lire et dans quel ordre.
+ */
+export async function pullAll({ max = 300 } = {}) {
+  const out = { contacts: [], companies: [], errors: [] }
+  // ⚠️ Séquentiel et tolérant : si les entreprises échouent, les contacts doivent
+  // quand même entrer. Un import tout-ou-rien fait perdre le travail déjà fait.
+  try { out.contacts = await pullContacts({ max }) } catch (e) { out.errors.push({ kind: 'contacts', message: e.message }) }
+  try { out.companies = await pullCompanies({ max }) } catch (e) { out.errors.push({ kind: 'entreprises', message: e.message }) }
+  return out
+}
+
 // Charge les pipelines + étapes pour l'écran de correspondance des phases.
 export async function loadPipelines() {
   const r = await pipelines.list('deals')

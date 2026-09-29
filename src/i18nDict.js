@@ -2071,4 +2071,12 @@ export const UI_DICT = [
   ['Un jeton d\'API ouvre tout le compte Pipedrive. En mode direct il reste dans ce navigateur — il n\'est pas synchronisé, mais il est lisible par qui y a accès. Le relais est le mode recommandé.', 'An API token opens the whole Pipedrive account. In direct mode it stays in this browser — it is not synchronised, but anyone with access to the browser can read it. The relay is the recommended mode.', 'Un token de API abre toda la cuenta de Pipedrive. En modo directo se queda en este navegador: no se sincroniza, pero puede leerlo cualquiera que tenga acceso. El relé es el modo recomendado.'],
   ['Dernier échange', 'Last exchange', 'Último intercambio'],
   ['Les échanges avec Pipedrive s\'inscrivent ici, avec leur durée et leur résultat.', 'Exchanges with Pipedrive are recorded here, with their duration and result.', 'Los intercambios con Pipedrive se registran aquí, con su duración y su resultado.'],
+
+  // ---- Import depuis un CRM (moteur partagé HubSpot / Pipedrive) ----
+  ['Importer contacts et entreprises', 'Import contacts and companies', 'Importar contactos y empresas'],
+  ['Dernier import', 'Last import', 'Última importación'],
+  ['rien à importer', 'nothing to import', 'nada que importar'],
+  ["Rien n'a été remplacé : corrigez au cas par cas depuis la fiche.", 'Nothing was replaced: fix them one by one from the record.', 'No se ha reemplazado nada: corrígelo caso por caso desde la ficha.'],
+  ['Contacts', 'Contacts', 'Contactos'],
+  ['Entreprises', 'Companies', 'Empresas'],
 ]

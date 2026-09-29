@@ -853,6 +853,39 @@ npm run dev        # serveur de dev
   réseau vers api.pipedrive.com. Conforme à la documentation, jamais confronté au réel — le
   premier branchement est une vérification, pas une formalité.
 
+## Import depuis un CRM — un seul moteur pour HubSpot et Pipedrive
+- **`src/crmImport.js`** — `applyCrmImport(data, rows, source)` → `{ data, report }`.
+  Chaque CRM rend des lignes NORMALISÉES (`pullAll()` dans `hubspotSync.js` et
+  `pipedriveSync.js`) ; tout le reste — dédoublonnage, fusion, compte rendu — se passe
+  ici. ⚠️ **UNE SEULE IMPLÉMENTATION** : c'est la leçon d'OrgChart/ProjectOrgChart puis de
+  PipelineKanban. Ce qui diffère d'un CRM à l'autre est la FORME des données ; ce qui doit
+  être identique est la façon de les faire entrer chez nous.
+- 🔑 **ON NE REMPLACE JAMAIS UNE SAISIE.** Un champ VIDE se remplit, un champ DIFFÉRENT est
+  SIGNALÉ dans le compte rendu et laissé intact — même règle que l'enrichissement groupé.
+  En import de masse personne ne décide rien, et une valeur écrasée en silence est
+  irrécupérable là où un écart signalé se tranche fiche par fiche.
+  ⚠️ **L'écart doit être MONTRÉ** : sans la liste, ce refus d'écraser passerait pour un
+  import qui n'a rien fait, et quelqu'un finirait par demander qu'on écrase.
+- Clés : **e-mail** pour un contact (deux personnes partagent un nom, pas une adresse),
+  **nom** pour une entreprise (c'est la clé de `data.companies`), les deux **insensibles à
+  la casse** — « ACME » et « Acme » sont la même société.
+- ⚠️ **Ce que l'ancien import HubSpot faisait** : il n'AJOUTAIT que l'inconnu. Un contact
+  déjà présent était ignoré EN ENTIER, même quand le CRM portait le téléphone qui nous
+  manquait ; un contact sans e-mail disparaissait sans un mot ; et **aucune entreprise
+  n'était jamais importée**. Les trois cas sont traités et COMPTÉS.
+- `pullCompanies` (HubSpot) et `pullOrganizations` (Pipedrive) sont NOUVEAUX : on savait
+  envoyer des entreprises, jamais en lire. Les champs sont exactement ceux de la fiche
+  (`ENRICHABLE`) — en inventer un donnerait une donnée qu'aucun écran ne sait afficher.
+- `pullAll` est **tolérant** : si les entreprises échouent, les contacts entrent quand même.
+  Un import tout-ou-rien fait perdre le travail déjà fait.
+- **UNE SEULE ÉCRITURE** à la fin (cf. sauvegarde différée), et l'espace reçu n'est jamais
+  muté sur place — React compare les références.
+- **`src/pages/CrmImportReport.jsx`** — le compte rendu, partagé lui aussi : créés /
+  complétés / inchangés / écartés par nature, puis les écarts et les lignes écartées AVEC
+  LEUR RAISON, repliés.
+- **`scripts/crm-import-test.mjs`** (dans `npm run audit`) : les cinq garanties falsifiées
+  une par une — écrasement, écarts tus, casse, raison d'écart manquante, champs non bornés.
+
 ## Supabase (synchro temps réel cross-device, optionnelle)
 - Config : **`src/supabaseConfig.js`** (URL + clé anon) ; côté site : bloc `window.BDR_SUPABASE_*` dans `site/index.html`.
   Vide = 100 % local (inerte). **Clés obscurcies** (XOR+base64 via `src/obf.js` / `bdrDeob` côté site) : plus aucune clé

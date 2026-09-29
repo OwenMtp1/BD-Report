@@ -283,6 +283,32 @@ export async function pullDeals({ max = 200 } = {}) {
   }))
 }
 
+/** Organisations Pipedrive → fiches BD Report (mêmes champs que la fiche). */
+export async function pullOrganizations({ max = 200 } = {}) {
+  const rows = (await crm.list('organizations', { limit: Math.min(max, 500) })) || []
+  const k = (ref) => keyOf('organization', ref)
+  return rows.map(o => ({
+    pipedriveId: o.id,
+    nom: o.name || '',
+    localisation: o.address || '',
+    effectif: o.people_count || '',
+    secteur: (k('bdr_secteur') && o[k('bdr_secteur')]) || '',
+    site: '', linkedin: '', ca: '',
+  }))
+}
+
+/** Tout ce qui s'importe, sous la forme que `crmImport.js` attend. */
+export async function pullAll({ max = 300 } = {}) {
+  const out = { contacts: [], companies: [], errors: [] }
+  try {
+    const persons = await pullPersons({ max })
+    // `pullPersons` rend déjà nos noms de champs ; on ajoute seulement la provenance.
+    out.contacts = persons.map(p => ({ ...p, source: 'Pipedrive' }))
+  } catch (e) { out.errors.push({ kind: 'contacts', message: e.message }) }
+  try { out.companies = await pullOrganizations({ max }) } catch (e) { out.errors.push({ kind: 'entreprises', message: e.message }) }
+  return out
+}
+
 export async function loadPipelines() {
   const list = (await pipelines.list()) || []
   const out = []

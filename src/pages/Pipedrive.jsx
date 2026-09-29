@@ -14,8 +14,10 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link2, Check, AlertTriangle, RefreshCw, Download, Upload, Settings2, Trash2 } from 'lucide-react'
 import { useStore, PIPEDRIVE_MODES, fmtDate } from '../store.jsx'
 import { Empty, Field, Select, toast } from '../ui.jsx'
+import { ImportReport } from './CrmImportReport.jsx'
 import { testPipedrive, pipedriveCallLog, clearPipedriveCallLog, isPipedriveConfigured } from '../pipedrive.js'
-import { ensureCustomFields, loadPipelines, pushAll, pullDeals, pullPersons, customFieldKeys } from '../pipedriveSync.js'
+import { ensureCustomFields, loadPipelines, pushAll, pullAll, customFieldKeys } from '../pipedriveSync.js'
+import { applyCrmImport, importSummary } from '../crmImport.js'
 
 export default function Pipedrive() {
   const store = useStore()
@@ -68,10 +70,18 @@ export default function Pipedrive() {
     toast(r.errors.length ? `${r.done - r.errors.length}/${r.total} envoyés, ${r.errors.length} en erreur` : `${r.total} affaire(s) envoyée(s)`)
   })
 
+  // ⚠️ L'import ÉCRIT désormais chez nous. Il ne faisait que compter, ce qui n'a
+  // d'intérêt pour personne — et le moteur est partagé avec HubSpot (`crmImport.js`) :
+  // dédoublonnage, refus d'écraser une saisie, compte rendu, tout est au même endroit.
   const pull = () => run('pull', async () => {
-    const [deals, persons] = await Promise.all([pullDeals({ max: 50 }), pullPersons({ max: 50 })])
-    setReport({ imported: { deals: deals.length, persons: persons.length }, sample: deals.slice(0, 5), errors: [] })
-    toast(`${deals.length} affaire(s) et ${persons.length} contact(s) lus`)
+    const rows = await pullAll({ max: 300 })
+    let rep = null
+    // UNE SEULE écriture à la fin : une par contact sérialiserait tout l'état autant
+    // de fois, et l'interface se figerait le temps de l'import.
+    store.setSub(d => { const r = applyCrmImport(d, rows, 'Pipedrive'); rep = r.report; return r.data })
+    if (rows.errors.length) rep.errors = rows.errors
+    setReport(rep)
+    toast(importSummary(rep))
   })
 
   if (!sub) return null
@@ -185,7 +195,7 @@ export default function Pipedrive() {
       {report && (
         <div className="card p-3 space-y-1.5">
           <div className="text-sm font-bold">Dernier échange</div>
-          {report.imported && <p className="text-xs">{report.imported.deals} affaire(s) et {report.imported.persons} contact(s) lus dans Pipedrive.</p>}
+          {report.contacts && <ImportReport r={report} />}
           {report.total !== undefined && <p className="text-xs">{report.done - report.errors.length} envoyé(s) sur {report.total}.</p>}
           {(report.errors || []).map((e, i) => (
             <div key={i} className="text-xs flex items-start gap-2">

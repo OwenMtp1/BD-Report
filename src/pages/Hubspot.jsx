@@ -3,6 +3,8 @@ import {
   Plug, KeyRound, Link2, Upload, Download, RefreshCw, CheckCircle2, XCircle, Play, Unplug,
   ListTree, Wrench, ScrollText, Eye, EyeOff, ExternalLink, AlertTriangle, Users2, Building2, Handshake, ShieldCheck,
 } from 'lucide-react'
+import { ImportReport } from './CrmImportReport.jsx'
+import { applyCrmImport, importSummary } from '../crmImport.js'
 import { useStore, DEFAULT_PHASES, HUBSPOT_MODES, isSupportRole } from '../store.jsx'
 import {
   testHubspotConnection, hubspotCallLog, clearHubspotCallLog, HS_ENDPOINTS, owners as hsOwners,
@@ -10,7 +12,7 @@ import {
 } from '../hubspot.js'
 import {
   DEFAULT_STAGE_MAP, ensureCustomProperties, loadPipelines, pushAll, pushRdv, pushContact,
-  pullContacts, pullDeals,
+  pullAll, pullDeals,
 } from '../hubspotSync.js'
 import { Field, Empty, toast } from '../ui.jsx'
 
@@ -312,6 +314,7 @@ function SyncCard({ store, cfg }) {
   const rdvs = sub.rdvs || []
   const contacts = sub.contacts || []
   const [prog, setProg] = useState(null)
+  const [importReport, setImportReport] = useState(null)
   const [report, setReport] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -336,16 +339,20 @@ function SyncCard({ store, cfg }) {
     return rep
   })
 
-  const importContacts = () => run('Import des contacts', async () => {
-    const rows = await pullContacts({ max: 300 })
-    let added = 0
-    store.setSub(s => {
-      const known = new Set((s.contacts || []).map(c => (c.email || '').toLowerCase()).filter(Boolean))
-      const fresh = rows.filter(r => r.email && !known.has(r.email.toLowerCase()))
-      added = fresh.length
-      return { ...s, contacts: [...(s.contacts || []), ...fresh.map(r => ({ ...r, id: Math.random().toString(36).slice(2, 10) }))] }
-    })
-    return { imported: rows.length, added }
+  // ⚠️ RÉÉCRIT SUR LE MOTEUR PARTAGÉ (`crmImport.js`). L'ancien import ne faisait
+  // qu'AJOUTER l'inconnu : un contact déjà présent était ignoré EN ENTIER, même quand
+  // HubSpot portait le téléphone qui nous manquait — et un contact sans e-mail
+  // disparaissait sans un mot. Il n'importait par ailleurs AUCUNE entreprise.
+  // Le moteur est celui de Pipedrive : une seule logique, une seule correction.
+  const importAll = () => run('Import des contacts et entreprises', async () => {
+    const rows = await pullAll({ max: 300 })
+    let rep = null
+    // Une seule écriture : une par ligne sérialiserait tout l'état autant de fois.
+    store.setSub(d => { const r = applyCrmImport(d, rows, 'HubSpot'); rep = r.report; return r.data })
+    if (rows.errors.length) rep.errors = rows.errors
+    setImportReport(rep)
+    toast(importSummary(rep))
+    return rep
   })
 
   const importDeals = () => run('Import des transactions', async () => {
@@ -393,13 +400,20 @@ function SyncCard({ store, cfg }) {
         <button className="btn-ghost !py-1.5 text-sm" disabled={busy} onClick={() => push({ contacts }, 'Envoi des contacts')}>
           <Upload size={15} /> Envoyer mes contacts
         </button>
-        <button className="btn-ghost !py-1.5 text-sm" disabled={busy} onClick={importContacts}>
-          <Download size={15} /> Importer les contacts
+        <button className="btn-ghost !py-1.5 text-sm" disabled={busy} onClick={importAll}>
+          <Download size={15} /> Importer contacts et entreprises
         </button>
         <button className="btn-ghost !py-1.5 text-sm" disabled={busy} onClick={importDeals}>
           <Download size={15} /> Importer les transactions
         </button>
       </div>
+
+      {importReport && (
+        <div className="card p-3 space-y-2">
+          <div className="text-sm font-bold">Dernier import</div>
+          <ImportReport r={importReport} />
+        </div>
+      )}
 
       {prog && prog.total > 0 && (
         <div className="space-y-1">
