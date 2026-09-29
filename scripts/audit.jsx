@@ -1192,6 +1192,40 @@ async function main() {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 6 octodecies. LE CODE D'ACCÈS EST OBLIGATOIRE, ET UNE SEULE PERMISSION L'OUVRE.
+  //
+  // 🔑 Trois garanties indissociables. Accorder la permission en laissant une porte
+  // sans code, ou poser un code que la permission n'ouvre pas, ne protège rien et
+  // n'accorde rien.
+  {
+    const src = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'store.jsx'), 'utf8')
+
+    // 1. Un espace ne naît JAMAIS sans code. `pin || '0000'` donnait un code identique
+    //    partout, que personne n'avait choisi et que tout le monde devine.
+    const create = src.slice(src.indexOf('createSubEnv(envId'), src.indexOf('createSubEnv(envId') + 700)
+    ok(!/pin:\s*pin\s*\|\|/.test(create), "createSubEnv retombe sur un code par défaut : un espace « protégé » que personne n'a choisi")
+    ok(/code\.length !== 4/.test(create), 'createSubEnv accepte un espace sans code à 4 chiffres')
+    ok(/pin:\s*hashPw\(/.test(create), "createSubEnv enregistre le code en clair au lieu de le hacher")
+
+    // 2. La réserve « sauf chez moi » ne doit pas revenir : elle n'arrêtait personne
+    //    (tout collègue porteur de la permission entrait déjà) et ne gênait que celui
+    //    qui connaît le code.
+    const skip = src.slice(src.indexOf('skipsPin(envId)'), src.indexOf('skipsPin(envId)') + 500)
+    ok(!/createdBy !== account/.test(skip), "skipsPin réintroduit « sauf sur mes environnements » — une réserve qui n'arrête personne")
+    ok(/canEnterClientEnvs\(\)/.test(skip), "skipsPin ne passe plus par la permission env.access")
+
+    // 3. ⚠️ DANS LES DÉMOS, LA PERMISSION EST ÉTEINTE. Une visite commerciale ne doit
+    //    pas montrer que l'éditeur entre où il veut. Seule la FORMATION la laisse jouer,
+    //    et seulement si la casquette choisie la porte réellement.
+    ok(/demo && dataset !== 'training'/.test(skip), "skipsPin joue dans la démo commerciale : un prospect y verrait l'éditeur entrer partout")
+
+    // La démo commerciale ne doit donc jamais exempter, quelle que soit la permission.
+    const demoDb = s.buildDemoDb({})
+    const demoAdmin = (demoDb.accounts || []).find(a => s.SUPPORT_ROLES.includes(a.role))
+    ok(!demoAdmin, 'la démo commerciale embarque un compte support : elle exposerait les droits de l\'éditeur')
+  }
+
   process.stdout.write((problems.length ? 'PROBLÈMES:\n- ' + problems.join('\n- ') : 'AUDIT OK') + '\n')
 
 }

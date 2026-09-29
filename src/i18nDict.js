@@ -2097,4 +2097,19 @@ export const UI_DICT = [
   ["Relais hérité de celui publié par l'équipe BD Report — rien à saisir. Ne le remplacez que pour viser un autre relais.", "Relay inherited from the one published by the BD Report team — nothing to enter. Only replace it to target a different relay.", 'Relé heredado del publicado por el equipo de BD Report: no hay nada que introducir. Solo reemplázalo para apuntar a otro relé.'],
   ["Aucun relais publié : l'équipe BD Report doit renseigner son URL dans Paramètres → Intégrations.", 'No relay published: the BD Report team must set its URL in Settings → Integrations.', 'No hay relé publicado: el equipo de BD Report debe indicar su URL en Ajustes → Integraciones.'],
   ['URL du relais (héritée)', 'Relay URL (inherited)', 'URL del relé (heredada)'],
+
+  // ---- Code d'accès obligatoire + formation staff ----
+  ["Définissez votre code d'accès", 'Set your access code', 'Define tu código de acceso'],
+  ['Enregistrer et entrer', 'Save and enter', 'Guardar y entrar'],
+  ["Nouveau code d'accès", 'New access code', 'Nuevo código de acceso'],
+  ["Confirmer le code d'accès", 'Confirm the access code', 'Confirmar el código de acceso'],
+  ['Confirmer', 'Confirm', 'Confirmar'],
+  ['Le code fait 4 chiffres.', 'The code is 4 digits.', 'El código tiene 4 dígitos.'],
+  ['Les deux codes ne correspondent pas.', 'The two codes do not match.', 'Los dos códigos no coinciden.'],
+  ['Ce code ne sera plus jamais affiché : il est enregistré haché. Notez-le.', 'This code will never be shown again: it is stored hashed. Write it down.', 'Este código no volverá a mostrarse: se guarda cifrado. Anótalo.'],
+  ["Cette personne doit d'abord définir son code d'accès.", 'This person must set their access code first.', 'Esta persona debe definir primero su código de acceso.'],
+  ["Un code d'accès à 4 chiffres est obligatoire.", 'A 4-digit access code is required.', 'Se requiere un código de acceso de 4 dígitos.'],
+  ["L'espace n'a pas pu être créé.", 'The space could not be created.', 'No se ha podido crear el espacio.'],
+  ['Changer de casquette', 'Switch role', 'Cambiar de rol'],
+  ['Revoir les casquettes', 'Review the roles', 'Volver a ver los roles'],
 ]

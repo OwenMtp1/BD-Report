@@ -4753,14 +4753,31 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         if (this.canEnterClientEnvs()) return db.environments
         return db.environments.filter(e => e.createdBy === account?.id || (e.members || []).includes(account?.id))
       },
+      /**
+       * Passer outre le code d'accès — environnement ET espace d'une personne.
+       *
+       * 🔑 C'est une PERMISSION (`env.access`), jamais une déduction de rôle : le code
+       * protège chaque espace de TOUT LE MONDE, et seule cette permission l'ouvre. Sans
+       * elle, même un Fondateur saisit le code, comme n'importe qui.
+       *
+       * ⚠️ LA RÉSERVE « SAUF CHEZ MOI » A ÉTÉ RETIRÉE, et elle ne protégeait personne.
+       * L'ancienne règle exemptait des environnements que l'on n'a PAS créés : sur le
+       * sien, on saisissait donc son propre code — mais n'importe quel collègue porteur
+       * de la permission, lui, entrait sans rien saisir. Elle gênait le seul qui connaît
+       * le code et n'arrêtait aucun de ceux qu'elle prétendait arrêter. La protection
+       * réelle est ailleurs : dans QUI reçoit `env.access`.
+       *
+       * ⚠️ DANS LES DÉMOS, ELLE EST ÉTEINTE. Une visite commerciale ne doit pas montrer
+       * que l'éditeur entre où il veut : c'est vrai, c'est assumé côté staff, et cela
+       * n'a rien à faire dans une démonstration de vente. Seule la FORMATION STAFF la
+       * laisse jouer — et encore : uniquement si la casquette choisie la porte
+       * réellement, puisque tout son intérêt est de refléter les droits en vigueur.
+       */
       skipsPin(envId) {
-        // Même clé que la liste : accorder l'accès et laisser une porte verrouillée derrière
-        // reviendrait à ne rien accorder du tout.
+        if (demo && dataset !== 'training') return false
         if (!this.canEnterClientEnvs()) return false
         const env = db.environments.find(e => e.id === (envId || session?.envId))
-        // Chez lui, un membre du staff est un utilisateur comme un autre : son propre code
-        // le protège de ses propres collègues, et il le connaît.
-        return !!env && env.createdBy !== account?.id
+        return !!env
       },
       /**
        * Ouvrir l'environnement d'un client DIRECTEMENT sur l'écran où vit une brique.
@@ -4923,9 +4940,18 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
         })
         return env
       },
+      /**
+       * ⚠️ LE CODE EST OBLIGATOIRE, et il n'a PLUS de valeur par défaut. `pin || '0000'`
+       * donnait un code que personne n'avait choisi, identique partout et connu de tous :
+       * un espace « protégé » par 0000 ne l'est pas, et laissait croire le contraire.
+       * Le refus est explicite pour que l'appelant le traite, au lieu de créer un espace
+       * ouvert sans le savoir.
+       */
       createSubEnv(envId, { prenom, nom, poste, service, pin }) {
         if (roBlocked()) return null
-        const sub = { id: uid(), envId, prenom, nom, poste, service, pin: pin || '0000', photo: '', ownerId: session.accountId }
+        const code = String(pin || '').replace(/\D/g, '')
+        if (code.length !== 4) return { error: "Un code d'accès à 4 chiffres est obligatoire." }
+        const sub = { id: uid(), envId, prenom, nom, poste, service, pin: hashPw(code), photo: '', ownerId: session.accountId }
         setDb(d => {
           d.subenvs.push(sub)
           // Un espace ouvert dans un environnement issu d'un modèle démarre avec la
@@ -5369,7 +5395,19 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
           return d
         })
       },
-      updateSubEnv(subId, patch) { if (roBlocked()) return; setDb(d => { Object.assign(d.subenvs.find(s => s.id === subId), patch); return d }) },
+      updateSubEnv(subId, patch) {
+        if (roBlocked()) return
+        // ⚠️ Le code est haché À L'ÉCRITURE, pas seulement au chargement suivant : entre
+        // les deux, il vivrait en clair dans l'état — donc dans la synchro et dans toute
+        // sauvegarde faite d'ici là.
+        const p = { ...patch }
+        if (p.pin !== undefined && p.pin && !String(p.pin).startsWith('sha256:')) p.pin = hashPw(String(p.pin))
+        setDb(d => { Object.assign(d.subenvs.find(s => s.id === subId), p); return d })
+      },
+      /** Espaces de l'environnement courant encore dépourvus de code. */
+      subEnvsWithoutPin() {
+        return (db.subenvs || []).filter(s => s.envId === session?.envId && !s.pin)
+      },
       deleteSubEnv(subId) { if (roBlocked()) return; setDb(d => { d.subenvs = d.subenvs.filter(s => s.id !== subId); delete d.data[subId]; return d }) },
       // ----- données du sous-environnement courant
       sub: session?.subEnvId ? db.data[session.subEnvId] : null,

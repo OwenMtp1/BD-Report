@@ -409,13 +409,19 @@ async function main() {
   if (!text().includes('Test')) throw new Error('Env Test missing from picker')
   await click(find('button', 'PeopleSpheres'))
 
-  // 4. Sous-environnement protégé par PIN
+  // 4. Choix de l'espace.
+  // ⚠️ LE COMPTE DE TEST PORTE `env.access` : il entre donc SANS code, y compris chez
+  // lui. La réserve « sauf sur mes propres environnements » a été retirée — elle
+  // n'arrêtait personne (tout collègue porteur de la permission entrait déjà chez vous)
+  // et ne gênait que celui qui connaît le code. Le code reste la protection de tout le
+  // monde ; la permission est ce qui l'ouvre, et elle seule.
   if (!text().includes('Owen Mrani Bonnier')) throw new Error('SubEnv picker missing: ' + text().slice(0, 300))
   await click(find('button', 'Owen Mrani Bonnier'))
   // Le compte de test encadre : aucun espace ne doit lui être verrouillé.
   if (text().includes('espace privé')) throw new Error('Manager should not see colleagues\' spaces locked')
-  if (!text().includes('4 chiffres')) throw new Error('PIN gate missing: ' + text().slice(0, 300))
-  await type(container.querySelector('input'), '1205')
+  if (text().includes('4 chiffres')) {
+    throw new Error("Avec la permission env.access, aucun code ne doit être demandé : " + text().slice(0, 200))
+  }
   await act(async () => { await new Promise(r => setTimeout(r, 600)) }) // laisse passer le squelette de chargement
 
   // 5. App principale : Dashboard
@@ -2063,11 +2069,18 @@ async function main() {
       // On CRÉE un collègue — la base semée n'en a pas — et on lui pose un profil ICP.
       // Il ne doit apparaître qu'en vue entreprise.
       await act(async () => {
-        win.__bdrStore.createSubEnv('env-peoplespheres', { prenom: 'Camille', nom: 'Collegue', poste: 'BDR', service: '', pin: '' })
+        // ⚠️ Le code est OBLIGATOIRE : sans lui, `createSubEnv` refuse au lieu de créer
+        // un espace « protégé » par une valeur par défaut que personne n'a choisie.
+        const refus = win.__bdrStore.createSubEnv('env-peoplespheres', { prenom: 'X', nom: 'Y', poste: 'BDR', service: '', pin: '' })
+        if (!refus?.error) throw new Error('Un espace a été créé SANS code d\'accès')
+        win.__bdrStore.createSubEnv('env-peoplespheres', { prenom: 'Camille', nom: 'Collegue', poste: 'BDR', service: '', pin: '7788' })
       })
       await act(async () => { await new Promise(r => setTimeout(r, 60)) })
       const mates = dbNow().subenvs.filter(x => x.envId === 'env-peoplespheres' && x.id !== 'sub-owen')
       if (!mates.length) throw new Error("L'espace du collègue n'a pas été créé")
+      // Et il est HACHÉ dès l'écriture, pas au chargement suivant : entre les deux il
+      // vivrait en clair dans l'état, donc dans la synchro et dans toute sauvegarde.
+      if (!String(mates[0].pin).startsWith('sha256:')) throw new Error("Le code du nouvel espace n'est pas haché")
       const mate = mates[0]
       await act(async () => {
         win.__bdrStore.setSubData(mate.id, d => ({ ...d, icpProfiles: [...(d.icpProfiles || []), { id: 'icp-mate', kind: 'company', name: 'Profil du collègue', secteurs: ['SaaS'], createdAt: '2026-01-01' }] }))

@@ -226,6 +226,51 @@ function Welcome({ name, onDone }) {
   )
 }
 
+/**
+ * Écran de DÉFINITION du code d'accès, pour un espace qui n'en a pas encore.
+ *
+ * ⚠️ Deux saisies, et ce n'est pas du zèle : le code est HACHÉ à l'écriture, donc
+ * personne ne pourra le relire — ni l'utilisateur, ni un manager, ni le support. Une
+ * faute de frappe à la première saisie enfermerait quelqu'un hors de son propre espace,
+ * sans recours possible. La confirmation est le seul filet.
+ */
+function PinSetGate({ sub, store, onDone }) {
+  const [a, setA] = useState('')
+  const [b, setB] = useState('')
+  const [err, setErr] = useState('')
+  const valide = a.length === 4 && a === b
+  const poser = () => {
+    if (!valide) { setErr(a.length !== 4 ? 'Le code fait 4 chiffres.' : 'Les deux codes ne correspondent pas.'); return }
+    store.updateSubEnv(sub.id, { pin: a })
+    onDone()
+  }
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-surface p-6">
+      <div className="card p-6 w-full max-w-sm space-y-4 text-center">
+        <Lock size={26} className="mx-auto text-brand" />
+        <div>
+          <h2 className="font-extrabold text-lg">Définissez votre code d'accès</h2>
+          <p className="text-sm text-muted mt-1">
+            Il protège l'espace de {sub.prenom} {sub.nom} — y compris de vos collègues. Quatre chiffres.
+          </p>
+        </div>
+        <input className="input text-center tracking-[0.5em] font-mono text-lg" maxLength={4} inputMode="numeric"
+          autoFocus placeholder="••••" aria-label="Nouveau code d'accès"
+          value={a} onChange={e => { setA(e.target.value.replace(/\D/g, '')); setErr('') }} />
+        <input className="input text-center tracking-[0.5em] font-mono text-lg" maxLength={4} inputMode="numeric"
+          placeholder="Confirmer" aria-label="Confirmer le code d'accès"
+          value={b} onChange={e => { setB(e.target.value.replace(/\D/g, '')); setErr('') }}
+          onKeyDown={e => { if (e.key === 'Enter') poser() }} />
+        {err && <p className="text-xs text-red-500">{err}</p>}
+        <button className="btn-primary w-full" disabled={!valide} onClick={poser}>Enregistrer et entrer</button>
+        <p className="text-xs text-muted">
+          Ce code ne sera plus jamais affiché : il est enregistré haché. Notez-le.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- Environnements
 function PinGate({ title, expected, onOk, onBack }) {
   const { t } = useT()
@@ -429,12 +474,18 @@ function SubEnvPicker() {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ prenom: '', nom: '', poste: '', service: '', pin: '' })
   const [pinFor, setPinFor] = useState(null)
+  const [pinToSet, setPinToSet] = useState(null)
   // Encadrer, c'est pouvoir entrer chez les autres — avec leur code, qui reste demandé.
   // Les espaces de démonstration et de formation échappent au verrou : on y incarne des
   // casquettes qui n'ont pas toujours de droit d'encadrement, et rien n'y est réel.
   const canOpenOthers = store.demo || store.hasClientPerm('team.view') || store.hasClientPerm('team.manage')
 
   if (pinFor) return <PinGate title={`${pinFor.prenom} ${pinFor.nom}`} expected={pinFor.pin} onOk={() => store.enterSubEnv(pinFor.id)} onBack={() => setPinFor(null)} />
+  // ⚠️ UN ESPACE SANS CODE NE S'OUVRE PLUS : on le fait DÉFINIR. Impossible d'en
+  // inventer un — un code est un secret, et en générer un donnerait un espace « protégé »
+  // par une valeur que son propriétaire ne connaît pas. Seul lui peut le poser, et il ne
+  // le posera jamais si on ne le lui demande pas au moment où il entre.
+  if (pinToSet) return <PinSetGate sub={pinToSet} store={store} onDone={() => setPinToSet(null)} />
 
   return (
     <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 gap-8">
@@ -456,7 +507,16 @@ function SubEnvPicker() {
             <button key={s.id} disabled={!open}
               title={open ? '' : "Vous ne pouvez ouvrir que votre propre espace"} aria-label={open ? '' : "Vous ne pouvez ouvrir que votre propre espace"}
               className={`card w-44 h-44 flex flex-col items-center justify-center gap-2 transition fade-in ${open ? 'hover:scale-105' : 'opacity-55 cursor-not-allowed'}`}
-              onClick={() => { if (!open) return; (s.pin && !store.skipsPin()) ? setPinFor(s) : store.enterSubEnv(s.id) }}>
+              onClick={() => {
+                if (!open) return
+                if (store.skipsPin()) return store.enterSubEnv(s.id)   // permission staff : on passe
+                if (s.pin) return setPinFor(s)                          // code posé : on le demande
+                // Pas de code : on ne laisse plus entrer, on le fait poser. Et seul son
+                // propriétaire peut le faire — définir le code de quelqu'un d'autre
+                // reviendrait à lui choisir son secret.
+                if (mine) return setPinToSet(s)
+                return toast("Cette personne doit d'abord définir son code d'accès.")
+              }}>
               {s.photo
                 ? <img src={s.photo} alt="" className="w-14 h-14 rounded-full object-cover" />
                 : <div className="w-14 h-14 rounded-full bg-brand/15 text-brand font-extrabold flex items-center justify-center text-lg">{(s.prenom?.[0] || '') + (s.nom?.[0] || '')}</div>}
@@ -485,17 +545,28 @@ function SubEnvPicker() {
                 {(env?.departments || []).map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </Field>
-            <Field label="Code d'accès (4 chiffres)"><input className="input" maxLength={4} value={form.pin} onChange={e => setForm(f => ({ ...f, pin: e.target.value.replace(/\D/g, '') }))} /></Field>
+            {/* ⚠️ OBLIGATOIRE : c'est ce code qui protège cet espace de TOUT LE MONDE,
+                collègues compris. Il était facultatif, et `createSubEnv` retombait alors
+                sur « 0000 » — un code identique partout, que personne n'avait choisi et
+                que tout le monde devine. */}
+            <Field label="Code d'accès (4 chiffres)" required>
+              <input className="input" maxLength={4} inputMode="numeric" value={form.pin}
+                onChange={e => setForm(f => ({ ...f, pin: e.target.value.replace(/\D/g, '') }))} />
+            </Field>
           </div>
           <p className="text-xs text-muted mt-3">Ce nouvel espace est totalement indépendant et démarre vide de données.</p>
           <div className="flex justify-end gap-2 mt-4">
             <button className="btn-ghost" onClick={() => setCreating(false)}>Annuler</button>
-            <button className="btn-primary" onClick={() => {
-              if (!form.prenom || !form.nom || !form.poste || !form.service) return
-              const sub = store.createSubEnv(env.id, form)
-              setCreating(false)
-              store.enterSubEnv(sub.id)
-            }}>Créer mon espace</button>
+            <button className="btn-primary"
+              disabled={!form.prenom || !form.nom || !form.poste || !form.service || form.pin.length !== 4}
+              onClick={() => {
+                const sub = store.createSubEnv(env.id, form)
+                // ⚠️ `createSubEnv` rend `{ error }` plutôt que de créer un espace ouvert :
+                // on le traite, au lieu d'entrer dans un `sub.id` qui n'existe pas.
+                if (!sub || sub.error) { toast(sub?.error || "L'espace n'a pas pu être créé."); return }
+                setCreating(false)
+                store.enterSubEnv(sub.id)
+              }}>Créer mon espace</button>
           </div>
         </Modal>
       )}

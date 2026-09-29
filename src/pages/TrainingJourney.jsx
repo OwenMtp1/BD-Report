@@ -119,6 +119,14 @@ export default function TrainingJourney({ onClose }) {
   // Le parcours ne montre que ce que la casquette choisie peut réellement ouvrir :
   // guider vers un écran interdit apprendrait l'inverse de ce qu'il faut savoir.
   const tour = TOUR.filter(st => !st.perm || chosenPerms.includes(st.perm))
+  // ⚠️ EMPREINTE DES DROITS DE LA CASQUETTE. La base de formation est construite dans
+  // l'initialiseur d'état du provider : elle ne se refait donc PAS quand `datasetRole`
+  // change. Sans ce repère, changer de rôle — ou modifier les permissions dans
+  // « Permissions staff » — ne changeait rien à ce que la formation laissait ouvrir :
+  // on continuait de s'entraîner sur les droits du premier choix. La clé force le
+  // remontage quand la casquette OU son contenu bouge, ce qui est exactement la
+  // promesse de cet espace : refléter les droits en vigueur, pas une photo.
+  const permSig = [...chosenPerms].sort().join(',')
   const step = touring ? tour[tourIdx] : null
 
   useEffect(() => {
@@ -183,11 +191,25 @@ export default function TrainingJourney({ onClose }) {
         <span className="inline-flex items-center gap-1.5 font-bold text-sm">
           <GraduationCap size={15} /> Formation staff
         </span>
-        <span className="chip !text-[11px]" style={{ background: 'rgba(52,211,153,.18)', color: '#34d399' }}>{chosen?.name || roleKey}</span>
+        {/* ⚠️ Le changement se fait ICI, en place. Il repassait par l'écran de choix :
+            comparer deux casquettes supposait donc de tout quitter et de tout refaire,
+            alors que c'est précisément l'exercice — « qu'est-ce qu'un Support voit que
+            je ne vois pas ? ». */}
+        <select
+          className="!text-[11px] rounded-full px-2.5 py-1 font-semibold border-0 outline-none cursor-pointer"
+          style={{ background: 'rgba(52,211,153,.18)', color: '#34d399' }}
+          value={roleKey} aria-label="Changer de casquette"
+          onChange={e => { stopTour(); setRoleKey(e.target.value) }}>
+          {roles.map(r => {
+            const k = r.roleKey || r.name
+            return <option key={k} value={k} style={{ color: '#0f2b23' }}>{r.name}</option>
+          })}
+        </select>
+        <span className="hidden md:inline text-white/50 text-xs">{chosenPerms.length} droit{chosenPerms.length > 1 ? 's' : ''}</span>
         <span className="hidden sm:inline text-white/50 text-xs">environnement isolé — rien n'est enregistré</span>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => { stopTour(); setRoleKey('') }} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20">
-            Changer de rôle
+            Revoir les casquettes
           </button>
           {touring
             ? <button onClick={stopTour} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/15 hover:bg-white/25 flex items-center gap-1.5"><X size={13} /> Arrêter</button>
@@ -197,7 +219,7 @@ export default function TrainingJourney({ onClose }) {
       </div>
 
       <div className="flex-1 min-h-0 relative overflow-auto bg-app">
-        <StoreProvider demo dataset="training" datasetRole={roleKey} datasetRoles={roles}>
+        <StoreProvider key={`${roleKey}|${permSig}`} demo dataset="training" datasetRole={roleKey} datasetRoles={roles}>
           <I18nProvider>
             <TrainingController navSeq={navSeq} />
             <App />
