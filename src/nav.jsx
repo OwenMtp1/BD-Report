@@ -69,6 +69,7 @@ export const NAV_GROUPS = [
       { id: 'ecosystem', label: 'Créer votre écosystème', icon: Workflow, brick: 'Écosystème', roles: MANAGER_ROLES, inManagerHub: true },
       { id: 'quotas', label: 'Objectifs & quotas', icon: Target, brick: 'Objectifs & quotas', roles: MANAGER_ROLES, inManagerHub: true, module: 'quotas' },
       { id: 'hubspot', label: 'Intégration HubSpot', icon: Link2, brick: 'Intégration HubSpot', roles: MANAGER_ROLES, inManagerHub: true },
+      { id: 'pipedrive', label: 'Intégration Pipedrive', icon: Link2, brick: 'Intégration Pipedrive', roles: MANAGER_ROLES, inManagerHub: true },
     ],
   },
   {

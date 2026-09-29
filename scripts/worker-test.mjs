@@ -793,5 +793,52 @@ console.log('Accès — plafond par adresse IP')
   ok(sante.status === 200, '/health reste joignable même une fois le plafond atteint')
 }
 
+// ---------------------------------------------------------------------------
+console.log('Pipedrive — le relais garde le jeton et borne ce qu\'il expose')
+{
+  const ENV = { GEMINI_API_KEY: 'k', PIPEDRIVE_API_TOKEN: 'jeton-secret-pipedrive' }
+  const call = (path, method = 'GET', env = ENV) => worker.fetch(
+    new Request('https://relay.test' + path, { method, ...(method === 'GET' ? {} : { body: '{}', headers: { 'Content-Type': 'application/json' } }) }), env)
+
+  // Sans secret, on le DIT — confondre « non configuré » et « en panne » enverrait
+  // chercher un incident inexistant.
+  {
+    stubFetch([[/./, () => ({ body: {} })]])
+    const res = await call('/pipedrive/deals', 'GET', { GEMINI_API_KEY: 'k' })
+    ok(res.status === 501, 'sans PIPEDRIVE_API_TOKEN → 501, pas un échec obscur')
+    ok(/PIPEDRIVE_API_TOKEN/.test((await res.json()).error || ''), 'le message nomme le secret à créer')
+  }
+
+  // ⚠️ Le cœur : le jeton part vers Pipedrive et NE REVIENT PAS au navigateur.
+  {
+    const calls = stubFetch([[/api\.pipedrive\.com/, () => ({ body: { success: true, data: [{ id: 7 }] } })]])
+    const res = await call('/pipedrive/deals')
+    ok(res.status === 200, 'un chemin autorisé passe')
+    ok(calls.length === 1 && /api\.pipedrive\.com\/v1\/deals/.test(calls[0].url), 'la requête part bien vers l\'API Pipedrive')
+    ok(calls[0].init?.headers?.['x-api-token'] === 'jeton-secret-pipedrive', 'le jeton est ajouté PAR LE RELAIS')
+    const txt = await res.text()
+    ok(!txt.includes('jeton-secret-pipedrive'), 'le jeton n\'apparaît JAMAIS dans la réponse rendue au navigateur')
+  }
+
+  // ⚠️ Sans liste blanche, ce relais serait un accès anonyme et complet à l'API.
+  {
+    const calls = stubFetch([[/./, () => ({ body: { success: true } })]])
+    for (const p of ['/pipedrive/users/me/settings/../../subscriptions', '/pipedrive/webhooks', '/pipedrive/goals']) {
+      const res = await call(p)
+      ok(res.status === 403, `chemin non prévu refusé : ${p}`)
+    }
+    ok(calls.length === 0, 'un chemin refusé ne déclenche AUCUN appel sortant')
+  }
+
+  // Les champs personnalisés ont leur propre forme d'URL — s'ils étaient refusés,
+  // la préparation du compte serait impossible.
+  {
+    stubFetch([[/api\.pipedrive\.com/, () => ({ body: { success: true, data: [] } })]])
+    for (const p of ['/pipedrive/dealFields', '/pipedrive/personFields', '/pipedrive/organizationFields']) {
+      ok((await call(p)).status === 200, `champs personnalisés autorisés : ${p}`)
+    }
+  }
+}
+
 if (failures) { console.error(`\nRELAIS : ${failures} vérification(s) en échec`); process.exit(1) }
-console.log('relais OK ✓ — routes, replis, quotas, accès et garde-fous')
+console.log('relais OK ✓ — routes, replis, quotas, accès, Pipedrive et garde-fous')

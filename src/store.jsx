@@ -9,6 +9,8 @@ import { signOut as signOutSupabase } from './supabaseAuth.js'
 import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeRemoteState, fetchContactRequests, subscribeContactRequests, publishOffersDebounced } from './supabaseSync.js'
 import { ALL_BRICKS, LEGACY_BRICKS, GRANTABLE_TABS, NAV } from './nav.jsx'
 import { KB_ARTICLES, KB_CATEGORIES } from './kbContent.js'
+import { configurePipedrive, PD_API_BASE } from './pipedrive.js'
+import { setCustomFieldKeys } from './pipedriveSync.js'
 import { configureHubspot, HS_API_BASE } from './hubspot.js'
 import { DEFAULT_STAGE_MAP, pushRdv } from './hubspotSync.js'
 
@@ -674,6 +676,52 @@ export function effectiveHubspotConfig(platform, envCfg, envId) {
   return cfg
 }
 // Applique la configuration au client HubSpot (base d'appel, entreprise, jeton local).
+// ---------------------------------------------------------------------------
+//  Intégration PIPEDRIVE — même architecture que HubSpot, et volontairement.
+//
+//  ⚠️ LE JETON NE VIT JAMAIS DANS L'ÉTAT SYNCHRONISÉ. Un jeton d'API Pipedrive
+//  ouvre TOUT le compte : affaires, contacts, montants. Il reste chez le relais,
+//  en secret Cloudflare. L'application ne connaît qu'une URL — exactement comme
+//  pour la clé Gemini, et pour la même raison : ce qui descend dans le navigateur
+//  est public.
+//
+//  ⚠️ `stageMap` n'a PAS de valeur par défaut, contrairement à HubSpot dont les
+//  étapes standard portent des identifiants connus. Chez Pipedrive, les étapes sont
+//  propres à chaque compte : la correspondance se règle après avoir chargé les
+//  pipelines, et pas avant.
+// ---------------------------------------------------------------------------
+export const PIPEDRIVE_MODES = [
+  { id: 'relay', label: 'Relais (recommandé — le jeton reste côté serveur)' },
+  { id: 'direct', label: 'API directe + jeton local (dépannage, hors navigateur)' },
+]
+export const PIPEDRIVE_TOKEN_KEY = 'bdrflow_pipedrive_token_v1'
+export function defaultPipedriveConfig() {
+  return {
+    enabled: false, mode: 'relay', relayUrl: '', pipelineId: '', currency: 'EUR',
+    stageMap: {}, fieldKeys: null, syncMeetings: true, syncNotes: true, autoPush: false,
+  }
+}
+export function effectivePipedriveConfig(platform, envCfg, envId) {
+  const base = { ...defaultPipedriveConfig(), ...(platform || {}) }
+  const cfg = { ...base, ...(envCfg || {}) }
+  cfg.stageMap = { ...(base.stageMap || {}), ...((envCfg || {}).stageMap || {}) }
+  cfg.relayUrl = (envCfg?.relayUrl || platform?.relayUrl || '')
+  cfg.tenantId = envId || ''
+  return cfg
+}
+export function applyPipedriveConfig(cfg) {
+  let token = ''
+  try { token = localStorage.getItem(PIPEDRIVE_TOKEN_KEY) || '' } catch (e) { /* ssr / jsdom */ }
+  const direct = cfg?.mode === 'direct'
+  configurePipedrive({
+    base: direct ? PD_API_BASE : ((cfg?.relayUrl || '').replace(/\/$/, '') + '/pipedrive'),
+    token: direct ? token : '',   // en mode relais, seul le serveur détient le jeton
+    tenantId: direct ? '' : (cfg?.tenantId || ''),
+    tenantKey: direct ? '' : (cfg?.tenantKey || ''),
+  })
+  if (cfg?.fieldKeys) setCustomFieldKeys(cfg.fieldKeys)
+}
+
 export function applyHubspotConfig(cfg) {
   let token = ''
   try { token = localStorage.getItem(HUBSPOT_TOKEN_KEY) || '' } catch (e) { /* ssr / jsdom */ }
@@ -4458,6 +4506,11 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
   const hsCfg = effectiveHubspotConfig(db.integrations?.hubspot, hsEnvCfg, session?.envId)
   useEffect(() => { applyHubspotConfig(hsCfg) }, [hsCfg.mode, hsCfg.proxyUrl, hsCfg.portalId, hsCfg.tenantId, hsCfg.tenantKey]) // eslint-disable-line
 
+  // Pipedrive : même mécanique, même découpage éditeur / entreprise cliente.
+  const pdEnvCfg = session?.envId ? (db.environments || []).find(e => e.id === session.envId)?.pipedrive : null
+  const pdCfg = effectivePipedriveConfig(db.integrations?.pipedrive, pdEnvCfg, session?.envId)
+  useEffect(() => { applyPipedriveConfig(pdCfg) }, [pdCfg.mode, pdCfg.relayUrl, pdCfg.tenantId, pdCfg.tenantKey, JSON.stringify(pdCfg.fieldKeys)]) // eslint-disable-line
+
   // Envoi automatique vers HubSpot des RDV créés/modifiés (option « autoPush »).
   // La signature ignore le champ `hubspot` : l'écriture des identifiants renvoyés
   // ne redéclenche donc pas d'envoi. La toute première passe n'envoie rien (sinon
@@ -6028,6 +6081,35 @@ export function StoreProvider({ children, demo = false, dataset = 'sales', datas
       // ===================================================== Intégration HubSpot
       // Config effective de l'ENTREPRISE courante (connecteur de l'éditeur + portail relié).
       hubspot() { return hsCfg },
+      // ---------------------------------------------------- Intégration Pipedrive
+      pipedrive() { return pdCfg },
+      // Réglage ÉDITEUR (l'URL du relais, publiée à tous) — réservé au staff, comme
+      // pour HubSpot : c'est une infrastructure de l'éditeur, pas un choix du client.
+      pipedrivePlatform() { return { ...defaultPipedriveConfig(), ...(db.integrations?.pipedrive || {}) } },
+      setPipedrivePlatformConfig(patch) {
+        if (!this.hasPerm('services.manage')) return { error: 'Droit insuffisant.' }
+        setDb(d => { d.integrations = d.integrations || {}; d.integrations.pipedrive = { ...(d.integrations.pipedrive || {}), ...patch }; return d })
+        return { ok: true }
+      },
+      // Réglage de l'ENTREPRISE courante (pipeline visé, correspondance des étapes…).
+      setPipedriveConfig(patch) {
+        const envId = session?.envId
+        if (!envId) return { error: 'Aucun environnement.' }
+        setDb(d => {
+          const e = d.environments.find(x => x.id === envId)
+          if (e) e.pipedrive = { ...(e.pipedrive || {}), ...patch }
+          return d
+        })
+        return { ok: true }
+      },
+      // ⚠️ Le jeton du mode « direct » ne passe PAS par l'état : il reste dans ce
+      // navigateur-ci. Le mettre dans `db` l'enverrait à la synchro, donc chez tous
+      // les collègues et dans chaque sauvegarde.
+      pipedriveToken() { try { return localStorage.getItem(PIPEDRIVE_TOKEN_KEY) || '' } catch (e) { return '' } },
+      setPipedriveToken(v) {
+        try { v ? localStorage.setItem(PIPEDRIVE_TOKEN_KEY, v) : localStorage.removeItem(PIPEDRIVE_TOKEN_KEY) } catch (e) { /* ssr */ }
+        applyPipedriveConfig(this.pipedrive())
+      },
       // Réglages « éditeur » : l'URL du connecteur publiée à tous les clients.
       // ----- Relais « Actualités » (Google News + Gemini), publié par l'éditeur
       // Même modèle que le connecteur HubSpot : l'application n'a pas de serveur, donc ni

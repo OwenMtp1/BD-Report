@@ -712,7 +712,7 @@ async function main() {
 
   // 5b bis. Console « Gestion Manager » : tout le réservé manager tient en un seul écran.
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Gestion Manager'))
-  for (const t of ['Utilisateurs', 'Organigramme', 'Créer votre écosystème', 'Objectifs & quotas', 'Pilotage équipe', 'Intégration HubSpot']) {
+  for (const t of ['Utilisateurs', 'Organigramme', 'Créer votre écosystème', 'Objectifs & quotas', 'Pilotage équipe', 'Intégration HubSpot', 'Intégration Pipedrive']) {
     if (!find('button', t)) throw new Error('Manager hub tab missing: ' + t)
   }
   // Objectifs & quotas : règles communes, montée en charge, cible par personne.
@@ -759,6 +759,32 @@ async function main() {
   // Les onglets regroupés ne doivent plus encombrer la barre latérale.
   if ([...container.querySelectorAll('nav button')].some(b => b.textContent.trim() === 'Intégration HubSpot')) {
     throw new Error('Manager tabs should be grouped, not left in the sidebar')
+  }
+
+  // 5c bis. Intégration Pipedrive. On vérifie les trois temps de l'écran ET le
+  // garde-fou qui compte : tant que les champs personnalisés n'existent pas dans le
+  // compte, l'écran doit DIRE qu'un envoi créerait des doublons. Chez Pipedrive un
+  // champ perso se désigne par une clé hachée propre au compte : sans elle, rien ne
+  // permet de retrouver une affaire déjà envoyée.
+  {
+    await click(find('button', 'Intégration Pipedrive'))
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    const t = text()
+    for (const attendu of ['1. Connexion', '2. Préparer le compte', '3. Synchroniser', 'Tester la connexion']) {
+      if (!t.includes(attendu)) throw new Error(`Écran Pipedrive : « ${attendu} » absent`)
+    }
+    if (!t.includes('créerait des doublons')) {
+      throw new Error("Sans champs personnalisés, l'écran Pipedrive doit avertir du risque de doublons")
+    }
+    // ⚠️ Le mode direct garde un jeton dans CE navigateur : l'écran doit le dire, sinon
+    // l'utilisateur croit que le relais le protège alors qu'il ne l'a pas choisi.
+    const modeSel = [...container.querySelectorAll('select')].find(x => [...x.options].some(o => /jeton local/.test(o.textContent)))
+    if (!modeSel) throw new Error('Le sélecteur de mode Pipedrive est absent')
+    await act(async () => { modeSel.value = 'direct'; Simulate.change(modeSel) })
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    if (!text().includes('ouvre tout le compte Pipedrive')) throw new Error("Le mode direct n'avertit pas que le jeton reste dans le navigateur")
+    await act(async () => { modeSel.value = 'relay'; Simulate.change(modeSel) })
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
   }
 
   // 5c. Intégration HubSpot : console de connexion, correspondances, synchro et catalogue d'appels.

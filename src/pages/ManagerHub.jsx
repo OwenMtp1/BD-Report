@@ -7,6 +7,7 @@ import OrgChart from './OrgChart.jsx'
 import Kpi from './Kpi.jsx'
 import TeamLead from './TeamLead.jsx'
 import Hubspot from './Hubspot.jsx'
+import Pipedrive from './Pipedrive.jsx'
 import Ecosystem from './Ecosystem.jsx'
 import Quotas from './Quotas.jsx'
 import { Empty } from '../ui.jsx'
@@ -26,11 +27,12 @@ const RENDERERS = {
   kpi: () => <Kpi />,
   teamlead: () => <TeamLead />,
   hubspot: () => <Hubspot />,
+  pipedrive: () => <Pipedrive />,
   ecosystem: () => <Ecosystem />,
   quotas: () => <Quotas />,
 }
 // Ordre d'affichage : la gestion des personnes d'abord, le pilotage ensuite, l'outillage après.
-const ORDER = ['admin', 'teams', 'orgchart', 'ecosystem', 'quotas', 'teamlead', 'kpi', 'hubspot']
+const ORDER = ['admin', 'teams', 'orgchart', 'ecosystem', 'quotas', 'teamlead', 'kpi', 'hubspot', 'pipedrive']
 
 export default function ManagerHub() {
   const store = useStore()

@@ -1393,6 +1393,53 @@ export default {
       // La racine répond comme /health : ouvrir l'URL du relais dans un navigateur doit
       // suffire à savoir s'il est vivant. Renvoyer « Route inconnue » à la seule adresse
       // qu'on pense à essayer envoyait chercher une panne là où il n'y en avait pas.
+      // ---------------------------------------------------------------- Pipedrive
+      // ⚠️ RELAIS, ET NON PROXY OUVERT. Le jeton Pipedrive ouvre TOUT le compte :
+      // affaires, contacts, montants. Il vit ici, en secret Cloudflare, et ne descend
+      // jamais dans le navigateur — même règle que la clé Gemini, pour la même raison.
+      //
+      // ⚠️ MONO-COMPTE, ASSUMÉ. Un seul `PIPEDRIVE_API_TOKEN` : c'est le compte de
+      // l'éditeur, pas celui d'un client. Pour plusieurs entreprises clientes il
+      // faudra le schéma de `hubspot/proxy-worker.js` — un jeton par locataire en KV,
+      // désigné par les en-têtes X-BDR-Tenant / X-BDR-Key. Le client de l'application
+      // les envoie DÉJÀ : le jour venu, seul ce bloc change.
+      //
+      // ⚠️ La liste blanche de chemins n'est pas une politesse. Sans elle, ce relais
+      // serait un accès anonyme et complet à l'API Pipedrive pour qui connaît son URL.
+      if (url.pathname.startsWith('/pipedrive/')) {
+        const token = env.PIPEDRIVE_API_TOKEN
+        if (!token) {
+          return json({ error: "Aucun jeton Pipedrive configuré : ajoutez le secret PIPEDRIVE_API_TOKEN dans Cloudflare." }, request, env, 501)
+        }
+        // On normalise avant de contrôler : vérifier la chaîne brute revient à vérifier
+        // autre chose que ce qui sera réellement appelé, puisque `fetch` résoudra les
+        // `..` de son côté. C'est ainsi qu'un premier jet laissait passer
+        // `/pipedrive/users/me/../../subscriptions`.
+        // ⚠️ Aujourd'hui la liste blanche ci-dessous est assez stricte pour refuser ce
+        // cas à elle seule — la normalisation ne porte donc plus la sécurité, et aucun
+        // test ne tombe si on la retire. Elle reste parce qu'elle protège la prochaine
+        // version de cette liste, pas celle-ci.
+        const rest = new URL(url.pathname.slice('/pipedrive'.length) || '/', 'https://x').pathname
+        // ⚠️ AU PLUS JUSTE. `/users` avait d'abord été autorisé en entier « parce qu'on
+        // a besoin de /users/me » — ce qui ouvrait aussi tout le reste de la famille.
+        // On n'ouvre que les deux chemins réellement utilisés : ce relais donne accès
+        // au compte Pipedrive de l'éditeur, chaque route de trop est une route offerte.
+        const PERMIS = /^\/(organizations|persons|deals|activities|notes|pipelines|stages)(\/[0-9]+)?(\/search)?\/?$|^\/users(\/me)?\/?$|^\/(deal|person|organization)Fields(\/[0-9]+)?\/?$/
+        if (!PERMIS.test(rest)) return json({ error: `Chemin non autorisé : ${rest}` }, request, env, 403)
+
+        const target = `https://api.pipedrive.com/v1${rest}${url.search}`
+        const init = { method: request.method, headers: { 'Content-Type': 'application/json', 'x-api-token': token } }
+        if (!['GET', 'HEAD'].includes(request.method)) init.body = await request.text()
+        const res = await fetch(target, init)
+        const body = await res.text()
+        // On rend la réponse TELLE QUELLE : le client sait déjà lire les erreurs de
+        // Pipedrive, et les réécrire ici ferait perdre le détail qui permet de corriger.
+        return new Response(body, {
+          status: res.status,
+          headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders(request, env) },
+        })
+      }
+
       if (url.pathname === '/health' || url.pathname === '/' || url.pathname === '') {
         return json({ ok: true, gemini: !!env.GEMINI_API_KEY, service: 'bdr-news', diag: '/diag' }, request, env)
       }

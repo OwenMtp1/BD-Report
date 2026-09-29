@@ -816,6 +816,43 @@ npm run dev        # serveur de dev
 - **Côté client** : mode d'emploi publié dans la base de connaissances (`KB_HUBSPOT_ARTICLE`, id
   `kb-hubspot-connect`, semé une fois via `db._autoSeed.kbHubspot`) → visible dans l'onglet Support.
 
+## Intégration Pipedrive
+- **`src/pipedrive.js`** — client API v1 : `crm` (list/get/create/update/remove/search), `fields`
+  (champs personnalisés), `pipelines`, `users`, `testPipedrive()`. Cœur `pdRequest` : en-têtes,
+  erreurs normalisées (`PipedriveError`), reprise sur 429/5xx, journal (`pipedriveCallLog` +
+  événement `pipedrive-log`). ⚠️ **Pipedrive répond 200 avec `success:false`** sur certaines
+  erreurs métier : ne regarder que le code HTTP laisserait passer un échec pour une réussite.
+  ⚠️ Le jeton part par un **en-tête**, jamais en paramètre d'URL (journaux, historique, Referer).
+- **`src/pipedriveSync.js`** — correspondance : entreprise→organization, contact→person (clé
+  `email`), RDV→deal (clé : champ perso `bdr_rdv_id`), créneau→activity « meeting », note→note,
+  tâche→activity « task ». `ensureCustomFields`, `pushRdv/pushContact/pushTask/pushAll`,
+  `pullDeals/pullPersons`, `loadPipelines`.
+  🔑 **LE PIÈGE STRUCTURANT : un champ personnalisé Pipedrive se désigne par une CLÉ HACHÉE**
+  de 40 caractères, attribuée à la création et DIFFÉRENTE dans chaque compte — là où le nom de
+  la propriété suffit chez HubSpot. Rien ne peut donc être codé en dur : `ensureCustomFields`
+  lit les champs du compte, retrouve les nôtres par leur libellé, et mémorise libellé → clé
+  dans `env.pipedrive.fieldKeys`. Sans cette clé, un second envoi crée des DOUBLONS au lieu de
+  mettre à jour — l'écran refuse de laisser l'oublier en silence.
+  ⚠️ **Une affaire a DEUX axes** : `stage_id` (où elle en est) et `status` (open/won/lost).
+  Ne renseigner que l'étape laisserait une affaire signée « ouverte » dans les rapports du
+  client — donc fausse dans SON outil. `won_time`/`lost_time` sont exigés avec le statut.
+  ⚠️ `stageMap` n'a **pas** de valeur par défaut : les identifiants d'étape sont propres à
+  chaque compte, la correspondance se règle après avoir chargé les pipelines.
+- **`src/pages/Pipedrive.jsx`** — console (nav Administration → Gestion Manager, brick homonyme) :
+  connexion, préparation du compte, synchronisation, journal des appels.
+- **Relais** : routes `/pipedrive/*` DANS `news/worker.js` — le worker déjà déployé, pas un
+  second à installer. Le jeton vit en secret Cloudflare (`PIPEDRIVE_API_TOKEN`) et ne descend
+  jamais dans le navigateur. ⚠️ **Liste blanche de chemins** : sans elle, l'URL du relais
+  donnerait un accès anonyme et complet au compte Pipedrive. Le chemin est **normalisé avant
+  contrôle** (un premier jet laissait passer `/pipedrive/users/me/../../subscriptions`).
+  ⚠️ **Mono-compte assumé** : un seul jeton, celui de l'éditeur. Pour plusieurs clients, le
+  schéma de `hubspot/proxy-worker.js` (jeton par locataire en KV) — l'app envoie DÉJÀ les
+  en-têtes `X-BDR-Tenant`/`X-BDR-Key`, seul ce bloc du worker changera.
+- **Mode d'emploi** : `pipedrive/SETUP.md`.
+- ⚠️ **Écrit sans accès à un vrai compte** : l'environnement de développement n'a pas de sortie
+  réseau vers api.pipedrive.com. Conforme à la documentation, jamais confronté au réel — le
+  premier branchement est une vérification, pas une formalité.
+
 ## Supabase (synchro temps réel cross-device, optionnelle)
 - Config : **`src/supabaseConfig.js`** (URL + clé anon) ; côté site : bloc `window.BDR_SUPABASE_*` dans `site/index.html`.
   Vide = 100 % local (inerte). **Clés obscurcies** (XOR+base64 via `src/obf.js` / `bdrDeob` côté site) : plus aucune clé
