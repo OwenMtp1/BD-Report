@@ -548,7 +548,9 @@ export default function Dashboard() {
                   <option value="quarter">Trimestriel</option>
                   <option value="year">Annuel</option>
                 </select>
-                <button className="btn-ghost !py-1.5 text-xs" onClick={() => exportReportPDF(stats, modeLabels[reportMode], { qualif: qualifyPhase(sub), jalon: milestonePhase(sub) })}>Exporter en PDF</button>
+                {store.hasClientPerm('data.export') && (
+                  <button className="btn-ghost !py-1.5 text-xs" onClick={() => exportReportPDF(stats, modeLabels[reportMode], { qualif: qualifyPhase(sub), jalon: milestonePhase(sub) })}>Exporter en PDF</button>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">

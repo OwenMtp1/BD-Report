@@ -74,6 +74,7 @@ export default function Contacts() {
   const [confirmDel, setConfirmDel] = useState(false)
   const [form, setForm] = useState(null) // contact en cours de création
   const fileRef = useRef(null)
+  const canExport = store.hasClientPerm('data.export')
 
   const createContact = () => {
     if (!form.nom.trim() && !form.email.trim()) { toast('Renseignez au moins un nom ou un email.'); return }
@@ -163,14 +164,20 @@ export default function Contacts() {
               toast(n ? `${n} contact${n > 1 ? 's' : ''} repris du pipeline de l'équipe` : 'Aucun nouveau contact à reprendre')
             }}><Users2 size={14} /> Importer depuis l'équipe</button>
           )}
-          <button className="btn-ghost text-xs" onClick={() => exportCSV(false)}>
-            <Download size={14} /> {hasFilters ? `CSV filtré (${contacts.length})` : 'Exporter CSV'}
-          </button>
-          <button className="btn-ghost text-xs" onClick={exportXLSX}>
-            <FileSpreadsheet size={14} /> {hasFilters ? `Excel filtré (${contacts.length})` : 'Exporter Excel'}
-          </button>
+          {/* ⚠️ `data.export` commande VRAIMENT ces trois boutons. Le droit existait au
+              catalogue sans être lu nulle part : on décochait « Exporter les données » et
+              la base entière repartait quand même en CSV. C'est le cas d'usage le plus
+              banal du droit — un commercial sur le départ — et il ne tenait à rien. */}
+          {canExport && <>
+            <button className="btn-ghost text-xs" onClick={() => exportCSV(false)}>
+              <Download size={14} /> {hasFilters ? `CSV filtré (${contacts.length})` : 'Exporter CSV'}
+            </button>
+            <button className="btn-ghost text-xs" onClick={exportXLSX}>
+              <FileSpreadsheet size={14} /> {hasFilters ? `Excel filtré (${contacts.length})` : 'Exporter Excel'}
+            </button>
+          </>}
           {selected.size > 0 && <>
-            <button className="btn-primary text-xs" onClick={() => exportCSV(true)}><Download size={14} /> Exporter la sélection ({selected.size})</button>
+            {canExport && <button className="btn-primary text-xs" onClick={() => exportCSV(true)}><Download size={14} /> Exporter la sélection ({selected.size})</button>}
             <button className="btn-danger text-xs" onClick={() => setConfirmDel(true)}><Trash2 size={14} /></button>
           </>}
         </div>

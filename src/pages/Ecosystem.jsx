@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {
   Workflow, Plus, Trash2, Pencil, Check, X, Coins, CalendarClock, AlertTriangle,
-  ChevronUp, ChevronDown, Save, Activity, CalendarRange, Layers, ArrowRightLeft, Gauge, Handshake,
+  ChevronUp, ChevronDown, Save, Activity, CalendarRange, Layers, ArrowRightLeft, Gauge, Handshake, Lock,
 } from 'lucide-react'
 import { useStore, uid, DEFAULT_PHASES, DEFAULT_PRIME_CUTOFF, fmtMoney, ACTIVITY_PERIODS, activityRuleTitle, computeActivityPrimes, handoffPhases, DEFAULT_HANDOFF_REASONS, primeRules, QUOTA_METRICS, closingPhases, DEFAULT_CLOSING_LOST_REASONS, DEFAULT_RECYCLE_DELAYS, RECYCLE_FALLBACK_DAYS } from '../store.jsx'
 import { Confirm, Field, Empty, toast } from '../ui.jsx'
@@ -738,6 +738,8 @@ function CadenceCard({ store, sub }) {
 export default function Ecosystem() {
   const store = useStore()
   const sub = store.sub
+  // ⚠️ Hook AVANT tout `return` conditionnel (convention du projet) : `sub` peut être nul.
+  const canEditBaremes = store.hasClientPerm('primes.rules')
   if (!sub) return null
   return (
     <div className="space-y-4">
@@ -755,11 +757,25 @@ export default function Ecosystem() {
       {store.hasModule('closing') && <ClosingCard store={store} sub={sub} />}
       {store.hasModule('recycling') && <RecycleCard store={store} sub={sub} />}
       {store.hasModule('cadence') && <CadenceCard store={store} sub={sub} />}
-      <PayRule store={store} sub={sub} />
-      <Bareme store={store} sub={sub} />
-      <PrimeRulesCard store={store} sub={sub} />
-      <ActivityBaremeCard store={store} sub={sub}
-        phaseOptions={(sub.phases && sub.phases.length ? sub.phases : DEFAULT_PHASES)} />
+      {/* ⚠️ `primes.rules` ne commande QUE les barèmes, pas tout l'écran. Les étapes de
+          pipeline et les réglages de module ci-dessus sont du vocabulaire d'équipe ;
+          ce qui suit fixe combien chacun sera payé. Le droit s'appelle « Définir les
+          barèmes et les règles » — le faire porter sur la page entière lui ferait dire
+          autre chose que son libellé, et retirerait les phases à qui doit les régler. */}
+      {canEditBaremes ? (
+        <>
+          <PayRule store={store} sub={sub} />
+          <Bareme store={store} sub={sub} />
+          <PrimeRulesCard store={store} sub={sub} />
+          <ActivityBaremeCard store={store} sub={sub}
+            phaseOptions={(sub.phases && sub.phases.length ? sub.phases : DEFAULT_PHASES)} />
+        </>
+      ) : (
+        <div className="card p-4 text-xs text-muted flex items-start gap-2">
+          <Lock size={15} className="shrink-0 mt-0.5" />
+          <span>Les barèmes, le jour de bascule et les règles de prime sont réglés par votre manager. Vos primes restent consultables sur la page « Primes &amp; Commissions ».</span>
+        </div>
+      )}
     </div>
   )
 }

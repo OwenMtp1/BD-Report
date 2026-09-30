@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import {
   Plug, KeyRound, Link2, Upload, Download, RefreshCw, CheckCircle2, XCircle, Play, Unplug,
-  ListTree, Wrench, ScrollText, Eye, EyeOff, ExternalLink, AlertTriangle, Users2, Building2, Handshake, ShieldCheck,
+  ListTree, Wrench, ScrollText, Eye, EyeOff, ExternalLink, AlertTriangle, Users2, Building2, Handshake, ShieldCheck, Lock,
 } from 'lucide-react'
 import { ImportReport } from './CrmImportReport.jsx'
 import { applyCrmImport, importSummary } from '../crmImport.js'
@@ -515,6 +515,7 @@ function LogCard() {
 export default function Hubspot() {
   const store = useStore()
   const cfg = store.hubspot()
+  const canManage = store.hasClientPerm('integrations.manage')
   return (
     <div className="space-y-4">
       <div>
@@ -523,10 +524,22 @@ export default function Hubspot() {
           Portail HubSpot de {store.currentEnv?.name || 'votre entreprise'} : connexion, correspondances, synchronisation et catalogue des appels API.
         </p>
       </div>
-      <ConnectionCard store={store} cfg={cfg} />
-      <SetupCard store={store} cfg={cfg} />
-      <SyncCard store={store} cfg={cfg} />
-      <ExplorerCard />
+      {/* ⚠️ `integrations.manage` sépare LIRE et AGIR, et c'est tout son intérêt : le
+          journal des appels sert à diagnostiquer une synchro qui déraille — un travail
+          d'équipe — alors que relier ou DÉCONNECTER un portail engage le CRM entier du
+          client. Fermer la page entière aurait confondu les deux ; ne rien fermer, ce
+          qu'on faisait, laissait n'importe qui débrancher HubSpot. */}
+      {canManage ? <>
+        <ConnectionCard store={store} cfg={cfg} />
+        <SetupCard store={store} cfg={cfg} />
+        <SyncCard store={store} cfg={cfg} />
+        <ExplorerCard />
+      </> : (
+        <div className="card p-4 text-xs text-muted flex items-start gap-2">
+          <Lock size={15} className="shrink-0 mt-0.5" />
+          <span>La connexion et la synchronisation sont réservées aux personnes autorisées à configurer un CRM. Le journal ci-dessous reste consultable pour suivre les échanges.</span>
+        </div>
+      )}
       <LogCard />
     </div>
   )

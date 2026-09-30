@@ -2031,6 +2031,29 @@ async function main() {
   await click(find('button', 'Créer le contact'))
   if (!text().includes('Jean Test Manuel')) throw new Error('Manual contact not created')
 
+  // ---- `data.export` COMMANDE VRAIMENT L'EXPORT.
+  // ⚠️ Le droit figurait au catalogue sans être lu nulle part : on décochait « Exporter
+  // les données » et la base entière repartait quand même en CSV. C'est le cas d'usage le
+  // plus banal du droit — un commercial sur le départ — et il ne tenait à rien.
+  // On l'éprouve ICI, à l'écran, parce que l'audit ne lit que le source : une garde peut
+  // exister dans le fichier et porter sur la mauvaise variable.
+  {
+    const exportBtn = () => [...container.querySelectorAll('main button')].find(b => /Exporter CSV|CSV filtré/.test(b.textContent))
+    if (!exportBtn()) throw new Error("L'export CSV devrait être offert par défaut (droit livré actif)")
+    const env0 = dbNow().environments.find(e => e.id === 'env-peoplespheres')
+    const tabs = [...(((env0.roles || []).find(r => r.id === 'erole-manager') || {}).tabs || [])]
+    await act(async () => {
+      win.__bdrStore.saveEnvRoles('env-peoplespheres', [...(env0.roles || []),
+        { id: 'erole-noexport', name: 'Sans export', color: 'slate', tabs, perms: ['team.view'] }])
+    })
+    await act(async () => { win.__bdrStore.assignSubRole('sub-owen', 'erole-noexport') })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    if (exportBtn()) throw new Error("Le bouton d'export survit à un rôle SANS `data.export` : le droit ne commande rien")
+    await act(async () => { win.__bdrStore.assignSubRole('sub-owen', null) })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    if (!exportBtn()) throw new Error("L'export n'est pas revenu après retrait du rôle restrictif")
+  }
+
   // 8c. Gestion Manager : la page rend, et AUCUN mot de passe en clair n'est exposé (sécurité)
   await click(navBtn('Gestion Manager'))
   if ([...container.querySelectorAll('input')].some(i => i.value === 'demo1234')) throw new Error('Admin must not expose plaintext password')

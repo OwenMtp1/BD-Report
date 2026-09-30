@@ -13,7 +13,7 @@ const dayISO = (offset = 0) => {
 
 // Validation des primes d'un collaborateur (manager) : les primes sont validées
 // d'office ; on peut en invalider (retirée des stats du collab + notification).
-function MemberPrimes({ m, store }) {
+function MemberPrimes({ m, store, canValidate }) {
   const [open, setOpen] = useState(false)
   const data = store.db.data[m.id] || { rdvs: [], bareme: [] }
   const primes = computePrimes(data.rdvs || [], data.bareme || [], primeOpts(data)).sort((a, b) => (b.triggerDate || '').localeCompare(a.triggerDate || ''))
@@ -34,9 +34,12 @@ function MemberPrimes({ m, store }) {
                 <div className={`font-semibold truncate ${p.invalidated ? 'line-through text-muted' : ''}`}>{p.entreprise || '—'} — {fmtMoney(p.montant)}</div>
                 <div className="text-[11px] text-muted">{p.payMonthLabel}{p.invalidated ? ` · invalidée par ${p.invalidatedBy}` : ''}</div>
               </div>
-              {p.invalidated
+              {/* ⚠️ Invalider une prime retire de l'argent à quelqu'un. `primes.validate`
+                  commande donc VRAIMENT ce bouton : le droit figurait au catalogue sans
+                  être lu, et n'importe qui atteignant cet écran pouvait trancher. */}
+              {canValidate && (p.invalidated
                 ? <button className="btn-ghost !py-1 text-xs shrink-0" onClick={() => store.invalidatePrime(m.id, p.rdvId, false)}>Revalider</button>
-                : <button className="btn-ghost !py-1 text-xs shrink-0 !text-red-600" onClick={() => { const reason = window.prompt('Motif de l’invalidation (optionnel) :') ?? ''; store.invalidatePrime(m.id, p.rdvId, true, reason.trim()); toast('Prime invalidée — le collaborateur est notifié') }}>Invalider</button>}
+                : <button className="btn-ghost !py-1 text-xs shrink-0 !text-red-600" onClick={() => { const reason = window.prompt('Motif de l’invalidation (optionnel) :') ?? ''; store.invalidatePrime(m.id, p.rdvId, true, reason.trim()); toast('Prime invalidée — le collaborateur est notifié') }}>Invalider</button>)}
             </div>
           ))}
         </div>
@@ -186,6 +189,8 @@ export default function TeamLead() {
   const members = store.db.subenvs.filter(s => s.envId === envId)
   const stats = useMemo(() => members.map(m => ({ m, s: memberStats(store.db.data[m.id] || { rdvs: [], bareme: [] }) })), [store.db, envId])
   const forecastSubs = useMemo(() => members.map(m => ({ id: m.id, data: store.db.data[m.id] })), [store.db, envId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const canSeeAllPrimes = store.hasClientPerm('primes.all')
+  const canValidatePrimes = store.hasClientPerm('primes.validate')
 
   // ---- Réassignation
   const [fromId, setFromId] = useState('')
@@ -370,14 +375,23 @@ export default function TeamLead() {
       {/* Relevés mensuels : le document que le collaborateur pourra opposer, une fois signé. */}
       {store.hasModule('statements') && <StatementsManager />}
 
-      {/* Validation des primes (manager) */}
-      <div className="card p-4">
-        <h3 className="font-bold mb-1 flex items-center gap-2"><ShieldCheck size={17} className="text-emerald-600" /> Validation des primes</h3>
-        <p className="text-xs text-muted mb-3">Les primes sont validées d'office. Invalidez celles qui ne doivent pas être payées : elles sortent des statistiques du collaborateur, qui reçoit une notification.</p>
-        <div className="space-y-2">
-          {stats.map(({ m }) => <MemberPrimes key={m.id} m={m} store={store} />)}
+      {/* Validation des primes (manager).
+          ⚠️ Deux droits, parce qu'il y a deux gestes : VOIR ce que chacun touche
+          (`primes.all`) et TRANCHER (`primes.validate`). La rémunération d'un collègue
+          n'est pas une donnée d'équipe comme une autre — encadrer ne donne pas
+          automatiquement le droit de la lire. Le bloc s'ouvre à l'un OU l'autre, sinon
+          le second serait un droit sans écran. */}
+      {(canSeeAllPrimes || canValidatePrimes) && (
+        <div className="card p-4">
+          <h3 className="font-bold mb-1 flex items-center gap-2"><ShieldCheck size={17} className="text-emerald-600" /> Validation des primes</h3>
+          <p className="text-xs text-muted mb-3">{canValidatePrimes
+            ? "Les primes sont validées d'office. Invalidez celles qui ne doivent pas être payées : elles sortent des statistiques du collaborateur, qui reçoit une notification."
+            : "Les primes de votre équipe, en lecture seule : vous n'avez pas le droit d'en invalider."}</p>
+          <div className="space-y-2">
+            {stats.map(({ m }) => <MemberPrimes key={m.id} m={m} store={store} canValidate={canValidatePrimes} />)}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Daily standup */}
       <div className="card p-4">

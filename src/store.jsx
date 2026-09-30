@@ -858,10 +858,14 @@ export const CLIENT_PERMISSION_GROUPS = [
     ],
   },
   {
+    // ⚠️ `pilot.kpi`, `pilot.team` et `pilot.pipeline` ONT ÉTÉ RETIRÉS, et ce n'est pas
+    // un oubli. Chacun désignait EXACTEMENT un onglet — « KPI Entreprise », « Pilotage
+    // équipe », « Leads » — déjà commandé par les `tabs` du rôle. Deux réglages pour une
+    // seule décision finissent toujours par se contredire (la leçon d'`EnvAdmin`), et en
+    // attendant ils n'étaient lus NULLE PART : on décochait une case, l'onglet restait.
+    // Ce qui se passe À L'INTÉRIEUR de ces écrans, lui, garde ses droits (`primes.all`,
+    // `primes.validate`) — c'est là qu'une distinction a du sens.
     id: 'pilotage', label: 'Pilotage', perms: [
-      { id: 'pilot.kpi', label: "Consulter les KPI de l'entreprise" },
-      { id: 'pilot.team', label: "Piloter l'activité de l'équipe" },
-      { id: 'pilot.pipeline', label: "Voir le pipeline de toute l'équipe" },
       { id: 'pilot.targets', label: 'Définir les objectifs et les quotas' },
       { id: 'pilot.challenges', label: "Lancer des challenges d'équipe" },
       // Trancher une passation engage la rémunération de quelqu'un : c'est un droit à part,
@@ -910,6 +914,17 @@ export const PINLESS_PERM = 'team.pinless'
 /** Périmètre de départ du rôle Manager intégré : tout, sauf ce qui se décide à la main. */
 export const defaultManagerPerms = () => CLIENT_PERMISSION_IDS.filter(p => p !== PINLESS_PERM)
 
+/**
+ * Droits livrés ACTIFS à tout le monde, y compris au simple Membre.
+ *
+ * ⚠️ `data.export` commande l'export de SES PROPRES contacts et de SON rapport — un geste
+ * ordinaire, que chacun fait depuis toujours. Le brancher en le livrant éteint aurait retiré
+ * du jour au lendemain un bouton quotidien à toutes les équipes installées. Comme pour les
+ * modules, l'état livré est ACTIF et c'est en le RETIRANT qu'on décide quelque chose — en
+ * l'occurrence : empêcher un commercial sur le départ de partir avec la base.
+ */
+export const DEFAULT_MEMBER_PERMS = ['data.export']
+
 // Onglets ouverts au Membre par défaut : son activité, pas le pilotage de l'équipe.
 const MEMBER_TABS = ['Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches',
   'Mes contacts', 'Mes notes', 'Primes & Commissions', 'Simulateur de primes', 'Conversations',
@@ -923,9 +938,9 @@ const CLOSER_TABS = ['Dashboard', 'Closing', 'Passation au closer', 'Mes Rendez-
 export function defaultEnvRoles() {
   return [
     { id: 'erole-manager', name: 'Manager', builtin: true, color: 'amber', tabs: [...ALL_BRICKS], perms: defaultManagerPerms() },
-    { id: 'erole-membre', name: 'Membre', builtin: true, color: 'emerald', tabs: [...MEMBER_TABS], perms: [] },
+    { id: 'erole-membre', name: 'Membre', builtin: true, color: 'emerald', tabs: [...MEMBER_TABS], perms: [...DEFAULT_MEMBER_PERMS] },
     // Le closer porte `deals.close` : c'est son métier, pas une faveur d'encadrement.
-    { id: CLOSING_ROLE_ID, name: 'Closer', builtin: true, color: 'sky', tabs: [...CLOSER_TABS], perms: ['deals.close'] },
+    { id: CLOSING_ROLE_ID, name: 'Closer', builtin: true, color: 'sky', tabs: [...CLOSER_TABS], perms: ['deals.close', ...DEFAULT_MEMBER_PERMS] },
   ]
 }
 // Complète une liste de rôles d'environnement sans écraser ce qui a été personnalisé :
@@ -4254,6 +4269,19 @@ export function migrate(db) {
       })
     }
     db._autoSeed.envRolePerms = [...db._autoSeed.envRolePerms, ...newPerms]
+  }
+  // ⚠️ BRANCHER UN DROIT QUI NE SERVAIT À RIEN, C'EST LE RETIRER À TOUT LE MONDE.
+  // `data.export` figurait au catalogue sans être lu nulle part : chacun exportait ses
+  // contacts, quel que soit son rôle. Le brancher tel quel aurait fait disparaître ce
+  // bouton chez tous les Membres déjà en place — une régression que personne n'aurait
+  // reliée à une case cochée des mois plus tôt. On le pose donc UNE FOIS sur TOUS les
+  // rôles existants (pas seulement le Manager) : l'état livré reste celui d'avant, et le
+  // retirer devient un choix. Les rôles créés ensuite partent de `DEFAULT_MEMBER_PERMS`.
+  if (!db._autoSeed.memberDefaultPerms) {
+    ;(db.environments || []).forEach(e => {
+      ;(e.roles || []).forEach(r => { r.perms = [...new Set([...(r.perms || []), ...DEFAULT_MEMBER_PERMS])] })
+    })
+    db._autoSeed.memberDefaultPerms = true
   }
   // Idem côté staff : un droit neuf va aux rôles intégrés qui portent déjà le droit voisin,
   // sinon l'écran correspondant resterait invisible sur les bases existantes.

@@ -11,7 +11,7 @@
 //  Un envoi en lot qui échoue à moitié sans dire lequel est pire qu'un envoi refusé.
 // ---------------------------------------------------------------------------
 import React, { useEffect, useMemo, useState } from 'react'
-import { Link2, Check, AlertTriangle, RefreshCw, Download, Upload, Settings2, Trash2 } from 'lucide-react'
+import { Link2, Check, AlertTriangle, RefreshCw, Download, Upload, Settings2, Trash2, Lock } from 'lucide-react'
 import { useStore, PIPEDRIVE_MODES, fmtDate } from '../store.jsx'
 import { Empty, Field, Select, toast } from '../ui.jsx'
 import { ImportReport } from './CrmImportReport.jsx'
@@ -23,6 +23,7 @@ export default function Pipedrive() {
   const store = useStore()
   const cfg = store.pipedrive()
   const sub = store.sub
+  const canManage = store.hasClientPerm('integrations.manage')
   const [state, setState] = useState(null)     // résultat du test de connexion
   const [busy, setBusy] = useState('')
   const [pipes, setPipes] = useState([])
@@ -94,6 +95,15 @@ export default function Pipedrive() {
         {state?.ok && <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"><Check size={12} /> {state.company || state.email}</span>}
       </div>
 
+      {/* ⚠️ `integrations.manage` sépare LIRE et AGIR — voir le commentaire jumeau dans
+          `Hubspot.jsx`. Le journal reste ouvert, les trois étapes se ferment. */}
+      {!canManage && (
+        <div className="card p-4 text-xs text-muted flex items-start gap-2">
+          <Lock size={15} className="shrink-0 mt-0.5" />
+          <span>La connexion et la synchronisation sont réservées aux personnes autorisées à configurer un CRM. Le journal ci-dessous reste consultable pour suivre les échanges.</span>
+        </div>
+      )}
+      {canManage && <>
       {/* 1 — CONNEXION */}
       <div className="card p-4 space-y-3">
         <div className="font-bold text-sm">1. Connexion</div>
@@ -216,6 +226,7 @@ export default function Pipedrive() {
           ))}
         </div>
       )}
+      </>}
 
       {/* Journal des appels */}
       <div className="card p-3">

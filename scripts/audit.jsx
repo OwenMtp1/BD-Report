@@ -1278,6 +1278,58 @@ async function main() {
       'skipsSubPin oublie l\'une des deux clés (staff `env.access` / client `team.pinless`)')
   }
 
+  // ---------------------------------------------------------------------------
+  // 6 novodecies. UN DROIT QUI N'EST LU NULLE PART N'EST PAS UN DROIT.
+  //
+  // 🔑 C'est déjà la règle du produit — `passwords.view` a été retiré du catalogue pour
+  // cette raison exacte : « un droit qui ne fait rien laisse croire qu'il protège quelque
+  // chose ». Elle n'était vérifiée nulle part, et HUIT droits clients sur seize avaient
+  // fini décoratifs : des cases à cocher dans l'éditeur de rôles que personne ne lisait.
+  // On décochait « Voir les primes de toute l'équipe », et elles restaient visibles.
+  //
+  // ⚠️ Ce contrôle vaut plus que les huit corrections : il rend l'oubli impossible à
+  // répéter. Ajouter une entrée au catalogue sans la brancher fait tomber l'audit.
+  //
+  // ⚠️ SA LIMITE, ÉCRITE POUR NE PAS ÊTRE SURESTIMÉE : il exige qu'un droit soit lu
+  // QUELQUE PART, pas PARTOUT où il devrait l'être. Débrancher `data.export` du seul
+  // écran Contacts le laisse passer, puisque le Dashboard le consulte encore. Il attrape
+  // le droit décoratif — le cas qui s'est produit huit fois — pas la garde oubliée sur un
+  // bouton parmi d'autres. Vérifié en le falsifiant : ce cas-là ne le fait PAS tomber.
+  {
+    const files = []
+    const walk = (dir) => {
+      for (const e of fs.default.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.default.join(dir, e.name)
+        if (e.isDirectory()) walk(p)
+        else if (/\.(jsx|js)$/.test(e.name) && !/i18nDict/.test(e.name)) files.push(p)
+      }
+    }
+    walk(path.default.join(process.cwd(), 'src'))
+    const code = files.map(f => fs.default.readFileSync(f, 'utf8')).join('\n')
+    // On cherche l'id CONSULTÉ, pas simplement présent : sa déclaration dans le catalogue
+    // s'écrit `{ id: 'x', label: … }`, sa lecture `hasClientPerm('x')` ou `clientPermIn(…,'x')`.
+    const dead = s.CLIENT_PERMISSION_IDS.filter(id => {
+      const lu = new RegExp(`(hasClientPerm|clientPermIn)\\([^)]*['"]${id.replace('.', '\\.')}['"]`)
+      return !lu.test(code)
+    })
+    ok(dead.length === 0,
+      `Droit(s) client au catalogue mais lu(s) nulle part — une case à cocher qui ne commande rien : ${dead.join(', ')}`)
+
+    // Et la contrepartie : brancher `data.export` sans le rattraper aurait retiré à tous
+    // les Membres déjà en place un bouton qu'ils utilisaient tous les jours.
+    ok(s.defaultEnvRoles().find(r => r.id === 'erole-membre').perms.includes('data.export'),
+      'Le rôle Membre ne peut plus exporter : exporter ses propres contacts est un geste ordinaire')
+    {
+      const d = s.migrate({
+        accounts: [{ id: '01', role: 'Fondateur' }],
+        environments: [{ id: 'e1', name: 'X', roles: [{ id: 'erole-membre', name: 'Membre', builtin: true, tabs: [], perms: [] }] }],
+        subenvs: [], data: {},
+      })
+      ok((d.environments[0].roles.find(r => r.id === 'erole-membre').perms || []).includes('data.export'),
+        'migrate ne rattrape pas `data.export` : les Membres déjà installés perdent leur export sans explication')
+    }
+  }
+
   process.stdout.write((problems.length ? 'PROBLÈMES:\n- ' + problems.join('\n- ') : 'AUDIT OK') + '\n')
 
 }
