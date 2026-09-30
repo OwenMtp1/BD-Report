@@ -789,7 +789,10 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold">Mes Rendez-vous</h2>
-        <div className="flex items-center gap-2">
+        {/* ⚠️ `flex-wrap` ICI AUSSI. Le conteneur au-dessus l'avait, celui-ci non : le
+            titre pouvait passer à la ligne, mais le groupe de boutons restait soudé et
+            débordait de 20 px sur un téléphone — toute la page glissait sous le doigt. */}
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex rounded-lg border border-line overflow-hidden">
             <button className={`px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 ${view === 'cards' ? 'bg-brand text-white' : 'bg-card text-muted'}`}
               onClick={() => setView('cards')} title="Vue cartes" aria-label="Vue cartes"><LayoutList size={13} /> Cartes</button>

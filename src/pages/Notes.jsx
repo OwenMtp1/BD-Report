@@ -140,8 +140,13 @@ function NotesTab({ onCreateRdvFromNote }) {
               <button onClick={() => setNotes(ns => ns.map(x => x.id === n.id ? { ...x, pinned: !x.pinned } : x))} title="Épingler" aria-label="Épingler">
                 {n.pinned ? <Pin size={16} className="text-amber-500" /> : <PinOff size={16} className="text-muted" />}
               </button>
-              <div className="flex-1 cursor-pointer" onClick={() => setEditing({ ...n })}>
-                <div className="flex items-center gap-2">
+              {/* ⚠️ `min-w-0` sur le bloc souple, `shrink-0` sur les actions. Un enfant de
+                  flex refuse par défaut de descendre sous la largeur de son contenu
+                  (`min-width:auto`) : un titre un peu long poussait donc les deux boutons
+                  hors de l'écran, au lieu de se laisser tronquer. C'est la cause la plus
+                  fréquente d'un débordement qu'aucune classe responsive n'explique. */}
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setEditing({ ...n })}>
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold">{n.title}</span>
                   <span className="chip bg-surface text-muted">{n.folder}</span>
                   {n.phase && <span className="chip bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">{n.phase}</span>}
@@ -150,7 +155,7 @@ function NotesTab({ onCreateRdvFromNote }) {
                 </div>
                 <p className="text-sm text-muted line-clamp-2 mt-1 whitespace-pre-wrap">{n.content}</p>
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-1 shrink-0">
                 <button className="p-1.5 rounded-lg hover:bg-surface" title="Exporter en Word" aria-label="Exporter en Word" onClick={() => exportNote(n, 'docx')}><FileDown size={15} /></button>
                 <button className="p-1.5 rounded-lg hover:bg-surface text-red-500" title="Supprimer" aria-label="Supprimer" onClick={() => setConfirmDel(n.id)}><Trash2 size={15} /></button>
               </div>

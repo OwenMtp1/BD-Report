@@ -1330,6 +1330,35 @@ async function main() {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 6 vicies. MOBILE — les deux débordements, figés.
+  //
+  // 🔑 `npm run mobile` MESURE la chose (Chromium, 375 px) et reste la référence : il a
+  // trouvé ces deux-là, et démenti tout le reste de ce qu'un scan de classes CSS laissait
+  // craindre. Mais il demande un navigateur et un build, donc il ne tourne pas à chaque
+  // lot. On fige ici les deux correctifs, pour qu'une régression tombe sans attendre.
+  //
+  // ⚠️ Ces deux gardes sont ÉTROITES par construction : elles protègent deux endroits
+  // connus, elles ne disent rien du reste de l'application. C'est `npm run mobile` qui
+  // répond de l'ensemble, et lui seul.
+  {
+    // ⚠️ Ancré sur l'EN-TÊTE, pas sur la classe. Cherchée n'importe où dans le fichier,
+    // elle s'y trouvait déjà deux fois : la garde passait au vert après avoir retiré le
+    // repli de l'en-tête. Constaté en la falsifiant, pas en la relisant.
+    const rdv = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'pages', 'Rdv.jsx'), 'utf8')
+    const entete = rdv.slice(rdv.indexOf('Mes Rendez-vous</h2>'), rdv.indexOf('Mes Rendez-vous</h2>') + 600)
+    ok(/flex items-center gap-2 flex-wrap/.test(entete),
+      "Rdv : le groupe de boutons d'en-tête ne se replie plus — il déborde de l'écran d'un téléphone")
+
+    // La cause la plus fréquente d'un débordement inexplicable : un enfant de flex refuse
+    // par défaut de descendre sous la largeur de son contenu (`min-width:auto`).
+    const notes = fs.default.readFileSync(path.default.join(process.cwd(), 'src', 'pages', 'Notes.jsx'), 'utf8')
+    ok(/flex-1 min-w-0 cursor-pointer/.test(notes),
+      'Notes : le corps de la carte a perdu `min-w-0` — un titre long repousse les actions hors écran')
+    ok(/flex gap-1 shrink-0/.test(notes),
+      'Notes : les actions de la carte ont perdu `shrink-0`')
+  }
+
   process.stdout.write((problems.length ? 'PROBLÈMES:\n- ' + problems.join('\n- ') : 'AUDIT OK') + '\n')
 
 }

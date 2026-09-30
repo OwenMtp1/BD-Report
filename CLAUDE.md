@@ -14,7 +14,19 @@ npm run audit      # audit structurel : démo complète, catalogues de droits, c
                    # AUCUN mot de passe en clair, fusion des états distants,
                    # invariant de découpage multi-tenant, couverture i18n
 npm run dev        # serveur de dev
+npm run mobile     # build + Chromium à 375×812 : aucun des 18 écrans ne doit DÉBORDER
 ```
+⚠️ **`npm run mobile` MESURE, il ne compte pas des classes CSS.** Le smoke tourne dans jsdom,
+qui ne fait aucune mise en page : toutes les largeurs y valent 0, et un test de débordement y
+passerait toujours. Un scan statique (`grid-cols-4` sans variante responsive, `<table>` sans
+conteneur) est tout aussi trompeur : il a signalé 9 grilles et 5 tableaux dont **aucun** ne
+posait de problème réel, et il a manqué les deux vrais coupables — un groupe de boutons sans
+`flex-wrap` et une carte sans `min-w-0`. Seule la mesure dans un vrai navigateur distingue les
+deux. ⚠️ La sonde s'ancre sur **`<main>`, jamais sur le document** : la page de démonstration
+enveloppe l'app dans son propre conteneur `overflow-auto`, qui absorbait tout — le test passait
+au vert même après injection délibérée d'un bloc de 900 px. C'est la falsification qui l'a
+montré. Un défilement horizontal VOULU (kanban) reste permis dès qu'il vit dans un conteneur
+à défilement situé sous `main`.
 `scripts/smoke.jsx` se connecte en OwenMtp / demo1234 → PeopleSpheres → Owen Mrani Bonnier → PIN 1205, puis traverse les pages. **Mets-le à jour quand tu ajoutes une page/feature.**
 
 ## Architecture
@@ -211,6 +223,22 @@ npm run dev        # serveur de dev
   historiques visaient l'env COURANT, inadapté au staff). **Rôles par environnement** :
   `env.roles = [{id, name, color, builtin, tabs[], perms[]}]`, `seedEnvRoles` garantit Manager et Membre partout,
   `CLIENT_PERMISSION_GROUPS`/`CLIENT_PERMISSION_IDS` = droits de management, `tabs` = bricks visibles,
+  🔑 **UN DROIT QUI N'EST LU NULLE PART N'EST PAS UN DROIT.** Huit des seize droits clients
+  étaient DÉCORATIFS : des cases à cocher que personne ne consultait — on décochait « Voir les
+  primes de toute l'équipe » et elles restaient visibles. C'est la règle qui avait déjà fait
+  retirer `passwords.view` du catalogue, jamais vérifiée. **`npm run audit` refuse désormais
+  tout droit du catalogue qui n'est lu nulle part** (sa limite est écrite dans le test : il
+  exige qu'un droit soit lu QUELQUE PART, pas partout — constaté en le falsifiant).
+  · **Retirés** : `pilot.kpi`, `pilot.team`, `pilot.pipeline` — chacun désignait exactement un
+    onglet déjà commandé par les `tabs` du rôle. Deux réglages pour une décision se contredisent.
+  · **Branchés** : `data.export` (CSV/Excel des contacts, rapport PDF), `primes.all` et
+    `primes.validate` (voir les primes de chacun / les invalider — deux gestes, deux droits),
+    `primes.rules` (les barèmes seuls, pas les étapes de pipeline), `integrations.manage`
+    (connecter/synchroniser un CRM ; le journal des appels reste lisible).
+  ⚠️ **BRANCHER UN DROIT INERTE, C'EST LE RETIRER À TOUT LE MONDE.** `data.export` est donc
+  livré ACTIF (`DEFAULT_MEMBER_PERMS`) et rattrapé UNE FOIS sur TOUS les rôles existants
+  (`_autoSeed.memberDefaultPerms`) : sans cela chaque Membre déjà en place perdait un bouton
+  quotidien, sans que personne le relie à une case cochée des mois plus tôt.
   `subenv.roleId` = rôle porté. `store.envRoles/saveEnvRoles/assignSubRole`. Le panneau travaille sur un **brouillon**
   appliqué en une fois après confirmation. ⚠️ Les `tabs` d'un rôle **restreignent EN PLUS de l'offre** dans
   `canSee` (`store.myEnvRole()`), et `store.hasClientPerm(id)` lit ses `perms` (repli sur `account.role` sans rôle
