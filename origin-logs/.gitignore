@@ -1,0 +1,24 @@
+# La clé serveur, la base de journaux, les captures d'écran et les
+# SAUVEGARDES ne quittent jamais la machine — api/data/ contient aussi
+# api/data/screens/ et api/data/backups/, qui est une copie complète de
+# la base : la publier reviendrait à publier tous les journaux.
+api/.env
+api/data/
+
+# ⚠️ ACTIVATION SIGNÉE — la clé PRIVÉE de l'éditeur ne doit JAMAIS être
+# commitée ni copiée sur un VPS : elle seule signe les activations. Le
+# jeton d'activation posé sur un VPS ne l'est pas non plus.
+api/licence-privee.pem
+api/activation.txt
+
+# ⚠️ AUCUNE base SQLite, où qu'elle soit. api/data/ est déjà couvert, mais
+# un run où DB_FILE vaut « undefined » ou un chemin inattendu a déjà déposé
+# une base (undefined/p.db + son WAL) à la racine, qui s'est retrouvée
+# versionnée avec de VRAIS journaux dedans. Ce filet attrape ce cas partout.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+# Le dossier fantôme d'un DB_FILE non défini.
+undefined/

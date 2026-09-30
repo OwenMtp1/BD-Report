@@ -1,0 +1,14 @@
+[Unit]
+Description=Origin Logs — vérifier les mises à jour
+
+[Timer]
+# Dix minutes après le démarrage de la machine, puis toutes les dix minutes.
+OnBootSec=10min
+OnUnitActiveSec=10min
+# ⚠️ Un décalage aléatoire : sans lui, dix VPS installés le même jour
+# interrogeraient GitHub à la même seconde, toutes les dix minutes.
+RandomizedDelaySec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

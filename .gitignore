@@ -5,3 +5,8 @@ dist
 *.local
 .audit
 .probe
+
+# Archives de livraison : une COPIE du dépôt, fabriquée à la demande pour
+# être envoyée à quelqu'un. La versionner figerait dans l'historique un
+# doublon de 500 Ko qui périme au commit suivant.
+*.tar.gz

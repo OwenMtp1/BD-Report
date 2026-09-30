@@ -1,0 +1,14 @@
+{
+  "name": "origin-logs-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord du panneau Origin Logs — un salon par rubrique, en direct.",
+  "private": true,
+  "type": "commonjs",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node index.js",
+    "verifier": "node index.js --verifier",
+    "salons": "node index.js --salons",
+    "test": "node test/bot.test.mjs"
+  }
+}
