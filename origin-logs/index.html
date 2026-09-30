@@ -291,6 +291,16 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .views-empty{font-size:12px;color:var(--muted);padding:8px 10px;line-height:1.5}
 .views-save{display:flex;gap:6px;margin-top:7px;padding-top:8px;border-top:1px solid var(--edge)}
 .views-save .input{flex:1;min-width:0;height:32px}
+/* ---------- règles d'alerte ---------- */
+.alerte-rule{border:1px solid var(--edge);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--panel-2)}
+.alerte-l1{display:flex;align-items:center;gap:8px}
+.alerte-l1 .input{flex:1;min-width:0;height:32px;font-weight:600}
+.alerte-l2{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:9px;font-size:12px;color:var(--muted)}
+.alerte-l2 label{display:inline-flex;align-items:center;gap:5px}
+.alerte-l2 .input{height:30px;width:auto;font-size:12px;padding:0 8px;color:var(--ink)}
+.alerte-l2 .alerte-n{width:64px;text-align:center}
+.alerte-on{display:inline-flex;align-items:center;cursor:pointer}
+.alerte-on input{width:16px;height:16px;accent-color:var(--vio)}
 .pb-custom{flex-basis:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:4px}
 .pb-custom[hidden]{display:none}
 .pb-custom label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
@@ -4247,9 +4257,96 @@ async function renderSettingsPage(force) {
     <div class="block" id="botBloc" style="border-top:1px solid var(--edge);padding-top:16px;margin-top:6px">
       <h3 class="eyebrow">Bot Discord — les journaux dans vos salons</h3>
       <div id="botCorps"><span class="lite-m">Chargement…</span></div>
+    </div>
+    <div class="block" id="alertesBloc" style="border-top:1px solid var(--edge);padding-top:16px;margin-top:6px">
+      <h3 class="eyebrow">Alertes — quand un seuil est franchi</h3>
+      <span class="lite-m">Une règle sonne quand trop d’évènements tombent sur une fenêtre glissante — « 5 détections anticheat pour le même joueur en 10 min ». L’alerte est déposée comme un évènement critique dans le salon de sa catégorie (ou « Serveur ») : le bot la reporte et mentionne le rôle configuré, en temps réel.</span>
+      <div id="alertesCorps" style="margin-top:10px"><span class="lite-m">Chargement…</span></div>
     </div>`;
   chargerBot();
+  chargerAlertes();
 }
+
+/* ---------- réglage des règles d'alerte ---------- */
+let ALERTES_DATA = null;
+async function chargerAlertes() {
+  const host = $('#alertesCorps'); if (!host) return;
+  try { ALERTES_DATA = await api('/api/alerts/rules'); }
+  catch (e) { host.innerHTML = `<span class="lite-m">${esc(e.message || 'Indisponible.')}</span>`; return; }
+  renderAlertes();
+}
+function alerteLigne(r) {
+  const d = ALERTES_DATA || { cats: [], sevs: [] };
+  const opt = (arr, val, extra) => (extra || '') + arr.map(o =>
+    `<option value="${esc(o.id)}" ${o.id === val ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
+  return `<div class="alerte-rule" data-alrule="${esc(r.id)}">
+    <div class="alerte-l1">
+      <label class="alerte-on"><input type="checkbox" data-alon ${r.on ? 'checked' : ''}> <span></span></label>
+      <input class="input" data-alname value="${esc(r.name)}" maxlength="60" placeholder="Nom de l’alerte" aria-label="Nom">
+      <button class="views-del" data-aldel title="Supprimer cette règle" aria-label="Supprimer">✕</button>
+    </div>
+    <div class="alerte-l2">
+      <label>Au moins <input class="input alerte-n" type="number" min="2" max="1000" data-alcount value="${r.count}"></label>
+      <label><select class="input" data-alcat>${opt(d.cats, r.cat, `<option value="any" ${r.cat === 'any' ? 'selected' : ''}>toutes catégories</option>`)}</select></label>
+      <label>gravité ≥ <select class="input" data-alsev>${opt(d.sevs, r.minSev)}</select></label>
+      <label>en <input class="input alerte-n" type="number" min="1" max="1440" data-alwin value="${r.windowMin}"> min</label>
+      <label><select class="input" data-alscope>
+        <option value="player" ${r.scope === 'player' ? 'selected' : ''}>par joueur</option>
+        <option value="global" ${r.scope === 'global' ? 'selected' : ''}>sur le serveur</option>
+      </select></label>
+    </div>
+  </div>`;
+}
+function renderAlertes() {
+  const host = $('#alertesCorps'); if (!host || !ALERTES_DATA) return;
+  const rules = ALERTES_DATA.rules || [];
+  host.innerHTML =
+    (rules.length ? rules.map(alerteLigne).join('')
+      : `<div class="views-empty">Aucune règle. Ajoutez-en une : le bot vous préviendra dès qu’un seuil est franchi.</div>`)
+    + `<div class="tools" style="margin-top:10px">
+        <button class="btn sm" id="alAdd">Ajouter une règle</button>
+        <button class="btn sm primary" id="alSave">Enregistrer les alertes</button>
+        <span class="lite-m" id="alMsg"></span>
+      </div>`;
+}
+function lireAlertes() {
+  return [...document.querySelectorAll('.alerte-rule')].map(row => ({
+    id: row.dataset.alrule,
+    on: row.querySelector('[data-alon]').checked,
+    name: row.querySelector('[data-alname]').value.trim(),
+    count: Number(row.querySelector('[data-alcount]').value) || 5,
+    cat: row.querySelector('[data-alcat]').value,
+    minSev: row.querySelector('[data-alsev]').value,
+    windowMin: Number(row.querySelector('[data-alwin]').value) || 10,
+    scope: row.querySelector('[data-alscope]').value
+  }));
+}
+function ajouterAlerte() {
+  if (!ALERTES_DATA) return;
+  ALERTES_DATA.rules = lireAlertes();   // ne perd pas les saisies en cours
+  ALERTES_DATA.rules.push({ id: 'r' + Math.random().toString(36).slice(2, 9), on: true,
+    name: 'Nouvelle alerte', cat: 'anticheat', minSev: 'alerte', scope: 'player', count: 5, windowMin: 10 });
+  renderAlertes();
+}
+async function enregistrerAlertes() {
+  const msg = $('#alMsg'); if (msg) msg.textContent = 'Enregistrement…';
+  try {
+    const r = await api('/api/alerts/rules', { method:'PUT', body: JSON.stringify({ rules: lireAlertes() }) });
+    ALERTES_DATA.rules = r.rules; renderAlertes();
+    toast('Alertes enregistrées.');
+  } catch (e) { if (msg) msg.textContent = e.message || 'Échec.'; }
+}
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('#alAdd,#alSave,[data-aldel]');
+  if (!b) return;
+  ev.preventDefault();
+  if (b.id === 'alAdd')  return ajouterAlerte();
+  if (b.id === 'alSave') return enregistrerAlertes();
+  if (b.dataset.aldel != null) {
+    const row = b.closest('.alerte-rule'); const id = row && row.dataset.alrule;
+    ALERTES_DATA.rules = lireAlertes().filter(x => x.id !== id); renderAlertes();
+  }
+});
 
 /* ============================================================
    Bot Discord de l'espace

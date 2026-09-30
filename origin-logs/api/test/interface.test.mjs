@@ -434,6 +434,14 @@ t('un filtre par catégorie recharge la frise', /id="friseCat"/.test(P)
   && /ev\.target\.id === 'friseCat'\) \{ FRISE\.cat = ev\.target\.value; friseCharger\(true\)/.test(P));
 t('« Charger plus » enchaîne les pages', /id="friseMore"/.test(P) && /friseCharger\(false\)/.test(P));
 
+sect('Alertes : réglage des règles à seuil');
+t('le bloc Alertes vit dans la page Réglages', /id="alertesBloc"/.test(P) && /chargerAlertes\(\)/.test(P));
+t('une règle expose seuil, catégorie, gravité, fenêtre et portée',
+  /data-alcount/.test(P) && /data-alcat/.test(P) && /data-alsev/.test(P) && /data-alwin/.test(P) && /data-alscope/.test(P));
+t('on ajoute, supprime et enregistre les règles',
+  /id="alAdd"/.test(P) && /id="alSave"/.test(P) && /data-aldel/.test(P)
+  && /api\('\/api\/alerts\/rules', \{ method:'PUT'/.test(P));
+
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);
 process.exit(n===T.length?0:1);

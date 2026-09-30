@@ -76,6 +76,9 @@ const SUITES = [
   // Permissions FINES : chaque geste (supprimer un compte, effacer des
   // données…) porte son propre droit, et un rôle qui ne l'a pas est refusé.
   { nom: 'permissions', fichier: 'permissions.test.mjs', port: 8918, discord: false,
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
+  // Moteur d'alertes : règles à seuil évaluées à l'ingestion.
+  { nom: 'alertes', fichier: 'alertes.test.mjs', port: 8919, discord: false,
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] }
 ];
 

@@ -938,6 +938,103 @@ function ingest(list, server, spaceId) {
   return n;
 }
 
+/* ============================================================
+   MOTEUR D'ALERTES — des règles à seuil sur une fenêtre glissante
+   ------------------------------------------------------------
+   « Alerte » ne voulait dire qu'une chose : un évènement grave pas encore
+   traité. Or ce qui compte en modération, c'est le SEUIL — « 5 détections
+   anticheat sur le même joueur en 10 min », « 20 morts en 5 min sur le
+   serveur ». On règle des règles, on les évalue à l'ingestion (donc en
+   temps réel, greffé sur le même réveil que le bot), et quand un seuil est
+   franchi on DÉCLENCHE.
+   ⚠️ Déclencher = INGÉRER un évènement critique. Il remonte au flux, réveille
+   le bot et déclenche sa mention — aucun code bot à ajouter, « le bot
+   rapporte, le panneau décide » reste vrai. L'évènement porte data.alerte=1
+   et est EXCLU de l'évaluation : sans ça, une règle « n'importe quelle
+   catégorie » se re-déclencherait sur sa propre alerte, sans fin.
+   ============================================================ */
+const ALERT_MAX_RULES = 20;
+const alertKey = sp => 'alertes.rules:' + sp;
+function normRule(r) {
+  if (!r || typeof r !== 'object') return null;
+  const cat = (r.cat === 'any' || CAT.CAT_IDS.includes(r.cat)) ? (r.cat || 'any') : 'any';
+  return {
+    id: S(r.id) || 'r' + Math.random().toString(36).slice(2, 9),
+    on: r.on !== false,
+    name: (S(r.name) || '').slice(0, 60) || 'Alerte',
+    cat,
+    minSev: CAT.SEV_IDS.includes(r.minSev) ? r.minSev : 'alerte',
+    scope: r.scope === 'global' ? 'global' : 'player',
+    count: Math.min(1000, Math.max(2, Number(r.count) || 5)),
+    windowMin: Math.min(1440, Math.max(1, Number(r.windowMin) || 10))
+  };
+}
+function chargerRegles(sp) {
+  try { const a = JSON.parse(getSetting(alertKey(sp)) || '[]'); return (Array.isArray(a) ? a : []).map(normRule).filter(Boolean); }
+  catch (e) { return []; }
+}
+function sauverRegles(sp, list, par) {
+  const clean = (Array.isArray(list) ? list : []).slice(0, ALERT_MAX_RULES).map(normRule).filter(Boolean);
+  setSetting(alertKey(sp), JSON.stringify(clean), par);
+  return clean;
+}
+// ⚠️ Une gravité qualifie si elle est AU MOINS aussi grave que le minimum :
+// SEV_IDS va du plus grave au moins grave, donc « index <= index(min) ».
+const sevQualifie = (sev, minSev) => CAT.SEV_IDS.indexOf(sev) <= CAT.SEV_IDS.indexOf(minSev);
+// Anti-rabâchage EN MÉMOIRE : une règle ne re-sonne pas pour le même sujet
+// tant que sa fenêtre n'est pas écoulée. Perdu au redémarrage (au pire une
+// alerte en double), jamais une alerte muette — le bon compromis.
+const ALERT_FIRED = new Map();   // sp:ruleId:sujet -> ts
+function evaluerAlertes(sp, batch) {
+  const rules = chargerRegles(sp).filter(r => r.on);
+  if (!rules.length) return;
+  const evs = (batch || []).map(r => normalize(r))
+    .filter(e => e.msg && !(e._data && e._data.alerte));
+  if (!evs.length) return;
+  const tnow = now();
+  for (const rule of rules) {
+    const sujets = new Set();
+    for (const e of evs) {
+      if (rule.cat !== 'any' && e.cat !== rule.cat) continue;
+      if (!sevQualifie(e.sev, rule.minSev)) continue;
+      if (rule.scope === 'global') sujets.add('*');
+      else if (e.actor_key) sujets.add(e.actor_key);
+    }
+    for (const sujet of sujets) {
+      const dkey = sp + ':' + rule.id + ':' + sujet;
+      if (tnow - (ALERT_FIRED.get(dkey) || 0) < rule.windowMin * 60000) continue;
+      const sevs = CAT.SEV_IDS.slice(0, CAT.SEV_IDS.indexOf(rule.minSev) + 1);
+      const w = ['space_id = ?', 'ts >= ?', "(json_extract(data,'$.alerte') IS NULL)",
+                 `sev IN (${sevs.map(() => '?').join(',')})`];
+      const a = [sp, tnow - rule.windowMin * 60000, ...sevs];
+      if (rule.cat !== 'any') { w.push('cat = ?'); a.push(rule.cat); }
+      if (rule.scope === 'player') { w.push('(actor_key = ? OR target_key = ?)'); a.push(sujet, sujet); }
+      const c = DB.row(db.prepare(`SELECT COUNT(*) n FROM events WHERE ${w.join(' AND ')}`).get(...a)).n;
+      if (c >= rule.count) { ALERT_FIRED.set(dkey, tnow); declencherAlerte(sp, rule, sujet, c); }
+    }
+  }
+}
+function declencherAlerte(sp, rule, sujet, count) {
+  let nomSujet = sujet;
+  if (rule.scope === 'player') {
+    const p = DB.row(db.prepare('SELECT name FROM players WHERE key = ? AND space_id = ?').get(sujet, sp));
+    nomSujet = (p && p.name) || sujet;
+  }
+  const quoi = rule.cat === 'any' ? 'évènements'
+    : ((CAT.CATS.find(c => c.id === rule.cat) || {}).label || rule.cat).toLowerCase();
+  const msg = `⚠️ ${rule.name} — ${count} ${quoi} en ${rule.windowMin} min`
+    + (rule.scope === 'player' ? ` pour ${nomSujet}` : ' sur le serveur');
+  // La catégorie de l'alerte suit celle de la règle : une alerte anticheat
+  // tombe dans le salon anticheat, là où le modo regarde déjà. « any » n'a
+  // pas de salon dédié — elle va dans « admin ».
+  ingest([{
+    cat: rule.cat === 'any' ? 'admin' : rule.cat, sev: 'critique', msg,
+    actor: rule.scope === 'player' ? { key: sujet, name: nomSujet } : undefined,
+    data: { kind: 'alerte_regle', alerte: 1, rule: rule.id, count, windowMin: rule.windowMin, scope: rule.scope }
+  }], 'Origin Logs', sp);
+  relayWake(sp);
+}
+
 /* ---------- poignée de joueur ----------
    Le panneau a besoin d'un identifiant pour ouvrir un dossier ou viser
    une sanction. Lui donner la LICENCE reviendrait à publier l'identifiant
@@ -1622,8 +1719,10 @@ async function route(req, res) {
     const b = await readBody(req);
     const list = Array.isArray(b) ? b : (b.events || []);
     if (!Array.isArray(list)) return fail(res, 400, 'Attendu : un tableau d’évènements.');
-    const n = ingest(list.slice(0, 500), S(b.server) || esp.name, esp.id);
-    if (n) relayWake(esp.id);   // réveille le bot abonné : pas d'attente du prochain sondage
+    const lot = list.slice(0, 500);
+    const n = ingest(lot, S(b.server) || esp.name, esp.id);
+    if (n) { relayWake(esp.id);   // réveille le bot abonné : pas d'attente du prochain sondage
+             try { evaluerAlertes(esp.id, lot); } catch (e) {} }  // les règles ne doivent jamais casser un dépôt
     return ok(res, { recus: n, espace: esp.name });
   }
   /* ---- battement de présence, envoyé par la ressource ----
@@ -2443,6 +2542,22 @@ async function route(req, res) {
       if (!f) return fail(res, 404, 'Joueur inconnu.');
       audit(me, 'dossier.ouvert', key, ip);
       return ok(res, f);
+    }
+    /* ---- règles d'alerte (seuils sur fenêtre glissante) ----
+       Gardées par settings.discord : celui qui règle l'intégration Discord
+       est aussi celui qui décide ce qui doit faire sonner un salon. */
+    if (p === '/api/alerts/rules' && method === 'GET') {
+      if (!need('settings.discord')) return;
+      return ok(res, { rules: chargerRegles(me.spaceId),
+        cats: CAT.CATS.map(c => ({ id: c.id, label: c.label })),
+        sevs: CAT.SEVS.map(s => ({ id: s.id, label: s.label })) });
+    }
+    if (p === '/api/alerts/rules' && method === 'PUT') {
+      if (!need('settings.discord')) return;
+      const body = await readBody(req);
+      const rules = sauverRegles(me.spaceId, body && body.rules, me.pseudo);
+      audit(me, 'alertes.regles', String(rules.length) + ' règle(s)', ip);
+      return ok(res, { rules });
     }
     /* ---- liaison Discord ----
        Les secrets sont globaux (une seule application Discord), le
