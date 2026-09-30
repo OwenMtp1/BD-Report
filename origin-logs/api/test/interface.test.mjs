@@ -423,6 +423,17 @@ t('⚠️ lecture/écriture localStorage protégées (navigation privée)',
   /function chargerVues\([^]*?catch \(e\) { return \[\]; }/.test(P)
   && /function sauverVues\([^]*?catch \(e\) {}/.test(P));
 
+sect('Dossier joueur : frise chronologique complète');
+t('le dossier ouvre la frise après rendu', /id="friseList"/.test(P) && /friseInit\(p\.key\)/.test(P));
+t('la frise réutilise DS.query avec { actor } (acteur OU cible), paginée au curseur',
+  /DS\.query\(\{ actor: FRISE\.key/.test(P) && /cursorTs:.*FRISE\.cursor/.test(P));
+t('⚠️ les évènements chargés sont mémorisés (sinon un clic n’ouvre aucun inspecteur)',
+  /remember\(r\.events\);/.test(P));
+t('les jours se regroupent sous un intertitre daté', /function friseJour\(/.test(P) && /class="frise-jour"/.test(P));
+t('un filtre par catégorie recharge la frise', /id="friseCat"/.test(P)
+  && /ev\.target\.id === 'friseCat'\) \{ FRISE\.cat = ev\.target\.value; friseCharger\(true\)/.test(P));
+t('« Charger plus » enchaîne les pages', /id="friseMore"/.test(P) && /friseCharger\(false\)/.test(P));
+
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);
 process.exit(n===T.length?0:1);

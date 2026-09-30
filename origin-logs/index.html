@@ -918,6 +918,14 @@ mark{
 .trail-row:hover{background:var(--vio-wash)}
 .trail-t{font-family:var(--mono);font-size:10px;color:var(--muted)}
 .trail-m{font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* ---------- frise chronologique du dossier joueur ---------- */
+.frise-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.frise-head .input{height:30px;width:auto;max-width:60%;font-size:12px;padding:0 8px}
+.frise-jour{font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);
+  padding:10px 8px 3px;position:sticky;top:0;background:var(--panel);z-index:1}
+.frise-jour:first-child{padding-top:2px}
+.frise-foot{display:flex;align-items:center;gap:10px;margin-top:8px}
+.frise-foot .lite-m{margin-left:auto}
 
 /* ============================================================
    FEUILLES ET DIALOGUES
@@ -3938,16 +3946,87 @@ async function openDossier(key) {
       </div>
       <div class="tools"><button class="btn sm" id="noteGo">Ajouter la note</button></div>` : ''}
     </div>` : ''}
-    <div class="block">
-      <h3 class="eyebrow">Derniers évènements</h3>
-      <div class="trail">${f.last.map(e => {
-        const c = CAT[e.cat] || { code:e.cat, fam:'var(--muted)' };
-        return `<button class="trail-row" data-ev="${e.id}">
-          <span class="trail-t">${hhmmss(e.t)}</span>
-          <span class="trail-m"><span class="code" style="--fam:${c.fam};margin-right:7px">${c.code}</span>${esc(strip(e.msg))}</span></button>`;
-      }).join('')}</div>
+    <div class="block" id="friseBlock">
+      <div class="frise-head">
+        <h3 class="eyebrow" style="margin:0">Historique complet</h3>
+        <select class="input" id="friseCat" aria-label="Filtrer l’historique par catégorie">
+          <option value="all">Toutes catégories</option>
+          ${visibleCats().map(c => `<option value="${esc(c.id)}">${esc(c.label)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="trail" id="friseList" aria-live="polite"></div>
+      <div class="frise-foot">
+        <button class="btn sm" id="friseMore" hidden>Charger plus</button>
+        <span class="lite-m" id="friseCount"></span>
+      </div>
     </div>`);
+  friseInit(p.key);
 }
+
+/* ---------- frise chronologique complète d'un joueur ----------
+   Le dossier montrait 20 évènements ; ici on déroule TOUT son historique,
+   filtrable par catégorie et paginé au curseur. On réutilise DS.query avec
+   { actor } (acteur OU cible) — même portée par rôle, même curseur, même
+   mise en forme que le flux principal : une seule vérité pour « qu'a fait
+   ce joueur ». Les jours se regroupent sous un intertitre daté. */
+let FRISE = { key:null, cat:'all', cursor:null, loading:false, jour:null };
+function friseJour(ts) {
+  const d = new Date(ts), j = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const auj = new Date(); const a0 = new Date(auj.getFullYear(), auj.getMonth(), auj.getDate());
+  const jours = Math.round((a0 - j) / 86400000);
+  if (jours === 0) return 'Aujourd’hui';
+  if (jours === 1) return 'Hier';
+  return d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year: jours > 300 ? 'numeric' : undefined });
+}
+function friseRow(e) {
+  const c = CAT[e.cat] || { code:(e.cat || '?').slice(0,3).toUpperCase(), fam:'var(--muted)', label:e.cat };
+  return `<button class="trail-row" data-ev="${e.id}" title="${esc(c.label || e.cat)} · ${hhmmss(e.t)}">
+    <span class="trail-t">${hhmmss(e.t)}</span>
+    <span class="trail-m"><span class="code" style="--fam:${c.fam};margin-right:7px">${c.code}</span>${esc(strip(e.msg))}</span></button>`;
+}
+function friseInit(key) {
+  FRISE = { key, cat:'all', cursor:null, loading:false, jour:null };
+  const list = $('#friseList'); if (list) list.innerHTML = '';
+  friseCharger(true);
+}
+async function friseCharger(reset) {
+  if (FRISE.loading) return;
+  const list = $('#friseList'), more = $('#friseMore'), cnt = $('#friseCount');
+  if (!list) return;
+  FRISE.loading = true;
+  if (more) more.disabled = true;
+  try {
+    const r = await DS.query({ actor: FRISE.key, cats: FRISE.cat === 'all' ? null : [FRISE.cat],
+      cursorTs: reset ? null : (FRISE.cursor && FRISE.cursor.ts),
+      cursorId: reset ? null : (FRISE.cursor && FRISE.cursor.id), limit: 40 });
+    if (reset) { list.innerHTML = ''; FRISE.jour = null; }
+    remember(r.events);   // ⚠️ sinon un clic sur une ligne n'ouvre aucun inspecteur (SEEN vide)
+    let html = '';
+    for (const e of r.events || []) {
+      const j = friseJour(e.t);
+      if (j !== FRISE.jour) { html += `<div class="frise-jour">${esc(j)}</div>`; FRISE.jour = j; }
+      html += friseRow(e);
+    }
+    if (reset && !(r.events || []).length)
+      html = `<div class="views-empty">Aucun évènement pour ce joueur dans cette catégorie.</div>`;
+    list.insertAdjacentHTML('beforeend', html);
+    FRISE.cursor = r.cursor || null;
+    if (more) more.hidden = !FRISE.cursor;
+    if (cnt) cnt.textContent = (r.total != null)
+      ? `${Number(r.total).toLocaleString('fr-FR')} évènement${r.total > 1 ? 's' : ''} au total` : '';
+  } catch (e) {
+    if (cnt) cnt.textContent = e.message || 'Historique indisponible.';
+  } finally {
+    FRISE.loading = false;
+    if (more) more.disabled = false;
+  }
+}
+document.addEventListener('change', ev => {
+  if (ev.target.id === 'friseCat') { FRISE.cat = ev.target.value; friseCharger(true); }
+});
+document.addEventListener('click', ev => {
+  if (ev.target.closest('#friseMore')) { ev.preventDefault(); friseCharger(false); }
+});
 
 /* ---------- dialogue d'action ---------- */
 let pendingAction = null;
