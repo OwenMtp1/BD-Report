@@ -410,6 +410,19 @@ t('⚠️ l’admin passe par data-view, plus par data-admin (routage)',
 t('⚠️ « Comptes » est distinct du sous-onglet Analyse « Équipe »',
   /k:'comptes',\s*label:'Comptes'/.test(P) && !/label:'Équipe'.*accès/.test(P));
 
+sect('Vues sauvegardées : rappeler un filtre en un clic');
+t('le bouton « Vues » est dans la barre de période', /id="viewsBtn"/.test(P) && /id="viewsMenu"/.test(P));
+t('on enregistre l’état de filtrage courant', /function vueSnapshot\(/.test(P)
+  && /view: STATE\.view/.test(P) && /sevs: \[\.\.\.STATE\.sevs\]/.test(P));
+t('appliquer une vue restaure la vue, la catégorie, la période, les gravités et la recherche',
+  /function appliquerVue\(/.test(P) && /STATE\.sevs = new Set\(v\.sevs/.test(P)
+  && /placerPeriode\(\); *\n? *syncHash\(\); render\(\); refresh\(\)/.test(P.replace(/\n\s*/g,' ')));
+t('⚠️ rangé PAR ESPACE dans localStorage (préférence d’affichage, pas donnée d’équipe)',
+  /function _vuesKey\(\)\s*{\s*return 'bdrlogs_vues_v1:' \+ \(\(ME\.espace && ME\.espace\.id\)/.test(P));
+t('⚠️ lecture/écriture localStorage protégées (navigation privée)',
+  /function chargerVues\([^]*?catch \(e\) { return \[\]; }/.test(P)
+  && /function sauverVues\([^]*?catch \(e\) {}/.test(P));
+
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);
 process.exit(n===T.length?0:1);

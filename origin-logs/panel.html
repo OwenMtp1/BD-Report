@@ -265,6 +265,24 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
 .periodbar .seg{height:32px}
 .periodbar .seg button{font-size:11.5px;padding:0 10px}
 .pb-acts{margin-left:auto;display:flex;gap:7px}
+/* ---------- vues sauvegardées (filtres favoris) ---------- */
+.views-wrap{position:relative;display:inline-flex}
+.views-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:50;width:300px;max-width:82vw;
+  background:var(--panel-2);border:1px solid var(--edge);border-radius:11px;
+  box-shadow:0 18px 44px rgba(0,0,0,.55);padding:7px}
+.views-menu[hidden]{display:none}
+.views-row{display:flex;align-items:stretch;gap:3px}
+.views-row+.views-row{margin-top:2px}
+.views-apply{flex:1;min-width:0;text-align:left;background:none;border:none;border-radius:8px;
+  padding:8px 10px;cursor:pointer;display:grid;gap:2px;color:var(--ink)}
+.views-apply:hover{background:var(--vio-wash)}
+.views-apply b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.views-desc{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.views-del{border:none;background:none;color:var(--muted);cursor:pointer;border-radius:8px;padding:0 9px;font-size:13px}
+.views-del:hover{background:var(--crit-wash,rgba(225,29,72,.12));color:var(--crit)}
+.views-empty{font-size:12px;color:var(--muted);padding:8px 10px;line-height:1.5}
+.views-save{display:flex;gap:6px;margin-top:7px;padding-top:8px;border-top:1px solid var(--edge)}
+.views-save .input{flex:1;min-width:0;height:32px}
 .pb-custom{flex-basis:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:4px}
 .pb-custom[hidden]{display:none}
 .pb-custom label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
@@ -1454,6 +1472,10 @@ select.input{height:36px}
       </div>
       <button class="btn sm" id="rangeCustomBtn" aria-expanded="false" title="Choisir une plage de dates">Plage…</button>
       <div class="pb-acts">
+        <div class="views-wrap">
+          <button class="btn sm" id="viewsBtn" aria-expanded="false" aria-haspopup="true" title="Vues sauvegardées">★ Vues</button>
+          <div class="views-menu" id="viewsMenu" hidden role="menu" aria-label="Vues sauvegardées"></div>
+        </div>
         <button class="btn sm live" id="liveBtn" aria-pressed="true"><span class="pulse" aria-hidden="true"></span> Direct</button>
         <button class="btn sm" id="exportBtn">Exporter</button>
       </div>
@@ -4510,6 +4532,103 @@ function clearFilter(quoi) {
   placerPeriode();
   syncHash(); render(); refresh();
 }
+
+/* ---------- vues sauvegardées : rappeler un filtre en un clic ----------
+   Un modo refait dix fois par jour le même réglage (« anticheat critique,
+   24 h »). On enregistre l'ÉTAT de filtrage courant sous un nom, et on le
+   rejoue d'un clic. Rangé PAR ESPACE dans localStorage : une préférence
+   d'affichage n'est pas une donnée d'équipe, elle n'a pas à être synchronisée
+   ni à voyager d'un client à l'autre. ⚠️ localStorage peut lever (navigation
+   privée) : on ne laisse jamais une lecture ou une écriture casser la page. */
+function _vuesKey() { return 'bdrlogs_vues_v1:' + ((ME.espace && ME.espace.id) || '0'); }
+function chargerVues() { try { return JSON.parse(localStorage.getItem(_vuesKey()) || '[]') || []; } catch (e) { return []; } }
+function sauverVues(list) { try { localStorage.setItem(_vuesKey(), JSON.stringify(list)); } catch (e) {} }
+function vueSnapshot() {
+  return { view: STATE.view, cat: STATE.cat, range: STATE.range, from: STATE.from, to: STATE.to,
+           sevs: [...STATE.sevs], q: STATE.q };
+}
+// Un résumé lisible d'une vue, qui sert aussi de nom par défaut.
+function decrireVue(v) {
+  const bits = [];
+  bits.push(v.view === 'stream' ? ((CAT[v.cat] || {}).label || (v.cat === 'all' ? 'Tous les logs' : v.cat))
+    : { overview:'Tableau de bord', economy:'Économie', playtime:'Temps de jeu', stats:'Statistiques' }[v.view] || v.view);
+  if ((v.sevs || []).length) bits.push(v.sevs.map(s => (SEV[s] || {}).label || s).join('/'));
+  const r = v.range == null ? 24 : v.range;
+  if (v.range === 'custom') bits.push('plage libre');
+  else if (r !== 24) bits.push(NOM_PERIODE[r] || r + ' h');
+  if (v.q) bits.push('« ' + v.q + ' »');
+  return bits.join(' · ');
+}
+function renderViewsMenu() {
+  const host = $('#viewsMenu'); if (!host) return;
+  const list = chargerVues();
+  host.innerHTML =
+    (list.length ? list.map(v => `<div class="views-row">
+        <button class="views-apply" role="menuitem" data-viewapply="${esc(v.id)}">
+          <b>${esc(v.nom)}</b><span class="views-desc">${esc(decrireVue(v))}</span></button>
+        <button class="views-del" data-viewdel="${esc(v.id)}" title="Supprimer cette vue" aria-label="Supprimer ${esc(v.nom)}">✕</button>
+      </div>`).join('')
+      : `<div class="views-empty">Aucune vue enregistrée. Réglez le flux (catégorie, période, gravité, recherche) comme vous l’aimez, puis donnez-lui un nom ci-dessous.</div>`)
+    + `<div class="views-save">
+        <input class="input" id="viewName" maxlength="40" placeholder="Nom (ex : Anticheat critique 24 h)" aria-label="Nom de la vue">
+        <button class="btn sm primary" id="viewSaveGo">Enregistrer</button>
+      </div>`;
+}
+function basculerViewsMenu() {
+  const m = $('#viewsMenu'), b = $('#viewsBtn'); if (!m) return;
+  const ouvrir = m.hidden;
+  if (ouvrir) renderViewsMenu();
+  m.hidden = !ouvrir;
+  if (b) b.setAttribute('aria-expanded', String(ouvrir));
+  if (ouvrir) { const n = $('#viewName'); if (n) n.focus(); }
+}
+function fermerViewsMenu() {
+  const m = $('#viewsMenu'), b = $('#viewsBtn');
+  if (m && !m.hidden) { m.hidden = true; if (b) b.setAttribute('aria-expanded', 'false'); }
+}
+function enregistrerVueActuelle() {
+  const inp = $('#viewName');
+  const snap = vueSnapshot();
+  let nom = (inp && inp.value || '').trim() || decrireVue(snap);
+  const list = chargerVues();
+  list.unshift({ id: 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), nom, ...snap });
+  sauverVues(list.slice(0, 30));   // un plafond : au-delà, c'est une liste, pas un favori
+  renderViewsMenu();
+  toast('Vue « ' + nom + ' » enregistrée.');
+}
+function supprimerVue(id) { sauverVues(chargerVues().filter(v => v.id !== id)); renderViewsMenu(); }
+function appliquerVue(v) {
+  STATE.view = v.view || 'stream';
+  STATE.cat = v.cat || 'all';
+  STATE.range = v.range == null ? 24 : v.range;
+  STATE.from = v.from || null; STATE.to = v.to || null;
+  STATE.sevs = new Set(v.sevs || []);
+  STATE.q = v.q || '';
+  const q = $('#q'); if (q) q.value = STATE.q;
+  const cq = $('#catQ'); if (cq) cq.value = STATE.q;
+  STATE.limit = 120;
+  if (ANALYSE_TABS.includes(STATE.view)) STATE.analyseTab = STATE.view;
+  fermerViewsMenu();
+  placerPeriode();
+  syncHash(); render(); refresh(); window.scrollTo({ top: 0 });
+}
+document.addEventListener('click', ev => {
+  const btn = ev.target.closest('#viewsBtn,#viewSaveGo,[data-viewapply],[data-viewdel]');
+  if (btn) {
+    ev.preventDefault();
+    if (btn.id === 'viewsBtn')   return basculerViewsMenu();
+    if (btn.id === 'viewSaveGo') return enregistrerVueActuelle();
+    if (btn.dataset.viewapply) { const v = chargerVues().find(x => x.id === btn.dataset.viewapply); if (v) appliquerVue(v); return; }
+    if (btn.dataset.viewdel)   return supprimerVue(btn.dataset.viewdel);
+    return;
+  }
+  // Un clic hors du menu le referme (le bouton lui-même est traité au-dessus).
+  if (!ev.target.closest('#viewsMenu')) fermerViewsMenu();
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Enter' && ev.target.id === 'viewName') { ev.preventDefault(); enregistrerVueActuelle(); }
+  else if (ev.key === 'Escape') fermerViewsMenu();
+});
 
 /* ---------- recherche : des joueurs et des écrans, pas que du texte ----------
    « Le mec qui a RDM » suppose de deviner la bonne catégorie. On propose
