@@ -720,6 +720,15 @@ montré. Un défilement horizontal VOULU (kanban) reste permis dès qu'il vit da
   d'entreprise et d'utilisateur s'afficherait en haut de chaque écran publié.
   Le formulaire de contact écrit dans Supabase (`contact_requests`) sinon repli `localStorage` (clé `bdrflow_contact_inbox_v1`),
   ingéré par l'app dans « Nouvelles demandes ».
+  **Publicité en tête de l'accueil** (à la place de la capture du hero) : version MUSIQUE SEULE de la vidéo,
+  `assets/pub-bd-report.mp4` (3,8 Mo) + `.webm` (3,1 Mo), affiche `pub-bd-report-affiche.jpg`.
+  ⚠️ `preload="none"` : RIEN ne se télécharge avant le clic (vérifié : 0 requête) ; le bouton lance la lecture
+  AVEC le son — une lecture automatique serait muette. ⚠️ MP4 d'abord, codec DÉCLARÉ (`avc1.640032` = High
+  niveau 5.0, LU dans le fichier — le 4.0 supposé était faux) ; le WebM sert les Chromium libres, sans H.264,
+  où le MP4 restait figé sur une image. Recoder la vidéo oblige à relire ce code.
+  ⚠️ `i18n-pages.mjs` réécrit aussi `poster` : il ne réécrivait que `href`/`src`, et l'affiche aurait été
+  cassée sur `/en/` et `/es/`. Le débordement horizontal de l'accueil sur téléphone est ANTÉRIEUR (halos et
+  bandeau de puces, 454 px pour 375) et masqué par `overflow-x:hidden` — mesuré avant/après, non corrigé.
 
 ## Rôles, offres, support
 - Rôles : `Fondateur`, `Support BD Report` (= mêmes droits que Fondateur), Administrateur, Manager, Développeur, Membre.

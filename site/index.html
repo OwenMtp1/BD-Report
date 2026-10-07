@@ -139,6 +139,23 @@ nav.scrolled{background:var(--chrome);backdrop-filter:blur(16px) saturate(150%);
 .hero-shot img{border-radius:16px;border:1px solid var(--line2);box-shadow:0 40px 120px rgba(0,0,0,.6),0 0 0 1px rgba(124,92,255,.08);
   -webkit-mask-image:linear-gradient(180deg,#000 72%,transparent);mask-image:linear-gradient(180deg,#000 72%,transparent)}
 .hero-shot::before{content:'';position:absolute;inset:-40px -10px auto;height:120px;background:radial-gradient(circle at 50% 0,rgba(124,92,255,.35),transparent 60%);z-index:-1}
+/* La publicité de 30 s, à la place de la capture. ⚠️ PAS de masque de fondu comme sur l'image :
+   il effaçait le bas du cadre — là où vivent les sous-titres et les commandes de lecture. */
+.hero-film video{display:block;width:100%;max-width:100%;aspect-ratio:16/9;background:#05070B;border-radius:16px;
+  border:1px solid var(--line2);box-shadow:0 40px 120px rgba(0,0,0,.6),0 0 0 1px rgba(124,92,255,.08)}
+.film-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:12px;
+  padding:14px 24px 14px 16px;border:0;border-radius:999px;background:var(--green);color:#04130E;font-family:inherit;font-weight:700;font-size:16px;line-height:1.2;
+  cursor:pointer;box-shadow:0 12px 44px rgba(34,211,166,.38);white-space:nowrap;transition:filter .2s,box-shadow .2s}
+.film-play[hidden]{display:none}  /* `display:inline-flex` l'emporterait sinon sur l'attribut hidden */
+.film-play:hover{filter:brightness(1.08);box-shadow:0 14px 54px rgba(34,211,166,.5)}
+.film-play:focus-visible{outline:3px solid var(--text);outline-offset:3px}
+.film-play .tri{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#04130E;color:var(--green);font-size:13px;padding-left:2px}
+.film-note{margin:14px 0 0;font-size:13px;color:var(--muted);text-align:center}
+/* Sur téléphone, le bouton à libellé couvrait presque toute l'image : il devient un simple rond de
+   lecture. Le libellé reste lu par les lecteurs d'écran, et la ligne dessous dit « 30 secondes ». */
+@media(max-width:520px){.film-play{padding:0;gap:0;width:64px;height:64px;justify-content:center}
+  .film-play .tri{width:auto;height:auto;background:transparent;color:#04130E;font-size:22px;padding-left:4px}
+  .film-play .lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
 
 .hero-note{color:var(--muted2);font-size:13px;margin-top:16px}
 
@@ -436,7 +453,23 @@ footer a{color:var(--violet2);font-weight:700}
       <a class="btn btn-ghost" href="#probleme" data-i18n="hero.cta2">Voir ce que ça change</a>
     </div>
     <p class="hero-note hero-anim d4" data-i18n="hero.note">Sans carte bancaire · Prêt à l'emploi en quelques minutes · FR · EN · ES</p>
-    <div class="hero-shot hero-anim d5"><img src="assets/dashboard.png" alt="Dashboard BD Report" loading="lazy"></div>
+    <!-- La publicité de 30 s, version MUSIQUE SEULE. ⚠️ `preload="none"` : 3,8 Mo ne partent
+         qu'au clic — chaque visiteur ne paie pas le film qu'il ne regardera pas, et le premier
+         affichage reste celui de l'image d'attente (70 Ko). Le son exige un geste : c'est le
+         bouton qui lance la lecture, jamais une lecture automatique, qui serait muette. -->
+    <div class="hero-shot hero-film hero-anim d5">
+      <video id="heroFilm" playsinline preload="none" poster="assets/pub-bd-report-affiche.jpg"
+        aria-label="Publicité BD Report, 30 secondes, avec musique">
+        <!-- MP4 d'abord : Chrome, Safari, Firefox et Edge le lisent tous. Le codec est DÉCLARÉ
+             (lu dans le fichier : High, niveau 5.0 → avc1.640032), pour qu'un navigateur sans
+             H.264 — les Chromium libres — passe directement au WebM au lieu de rester figé
+             sur une image. Recoder l'un sans l'autre, ou changer de niveau, oblige à revoir ce code. -->
+        <source src="assets/pub-bd-report.mp4" type='video/mp4; codecs="avc1.640032, mp4a.40.2"'>
+        <source src="assets/pub-bd-report.webm" type='video/webm; codecs="vp9, opus"'>
+      </video>
+      <button class="film-play" id="filmPlay" type="button"><span class="tri" aria-hidden="true">▶</span><span class="lbl" data-i18n="film.play">Voir BD Report en 30 secondes</span></button>
+    </div>
+    <p class="film-note hero-anim d5" data-i18n="film.note">30 secondes · avec musique, pensez à monter le son</p>
   </div>
 </header>
 
@@ -1039,6 +1072,7 @@ const I18N = {
     'hero.sub':'Meetings, pipeline, bonuses and team steering in a single workspace. Every move to SQL triggers the bonus at the grid in force that day — no spreadsheet, no end-of-month argument.',
     'hero.cta1':'Create my workspace, free <span class="arw">→</span>','hero.cta2':'See what changes','hero.cta3':'Try the live demo, no signup',
     'hero.note':'No credit card · Up and running in minutes · FR · EN · ES',
+    'film.play':'Watch BD Report in 30 seconds','film.note':'30 seconds · in French, with music: turn the sound on',
     'prob.eyebrow':'The job, today','prob.title':'The work gets done. It still has to be counted.',
     'prob.sub':'Three problems come up in every outbound team. None of them comes from a lack of work.',
     'prob.t1':'The bonus lives in a spreadsheet',
@@ -1099,6 +1133,7 @@ const I18N = {
     'hero.sub':'Citas, pipeline, primas y dirección de equipo en un único espacio. Cada paso a SQL activa la prima con el baremo vigente ese día — sin hoja de cálculo y sin discusión a fin de mes.',
     'hero.cta1':'Crear mi espacio gratis <span class="arw">→</span>','hero.cta2':'Ver qué cambia','hero.cta3':'Probar la demo, sin registro',
     'hero.note':'Sin tarjeta · Listo en unos minutos · FR · EN · ES',
+    'film.play':'Ver BD Report en 30 segundos','film.note':'30 segundos · en francés, con música: activa el sonido',
     'prob.eyebrow':'El día a día, hoy','prob.title':'El trabajo está hecho. Falta que se cuente.',
     'prob.sub':'Tres problemas se repiten en todos los equipos outbound. Ninguno viene de la falta de trabajo.',
     'prob.t1':'La prima se calcula en una hoja de cálculo',
@@ -1173,6 +1208,26 @@ function toggleLang() {
   localStorage.setItem('bdr_site_lang', lang)
   applyLang()
 }
+
+// ---------- Publicité de l'accueil ----------
+// Le bouton lance la lecture AVEC le son : c'est un geste du visiteur, donc le navigateur
+// l'autorise. Une lecture automatique serait forcément muette — et la musique est la moitié
+// du film. À la fin, retour à l'image d'attente et au bouton, pour revoir.
+;(() => {
+  const film = document.getElementById('heroFilm'), btn = document.getElementById('filmPlay')
+  if (!film || !btn) return
+  btn.addEventListener('click', () => {
+    btn.hidden = true
+    film.controls = true
+    // Si la lecture est refusée (réseau, format), le bouton revient au lieu de laisser un cadre muet.
+    film.play().catch(() => { btn.hidden = false; film.controls = false })
+  })
+  film.addEventListener('ended', () => {
+    film.controls = false
+    film.load()          // réaffiche l'image d'attente ; `preload="none"` : rien n'est retéléchargé
+    btn.hidden = false
+  })
+})()
 
 // ---------- Onglets de fonctionnalités ----------
 const SLUGS = ['pilotage', 'activite', 'pipeline', 'remuneration', 'collaboration', 'donnees']

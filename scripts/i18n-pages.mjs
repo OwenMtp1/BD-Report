@@ -165,7 +165,9 @@ for (const lang of LANGS) {
     out = out.replace(/<\/body>/i, `${switcherScript(rel, lang)}\n</body>`)
     // Les ressources vivent à la racine du site, pas sous /en/ : sans cette réécriture
     // une page localisée irait chercher /en/assets/… et n'aurait ni style ni image.
-    out = out.replace(/(href|src)="(?:\.\.\/)*assets\//g, `$1="${ASSET_ROOT}/assets/`)
+    // ⚠️ `poster` aussi : l'image d'attente d'une <video> est un lien de ressource comme un
+    // autre. Sans lui, la vidéo de l'accueil s'affichait en carré noir sur /en/ et /es/.
+    out = out.replace(/(href|src|poster)="(?:\.\.\/)*assets\//g, `$1="${ASSET_ROOT}/assets/`)
     writeFileSync(full, out)
     made++
   }
