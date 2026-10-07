@@ -1027,10 +1027,21 @@ montré. Un défilement horizontal VOULU (kanban) reste permis dès qu'il vit da
 - **`video/music.mjs`** — bande-son SYNTHÉTISÉE (aucun échantillon), écrite contre l'image :
   impact à 7,45 s, trois notes sur les trois barres du logo, déclic sur le cadenas. ⚠️ Changer
   un instant de l'animation sans le reporter ici désynchronise le son. Mixée SOUS une voix.
-- **Pas de voix off générée** : la machine n'a aucun moteur vocal. Livrée avec sous-titres
-  incrustés (la plupart des vues sur réseaux sont son coupé) ; `video/voix-off.md` donne le
-  texte, le jeu par réplique et la commande de mixage. Le texte vit dans `window.VO` et
-  NULLE PART ailleurs : le `.srt` en est généré, l'écran et la voix ne peuvent diverger.
+- **`video/voice.py`** — voix off SYNTHÉTISÉE en local (Piper, `fr_FR-siwis-medium`, CC BY 4.0 :
+  **crédit obligatoire**, texte exact dans `voix-off.md`), puis mixage : musique atténuée sous la
+  voix (`sidechaincompress`), -14 LUFS. Le texte vit dans `window.VO` et NULLE PART ailleurs :
+  le `.srt` en est généré, puis lu par `voice.py` — écran, sous-titres et voix ne peuvent diverger.
+  ⚠️ **La prononciation se vérifie sur les PHONÈMES**, pas à l'oreille (aucune sortie son ici) :
+  c'est ce contrôle qui a trouvé « BD » lu *boulevard* (« Boulevard Report » !), « pipeline » à la
+  française, et des nasales perdues. `SPOKEN` réécrit pour la voix, `FORBIDDEN`/`REQUIRED`
+  REFUSENT de générer si un piège revient. ⚠️ Prendre la voix sur le dépôt **sherpa-onnx** (GitHub),
+  PAS la v0.0.2 publiée par Piper : sa table de phonèmes ignore le tilde des nasales (« constate »
+  → « costate »). HuggingFace, sa source normale, est bloqué par le proxy de dev.
+  ⚠️ `noise_w_scale=0` : le rythme de Piper est tiré au hasard, une réplique tenait à un passage et
+  débordait au suivant. ⚠️ Trois répliques sont COUPÉES pour tomber sur leur image (pivot,
+  « Figée » = déclic du cadenas, « Essayez la démo » = bouton qui respire) — en déplacer une
+  suppose de déplacer l'animation ET le son correspondants.
+  Licences écartées exprès : tom (AGPL), upmc (CC BY-SA), edge-tts (contourne l'API Microsoft).
 - `npm run video` ; `ffmpeg` requis (système, `npm i --no-save ffmpeg-static`, ou `FFMPEG=`).
   Sorties dans `video/out/` (ignoré par git). Police Inter embarquée, licence OFL jointe.
 

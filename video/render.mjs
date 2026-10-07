@@ -84,15 +84,23 @@ const main = async () => {
     // demandait 5,3 mots/s sur la phrase du pivot — celle qui porte toute la publicité —
     // et rien ne le signalait : les sous-titres, eux, s'affichent à n'importe quelle vitesse.
     // On refuse donc de rendre plutôt que de livrer un texte qu'aucune voix ne peut tenir.
+    // Un « ? » ou un « : » isolé n'est pas un mot : les compter refusait des répliques saines.
+    // C'est un garde-fou GROSSIER ; `voice.py` mesure ensuite la durée réellement synthétisée.
     const MAX_WPS = 3.6
     const tooFast = (await page.evaluate(() => window.VO))
-      .map(([a, b, txt]) => ({ txt, wps: txt.split(/\s+/).length / (b - a) }))
+      .map(([a, b, txt]) => ({ txt, wps: txt.split(/\s+/).filter(w => /[\p{L}\d]/u.test(w)).length / (b - a) }))
       .filter(l => l.wps > MAX_WPS)
     if (tooFast.length) {
       throw new Error(`Réplique(s) trop rapide(s) pour une voix off (> ${MAX_WPS} mots/s) :\n  ` +
         tooFast.map(l => `${l.wps.toFixed(1)} mots/s — « ${l.txt} »`).join('\n  '))
     }
     const stage = page.locator('#stage')
+
+    // Les sous-titres sont écrits D'ABORD, même pour des images-clés : `voice.py` les lit,
+    // et vérifier qu'une réplique tient dans son créneau ne doit pas coûter 900 images.
+    const vo = await page.evaluate(() => window.VO)
+    const srt = vo.map(([a, b, txt], i) => `${i + 1}\n${srtTime(a)} --> ${srtTime(b)}\n${txt}\n`).join('\n')
+    await writeFile(path.join(OUT, 'bd-report-pub-30s.srt'), srt)
 
     if (stills) {
       const dir = path.join(OUT, 'stills')
@@ -118,12 +126,7 @@ const main = async () => {
     }
     if (errors.length) throw new Error('Erreurs pendant le rendu :\n  ' + errors.join('\n  '))
 
-    // ---- 2. Les sous-titres — générés depuis le MÊME tableau que ceux affichés à l'écran.
-    const vo = await page.evaluate(() => window.VO)
-    const srt = vo.map(([a, b, txt], i) => `${i + 1}\n${srtTime(a)} --> ${srtTime(b)}\n${txt}\n`).join('\n')
-    await writeFile(path.join(OUT, 'bd-report-pub-30s.srt'), srt)
-
-    // ---- 3. Encodage. H.264 + yuv420p : lu partout (LinkedIn, Instagram, navigateurs, PowerPoint).
+    // ---- 2. Encodage. H.264 + yuv420p : lu partout (LinkedIn, Instagram, navigateurs, PowerPoint).
     const ffmpeg = await findFfmpeg()
     const music = path.resolve('video/out/musique.wav')
     const args = ['-y', '-framerate', String(FPS), '-i', path.join(frames, 'f%04d.jpg')]

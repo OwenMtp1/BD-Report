@@ -365,17 +365,31 @@ const r1Items = [...document.querySelectorAll('.r1i')]
 // =========================================================================
 window.VO = [
   [0.55, 2.75, "Une formule modifiée en cours d'année…"],
-  [2.85, 4.75, 'quatre outils, quatre chiffres différents…'],
-  [4.85, 6.55, 'le retard, découvert le 28.'],
-  // ⚠️ Court EXPRÈS : l'écran barre déjà « se négocie », la voix n'a qu'à dire la
-  // résolution. La version longue demandait 5,3 mots/s — imprononçable sur la phrase
-  // qui doit porter toute la publicité.
-  [7.60, 10.05, 'La fin de mois ? Elle se constate.'],
-  [10.35, 12.30, 'BD Report.'],
+  // « différents » est retiré : l'écran MONTRE quatre chiffres différents, et la voix
+  // ne tenait pas dans le créneau sans se précipiter (vérifié par video/voice.py).
+  [2.85, 4.85, 'quatre outils, quatre chiffres…'],
+  // Elle court jusqu'au choc (7,45 s) : l'effondrement est un silence VISUEL, pas sonore.
+  [4.95, 7.30, 'le retard, découvert le 28.'],
+  // ⚠️ LE PIVOT EST CALÉ SUR L'IMAGE, en deux temps. La question tombe juste après le
+  // choc ; la voix se TAIT pendant que la rature barre « se négocie » (8,75 → 9,15 s) ;
+  // « Elle se constate » sort au moment exact où ces mots montent à l'écran (9,15 s).
+  // D'une seule traite, la phrase ne tenait pas dans son créneau avec sa pause — et la
+  // version longue d'origine demandait 5,3 mots/s, imprononçable.
+  [7.55, 8.75, 'La fin de mois ?'],
+  [9.10, 10.30, 'Elle se constate.'],
+  [10.45, 12.30, 'BD Report.'],
   [12.60, 16.85, 'Rendez-vous, pipeline, primes, pilotage : un seul espace.'],
-  [17.15, 21.45, 'Chaque passage en SQL déclenche la prime, au barème du jour. Figée.'],
-  [21.80, 25.60, "Et une raison d'appeler, trouvée pour vous."],
-  [26.00, 29.70, 'Toute la prospection, et la rémunération qui va avec. Essayez la démo.'],
+  // « Figée. » est une réplique À PART, calée sur le cadenas (20,7 s). D'une traite, elle
+  // tombait 1,5 s après le déclic qu'elle doit souligner.
+  [17.00, 20.60, 'Chaque passage en SQL déclenche la prime, au barème du jour.'],
+  [20.70, 21.50, 'Figée.'],
+  [21.80, 25.15, "Et une raison d'appeler, trouvée pour vous."],
+  // L'appel à l'action, en deux temps lui aussi : le slogan démarre sur le fondu de la
+  // dernière preuve, et « Essayez la démo » tombe quand le bouton RESPIRE (28,4 s).
+  // ⚠️ Le slogan a besoin d'AIR : à 25,6 s il fallait l'accélérer de 19 %, la limite —
+  // précipiter la phrase qui porte la marque. Il démarre donc plus tôt.
+  [25.25, 28.30, 'Toute la prospection, et la rémunération qui va avec.'],
+  [28.35, 29.55, 'Essayez la démo.'],
 ]
 
 // =========================================================================
@@ -526,7 +540,7 @@ function render(t) {
 
   // ===== PREUVE 2 : la prime figée =====
   {
-    const v = win(t, 16.95, 21.75, .45, .4)
+    const v = win(t, 16.95, 22.05, .45, .4)
     set($('scR2'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
     if (v > 0) {
       const p = E.out(inv(t, 16.95, 17.85))
@@ -534,13 +548,13 @@ function render(t) {
       $('r2Txt').style.opacity = E.out(inv(t, 17.1, 17.75))
       $('r2Txt').style.transform = `translateY(${mix(40, 0, E.out(inv(t, 17.1, 17.85)))}px)`
       // Le compteur monte… puis le cadenas se FERME : la prime ne bougera plus.
-      $('r2Num').textContent = fmtEur(1200 * E.out(inv(t, 18.0, 19.3)))
-      const lk = E.back(inv(t, 19.45, 19.8))
+      $('r2Num').textContent = fmtEur(1200 * E.out(inv(t, 18.9, 20.45)))
+      const lk = E.back(inv(t, 20.7, 21.05))
       $('r2Shackle').style.transform = `translateY(${mix(-3.2, 0, lk)}px)`
-      $('r2Lock').style.transform = `scale(${1 + .22 * Math.sin(Math.PI * inv(t, 19.45, 19.95))})`
-      $('r2Counter').style.boxShadow = `0 30px 80px rgba(0,0,0,.55), 0 0 ${70 * inv(t, 19.5, 19.9) * (1 - inv(t, 20.2, 21))}px rgba(34,211,166,.55)`
-      $('r2Counter').style.borderColor = inv(t, 19.5, 19.7) > .5 ? 'rgba(34,211,166,.6)' : ''
-      $('r2Sub').style.opacity = E.out(inv(t, 19.7, 20.2))
+      $('r2Lock').style.transform = `scale(${1 + .22 * Math.sin(Math.PI * inv(t, 20.7, 21.2))})`
+      $('r2Counter').style.boxShadow = `0 30px 80px rgba(0,0,0,.55), 0 0 ${70 * inv(t, 20.75, 21.15) * (1 - inv(t, 21.4, 22))}px rgba(34,211,166,.55)`
+      $('r2Counter').style.borderColor = inv(t, 20.75, 20.95) > .5 ? 'rgba(34,211,166,.6)' : ''
+      $('r2Sub').style.opacity = E.out(inv(t, 20.95, 21.35))
     }
   }
 
@@ -594,7 +608,9 @@ function render(t) {
     capEl.style.transform = `translateY(${mix(10, 0, E.out(inv(t, cap[0], cap[0] + .2)))}px)`
   } else capEl.style.opacity = 0
   // Le sous-titre se tait sur la marque et l'appel à l'action : le texte est déjà à l'écran.
-  if (cap && (cap[2] === 'BD Report.' || t > 25.9)) capEl.style.opacity = 0
+  // (par réplique, pas par instant : un seuil en secondes faisait clignoter le sous-titre du
+  // slogan, qui démarre juste avant que l'écran ne l'affiche)
+  if (cap && (cap[2] === 'BD Report.' || cap[0] >= 25.2)) capEl.style.opacity = 0
   $('progress').style.width = `${(t / DURATION) * 100}%`
   $('progress').style.opacity = .55
 }

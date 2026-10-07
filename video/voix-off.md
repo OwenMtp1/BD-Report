@@ -1,70 +1,106 @@
 # BD Report — publicité 30 s : voix off
 
-La vidéo `video/out/bd-report-pub-30s.mp4` est livrée **avec musique et sous-titres
-incrustés, sans voix**. Elle tient seule : la majorité des vidéos sur LinkedIn et
-Instagram se regardent son coupé, et les sous-titres disent tout.
+Deux fichiers sortent de `video/out/` :
 
-Ce document sert à ajouter la voix. Les timecodes sont ceux de l'image, à 50 ms près —
-le fichier `bd-report-pub-30s.srt` les donne au format standard.
+| Fichier | Contenu |
+|---|---|
+| `bd-report-pub-30s-voix.mp4` | **La version à publier** : voix off de synthèse, musique atténuée sous la voix, sous-titres incrustés. |
+| `bd-report-pub-30s.mp4` | Musique et sous-titres, sans voix — pour une boucle muette ou une voix enregistrée plus tard. |
 
-## Le texte, réplique par réplique
+## ⚖️ Crédit obligatoire
 
-| Début | Fin | Réplique | Jeu |
-|---|---|---|---|
-| 0,55 | 2,75 | Une formule modifiée en cours d'année… | Posé, presque las. On constate, on ne se plaint pas. |
-| 2,85 | 4,75 | quatre outils, quatre chiffres différents… | Même ton, un cran plus rapide — l'énumération accélère. |
-| 4,85 | 6,55 | le retard, découvert le 28. | Ralentir sur « le 28 ». Laisser tomber la phrase. |
-| — | — | *(silence — l'impact à 7,45 s)* | **Ne rien dire.** Le choc est sonore. |
-| 7,60 | 10,05 | La fin de mois ? … Elle se constate. | LA réplique. Vraie pause après la question (≈ 0,5 s). Sourire dans la voix sur « constate ». |
-| 10,35 | 12,30 | BD Report. | Net, sans emphase. Le logo fait le travail. |
-| 12,60 | 16,85 | Rendez-vous, pipeline, primes, pilotage : un seul espace. | Énergie qui monte. Liste rythmée, poser « un seul espace ». |
-| 17,15 | 21,45 | Chaque passage en SQL déclenche la prime, au barème du jour. Figée. | « Figée » tombe **sur le déclic du cadenas** (19,5 s) ou juste après. |
-| 21,80 | 25,60 | Et une raison d'appeler, trouvée pour vous. | Complice, plus bas. Un secret entre commerciaux. |
-| 26,00 | 29,70 | Toute la prospection, et la rémunération qui va avec. Essayez la démo. | Le slogan, en entier, sans se presser. « Essayez la démo » : une invitation, pas une injonction. |
+La voix est synthétisée par **Piper** avec le modèle **fr_FR-siwis-medium**, entraîné
+sur le corpus **SIWIS** (CC BY 4.0). L'usage commercial est permis **à condition de
+créditer la source**. À placer dans la description de la publication, ou sur une page
+de mentions du site :
 
-**63 mots pour 30 secondes**, débit moyen 2,4 mots/s, aucune réplique au-delà de
-3,2 mots/s : le confort d'une voix publicitaire française, avec de l'air pour les
-silences. `render.mjs` refuse toute réplique au-delà de 3,6 mots/s — la première
-version du pivot en demandait 5,3, et aucun comédien ne l'aurait tenue.
+> Voix de synthèse : Piper (fr_FR-siwis-medium), entraînée sur le corpus SIWIS French
+> Speech Synthesis Database — P.-E. Honnet, A. Lazaridis, P. N. Garner, J. Yamagishi,
+> CC BY 4.0 (https://datashare.is.ed.ac.uk/handle/10283/2353).
 
-**Voix conseillée** : plutôt grave et chaleureuse, 30–45 ans, ton « collègue qui sait »
-plutôt que « speaker radio ». La cible est un BDR ou un manager commercial : on lui parle
-de son quotidien, pas d'une promesse.
+**Pourquoi cette voix et pas une autre.** C'est la seule voix française de qualité
+correcte dont la licence est sans ambiguïté pour une publicité :
 
-## L'enregistrer
+| Voix | Licence | Verdict |
+|---|---|---|
+| **siwis** (féminine) | CC BY 4.0 | ✅ retenue — crédit obligatoire |
+| tom (masculine) | AGPLv3 | ❌ copyleft fort, statut flou pour un son généré |
+| upmc (masculine) | CC BY-SA 4.0 | ❌ clause « partage à l'identique » qui pourrait s'étendre à la pub |
+| gilles, mls (masculines) | CC0 / CC BY | ❌ qualité « low », 16 kHz : un son étouffé |
+| edge-tts, voix Google… | — | ❌ voix excellentes, mais leur usage par ces outils contourne l'API officielle : aucun droit de diffusion publicitaire |
 
-Trois possibilités, de la plus rapide à la plus soignée :
+Une **voix masculine grave** (celle que ce script recommandait d'abord) n'existe donc
+pas proprement en local. Pour l'avoir : un comédien, ou un service payant qui accorde
+explicitement les droits commerciaux (ElevenLabs en offre payante, par exemple).
 
-1. **Vous-même**, au téléphone, dans une pièce calme (un placard plein de vêtements fait
-   une cabine étonnamment bonne). Lisez sur la vidéo en lecture pour caler le rythme.
-2. **Une voix de synthèse** (ElevenLabs, Azure, Google) : collez le texte réplique par
-   réplique. Exportez chaque réplique séparément — c'est le calage qui fait la qualité,
-   pas la voix.
-3. **Un comédien** (Voice123, Fiverr, Malt) : envoyez ce document et la vidéo. Un 30 s
-   coûte généralement entre 80 et 300 € selon les droits de diffusion — précisez « web
-   et réseaux sociaux, durée illimitée ».
+## Ce que la machine a vérifié — et ce qu'elle n'a pas pu
 
-## La mixer par-dessus la musique
+**Personne n'a écouté cette voix avant livraison** : l'environnement de fabrication n'a
+pas de sortie son, et les modèles de reconnaissance vocale y sont inaccessibles. Ce qui
+a été contrôlé, objectivement :
 
-Avec un fichier `voix.wav` calé sur la vidéo (début à 0,0 s) :
+- **La prononciation, phonème par phonème.** C'est ce que le modèle reçoit en entrée.
+  Ce contrôle a trouvé trois pièges, tous corrigés et désormais REFUSÉS par `voice.py`
+  s'ils reviennent :
+  - « BD » lu comme l'abréviation de **boulevard** → la pub disait « Boulevard Report » ;
+  - « pipeline » lu à la française (« pip-line ») → réécrit pour donner *païp-laïn* ;
+  - **les voyelles nasales perdues** avec l'ancienne version du modèle (« constate »
+    devenait « costate ») → remplacé par la version actuelle.
+- **Chaque réplique tient dans son créneau**, à débit naturel ou presque (accélération
+  maximale ×1,12 sur « Elle se constate »). `voice.py` refuse une réplique qui ne tient
+  pas même en accélérant de 19 %.
+- **Le rythme est déterministe** : la même commande donne les mêmes durées, donc le
+  même calage.
 
-```bash
-ffmpeg -i video/out/bd-report-pub-30s.mp4 -i voix.wav -filter_complex \
-  "[1:a]volume=1.0[v];[0:a][v]sidechaincompress=threshold=0.05:ratio=6:attack=20:release=300[m];[m][v]amix=inputs=2:normalize=0[a]" \
-  -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k video/out/bd-report-pub-30s-voix.mp4
-```
+**À écouter vous-même avant publication**, en particulier : « Bi Di Riporte » (la marque),
+« SQL » (dit *èss-ku-èl*, à la française), et le naturel général — une voix de synthèse
+locale reste en dessous d'un comédien.
 
-Le `sidechaincompress` baisse la musique **pendant que la voix parle** et la remonte dans
-les silences — c'est ce qui rend un mixage publicitaire intelligible. La musique a déjà
-été écrite pour ça (médiums dégagés, niveau moyen bas).
+## Le texte, calé sur l'image
+
+Le texte vit dans `video/ad.html` (`window.VO`) et **nulle part ailleurs** : le `.srt`
+en est généré, puis lu par `voice.py`. Écran, sous-titres et voix ne peuvent diverger.
+
+| Début | Réplique | Calage |
+|---|---|---|
+| 0,55 | Une formule modifiée en cours d'année… | le barème change sous les yeux |
+| 2,85 | quatre outils, quatre chiffres… | les quatre cartes, quatre chiffres différents |
+| 4,95 | le retard, découvert le 28. | court jusqu'au choc (7,45 s) |
+| 7,55 | La fin de mois ? | juste après l'impact |
+| — | *(silence)* | la rature barre « se négocie » |
+| 9,10 | Elle se constate. | **au moment où ces mots montent à l'écran** |
+| 10,45 | BD Report. | le logo vient de se poser |
+| 12,60 | Rendez-vous, pipeline, primes, pilotage : un seul espace. | les quatre coches apparaissent |
+| 17,00 | Chaque passage en SQL déclenche la prime, au barème du jour. | le compteur monte |
+| 20,70 | Figée. | **le cadenas se ferme, déclic dans la musique** |
+| 21,80 | Et une raison d'appeler, trouvée pour vous. | le signal Hexalog |
+| 25,25 | Toute la prospection, et la rémunération qui va avec. | sur le fondu, puis le slogan à l'écran |
+| 28,35 | Essayez la démo. | **le bouton « respire »** |
+
+Trois répliques ont été COUPÉES en deux pour tomber sur leur image (le pivot, « Figée »,
+l'appel à l'action) : d'une traite, elles débordaient — et surtout, elles tombaient à
+côté du moment qu'elles devaient souligner.
 
 ## Refaire la vidéo
 
 ```bash
-npm run video          # musique + rendu image par image → video/out/
+# une fois
+python3 -m venv .venv-tts && .venv-tts/bin/pip install piper-tts
+#  + la voix : vits-piper-fr_FR-siwis-medium.tar.bz2, sur
+#    https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
+#    (fr_FR-siwis-medium.onnx et .onnx.json, à copier dans video/assets/voice/)
+#    ⚠️ PAS la version v0.0.2 publiée par Piper : sa table de phonèmes ignore les nasales.
+
+npm run video                       # musique + image (≈ 8 min) → bd-report-pub-30s.mp4
+.venv-tts/bin/python video/voice.py # voix + mixage            → bd-report-pub-30s-voix.mp4
+.venv-tts/bin/python video/voice.py --check   # prononciation et créneaux seulement
 ```
 
-Il faut un `ffmpeg` : celui du système, ou `npm i --no-save ffmpeg-static`, ou la
-variable `FFMPEG=/chemin/vers/ffmpeg`. Le texte des sous-titres vit dans `video/ad.html`
-(`window.VO`) — **modifier le texte là, et nulle part ailleurs** : le `.srt` en est
-généré, si bien que l'écran et la voix ne peuvent pas diverger.
+`ffmpeg` requis : celui du système, `npm i --no-save ffmpeg-static`, ou `FFMPEG=…`.
+
+## Remplacer par une voix humaine
+
+Enregistrez un `voix.wav` calé sur la vidéo (début à 0,0 s), déposez-le dans
+`video/out/`, et reprenez la commande de mixage de `voice.py` (fin du fichier) : la
+musique s'atténue automatiquement sous la voix (`sidechaincompress`) et le tout est
+ramené à -14 LUFS, le niveau attendu par LinkedIn, YouTube et Instagram.

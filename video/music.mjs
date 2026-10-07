@@ -164,9 +164,10 @@ for (let t = 12.4, s = 0; t < 25.6; t += BEAT / 2, s++) {
 // Le logo : trois barres qui montent = trois notes qui montent, puis le point mint.
 ;[[10.45, 72], [10.55, 76], [10.65, 79]].forEach(([t, m], i) => pluck(t, m, { g: .16, dur: 1.1, pan: (i - 1) * .35, send: .6 }))
 pluck(10.85, 84, { g: .12, dur: 1.4, send: .7 })
-// La prime se FIGE : déclic sec du cadenas, puis un carillon.
-noiseHit(19.47, { dur: .025, g: .5, hp: .5, decay: 220, send: .1 })
-pluck(19.5, 79, { g: .12, dur: 1.4, pan: -.2, send: .6 }); pluck(19.5, 84, { g: .1, dur: 1.6, pan: .2, send: .6 })
+// La prime se FIGE : déclic sec du cadenas, puis un carillon. Sur le mot « Figée » (20,7 s)
+// et sur l'animation du cadenas dans ad.html — les trois bougent ENSEMBLE.
+noiseHit(20.72, { dur: .025, g: .5, hp: .5, decay: 220, send: .1 })
+pluck(20.75, 79, { g: .12, dur: 1.4, pan: -.2, send: .6 }); pluck(20.75, 84, { g: .1, dur: 1.6, pan: .2, send: .6 })
 // Le score du signal monte : un « ping » quand il atteint sa valeur.
 pluck(24.6, 88, { g: .08, dur: .9, send: .6 })
 // Transitions entre preuves : un souffle.

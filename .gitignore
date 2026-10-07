@@ -7,3 +7,6 @@ dist
 .probe
 # Vidéo : sorties de rendu (régénérables par `npm run video`, 14 Mo de binaire)
 video/out
+# Modèle de voix Piper (~60 Mo) : téléchargé, jamais versionné — voir video/voice.py
+video/assets/voice
+.venv-tts
