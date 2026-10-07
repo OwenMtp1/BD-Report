@@ -11,6 +11,7 @@
     "audit": "node scripts/check-single-bundle.mjs && vite build --ssr scripts/audit.jsx --outDir .audit --emptyOutDir && node .audit/audit.js && node scripts/mtRoundtrip.mjs && node scripts/worker-test.mjs && node scripts/migrate-test.mjs && node scripts/crm-import-test.mjs && node scripts/i18n-coverage.mjs",
     "i18n:missing": "node scripts/i18n-coverage.mjs --list",
     "mobile": "npm run build && node scripts/mobile-check.mjs",
+    "video": "node video/music.mjs && node video/render.mjs",
     "shots": "npm run build && node scripts/screenshots.mjs && SHOT_THEME=light node scripts/screenshots.mjs",
     "tauri": "tauri"
   },

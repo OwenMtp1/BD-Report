@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>BD Report — publicité 30 s</title>
+<!--
+  PUBLICITÉ MOTION DESIGN — 30 s, 1920×1080, 30 i/s.
+
+  ⚠️ TOUT EST PILOTÉ PAR `window.__seek(t)`, rien par l'horloge. Aucune animation CSS,
+  aucun requestAnimationFrame : la capture image par image (`render.mjs`) doit obtenir
+  EXACTEMENT la même image pour le même instant, quelle que soit la vitesse de la machine.
+  Une animation CSS « qui tourne » donnerait une vidéo différente à chaque rendu.
+
+  Structure publicitaire classique d'un 30 s SaaS :
+    0–6,6 s   LE PROBLÈME — les trois douleurs du site, mot pour mot (tableur, 4 outils, le 28)
+    6,6–10 s  LE PIVOT — « La fin de mois se négocie » → « se constate »
+    10–12,4 s LA MARQUE — le vrai logo (trois barres qui montent), le vrai slogan
+    12,4–25,8 TROIS PREUVES — captures RÉELLES de l'app (démo fictive « Atlas Revenue »)
+    25,8–30 s L'APPEL À L'ACTION — démo sans inscription
+
+  Ouvert tel quel dans un navigateur, la page se joue toute seule (lecture en boucle).
+-->
+<style>
+  @font-face { font-family: Inter; font-weight: 400; src: url(assets/fonts/inter-400.ttf) }
+  @font-face { font-family: Inter; font-weight: 600; src: url(assets/fonts/inter-600.ttf) }
+  @font-face { font-family: Inter; font-weight: 700; src: url(assets/fonts/inter-700.ttf) }
+  @font-face { font-family: Inter; font-weight: 800; src: url(assets/fonts/inter-800.ttf) }
+  @font-face { font-family: Inter; font-weight: 900; src: url(assets/fonts/inter-900.ttf) }
+
+  :root {
+    --bg: #070A0F; --surface: #101620; --surface2: #151C27;
+    --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.16);
+    --text: #F8FAFC; --muted: #94A3B8;
+    --violet: #7C5CFF; --green: #22D3A6; --amber: #FFB547; --red: #FF5C7A;
+    --blue: #3B5BDB; --cyan: #0EA5E9; --mint: #A7F3D0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0 }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden }
+  body { display: flex; align-items: center; justify-content: center }
+  #stage {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: Inter, system-ui, sans-serif; font-feature-settings: "ss01", "cv11";
+    transform-origin: center;
+  }
+  .abs { position: absolute }
+  .full { position: absolute; inset: 0 }
+  .center { display: flex; align-items: center; justify-content: center }
+
+  /* ---------- Fond : halos, grille, grain, vignette ---------- */
+  .halo { position: absolute; border-radius: 50%; filter: blur(120px); will-change: transform }
+  #haloV { width: 900px; height: 900px; background: var(--violet); opacity: .32 }
+  #haloG { width: 800px; height: 800px; background: var(--green); opacity: .0 }
+  #haloB { width: 760px; height: 760px; background: var(--blue); opacity: .0 }
+  #grid {
+    position: absolute; inset: -200px;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 80px 80px;
+    mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  }
+  #grain { position: absolute; inset: 0; opacity: .07; mix-blend-mode: overlay; pointer-events: none }
+  #vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.65) 100%) }
+
+  /* ---------- Typographie ---------- */
+  .eyebrow { font-weight: 700; font-size: 22px; letter-spacing: .32em; text-transform: uppercase; color: var(--muted) }
+  .h1 { font-weight: 800; font-size: 96px; line-height: 1.02; letter-spacing: -.035em }
+  .h2 { font-weight: 800; font-size: 68px; line-height: 1.05; letter-spacing: -.03em }
+  .grad { background: linear-gradient(92deg, var(--green), var(--cyan) 55%, var(--violet));
+          -webkit-background-clip: text; background-clip: text; color: transparent }
+  .mask { display: inline-block; overflow: hidden; vertical-align: bottom; padding: .12em 0 .08em; margin-top: -.12em }
+  .mask > span { display: inline-block; will-change: transform }
+
+  /* ---------- Cartes d'interface stylisées ---------- */
+  .card { background: linear-gradient(180deg, rgba(21,28,39,.92), rgba(16,22,32,.92));
+          border: 1px solid var(--line2); border-radius: 22px;
+          box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05) }
+  .chip { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px;
+          padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line2); background: rgba(255,255,255,.04) }
+
+  /* Tableur */
+  #sheet { width: 1180px; padding: 0; overflow: hidden }
+  #sheet .bar { display: flex; align-items: center; gap: 18px; padding: 20px 26px; border-bottom: 1px solid var(--line) }
+  #sheet .fx { font: 700 22px Inter; color: var(--violet); font-style: italic }
+  #sheet .formula { font: 600 24px "DejaVu Sans Mono", monospace; color: #CBD5E1; white-space: nowrap; overflow: hidden }
+  #cells { display: grid; grid-template-columns: 90px repeat(6, 1fr); }
+  #cells div { height: 64px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+               display: flex; align-items: center; justify-content: flex-end; padding: 0 18px;
+               font: 600 24px "DejaVu Sans Mono", monospace; color: #E2E8F0 }
+  #cells div.hd { justify-content: center; color: var(--muted); font: 700 18px Inter; background: rgba(255,255,255,.025) }
+  #cells div.rh { justify-content: center; color: var(--muted); font: 700 18px Inter; background: rgba(255,255,255,.025) }
+  #cells div.hot { position: relative }
+  /* ⚠️ Un <span>, pas un <div> : `#cells div` lui imposait la police monospace et la hauteur
+     d'une cellule. Et il vit DANS la cellule — posé au-dessus, il masquait l'en-tête « Avr ». */
+  #tag { position: absolute; left: 12px; top: 50%; font: 800 14px Inter; color: #1a1205; background: var(--amber);
+         padding: 5px 10px; border-radius: 8px; letter-spacing: .02em; white-space: nowrap }
+
+  /* Quatre outils */
+  .tool { width: 380px; height: 300px; padding: 30px 32px; display: flex; flex-direction: column; justify-content: space-between }
+  .tool .name { display: flex; align-items: center; gap: 14px; font: 700 26px Inter; color: #E2E8F0 }
+  .tool .dot { width: 14px; height: 14px; border-radius: 4px }
+  .tool .lbl { font: 600 20px Inter; color: var(--muted) }
+  .tool .num { font: 900 112px Inter; letter-spacing: -.04em; line-height: 1 }
+
+  /* Calendrier */
+  #cal { display: grid; grid-template-columns: repeat(16, 86px); gap: 12px }
+  #cal div { height: 86px; border-radius: 16px; border: 1px solid var(--line2); background: rgba(255,255,255,.03);
+             display: flex; align-items: center; justify-content: center; font: 700 30px Inter; color: #64748B }
+
+  /* Preuves : cadre d'écran */
+  .shot { position: absolute; border-radius: 22px; overflow: hidden; border: 1px solid var(--line2);
+          box-shadow: 0 50px 120px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.03); background: #0b0f16 }
+  .shot .top { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 18px;
+               background: #0d121a; border-bottom: 1px solid var(--line) }
+  .shot .top i { width: 13px; height: 13px; border-radius: 50%; display: block }
+  .shot img { display: block; width: 100% }
+
+  .pill { font: 700 22px Inter; padding: 12px 22px; border-radius: 999px; display: inline-flex; gap: 12px; align-items: center }
+  .tick { width: 30px; height: 30px; border-radius: 50%; background: var(--green); color: #052016;
+          display: inline-flex; align-items: center; justify-content: center; font: 900 18px Inter }
+
+  /* Sous-titres brûlés (lecture sans le son : la majorité des vues sur réseaux sociaux) */
+  #caption { position: absolute; left: 0; right: 0; bottom: 64px; text-align: center; pointer-events: none }
+  #caption span { display: inline-block; font: 600 34px Inter; letter-spacing: -.01em; color: #fff;
+                  background: rgba(7,10,15,.72); padding: 12px 26px; border-radius: 14px;
+                  border: 1px solid rgba(255,255,255,.10); backdrop-filter: blur(6px); max-width: 1500px }
+
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none }
+  #progress { position: absolute; left: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--green), var(--cyan)) }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- ===================== FOND ===================== -->
+  <div class="full" id="bg">
+    <div class="halo" id="haloV"></div>
+    <div class="halo" id="haloG"></div>
+    <div class="halo" id="haloB"></div>
+    <div id="grid"></div>
+  </div>
+
+  <!-- ===================== ACTE 1 — A : le tableur ===================== -->
+  <div class="full center" id="scA">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:40px">
+      <div class="eyebrow" id="aEye">La prime, aujourd'hui</div>
+      <div class="card" id="sheet">
+        <div class="bar"><span class="fx">fx</span><span class="formula" id="formula"></span></div>
+        <div id="cells"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ACTE 1 — B : quatre outils ===================== -->
+  <div class="full center" id="scB">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:46px">
+      <div class="eyebrow" id="bEye">RDV du mois — selon qui ?</div>
+      <div style="display:flex;gap:30px" id="tools"></div>
+    </div>
+  </div>
+
+  <!-- ===================== ACTE 1 — C : le 28 ===================== -->
+  <div class="full center" id="scC">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:50px">
+      <div class="eyebrow" id="cEye">Le retard, il se découvre…</div>
+      <div id="cal"></div>
+    </div>
+  </div>
+
+  <!-- ===================== ACTE 2 — PIVOT ===================== -->
+  <div class="full center" id="scP">
+    <div style="text-align:center">
+      <div class="h1" id="pL1"><span class="mask"><span>La fin de mois</span></span></div>
+      <div class="h1" style="position:relative;display:inline-block;margin-top:14px">
+        <span class="mask" id="pNeg"><span style="color:#7d8799">se négocie.</span></span>
+        <div class="abs" id="pStrike" style="left:-12px;top:52%;height:9px;border-radius:9px;background:var(--red)"></div>
+      </div>
+      <div class="h1" style="margin-top:6px"><span class="mask" id="pCon"><span class="grad">Elle se constate.</span></span></div>
+    </div>
+  </div>
+
+  <!-- ===================== ACTE 2 — LA MARQUE ===================== -->
+  <div class="full center" id="scM">
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <svg id="logo" width="230" height="230" viewBox="0 0 64 64">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#3B5BDB"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient></defs>
+        <rect id="lgBox" width="64" height="64" rx="15" fill="url(#lg)"/>
+        <rect id="lgB1" x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"/>
+        <rect id="lgB2" x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"/>
+        <rect id="lgB3" x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"/>
+        <circle id="lgDot" cx="45.5" cy="11" r="4" fill="#A7F3D0"/>
+      </svg>
+      <div id="word" style="font:900 132px Inter;letter-spacing:-.04em;margin-top:36px;line-height:1">BD Report</div>
+      <div id="slogan" style="margin-top:44px;text-align:center">
+        <div class="h2"><span class="mask"><span>Toute la prospection,</span></span></div>
+        <div class="h2"><span class="mask"><span class="grad">et la rémunération qui va avec.</span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ACTE 3 — TROIS PREUVES ===================== -->
+  <div class="full" id="scR1">
+    <div class="abs" id="r1Txt" style="left:140px;top:250px;width:640px">
+      <div class="eyebrow" style="color:var(--green)">01 — Un seul espace</div>
+      <div class="h2" style="margin-top:26px">Tout au même<br>endroit.</div>
+      <div style="display:flex;flex-direction:column;gap:18px;margin-top:44px" id="r1List"></div>
+    </div>
+    <div class="shot" id="r1Shot" style="width:1060px;left:800px;top:170px">
+      <div class="top"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+      <img id="img1" src="../site/assets/dashboard.png" alt="">
+    </div>
+  </div>
+
+  <div class="full" id="scR2">
+    <div class="shot" id="r2Shot" style="width:1060px;left:60px;top:170px">
+      <div class="top"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+      <img id="img2" src="../site/assets/primes.png" alt="">
+    </div>
+    <div class="abs" id="r2Txt" style="left:1190px;top:230px;width:640px">
+      <div class="eyebrow" style="color:var(--green)">02 — Primes</div>
+      <div class="h2" style="margin-top:26px">Passage en SQL,<br><span class="grad">prime déclenchée.</span></div>
+      <div class="card" id="r2Counter" style="margin-top:44px;padding:30px 34px;display:flex;align-items:center;justify-content:space-between;width:560px">
+        <div>
+          <div style="font:600 20px Inter;color:var(--muted)">Prime de ce deal</div>
+          <div id="r2Num" style="font:900 84px Inter;letter-spacing:-.04em;margin-top:4px">0 €</div>
+        </div>
+        <svg id="r2Lock" width="92" height="92" viewBox="0 0 24 24" fill="none" stroke="#22D3A6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="11" width="16" height="10" rx="2.5"/><path id="r2Shackle" d="M8 11V7.5a4 4 0 0 1 8 0V11"/>
+        </svg>
+      </div>
+      <div id="r2Sub" style="font:600 24px Inter;color:var(--muted);margin-top:22px">Figée au barème du jour. Fin de la discussion.</div>
+    </div>
+  </div>
+
+  <div class="full" id="scR3">
+    <div class="abs" id="r3Txt" style="left:140px;top:250px;width:640px">
+      <div class="eyebrow" style="color:var(--green)">03 — Signaux</div>
+      <div class="h2" style="margin-top:26px">Une raison<br>d'appeler,<br><span class="grad">trouvée pour vous.</span></div>
+    </div>
+    <div class="shot" id="r3Shot" style="width:1060px;left:800px;top:170px">
+      <div class="top"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+      <img id="img3" src="../site/assets/company.png" alt="">
+    </div>
+    <div class="card abs" id="r3Sig" style="left:690px;top:640px;width:520px;padding:26px 30px;background:#141B26">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:46px;height:46px;border-radius:14px;background:rgba(34,211,166,.15);display:flex;align-items:center;justify-content:center;font-size:26px">📡</div>
+        <div>
+          <div style="font:800 24px Inter">Hexalog · levée de fonds</div>
+          <div style="font:600 18px Inter;color:var(--muted);margin-top:4px">3 sources concordantes · il y a 2 jours</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:20px">
+        <div style="flex:1;height:10px;border-radius:10px;background:rgba(255,255,255,.08);overflow:hidden">
+          <div id="r3Bar" style="height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--cyan))"></div>
+        </div>
+        <div id="r3Score" style="font:900 26px Inter;color:var(--green);width:62px;text-align:right">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ACTE 4 — APPEL À L'ACTION ===================== -->
+  <div class="full center" id="scZ">
+    <div style="display:flex;flex-direction:column;align-items:center;text-align:center">
+      <svg id="logo2" width="120" height="120" viewBox="0 0 64 64">
+        <rect width="64" height="64" rx="15" fill="url(#lg)"/>
+        <rect x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"/>
+        <rect x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"/>
+        <rect x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"/>
+        <circle cx="45.5" cy="11" r="4" fill="#A7F3D0"/>
+      </svg>
+      <div style="margin-top:40px">
+        <div class="h1"><span class="mask"><span>Toute la prospection,</span></span></div>
+        <div class="h1"><span class="mask"><span class="grad">et la rémunération qui va avec.</span></span></div>
+      </div>
+      <div id="zCta" style="margin-top:58px;display:flex;align-items:center;gap:22px">
+        <div class="pill" style="background:var(--green);color:#052016;font-size:30px;padding:20px 38px;font-weight:800">Essayer la démo →</div>
+        <div style="font:600 26px Inter;color:var(--muted)">sans inscription</div>
+      </div>
+      <div id="zUrl" style="margin-top:38px;font:700 34px Inter;letter-spacing:.02em;color:#E2E8F0">bdreport.js.org</div>
+    </div>
+  </div>
+
+  <svg id="grain" width="1920" height="1080">
+    <filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/></filter>
+    <rect width="100%" height="100%" filter="url(#n)"/>
+  </svg>
+  <div id="vignette"></div>
+  <div id="caption"><span id="capTxt"></span></div>
+  <div id="flash"></div>
+  <div id="progress"></div>
+</div>
+
+<script>
+// =========================================================================
+//  Outils d'animation — tout est une fonction PURE de t (en secondes).
+// =========================================================================
+const DURATION = 30
+const $ = (id) => document.getElementById(id)
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x))
+const inv = (t, a, b) => clamp((t - a) / (b - a))
+const mix = (a, b, p) => a + (b - a) * p
+const E = {
+  out: p => 1 - Math.pow(1 - p, 3),
+  in: p => p * p * p,
+  io: p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2,
+  expo: p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p),
+  back: p => 1 + 2.4 * Math.pow(p - 1, 3) + 1.4 * Math.pow(p - 1, 2),
+}
+// Visibilité d'une scène : fondu d'entrée sur `fi`, de sortie sur `fo`.
+const win = (t, a, b, fi = .35, fo = .35) => Math.min(E.out(inv(t, a, a + fi)), 1 - E.in(inv(t, b - fo, b)))
+const set = (el, css) => { for (const k in css) el.style[k] = css[k] }
+// Révélation « par masque » d'une ligne : le texte monte depuis sous sa ligne de base.
+const reveal = (el, p) => { const s = el.querySelector('span'); s.style.transform = `translateY(${mix(110, 0, E.expo(p))}%)` }
+// Groupement à la main : le Chromium de rendu n'embarque pas toujours les règles françaises
+// (il écrivait « 1200 € »). Espace insécable, pour que le montant ne se coupe jamais.
+const fmtEur = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0') + '\u00a0€'
+
+// =========================================================================
+//  Construction du décor (une fois)
+// =========================================================================
+// Tableur : une colonne d'index + 6 mois.
+const MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin']
+const ROWS = [
+  ['Barème SQL', '150', '150', '150', '150', '150', '150'],
+  ['Deals SQL', '4', '6', '5', '7', '3', '8'],
+  ['Prime', '600', '900', '750', '1 050', '450', '1 200'],
+  ['Payé ?', 'oui', 'oui', '?', '?', '?', '?'],
+]
+;(() => {
+  const c = $('cells')
+  c.insertAdjacentHTML('beforeend', '<div class="hd"></div>' + MONTHS.map(m => `<div class="hd">${m}</div>`).join(''))
+  ROWS.forEach((r, i) => {
+    c.insertAdjacentHTML('beforeend', `<div class="rh" style="font-size:15px">${r[0]}</div>` +
+      r.slice(1).map((v, j) => `<div data-v="${v}" data-r="${i}" data-c="${j}">${v}</div>`).join(''))
+  })
+})()
+const cells = [...document.querySelectorAll('#cells div[data-v]')]
+// La cellule « qu'on a modifiée » : le barème d'avril.
+const hot = cells.find(d => d.dataset.r === '0' && d.dataset.c === '3')
+hot.classList.add('hot')
+hot.insertAdjacentHTML('beforeend', '<span id="tag">modifié</span>')
+
+const TOOLS = [
+  ['CRM', '#7C5CFF', 47], ['Agenda', '#0EA5E9', 52], ['Fichier de suivi', '#FFB547', 44], ['Conversation', '#22D3A6', 49],
+]
+$('tools').innerHTML = TOOLS.map(([n, col]) =>
+  `<div class="card tool"><div class="name"><span class="dot" style="background:${col}"></span>${n}</div>
+   <div><div class="lbl">RDV ce mois-ci</div><div class="num" style="color:${col}">0</div></div></div>`).join('')
+const toolEls = [...document.querySelectorAll('#tools .tool')]
+
+$('cal').innerHTML = Array.from({ length: 31 }, (_, i) => `<div>${i + 1}</div>`).join('')
+const days = [...document.querySelectorAll('#cal div')]
+
+$('r1List').innerHTML = ['Rendez-vous', 'Pipeline', 'Primes', "Pilotage d'équipe"].map(x =>
+  `<div class="r1i" style="display:flex;align-items:center;gap:16px;font:700 28px Inter"><span class="tick">✓</span>${x}</div>`).join('')
+const r1Items = [...document.querySelectorAll('.r1i')]
+
+// =========================================================================
+//  Sous-titres = voix off. UNE source pour les deux : `voix-off.srt` est
+//  GÉNÉRÉ depuis ce tableau par render.mjs — le texte lu et le texte affiché
+//  ne peuvent donc pas diverger.
+// =========================================================================
+window.VO = [
+  [0.55, 2.75, "Une formule modifiée en cours d'année…"],
+  [2.85, 4.75, 'quatre outils, quatre chiffres différents…'],
+  [4.85, 6.55, 'le retard, découvert le 28.'],
+  // ⚠️ Court EXPRÈS : l'écran barre déjà « se négocie », la voix n'a qu'à dire la
+  // résolution. La version longue demandait 5,3 mots/s — imprononçable sur la phrase
+  // qui doit porter toute la publicité.
+  [7.60, 10.05, 'La fin de mois ? Elle se constate.'],
+  [10.35, 12.30, 'BD Report.'],
+  [12.60, 16.85, 'Rendez-vous, pipeline, primes, pilotage : un seul espace.'],
+  [17.15, 21.45, 'Chaque passage en SQL déclenche la prime, au barème du jour. Figée.'],
+  [21.80, 25.60, "Et une raison d'appeler, trouvée pour vous."],
+  [26.00, 29.70, 'Toute la prospection, et la rémunération qui va avec. Essayez la démo.'],
+]
+
+// =========================================================================
+//  LE RENDU — une image pour un instant t.
+// =========================================================================
+function render(t) {
+  // ---------- Fond : les halos dérivent, et la couleur bascule du violet (le
+  // problème) au vert (la résolution) au moment du pivot.
+  const shift = E.io(inv(t, 7.0, 11.0))
+  set($('haloV'), { transform: `translate(${mix(-200, -520, t / DURATION)}px, ${mix(-260, 120, t / DURATION)}px)`, opacity: mix(.34, .14, shift) })
+  set($('haloG'), { transform: `translate(${mix(1300, 980, t / DURATION)}px, ${mix(420, 180, t / DURATION)}px)`, opacity: mix(0, .26, shift) })
+  set($('haloB'), { transform: `translate(${mix(700, 560, t / DURATION)}px, ${mix(700, 520, t / DURATION)}px)`, opacity: mix(0, .22, shift) })
+  set($('grid'), { transform: `translate(${(-t * 14) % 80}px, ${(-t * 9) % 80}px)`, opacity: .55 + .35 * shift })
+
+  // ---------- Effondrement vers le centre (6,6 → 7,5 s) : tout le chaos
+  // converge en un point avant que la marque n'en sorte.
+  const col = E.in(inv(t, 6.6, 7.45))
+  const collapse = (el) => { el.style.transform = `scale(${mix(1, .08, col)}) rotate(${mix(0, -8, col)}deg)`; el.style.filter = `blur(${col * 14}px)` }
+
+  // ===== A : le tableur =====
+  {
+    const v = win(t, 0.15, 2.95, .45, .3)
+    set($('scA'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
+    if (v > 0) {
+      const k = E.out(inv(t, 0.15, 1.0))
+      $('sheet').style.transform = `perspective(1600px) rotateX(${mix(18, 6, k)}deg) translateY(${mix(60, 0, k)}px) rotateZ(${mix(-1.5, -0.6, t / 3)}deg)`
+      $('aEye').style.opacity = E.out(inv(t, 0.3, 0.8))
+      // Les cellules se remplissent l'une après l'autre.
+      cells.forEach((d, i) => { d.style.opacity = E.out(inv(t, 0.35 + i * 0.022, 0.6 + i * 0.022)) })
+      // La formule se tape, caractère par caractère.
+      const F = '=SI(B2>=5;B2*barème_v3;B2*barème_v2)'
+      $('formula').textContent = F.slice(0, Math.floor(F.length * inv(t, 0.6, 1.7))) + (Math.floor(t * 3) % 2 ? '▌' : ' ')
+      // Le barème d'avril change sous nos yeux : 150 → 90.
+      const hp = inv(t, 1.75, 2.0)
+      hot.firstChild.nodeValue = hp > .5 ? '90' : '150'
+      hot.style.background = `rgba(255,181,71,${0.32 * E.out(hp) * (1 - .3 * Math.sin(t * 18) ** 2)})`
+      hot.style.color = hp > .5 ? '#FFB547' : ''
+      const tag = $('tag'); tag.style.opacity = E.out(inv(t, 1.9, 2.15)); tag.style.transform = `translateY(calc(-50% + ${mix(10, 0, E.back(inv(t, 1.9, 2.25)))}px)) scale(${mix(.7, 1, E.back(inv(t, 1.9, 2.25)))})`
+    }
+  }
+
+  // ===== B : quatre outils, quatre chiffres =====
+  {
+    const v = win(t, 2.75, 4.95, .3, .3)
+    set($('scB'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
+    if (v > 0) {
+      $('bEye').style.opacity = E.out(inv(t, 2.85, 3.3))
+      toolEls.forEach((el, i) => {
+        const p = E.back(inv(t, 2.8 + i * .09, 3.35 + i * .09))
+        const wob = Math.sin(t * 2.2 + i * 1.7) * 4
+        el.style.transform = `translateY(${mix(140, wob, p)}px) rotate(${mix(i % 2 ? 6 : -6, (i - 1.5) * 1.6, p)}deg)`
+        el.style.opacity = clamp(p * 1.4)
+        const n = TOOLS[i][2]
+        el.querySelector('.num').textContent = Math.round(n * E.out(inv(t, 3.05 + i * .09, 3.85 + i * .09)))
+      })
+    }
+  }
+
+  // ===== C : le 28 =====
+  {
+    // ⚠️ La scène vit jusqu'à 7,5 s : l'effondrement (6,6 → 7,45) se joue SUR elle. Elle
+    // s'effaçait à 6,65 s, et le choc qui relie le problème à la solution tombait dans le vide.
+    const v = win(t, 4.75, 7.5, .3, .1)
+    set($('scC'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
+    if (v > 0) {
+      $('cEye').style.opacity = E.out(inv(t, 4.85, 5.25))
+      days.forEach((d, i) => {
+        const p = E.out(inv(t, 4.8 + i * .028, 5.15 + i * .028))
+        d.style.opacity = p
+        d.style.transform = `translateY(${mix(30, 0, p)}px)`
+        const passed = i < 27 && t > 5.15 + i * .035
+        d.style.background = passed ? 'rgba(124,92,255,.10)' : 'rgba(255,255,255,.03)'
+        d.style.color = passed ? '#7C6FA8' : '#64748B'
+      })
+      // Le 28 s'allume en ambre — trop tard.
+      const d28 = days[27], q = inv(t, 5.95, 6.2)
+      const pulse = 1 + .08 * Math.sin(t * 16) * q
+      d28.style.transform = `scale(${mix(1, 1.32, E.back(q)) * pulse})`
+      d28.style.background = `rgba(255,181,71,${.9 * q})`
+      d28.style.color = q > .4 ? '#1a1205' : ''
+      d28.style.borderColor = q > .4 ? '#FFB547' : ''
+      d28.style.boxShadow = `0 0 ${60 * q}px rgba(255,181,71,${.7 * q})`
+      d28.style.zIndex = 2
+    }
+  }
+  // L'effondrement s'applique au dernier tableau du problème.
+  collapse($('scC').firstElementChild)
+
+  // ===== Impact =====
+  $('flash').style.opacity = Math.max(0, .85 * (1 - inv(t, 7.45, 7.85))) * (t >= 7.45 ? 1 : 0)
+  // Petite secousse à l'impact : le choc se SENT avant de se voir.
+  const shake = t > 7.45 && t < 7.8 ? (1 - inv(t, 7.45, 7.8)) * 9 : 0
+  $('stage').style.transform = `translate(${Math.sin(t * 90) * shake}px, ${Math.cos(t * 77) * shake}px)`
+
+  // ===== PIVOT : « se négocie » → « Elle se constate » =====
+  {
+    const v = win(t, 7.5, 10.15, .2, .35)
+    set($('scP'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
+    if (v > 0) {
+      reveal($('pL1').querySelector('.mask'), inv(t, 7.6, 8.25))
+      reveal($('pNeg'), inv(t, 7.8, 8.45))
+      const s = E.io(inv(t, 8.75, 9.15))
+      // `offsetWidth`, pas getBoundingClientRect : il ignore la secousse et le zoom d'affichage.
+      $('pStrike').style.width = `${($('pNeg').offsetWidth + 24) * s}px`
+      $('pNeg').style.opacity = mix(1, .45, s)
+      reveal($('pCon'), inv(t, 9.15, 9.75))
+    }
+  }
+
+  // ===== LA MARQUE =====
+  {
+    const v = win(t, 10.05, 12.55, .25, .35)
+    set($('scM'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
+    if (v > 0) {
+      const box = E.back(inv(t, 10.1, 10.65))
+      $('logo').style.transform = `scale(${mix(.2, 1, box)}) rotate(${mix(-90, 0, E.out(inv(t, 10.1, 10.7)))}deg)`
+      // Les trois barres MONTENT l'une après l'autre — c'est ce que dit le logo.
+      ;[['lgB1', 34, 17], ['lgB2', 26, 25], ['lgB3', 16, 35]].forEach(([id, y, h], i) => {
+        const p = E.back(inv(t, 10.45 + i * .1, 10.85 + i * .1))
+        const hh = Math.max(0.01, h * p)
+        $(id).setAttribute('height', hh); $(id).setAttribute('y', y + h - hh)
+      })
+      const dp = E.back(inv(t, 10.85, 11.15))
+      $('lgDot').setAttribute('r', 4 * dp); $('lgDot').setAttribute('cy', mix(18, 11, dp))
+      const wp = E.out(inv(t, 10.75, 11.35))
+      set($('word'), { opacity: wp, letterSpacing: `${mix(.25, -.04, wp)}em`, filter: `blur(${(1 - wp) * 10}px)` })
+      const sl = $('slogan').querySelectorAll('.mask')
+      reveal(sl[0], inv(t, 11.3, 11.85)); reveal(sl[1], inv(t, 11.45, 12.0))
+      $('scM').firstElementChild.style.transform = `scale(${mix(1, 1.04, inv(t, 10.1, 12.55))})`
+    }
+  }
+
+  // ===== PREUVE 1 : tout au même endroit =====
+  {
+    const v = win(t, 12.4, 17.15, .45, .4)
+    set($('scR1'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
+    if (v > 0) {
+      const p = E.out(inv(t, 12.4, 13.3))
+      $('r1Shot').style.transform = `perspective(2200px) translateX(${mix(260, 0, p)}px) rotateY(${mix(-24, -9, p) + mix(0, 3, inv(t, 13.3, 17))}deg) translateY(${mix(0, -18, inv(t, 13, 17))}px)`
+      $('r1Txt').style.transform = `translateY(${mix(40, 0, E.out(inv(t, 12.55, 13.3)))}px)`
+      $('r1Txt').style.opacity = E.out(inv(t, 12.55, 13.2))
+      r1Items.forEach((el, i) => {
+        const q = E.back(inv(t, 13.4 + i * .32, 13.8 + i * .32))
+        el.style.opacity = clamp(q); el.style.transform = `translateX(${mix(-30, 0, q)}px)`
+      })
+    }
+  }
+
+  // ===== PREUVE 2 : la prime figée =====
+  {
+    const v = win(t, 16.95, 21.75, .45, .4)
+    set($('scR2'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
+    if (v > 0) {
+      const p = E.out(inv(t, 16.95, 17.85))
+      $('r2Shot').style.transform = `perspective(2200px) translateX(${mix(-260, 0, p)}px) rotateY(${mix(24, 9, p) - mix(0, 3, inv(t, 17.85, 21.5))}deg) translateY(${mix(0, -18, inv(t, 17.5, 21.5))}px)`
+      $('r2Txt').style.opacity = E.out(inv(t, 17.1, 17.75))
+      $('r2Txt').style.transform = `translateY(${mix(40, 0, E.out(inv(t, 17.1, 17.85)))}px)`
+      // Le compteur monte… puis le cadenas se FERME : la prime ne bougera plus.
+      $('r2Num').textContent = fmtEur(1200 * E.out(inv(t, 18.0, 19.3)))
+      const lk = E.back(inv(t, 19.45, 19.8))
+      $('r2Shackle').style.transform = `translateY(${mix(-3.2, 0, lk)}px)`
+      $('r2Lock').style.transform = `scale(${1 + .22 * Math.sin(Math.PI * inv(t, 19.45, 19.95))})`
+      $('r2Counter').style.boxShadow = `0 30px 80px rgba(0,0,0,.55), 0 0 ${70 * inv(t, 19.5, 19.9) * (1 - inv(t, 20.2, 21))}px rgba(34,211,166,.55)`
+      $('r2Counter').style.borderColor = inv(t, 19.5, 19.7) > .5 ? 'rgba(34,211,166,.6)' : ''
+      $('r2Sub').style.opacity = E.out(inv(t, 19.7, 20.2))
+    }
+  }
+
+  // ===== PREUVE 3 : une raison d'appeler =====
+  {
+    const v = win(t, 21.55, 25.95, .45, .45)
+    set($('scR3'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
+    if (v > 0) {
+      const p = E.out(inv(t, 21.55, 22.45))
+      $('r3Shot').style.transform = `perspective(2200px) translateX(${mix(260, 0, p)}px) rotateY(${mix(-24, -9, p) + mix(0, 3, inv(t, 22.45, 25.8))}deg) translateY(${mix(0, -18, inv(t, 22, 25.8))}px)`
+      $('r3Txt').style.opacity = E.out(inv(t, 21.7, 22.35))
+      $('r3Txt').style.transform = `translateY(${mix(40, 0, E.out(inv(t, 21.7, 22.45)))}px)`
+      const s = E.back(inv(t, 22.9, 23.45))
+      $('r3Sig').style.opacity = clamp(s * 1.3)
+      $('r3Sig').style.transform = `translateY(${mix(60, 0, s)}px) scale(${mix(.9, 1, s)})`
+      const sc = E.out(inv(t, 23.4, 24.6))
+      $('r3Bar').style.width = `${87 * sc}%`
+      $('r3Score').textContent = Math.round(87 * sc)
+    }
+  }
+
+  // ===== APPEL À L'ACTION =====
+  {
+    const v = win(t, 25.75, 30.2, .45, .2)
+    set($('scZ'), { opacity: v, visibility: v > 0 ? 'visible' : 'hidden' })
+    if (v > 0) {
+      const lp = E.back(inv(t, 25.85, 26.35))
+      $('logo2').style.transform = `scale(${mix(.3, 1, lp)})`
+      $('logo2').style.opacity = clamp(lp * 1.4)
+      const m = $('scZ').querySelectorAll('.mask')
+      reveal(m[0], inv(t, 26.1, 26.7)); reveal(m[1], inv(t, 26.3, 26.9))
+      const c = E.back(inv(t, 27.2, 27.65))
+      $('zCta').style.opacity = clamp(c * 1.3)
+      $('zCta').style.transform = `translateY(${mix(30, 0, c)}px)`
+      $('zUrl').style.opacity = E.out(inv(t, 27.7, 28.2))
+      // Le bouton respire une fois : là où le regard doit aller.
+      const pill = $('zCta').firstElementChild
+      pill.style.transform = `scale(${1 + .05 * Math.sin(Math.PI * inv(t, 28.4, 29.1))})`
+      pill.style.boxShadow = `0 0 ${50 * Math.sin(Math.PI * inv(t, 28.4, 29.1))}px rgba(34,211,166,.6)`
+    }
+  }
+
+  // ===== Fondu au noir final + sous-titres =====
+  $('stage').style.filter = `brightness(${1 - E.in(inv(t, 29.55, 30))})`
+  const cap = window.VO.find(([a, b]) => t >= a && t < b)
+  const capEl = $('caption')
+  if (cap) {
+    $('capTxt').textContent = cap[2]
+    const q = Math.min(inv(t, cap[0], cap[0] + .18), 1 - inv(t, cap[1] - .15, cap[1]))
+    capEl.style.opacity = q
+    capEl.style.transform = `translateY(${mix(10, 0, E.out(inv(t, cap[0], cap[0] + .2)))}px)`
+  } else capEl.style.opacity = 0
+  // Le sous-titre se tait sur la marque et l'appel à l'action : le texte est déjà à l'écran.
+  if (cap && (cap[2] === 'BD Report.' || t > 25.9)) capEl.style.opacity = 0
+  $('progress').style.width = `${(t / DURATION) * 100}%`
+  $('progress').style.opacity = .55
+}
+
+// Point d'entrée de la capture : `render.mjs` appelle __seek(t) puis photographie.
+window.__seek = (t) => { render(t); return t }
+window.__ready = Promise.all([
+  document.fonts.ready,
+  ...[...document.images].map(i => i.decode().catch(() => {})),
+])
+
+// Lecture en boucle quand la page est ouverte à la main dans un navigateur.
+if (!navigator.webdriver) {
+  const fit = () => { const s = Math.min(innerWidth / 1920, innerHeight / 1080); $('stage').parentElement.style.zoom = s }
+  addEventListener('resize', fit); fit()
+  let t0 = performance.now()
+  const loop = (now) => { render(((now - t0) / 1000) % DURATION); requestAnimationFrame(loop) }
+  window.__ready.then(() => { t0 = performance.now(); requestAnimationFrame(loop) })
+} else render(0)
+</script>
+</body>
+</html>

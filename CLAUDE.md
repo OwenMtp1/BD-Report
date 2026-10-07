@@ -1011,6 +1011,29 @@ montré. Un défilement horizontal VOULU (kanban) reste permis dès qu'il vit da
   drapeau `FEATURES.multiTenant` est donc inerte. Le runbook dit précisément ce qui reste, et
   pourquoi le branchement ne doit pas se faire avant d'avoir un projet Supabase de test.
 
+## Vidéo publicitaire (30 s, motion design)
+- **`video/ad.html`** — l'animation, 1920×1080, ouverte à la main elle se joue en boucle.
+  Problème (tableur, 4 outils, le 28 — les trois douleurs du site, mot pour mot) → pivot
+  (« La fin de mois se négocie » barré → « Elle se constate ») → vrai logo (les trois barres
+  MONTENT) → trois preuves sur captures RÉELLES de la démo fictive → appel à l'action.
+  ⚠️ **TOUT est piloté par `window.__seek(t)`, rien par l'horloge** : ni animation CSS, ni
+  `requestAnimationFrame` pendant le rendu. La même commande donne la même vidéo à l'image près.
+- **`video/render.mjs`** — capture IMAGE PAR IMAGE (Playwright), jamais l'enregistrement temps
+  réel, qui perd des images sur une machine lente. `--stills 1.5,9.9` sort des images-clés :
+  **les regarder AVANT le rendu complet** (8 min) — c'est ainsi qu'ont été trouvés un fondu
+  qui effaçait la scène avant son effondrement et une étiquette en police monospace.
+  ⚠️ **Il refuse une réplique de plus de 3,6 mots/s** : la phrase du pivot en demandait 5,3,
+  imprononçable, et les sous-titres s'affichent à n'importe quelle vitesse sans rien signaler.
+- **`video/music.mjs`** — bande-son SYNTHÉTISÉE (aucun échantillon), écrite contre l'image :
+  impact à 7,45 s, trois notes sur les trois barres du logo, déclic sur le cadenas. ⚠️ Changer
+  un instant de l'animation sans le reporter ici désynchronise le son. Mixée SOUS une voix.
+- **Pas de voix off générée** : la machine n'a aucun moteur vocal. Livrée avec sous-titres
+  incrustés (la plupart des vues sur réseaux sont son coupé) ; `video/voix-off.md` donne le
+  texte, le jeu par réplique et la commande de mixage. Le texte vit dans `window.VO` et
+  NULLE PART ailleurs : le `.srt` en est généré, l'écran et la voix ne peuvent diverger.
+- `npm run video` ; `ffmpeg` requis (système, `npm i --no-save ffmpeg-static`, ou `FFMPEG=`).
+  Sorties dans `video/out/` (ignoré par git). Police Inter embarquée, licence OFL jointe.
+
 ## DÉPLOIEMENT — IMPORTANT
 Le **proxy git de l'environnement de dev bloque la branche `gh-pages`** (seul le push de la branche de travail passe).
 → Le déploiement se fait donc **via GitHub Actions**, pas par push git local.

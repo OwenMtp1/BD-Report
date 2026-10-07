@@ -5,3 +5,5 @@ dist
 *.local
 .audit
 .probe
+# Vidéo : sorties de rendu (régénérables par `npm run video`, 14 Mo de binaire)
+video/out
