@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+<title>BD Report vs tableur et CRM — que choisir pour une équipe BDR</title>
+<meta name="description" content="Tableur, CRM ou BD Report : ce que chacun sait faire pour une équipe BDR, ce qu'il ne sait pas faire, et quand garder les trois. Comparaison honnête, sans caricature.">
+<link rel="icon" type="image/svg+xml" href="app/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<style>
+  .cmp-tbl th:first-child { width: 32% }
+  .cmp-tbl td:not(:first-child), .cmp-tbl th:not(:first-child) { text-align: center }
+  .yes { color: #6EE7C4; font-weight: 800 }
+  .no { color: #FF9AA8; font-weight: 800 }
+  .part { color: #FFC978; font-weight: 800 }
+  .verdict { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 18px 0 }
+  @media (max-width: 780px) { .verdict { grid-template-columns: 1fr } }
+  .verdict .card h3 { font-size: 16px; margin-bottom: 6px }
+  .verdict .card p { font-size: 14px; color: var(--muted) }
+  .keep { border-left: 3px solid var(--violet) }
+</style>
+<link rel="canonical" href="https://owenmtp1.github.io/BD-Report/comparatif.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BD Report">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="BD Report vs tableur et CRM — que choisir pour une équipe BDR">
+<meta property="og:description" content="Tableur, CRM ou BD Report : ce que chacun sait faire pour une équipe BDR, ce qu'il ne sait pas faire, et quand garder les trois. Comparaison honnête, sans caricature.">
+<meta property="og:url" content="https://owenmtp1.github.io/BD-Report/comparatif.html">
+<meta property="og:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BD Report vs tableur et CRM — que choisir pour une équipe BDR">
+<meta name="twitter:description" content="Tableur, CRM ou BD Report : ce que chacun sait faire pour une équipe BDR, ce qu'il ne sait pas faire, et quand garder les trois. Comparaison honnête, sans caricature.">
+<meta name="twitter:image" content="https://owenmtp1.github.io/BD-Report/assets/og.png">
+<script>(function(){try{var t=localStorage.getItem('bdr_site_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
+<style>
+.theme-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line2);
+  background:var(--veil);color:var(--muted);border-radius:10px;width:34px;height:34px;padding:0;
+  cursor:pointer;transition:color .2s,background .2s,border-color .2s}
+.theme-btn:hover{color:var(--text);background:var(--veil2)}
+.theme-btn svg{width:17px;height:17px;display:block}
+</style>
+<link rel="alternate" hreflang="fr" href="https://owenmtp1.github.io/BD-Report/comparatif.html">
+<link rel="alternate" hreflang="en" href="https://owenmtp1.github.io/BD-Report/en/comparatif.html">
+<link rel="alternate" hreflang="es" href="https://owenmtp1.github.io/BD-Report/es/comparatif.html">
+<link rel="alternate" hreflang="x-default" href="https://owenmtp1.github.io/BD-Report/comparatif.html">
+</head>
+<body>
+<div class="bg-layer"></div><div class="bg-grid"></div>
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="index.html">
+      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9B84FF"/><stop offset="1" stop-color="#22D3A6"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#0B0F16" opacity=".85"/><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#0B0F16" opacity=".9"/><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#0B0F16"/></svg>
+      <span><b>BD</b> Report</span>
+    </a>
+    <div class="nav-right">
+      <a href="index.html#tarifs" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.pricing">Tarifs</a>
+      <a href="index.html#contact" style="font-weight:600;font-size:14px;color:var(--muted)" data-i18n="nav.contact">Contact</a>
+      <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧 EN</button>
+      <a class="btn btn-primary" href="app/" data-i18n="nav.login">Se connecter</a>
+    </div>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="chip" data-i18n="hero.chip">⚖️ Comparaison</span>
+    <h1 data-i18n="hero.title">Tableur, CRM, ou BD Report ?</h1>
+    <p data-i18n="hero.pitch">Les deux vraies alternatives à BD Report ne sont pas d'autres logiciels de prospection : c'est le tableur que vous tenez déjà, et le CRM que vous avez déjà payé. Voici ce que chacun sait faire, ce qu'il ne sait pas faire, et pourquoi la réponse est souvent « les trois ».</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="intro" data-i18n="intro">Cette page est écrite pour être lue par quelqu'un qui hésite. Nous n'y prétendons pas qu'un CRM est mauvais — c'est faux — ni qu'un tableur ne sert à rien : il a permis à des milliers d'équipes de suivre leur activité avant que quoi que ce soit d'autre existe. Nous disons où chacun s'arrête.</p>
+
+  <section class="sec">
+    <div class="card">
+      <h2><span class="ic">📊</span> <span data-i18n="s1.title">Ce que fait un tableur, et où il s'arrête</span></h2>
+      <p data-i18n="s1.p1">Un tableur est imbattable sur un point : il ne coûte rien et il fait exactement ce qu'on lui demande. Pour une personne seule qui suit trente comptes, c'est souvent le bon outil, et prétendre le contraire serait malhonnête.</p>
+      <p data-i18n="s1.p2">Il s'arrête à trois endroits, toujours les mêmes. <strong>Une formule modifiée en cours d'année réécrit le passé</strong> : plus personne ne sait quel barème s'appliquait au moment du deal, et la fin de mois se négocie au lieu de se constater. <strong>Deux personnes ne peuvent pas y travailler sans se marcher dessus</strong> : on finit avec une version par commercial et une réconciliation manuelle chaque semaine. Et <strong>il ne rappelle rien</strong> : un no-show à replanifier n'existe que si quelqu'un s'en souvient.</p>
+      <div class="note" data-i18n="s1.note">Le signe que le tableur a atteint sa limite : quelqu'un passe plus d'une heure par semaine à le mettre d'accord avec la réalité.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">🗂️</span> <span data-i18n="s2.title">Ce que fait un CRM, et où il s'arrête</span></h2>
+      <p data-i18n="s2.p1">Un CRM suit des comptes et des affaires sur toute leur durée de vie, souvent sur plusieurs années et plusieurs interlocuteurs. C'est un outil d'entreprise, conçu pour le cycle de vente complet, et rien ici ne propose de le remplacer.</p>
+      <p data-i18n="s2.p2">Il s'arrête là où commence le métier du BDR. <strong>Un CRM ne calcule pas la rémunération variable</strong> : le plan de commissions vit dans un fichier à part, tenu par les RH ou le manager. <strong>Il ne sait pas ce qu'un no-show a coûté</strong>, parce qu'un no-show n'est pas une étape de vente. Et surtout, <strong>il ne montre jamais au commercial ce qu'il touchera ce mois-ci</strong> — c'est pourtant la seule question qui le fera ouvrir un outil de reporting tous les matins.</p>
+      <div class="note" data-i18n="s2.note">Le signe que le CRM ne suffit pas : vos BDR le remplissent parce qu'on le leur demande, pas parce qu'ils y trouvent quelque chose.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">⚖️</span> <span data-i18n="s3.title">Le tableau, sans caricature</span></h2>
+      <div class="tw">
+        <table class="cmp-tbl">
+          <thead>
+            <tr>
+              <th data-i18n="t.h0">Besoin d'une équipe BDR</th>
+              <th data-i18n="t.h1">Tableur</th>
+              <th data-i18n="t.h2">CRM</th>
+              <th data-i18n="t.h3">BD Report</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="t.r1">Suivre des comptes sur un cycle long</td><td class="part">≈</td><td class="yes">✓</td><td class="part">≈</td></tr>
+            <tr><td data-i18n="t.r2">Calculer la prime de chaque commercial</td><td class="part">≈</td><td class="no">✗</td><td class="yes">✓</td></tr>
+            <tr><td data-i18n="t.r3">Figer le barème au moment du deal</td><td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td></tr>
+            <tr><td data-i18n="t.r4">Montrer au BDR ce qu'il va toucher</td><td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td></tr>
+            <tr><td data-i18n="t.r5">Travailler à plusieurs sans conflit</td><td class="no">✗</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+            <tr><td data-i18n="t.r6">Suivre les no-shows et leur coût</td><td class="part">≈</td><td class="no">✗</td><td class="yes">✓</td></tr>
+            <tr><td data-i18n="t.r7">Prévoir le mois avec une fourchette</td><td class="no">✗</td><td class="part">≈</td><td class="yes">✓</td></tr>
+            <tr><td data-i18n="t.r8">Personnaliser les étapes du pipeline</td><td class="yes">✓</td><td class="part">≈</td><td class="yes">✓</td></tr>
+            <tr><td data-i18n="t.r9">Servir de source de vérité à toute l'entreprise</td><td class="no">✗</td><td class="yes">✓</td><td class="no">✗</td></tr>
+            <tr><td data-i18n="t.r10">Coûter zéro euro</td><td class="yes">✓</td><td class="no">✗</td><td class="part">≈</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--muted2);margin-top:10px" data-i18n="t.legend">✓ le fait nativement · ≈ le fait au prix d'un contournement · ✗ ne le fait pas</p>
+    </div>
+
+    <div class="card keep">
+      <h2><span class="ic">🤝</span> <span data-i18n="s4.title">Pourquoi la réponse est souvent « les trois »</span></h2>
+      <p data-i18n="s4.p1">Deux lignes du tableau méritent qu'on s'y arrête, parce qu'elles disent l'inverse de ce qu'un argumentaire commercial dirait normalement. <strong>BD Report n'est pas la source de vérité de votre entreprise</strong> : si vous avez un CRM, il le reste. Et <strong>BD Report n'est pas gratuit</strong> une fois la bêta terminée, là où un tableur l'est pour toujours.</p>
+      <p data-i18n="s4.p2">C'est pour cela que l'intégration HubSpot existe : entreprises, contacts, rendez-vous et tâches partent dans votre portail, et les deux outils racontent la même histoire. Le CRM garde le cycle de vente ; BD Report tient l'activité quotidienne du BDR et sa rémunération, que le CRM ne modélisera jamais.</p>
+      <div class="verdict">
+        <div class="card"><h3 data-i18n="v1.t">Gardez le tableur si…</h3><p data-i18n="v1.p">Vous êtes seul, vous suivez moins d'une cinquantaine de comptes, et votre prime tient en une multiplication. Vous n'avez besoin de rien d'autre, et nous ne vous vendrons pas le contraire.</p></div>
+        <div class="card"><h3 data-i18n="v2.t">Gardez le CRM si…</h3><p data-i18n="v2.p">Vos cycles dépassent six mois, plusieurs équipes touchent aux mêmes comptes, et votre direction a besoin d'une source unique. Vous le garderez de toute façon.</p></div>
+        <div class="card"><h3 data-i18n="v3.t">Ajoutez BD Report si…</h3><p data-i18n="v3.p">Vous avez des BDR payés au variable, et la question « combien je touche ce mois-ci » se règle aujourd'hui par e-mail ou en réunion. C'est exactement le trou que ce produit remplit.</p></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">💬</span> <span data-i18n="s5.title">La question qu'on nous pose le plus</span></h2>
+      <p data-i18n="s5.p1"><strong>« Un outil de plus, mes commerciaux ne l'utiliseront pas. »</strong> C'est le risque réel de tout outil de reporting, et la raison pour laquelle celui-ci part de leur paie plutôt que de vos tableaux de bord. Un BDR ouvre BD Report pour savoir où en est sa prime ; votre reporting est ce qui en tombe, sans double saisie.</p>
+      <p data-i18n="s5.p2">Si ce raisonnement ne vous convainc pas, la démonstration dure vingt minutes et se fait sur vos propres règles de prime — pas sur un jeu de données préparé.</p>
+    </div>
+  </section>
+
+  <div class="cta">
+    <h2 data-i18n="cta.title">Voir ce que ça donne sur votre plan de primes</h2>
+    <p data-i18n="cta.sub">Vingt minutes, vos règles, vos chiffres.</p>
+    <a class="btn btn-primary" href="index.html#contact" data-i18n="cta.btn">Demander une démonstration</a>
+  </div>
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2026 <b style="color:#7C9BFF">BD</b> Report — <span data-i18n="foot.tag">Pilotez votre prospection. Encaissez vos primes.</span></span>
+    <span style="display:flex;gap:18px;flex-wrap:wrap">
+      <a href="securite.html" data-i18n="nav.security">Sécurité</a>
+      <a href="cgv.html">CGV</a>
+      <a href="confidentialite.html">Confidentialité</a>
+      <a href="index.html" data-i18n="foot.back">← Retour au site</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+const DICTS = {
+  en: {"nav.pricing":"Pricing","nav.contact":"Contact","nav.login":"Log in","nav.security":"Security","foot.back":"← Back to the site","foot.tag":"Run your pipeline. Cash your bonuses.","hero.chip":"⚖️ Comparison","hero.title":"Spreadsheet, CRM, or BD Report?","hero.pitch":"The two real alternatives to BD Report aren't other prospecting tools: they're the spreadsheet you already keep and the CRM you already pay for. Here's what each one does, what it doesn't, and why the answer is often “all three”.","intro":"This page is written for someone who is hesitating. We don't claim a CRM is bad — it isn't — nor that a spreadsheet is useless: it let thousands of teams track their activity before anything else existed. We're saying where each one stops.","s1.title":"What a spreadsheet does, and where it stops","s1.p1":"A spreadsheet is unbeatable on one count: it costs nothing and does exactly what you tell it. For one person tracking thirty accounts it is often the right tool, and pretending otherwise would be dishonest.","s1.p2":"It stops in three places, always the same ones. <strong>One formula edited mid-year rewrites the past</strong>: nobody can say which grid applied when the deal landed, and the end of the month gets negotiated instead of simply read. <strong>Two people cannot work in it without colliding</strong>: you end up with one version per rep and a manual reconciliation every week. And <strong>it reminds you of nothing</strong>: a no-show to rebook only exists if someone remembers it.","s1.note":"The sign a spreadsheet has hit its limit: someone spends more than an hour a week making it agree with reality.","s2.title":"What a CRM does, and where it stops","s2.p1":"A CRM tracks accounts and deals across their whole life, often over several years and several contacts. It is an enterprise tool built for the full sales cycle, and nothing here proposes to replace it.","s2.p2":"It stops where the BDR's job begins. <strong>A CRM does not compute variable pay</strong>: the commission plan lives in a separate file kept by HR or the manager. <strong>It does not know what a no-show cost</strong>, because a no-show isn't a sales stage. And above all, <strong>it never shows a rep what they will make this month</strong> — which is the only question that will make them open a reporting tool every morning.","s2.note":"The sign a CRM isn't enough: your BDRs fill it in because they're told to, not because they get something out of it.","s3.title":"The table, without the caricature","t.h0":"What a BDR team needs","t.h1":"Spreadsheet","t.h2":"CRM","t.h3":"BD Report","t.r1":"Track accounts over a long cycle","t.r2":"Compute each rep's bonus","t.r3":"Freeze the grid at deal time","t.r4":"Show the BDR what they'll make","t.r5":"Work as a team without conflicts","t.r6":"Track no-shows and their cost","t.r7":"Forecast the month with a range","t.r8":"Customize pipeline stages","t.r9":"Be the company's source of truth","t.r10":"Cost nothing","t.legend":"✓ does it natively · ≈ does it with a workaround · ✗ doesn't do it","s4.title":"Why the answer is often “all three”","s4.p1":"Two rows deserve a pause, because they say the opposite of what a sales page normally says. <strong>BD Report is not your company's source of truth</strong>: if you have a CRM, it stays. And <strong>BD Report is not free</strong> once the beta ends, where a spreadsheet is free forever.","s4.p2":"That is why the HubSpot integration exists: companies, contacts, meetings and tasks go into your portal, and both tools tell the same story. The CRM keeps the sales cycle; BD Report holds the BDR's daily activity and their pay, which the CRM will never model.","v1.t":"Keep the spreadsheet if…","v1.p":"You work alone, track fewer than fifty accounts, and your bonus fits in one multiplication. You need nothing else, and we won't sell you otherwise.","v2.t":"Keep the CRM if…","v2.p":"Your cycles run past six months, several teams touch the same accounts, and your leadership needs a single source. You'll keep it anyway.","v3.t":"Add BD Report if…","v3.p":"You have BDRs on variable pay, and “how much do I make this month” is currently settled by email or in a meeting. That is exactly the gap this product fills.","s5.title":"The question we get most","s5.p1":"<strong>“One more tool — my reps won't use it.”</strong> That's the real risk with any reporting tool, and the reason this one starts from their pay rather than your dashboards. A BDR opens BD Report to see where their bonus stands; your reporting is what falls out of it, with no double entry.","s5.p2":"If that reasoning doesn't convince you, the demo takes twenty minutes and runs on your own bonus rules — not on a prepared dataset.","cta.title":"See it on your own commission plan","cta.sub":"Twenty minutes, your rules, your numbers.","cta.btn":"Book a demo"},
+  es: {"nav.pricing":"Precios","nav.contact":"Contacto","nav.login":"Iniciar sesión","nav.security":"Seguridad","foot.back":"← Volver al sitio","foot.tag":"Dirige tu pipeline. Cobra tus primas.","hero.chip":"⚖️ Comparación","hero.title":"¿Hoja de cálculo, CRM o BD Report?","hero.pitch":"Las dos verdaderas alternativas a BD Report no son otras herramientas de prospección: son la hoja de cálculo que ya llevas y el CRM que ya pagas. Esto es lo que hace cada una, lo que no hace, y por qué la respuesta suele ser «las tres».","intro":"Esta página está escrita para quien duda. No decimos que un CRM sea malo — no lo es — ni que una hoja de cálculo no sirva: permitió a miles de equipos seguir su actividad antes de que existiera nada más. Decimos dónde se detiene cada una.","s1.title":"Lo que hace una hoja de cálculo, y dónde se detiene","s1.p1":"Una hoja de cálculo es imbatible en una cosa: no cuesta nada y hace exactamente lo que le pides. Para una persona sola que sigue treinta cuentas suele ser la herramienta correcta, y fingir lo contrario sería deshonesto.","s1.p2":"Se detiene en tres puntos, siempre los mismos. <strong>Una fórmula tocada a mitad de año reescribe el pasado</strong>: nadie sabe ya qué baremo se aplicaba cuando se cerró el trato, y el fin de mes se negocia en vez de leerse. <strong>Dos personas no pueden trabajar en ella sin pisarse</strong>: acabas con una versión por comercial y una conciliación manual cada semana. Y <strong>no recuerda nada</strong>: un no-show a reprogramar solo existe si alguien se acuerda.","s1.note":"La señal de que la hoja llegó a su límite: alguien dedica más de una hora por semana a ponerla de acuerdo con la realidad.","s2.title":"Lo que hace un CRM, y dónde se detiene","s2.p1":"Un CRM sigue cuentas y oportunidades durante toda su vida, a menudo varios años y varios interlocutores. Es una herramienta de empresa pensada para el ciclo de venta completo, y aquí nadie propone sustituirla.","s2.p2":"Se detiene donde empieza el oficio del BDR. <strong>Un CRM no calcula la retribución variable</strong>: el plan de comisiones vive en un fichero aparte que llevan RR. HH. o el manager. <strong>No sabe lo que costó un no-show</strong>, porque un no-show no es una fase de venta. Y sobre todo, <strong>nunca le muestra al comercial lo que va a cobrar este mes</strong> — que es la única pregunta que le hará abrir una herramienta de reporting cada mañana.","s2.note":"La señal de que el CRM no basta: tus BDR lo rellenan porque se lo piden, no porque saquen algo de ello.","s3.title":"La tabla, sin caricatura","t.h0":"Lo que necesita un equipo BDR","t.h1":"Hoja de cálculo","t.h2":"CRM","t.h3":"BD Report","t.r1":"Seguir cuentas en un ciclo largo","t.r2":"Calcular la prima de cada comercial","t.r3":"Congelar el baremo en el momento del trato","t.r4":"Mostrar al BDR lo que va a cobrar","t.r5":"Trabajar en equipo sin conflictos","t.r6":"Seguir los no-shows y su coste","t.r7":"Prever el mes con una horquilla","t.r8":"Personalizar las fases del pipeline","t.r9":"Ser la fuente de verdad de la empresa","t.r10":"No costar nada","t.legend":"✓ lo hace de forma nativa · ≈ lo hace con un apaño · ✗ no lo hace","s4.title":"Por qué la respuesta suele ser «las tres»","s4.p1":"Dos filas merecen una pausa, porque dicen lo contrario de lo que diría una página comercial. <strong>BD Report no es la fuente de verdad de tu empresa</strong>: si tienes un CRM, se queda. Y <strong>BD Report no es gratis</strong> cuando acabe la beta, mientras que una hoja de cálculo lo es para siempre.","s4.p2":"Por eso existe la integración con HubSpot: empresas, contactos, citas y tareas van a tu portal, y las dos herramientas cuentan lo mismo. El CRM conserva el ciclo de venta; BD Report sostiene la actividad diaria del BDR y su retribución, que el CRM nunca modelará.","v1.t":"Quédate con la hoja si…","v1.p":"Trabajas solo, sigues menos de cincuenta cuentas y tu prima cabe en una multiplicación. No necesitas nada más, y no te venderemos lo contrario.","v2.t":"Quédate con el CRM si…","v2.p":"Tus ciclos superan los seis meses, varios equipos tocan las mismas cuentas y tu dirección necesita una fuente única. Lo conservarás igualmente.","v3.t":"Añade BD Report si…","v3.p":"Tienes BDR con retribución variable, y «cuánto cobro este mes» se resuelve hoy por correo o en una reunión. Ese es exactamente el hueco que llena este producto.","s5.title":"La pregunta que más nos hacen","s5.p1":"<strong>«Una herramienta más — mis comerciales no la usarán.»</strong> Es el riesgo real de cualquier herramienta de reporting, y la razón por la que esta parte de su nómina en vez de tus paneles. Un BDR abre BD Report para saber cómo va su prima; tu reporting es lo que sale de ahí, sin doble captura.","s5.p2":"Si ese razonamiento no te convence, la demo dura veinte minutos y se hace con tus propias reglas de prima — no con un conjunto de datos preparado.","cta.title":"Verlo sobre tu propio plan de comisiones","cta.sub":"Veinte minutos, tus reglas, tus cifras.","cta.btn":"Pedir una demostración"},
+}
+const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
+let lang = localStorage.getItem('bdr_site_lang') || 'fr'
+const FR = {}
+document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
+function applyLang(){
+  document.documentElement.lang = lang
+  const d = DICTS[lang]
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = lang === 'fr' ? FR[el.dataset.i18n] : ((d && d[el.dataset.i18n]) ?? FR[el.dataset.i18n]) })
+  document.getElementById('langBtn').textContent = BTN[lang]
+}
+function toggleLang(){ lang = SEQ[(SEQ.indexOf(lang) + 1) % SEQ.length]; localStorage.setItem('bdr_site_lang', lang); applyLang() }
+applyLang()
+</script>
+<script>
+(function(){
+  var host = document.querySelector('.nav-right') || document.querySelector('.nav-links');
+  if (!host) return;
+  var b = document.createElement('button');
+  b.className = 'theme-btn'; b.type = 'button';
+  // Pictogrammes tracés au trait plutôt qu'émoji : un émoji est rendu différemment par
+  // chaque système, en couleur, et jure avec le reste d'une interface sobre.
+  var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.4M12 19.2v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
+  var root = document.documentElement;
+  function isLight(){
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'light';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+  // Les captures du produit suivent le thème du site : montrer une interface sombre
+  // sur une page claire donne l'impression d'une image collée là par erreur.
+  function swapShots(light){
+    var imgs = document.querySelectorAll('img[src*="/assets/"], img[src^="assets/"], img[src^="../assets/"]');
+    for (var i = 0; i < imgs.length; i++) {
+      var el = imgs[i], src = el.getAttribute('src');
+      if (!src || src.indexOf('og.png') > -1 || src.indexOf('.svg') > -1) continue;
+      var isLightSrc = src.indexOf('-light.') > -1;
+      if (light && !isLightSrc) el.setAttribute('src', src.replace(/(.[a-z]+)$/, '-light$1'));
+      else if (!light && isLightSrc) el.setAttribute('src', src.replace('-light.', '.'));
+    }
+  }
+  function paint(){
+    var light = isLight();
+    b.innerHTML = light ? MOON : SUN;
+    b.title = light ? 'Passer en mode sombre' : 'Passer en mode clair';
+    b.setAttribute('aria-label', b.title);
+    swapShots(light);
+  }
+  b.onclick = function(){
+    var next = isLight() ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('bdr_site_theme', next); } catch (e) {}
+    paint();
+  };
+  paint();
+  var lang = host.querySelector('#langBtn');
+  if (lang) host.insertBefore(b, lang); else host.appendChild(b);
+})();
+</script>
+
+<script>
+(function(){
+  var urls = {"fr":"https://owenmtp1.github.io/BD-Report/comparatif.html","en":"https://owenmtp1.github.io/BD-Report/en/comparatif.html","es":"https://owenmtp1.github.io/BD-Report/es/comparatif.html"};
+  var seq = ['fr','en','es'], cur = "fr";
+  var btn = document.getElementById('langBtn');
+  if (!btn) return;
+  var labels = { fr: '\uD83C\uDDEC\uD83C\uDDE7 EN', en: '\uD83C\uDDEA\uD83C\uDDF8 ES', es: '\uD83C\uDDEB\uD83C\uDDF7 FR' };
+  btn.textContent = labels[cur];
+  btn.onclick = function(){
+    var next = seq[(seq.indexOf(cur) + 1) % seq.length];
+    try { localStorage.setItem('bdr_site_lang', next); } catch (e) {}
+    window.location.href = urls[next];
+  };
+})();
+</script>
+</body>
+</html>
