@@ -71,10 +71,8 @@ function Login() {
   const store = useStore()
   const { t, lang } = useT()
   const saved = store.getSavedCreds ? store.getSavedCreds() : null
-  const [mode, setMode] = useState('login')
   const [id, setId] = useState(saved?.id || '')
   const [pw, setPw] = useState(saved?.pw || '')
-  const [pseudo, setPseudo] = useState('')
   const [err, setErr] = useState('')
   const [remember, setRemember] = useState(false)
   const [savePw, setSavePw] = useState(!!saved)
@@ -131,18 +129,17 @@ function Login() {
     } catch (e) { clearGoogleFlow(); setErr(`${t('login.googleErr')} (${e?.message || e})`); setGBusy(false) }
   }
 
+  // ⚠️ PLUS D'INSCRIPTION LIBRE depuis cet écran. « Créer un compte » ouvrait un compte à
+  // quiconque tapait une adresse, sans validation — alors que la règle du produit est que
+  // les accès sont DÉLIVRÉS (par un manager, ou par l'équipe BD Report pour un nouvel
+  // environnement), sans quoi les sièges d'une offre se contournent. La connexion Google
+  // appliquait déjà cette règle en refusant toute adresse inconnue ; le formulaire, non.
+  // Le lien mène désormais à la demande d'espace du site (#creer-mon-espace).
   const submit = () => {
     setErr('')
-    if (mode === 'login') {
-      const acc = store.login(id.trim(), pw, { remember, savePw })
-      if (acc && acc.error === 'disabled') setErr('Accès désactivé. Contactez le support BD Report.')
-      else if (!acc || acc.error) setErr(t('login.errBad'))
-    } else {
-      if (!id.includes('@')) { setErr(t('login.errEmail')); return }
-      if (!pw) { setErr(t('login.errPw')); return }
-      const r = store.register({ email: id.trim(), pseudo: pseudo.trim(), password: pw })
-      if (r.error) setErr(r.error)
-    }
+    const acc = store.login(id.trim(), pw, { remember, savePw })
+    if (acc && acc.error === 'disabled') setErr('Accès désactivé. Contactez le support BD Report.')
+    else if (!acc || acc.error) setErr(t('login.errBad'))
   }
 
   return (
@@ -167,12 +164,10 @@ function Login() {
             {gBusy ? t('login.googleBusy') : t('login.google')}
           </button>
           <div className="flex items-center gap-3 text-xs text-gray-400"><div className="flex-1 h-px bg-gray-200" />{t('login.or')}<div className="flex-1 h-px bg-gray-200" /></div>
-          <input className="input !bg-gray-50" placeholder={mode === 'login' ? t('login.idph') : t('login.emailph')} value={id} onChange={e => setId(e.target.value)} />
-          {mode === 'register' && <input className="input !bg-gray-50" placeholder={t('login.userph')} value={pseudo} onChange={e => setPseudo(e.target.value)} />}
+          <input className="input !bg-gray-50" placeholder={t('login.idph')} value={id} onChange={e => setId(e.target.value)} />
           <input className="input !bg-gray-50" type="password" placeholder={t('login.pwph')} value={pw} onChange={e => setPw(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submit()} />
-          {mode === 'login' && (
-            <div className="flex flex-col gap-1.5 text-xs text-gray-600">
+          <div className="flex flex-col gap-1.5 text-xs text-gray-600">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
                 Rester connecté pendant 30 jours (ne plus demander le mot de passe)
@@ -181,15 +176,15 @@ function Login() {
                 <input type="checkbox" checked={savePw} onChange={e => setSavePw(e.target.checked)} />
                 Enregistrer mon mot de passe sur cet appareil
               </label>
-            </div>
-          )}
+          </div>
           {err && <p className="text-red-500 text-xs">{err}</p>}
           <button className="w-full btn-primary justify-center !py-2.5" onClick={submit}>
-            {mode === 'login' ? t('login.signin') : t('login.signup')}
+            {t('login.signin')}
           </button>
-          <button className="w-full text-xs text-gray-500 hover:underline" onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setErr('') }}>
-            {mode === 'login' ? t('login.toSignup') : t('login.toSignin')}
-          </button>
+          {/* Le site est servi à la racine, au-dessus de /app/ (comme les CGV plus bas). */}
+          <a className="block w-full text-center text-xs text-gray-500 hover:underline" href="../#creer-mon-espace">
+            {t('login.toSignup')}
+          </a>
           <button className="w-full text-xs text-gray-500 hover:underline flex items-center justify-center gap-1.5"
             onClick={openTrainingPage}>
             <GraduationCap size={13} /> Espace de formation — accès libre

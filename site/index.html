@@ -232,7 +232,7 @@ section{padding:clamp(70px,9vw,120px) 0;position:relative}
 @media(max-width:860px){.cockpit{grid-template-columns:1fr}}
 .shot{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line2);background:var(--surface);box-shadow:0 24px 70px rgba(0,0,0,.45);transition:transform .3s,box-shadow .3s,border-color .3s}
 .shot:hover{transform:translateY(-4px);border-color:rgba(124,92,255,.4);box-shadow:0 30px 90px rgba(124,92,255,.2)}
-.shot img{width:100%}
+.shot img{width:100%;height:auto}  /* + width/height sur les <img> : la place est réservée AVANT le chargement */
 .shot .cap{position:absolute;left:12px;bottom:12px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--chrome);backdrop-filter:blur(6px);border:1px solid var(--line)}
 .shot.big{grid-row:span 2}
 
@@ -448,9 +448,7 @@ footer a{color:var(--violet2);font-weight:700}
     <h1 class="hero-anim d2" data-i18n="hero.title">Toute la prospection,<br><span class="grad">et la rémunération qui va avec.</span></h1>
     <p class="sub hero-anim d3" data-i18n="hero.sub">Les rendez-vous, le pipeline, les primes et le pilotage d'équipe dans un seul espace. Chaque passage en SQL déclenche la prime au barème en vigueur ce jour-là — sans tableur et sans discussion en fin de mois.</p>
     <div class="hero-cta hero-anim d4">
-      <a class="btn btn-primary" href="app/" data-i18n="hero.cta1">Créer mon espace gratuitement <span class="arw">→</span></a>
-      <a class="btn btn-ghost" href="app/#/demo" data-i18n="hero.cta3">Essayer la démo, sans inscription</a>
-      <a class="btn btn-ghost" href="#probleme" data-i18n="hero.cta2">Voir ce que ça change</a>
+      <a class="btn btn-primary" href="#creer-mon-espace" data-i18n="hero.cta1">Créer mon espace gratuitement <span class="arw">→</span></a>
     </div>
     <p class="hero-note hero-anim d4" data-i18n="hero.note">Sans carte bancaire · Prêt à l'emploi en quelques minutes · FR · EN · ES</p>
     <!-- La publicité de 30 s, version MUSIQUE SEULE. ⚠️ `preload="none"` : 3,8 Mo ne partent
@@ -587,9 +585,12 @@ footer a{color:var(--violet2);font-weight:700}
       <p class="sec-sub" style="margin-inline:auto" data-i18n="cockpit.sub">Sobre, rapide, précis. Voici quelques vues réelles de l'application.</p>
     </div>
     <div class="cockpit reveal">
-      <div class="shot big"><img src="assets/primes.png" alt="Primes & commissions" loading="lazy"><span class="cap" data-i18n="cockpit.c1">Primes &amp; commissions</span></div>
-      <div class="shot"><img src="assets/leads.png" alt="Pipeline" loading="lazy"><span class="cap" data-i18n="cockpit.c2">Pipeline kanban</span></div>
-      <div class="shot"><img src="assets/teamlead.png" alt="Pilotage équipe" loading="lazy"><span class="cap" data-i18n="cockpit.c3">Pilotage d'équipe</span></div>
+      <!-- ⚠️ width/height OBLIGATOIRES sur ces captures chargées à la demande : sans eux elles
+           naissaient à 0 px puis poussaient la page de 608 px en arrivant — tout lien vers
+           #tarifs, #contact ou #creer-mon-espace s'arrêtait alors bien avant sa cible. -->
+      <div class="shot big"><img src="assets/primes.png" alt="Primes & commissions" loading="lazy" width="1440" height="900"><span class="cap" data-i18n="cockpit.c1">Primes &amp; commissions</span></div>
+      <div class="shot"><img src="assets/leads.png" alt="Pipeline" loading="lazy" width="1440" height="900"><span class="cap" data-i18n="cockpit.c2">Pipeline kanban</span></div>
+      <div class="shot"><img src="assets/teamlead.png" alt="Pilotage équipe" loading="lazy" width="1440" height="900"><span class="cap" data-i18n="cockpit.c3">Pilotage d'équipe</span></div>
     </div>
     <div class="wrap" style="margin-top:34px;padding:0"><div class="marquee"><div class="marquee-track" id="marqueeTrack"></div></div></div>
   </div>
@@ -635,7 +636,7 @@ footer a{color:var(--violet2);font-weight:700}
     <div class="sec-head fade">
       <span class="chip" data-i18n="obj.chip">Questions légitimes</span>
       <h2 data-i18n="obj.title">Ce qu'on nous demande avant de signer</h2>
-      <p data-i18n="obj.sub">Les réponses courtes. Les longues sont dans la démo.</p>
+      <p data-i18n="obj.sub">Les réponses courtes. Pour les longues, écrivez-nous.</p>
     </div>
     <div class="qas" data-stagger>
       <details class="qa">
@@ -686,7 +687,7 @@ footer a{color:var(--violet2);font-weight:700}
           <li data-i18n="pricing.s5">1 espace personnel (usage solo, 1 compte)</li>
           <li data-i18n="pricing.s6">Prise de notes</li>
         </ul>
-        <a class="btn btn-primary" href="app/" data-i18n="pricing.createAccount">Créer un compte gratuit</a>
+        <a class="btn btn-primary" href="#creer-mon-espace" data-i18n="pricing.createAccount">Créer un compte gratuit</a>
         <div class="soon" data-i18n="pricing.supgrade">Passez en Beta Testing pour débloquer toutes les fonctionnalités.</div>
       </div>
       <div class="plan pro">
@@ -781,6 +782,10 @@ footer a{color:var(--violet2);font-weight:700}
 
 <section id="contact">
   <div class="wrap">
+    <!-- Point d'arrivée de TOUS les « Créer mon espace / un compte » du site et de l'app :
+         un espace se demande, il ne s'ouvre pas seul (les accès sont délivrés). La marge
+         compense la barre de navigation fixe, sous laquelle le titre passait sinon. -->
+    <span id="creer-mon-espace" style="display:block;height:0;scroll-margin-top:96px" aria-hidden="true"></span>
     <div class="sec-head fade">
       <span class="chip" style="background:rgba(94,220,255,.15);color:#5EDCFF">Contact</span>
       <h2 data-i18n="contact.title">Parlons de votre équipe</h2>
@@ -860,7 +865,7 @@ footer a{color:var(--violet2);font-weight:700}
     <span class="chip chip-v" data-i18n="fcta.chip">Prêt à décoller ?</span>
     <h2 style="margin-top:18px" data-i18n="fcta.title">Votre performance mérite mieux qu'un tableur.</h2>
     <div class="hero-cta" style="justify-content:center;margin-top:30px">
-      <a class="btn btn-primary" href="app/" data-i18n="fcta.btn">Commencer gratuitement <span class="arw">→</span></a>
+      <a class="btn btn-primary" href="#creer-mon-espace" data-i18n="fcta.btn">Commencer gratuitement <span class="arw">→</span></a>
       <a class="btn btn-ghost" href="#contact" data-i18n="nav.contact">Contact</a>
     </div>
   </div>
@@ -1070,7 +1075,7 @@ const I18N = {
     'hero.chip':'⚡ Built by and for BDRs / SDRs',
     'hero.title':'All of your prospecting,<br><span class="grad">and the pay that comes with it.</span>',
     'hero.sub':'Meetings, pipeline, bonuses and team steering in a single workspace. Every move to SQL triggers the bonus at the grid in force that day — no spreadsheet, no end-of-month argument.',
-    'hero.cta1':'Create my workspace, free <span class="arw">→</span>','hero.cta2':'See what changes','hero.cta3':'Try the live demo, no signup',
+    'hero.cta1':'Create my workspace, free <span class="arw">→</span>',
     'hero.note':'No credit card · Up and running in minutes · FR · EN · ES',
     'film.play':'Watch BD Report in 30 seconds','film.note':'30 seconds · in French, with music: turn the sound on',
     'prob.eyebrow':'The job, today','prob.title':'The work gets done. It still has to be counted.',
@@ -1081,7 +1086,7 @@ const I18N = {
     'prob.d2':'The CRM, the calendar, the tracking file, the team chat. Each has a number, none of them match, and half of reporting time goes into reconciling them.',
     'prob.t3':'You find out you are behind on the 28th',
     'prob.d3':'With no view of activity as it happens, a manager sees the gap once the month is played — when there are no longer enough days to close it.',
-    'obj.chip':'Fair questions','obj.title':'What we get asked before signing','obj.sub':'The short answers. The long ones are in the demo.',
+    'obj.chip':'Fair questions','obj.title':'What we get asked before signing','obj.sub':'The short answers. For the long ones, drop us a line.',
     'obj.q1':'“We already have a CRM.”',
     'obj.a1':'Keep it. A CRM tracks accounts; it does not compute a BDR\'s pay, does not know what a no-show cost, and never shows a rep what they will make this month. BD Report connects to HubSpot and pushes companies, contacts, meetings and tasks into your portal: both tools tell the same story.',
     'obj.q2':'“Our commission plan is too specific.”',
@@ -1131,7 +1136,7 @@ const I18N = {
     'hero.chip':'⚡ Hecho por y para BDR / SDR',
     'hero.title':'Toda la prospección,<br><span class="grad">y la remuneración que la acompaña.</span>',
     'hero.sub':'Citas, pipeline, primas y dirección de equipo en un único espacio. Cada paso a SQL activa la prima con el baremo vigente ese día — sin hoja de cálculo y sin discusión a fin de mes.',
-    'hero.cta1':'Crear mi espacio gratis <span class="arw">→</span>','hero.cta2':'Ver qué cambia','hero.cta3':'Probar la demo, sin registro',
+    'hero.cta1':'Crear mi espacio gratis <span class="arw">→</span>',
     'hero.note':'Sin tarjeta · Listo en unos minutos · FR · EN · ES',
     'film.play':'Ver BD Report en 30 segundos','film.note':'30 segundos · en francés, con música: activa el sonido',
     'prob.eyebrow':'El día a día, hoy','prob.title':'El trabajo está hecho. Falta que se cuente.',
@@ -1142,7 +1147,7 @@ const I18N = {
     'prob.d2':'El CRM, la agenda, el fichero de seguimiento, el chat del equipo. Cada uno da una cifra, ninguna coincide, y la mitad del tiempo de reporting se va en cuadrarlas.',
     'prob.t3':'El retraso se descubre el día 28',
     'prob.d3':'Sin visión de la actividad al día, un manager ve el hueco cuando el mes ya está jugado — cuando ya no quedan días para recuperarlo.',
-    'obj.chip':'Preguntas legítimas','obj.title':'Lo que nos preguntan antes de firmar','obj.sub':'Las respuestas cortas. Las largas están en la demo.',
+    'obj.chip':'Preguntas legítimas','obj.title':'Lo que nos preguntan antes de firmar','obj.sub':'Las respuestas cortas. Para las largas, escríbenos.',
     'obj.q1':'«Ya tenemos un CRM.»',
     'obj.a1':'Consérvalo. Un CRM sigue cuentas; no calcula la retribución de un BDR, no sabe lo que costó un no-show y no le muestra al comercial lo que va a cobrar este mes. BD Report se conecta a HubSpot y envía empresas, contactos, citas y tareas a tu portal: las dos herramientas cuentan lo mismo.',
     'obj.q2':'«Nuestras primas son muy específicas.»',
@@ -1209,25 +1214,6 @@ function toggleLang() {
   applyLang()
 }
 
-// ---------- Publicité de l'accueil ----------
-// Le bouton lance la lecture AVEC le son : c'est un geste du visiteur, donc le navigateur
-// l'autorise. Une lecture automatique serait forcément muette — et la musique est la moitié
-// du film. À la fin, retour à l'image d'attente et au bouton, pour revoir.
-;(() => {
-  const film = document.getElementById('heroFilm'), btn = document.getElementById('filmPlay')
-  if (!film || !btn) return
-  btn.addEventListener('click', () => {
-    btn.hidden = true
-    film.controls = true
-    // Si la lecture est refusée (réseau, format), le bouton revient au lieu de laisser un cadre muet.
-    film.play().catch(() => { btn.hidden = false; film.controls = false })
-  })
-  film.addEventListener('ended', () => {
-    film.controls = false
-    film.load()          // réaffiche l'image d'attente ; `preload="none"` : rien n'est retéléchargé
-    btn.hidden = false
-  })
-})()
 
 // ---------- Onglets de fonctionnalités ----------
 const SLUGS = ['pilotage', 'activite', 'pipeline', 'remuneration', 'collaboration', 'donnees']
@@ -1351,7 +1337,7 @@ function duoTab(w){
       var price=o.priceLabel||(Number(o.price)>0?o.price+' € / mois':'Gratuit');
       var feats=(o.bricks||[]).slice(0,8).map(function(b){return '<li>'+esc(b)+'</li>';}).join('');
       if(o.team) feats+='<li>Pilotage d\'équipe &amp; comptes multiples</li>';
-      var cta=o.team?'<a class="btn btn-primary" href="#contact">Souscrire</a>':'<a class="btn btn-primary" href="app/">Commencer gratuitement</a>';
+      var cta=o.team?'<a class="btn btn-primary" href="#contact">Souscrire</a>':'<a class="btn btn-primary" href="#creer-mon-espace">Commencer gratuitement</a>';
       return '<div class="plan'+(o.team?' pro':'')+'">'+(o.team?'<span class="badge">⭐ Offre équipe</span>':'')+
         '<h3>'+esc(o.name)+'</h3><div class="price">'+esc(price)+'</div>'+
         (o.desc?'<p style="color:var(--muted);font-size:14px">'+esc(o.desc)+'</p>':'')+
@@ -1371,6 +1357,53 @@ function duoTab(w){
     }
   }catch(_){ }
 })();
+</script>
+<!-- ⚠️ SCRIPT À PART, ET C'EST LA CORRECTION. Pour fabriquer /en/ et /es/, scripts/i18n-pages.mjs
+     SUPPRIME tout script qui appelle applyLang() — donc le script principal ci-dessus en entier.
+     Logés dedans, le bouton de la vidéo et la demande d'espace étaient MORTS sur les versions
+     anglaise et espagnole (le bouton ne faisait rien). Ici, rien n'appelle applyLang() : le
+     générateur garde ce bloc. Il ne dépend d'aucune variable du script principal. -->
+<script>
+// ---------- Demande d'espace ----------
+// Arriver par « Créer mon espace » (#creer-mon-espace) pré-remplit le message : la demande
+// porte d'emblée sur un environnement, et dit ce dont on a besoin pour le préparer.
+// ⚠️ Seulement si le champ est VIDE : un visiteur qui a commencé à écrire ne perd rien.
+// La langue est celle de la PAGE (`<html lang>`), qui est juste aussi sur /en/ et /es/.
+;(() => {
+  const ASK = {
+    fr: "Bonjour, je souhaite créer un espace BD Report pour mon équipe.\nNombre de personnes : \nCRM utilisé : ",
+    en: "Hello, I'd like to set up a BD Report workspace for my team.\nTeam size: \nCRM in use: ",
+    es: "Hola, quiero crear un espacio BD Report para mi equipo.\nTamaño del equipo: \nCRM que usamos: ",
+  }
+  const fill = () => {
+    if (location.hash !== '#creer-mon-espace') return
+    const msg = document.getElementById('cMsg')
+    if (!msg || msg.value.trim()) return
+    msg.value = ASK[(document.documentElement.lang || 'fr').slice(0, 2)] || ASK.fr
+  }
+  addEventListener('hashchange', fill)
+  fill()
+})()
+
+// ---------- Publicité de l'accueil ----------
+// Le bouton lance la lecture AVEC le son : c'est un geste du visiteur, donc le navigateur
+// l'autorise. Une lecture automatique serait forcément muette — et la musique est la moitié
+// du film. À la fin, retour à l'image d'attente et au bouton, pour revoir.
+;(() => {
+  const film = document.getElementById('heroFilm'), btn = document.getElementById('filmPlay')
+  if (!film || !btn) return
+  btn.addEventListener('click', () => {
+    btn.hidden = true
+    film.controls = true
+    // Si la lecture est refusée (réseau, format), le bouton revient au lieu de laisser un cadre muet.
+    film.play().catch(() => { btn.hidden = false; film.controls = false })
+  })
+  film.addEventListener('ended', () => {
+    film.controls = false
+    film.load()          // réaffiche l'image d'attente ; `preload="none"` : rien n'est retéléchargé
+    btn.hidden = false
+  })
+})()
 </script>
 </body>
 </html>

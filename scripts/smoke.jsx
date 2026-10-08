@@ -400,6 +400,15 @@ async function main() {
   const gBtn = find('button', 'Continuer avec Google')
   if (!gBtn) throw new Error('Google sign-in button missing')
   if (gBtn.disabled) throw new Error('Google sign-in button must be enabled')
+  // ---- PAS D'INSCRIPTION LIBRE. « Créer un compte » ouvrait un compte à quiconque tapait une
+  // adresse ; il mène désormais à la demande d'espace du site. Un espace se DEMANDE : les accès
+  // sont délivrés, sans quoi les sièges d'une offre se contournent.
+  {
+    const ask = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '../#creer-mon-espace')
+    if (!ask) throw new Error("« Créer un compte » doit mener à la demande d'espace du site (../#creer-mon-espace)")
+    if (find('button', 'Pas de compte ? Créer un compte')) throw new Error("L'inscription libre est revenue : un bouton bascule encore vers un formulaire de création")
+    if (container.querySelectorAll('input:not([type="checkbox"])').length !== 2) throw new Error("L'écran de connexion ne doit offrir que l'identifiant et le mot de passe")
+  }
   const inputs = container.querySelectorAll('input')
   await type(inputs[0], 'OwenMtp')
   await type(inputs[1], 'demo1234')

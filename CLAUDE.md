@@ -729,6 +729,22 @@ montré. Un défilement horizontal VOULU (kanban) reste permis dès qu'il vit da
   ⚠️ `i18n-pages.mjs` réécrit aussi `poster` : il ne réécrivait que `href`/`src`, et l'affiche aurait été
   cassée sur `/en/` et `/es/`. Le débordement horizontal de l'accueil sur téléphone est ANTÉRIEUR (halos et
   bandeau de puces, 454 px pour 375) et masqué par `overflow-x:hidden` — mesuré avant/après, non corrigé.
+  **Un espace se DEMANDE, il ne s'ouvre pas seul.** Plus aucune invitation à la démo libre sur le site
+  (17 pages), et TOUS les « Créer mon espace / un compte / Commencer gratuitement » mènent à
+  `#creer-mon-espace` — l'ancre du formulaire de contact de l'accueil, qui pré-remplit le message dans la
+  langue de la page (seulement s'il est VIDE). Côté app, l'écran de connexion n'a plus d'inscription
+  libre : « Pas de compte ? » mène à `../#creer-mon-espace`. ⚠️ Ce formulaire ouvrait un compte à
+  quiconque tapait une adresse, alors que la connexion Google refusait déjà les inconnus : les accès
+  sont DÉLIVRÉS, sinon les sièges d'une offre se contournent. Le smoke le fige.
+  ⚠️ **`i18n-pages.mjs` SUPPRIME tout script qui appelle `applyLang()`** — donc le script principal
+  de l'accueil EN ENTIER sur `/en/` et `/es/`. Tout code de page qui doit vivre dans les trois langues
+  va dans un `<script>` À PART (c'est ce qui a ressuscité le bouton vidéo, mort sur EN/ES).
+  ⛔ **Conséquence ANTÉRIEURE, non corrigée (en attente de décision)** : sur `/en/` et `/es/`, la
+  section Fonctionnalités est VIDE (onglets construits par ce script) et 33 blocs restent INVISIBLES
+  après défilement complet (leur apparition aussi). Mesuré : FR 3 restants, EN/ES 33.
+  ⚠️ Les trois captures « cockpit » portent `width/height` : chargées à la demande sans taille, elles
+  poussaient la page de 608 px, et tout lien vers `#tarifs`, `#contact`, `#creer-mon-espace` s'arrêtait
+  bien avant sa cible.
 
 ## Rôles, offres, support
 - Rôles : `Fondateur`, `Support BD Report` (= mêmes droits que Fondateur), Administrateur, Manager, Développeur, Membre.
