@@ -726,6 +726,8 @@ montré. Un défilement horizontal VOULU (kanban) reste permis dès qu'il vit da
   AVEC le son — une lecture automatique serait muette. ⚠️ MP4 d'abord, codec DÉCLARÉ (`avc1.640032` = High
   niveau 5.0, LU dans le fichier — le 4.0 supposé était faux) ; le WebM sert les Chromium libres, sans H.264,
   où le MP4 restait figé sur une image. Recoder la vidéo oblige à relire ce code.
+  ⚠️ `i18n-pages.mjs` réécrit aussi les liens vers `app/` : l'app n'est publiée qu'à la racine,
+  et sur `/en/` et `/es/` « Se connecter » et l'icône d'onglet menaient à `/en/app/` (404).
   ⚠️ `i18n-pages.mjs` réécrit aussi `poster` : il ne réécrivait que `href`/`src`, et l'affiche aurait été
   cassée sur `/en/` et `/es/`. Le débordement horizontal de l'accueil sur téléphone est ANTÉRIEUR (halos et
   bandeau de puces, 454 px pour 375) et masqué par `overflow-x:hidden` — mesuré avant/après, non corrigé.
@@ -757,6 +759,12 @@ montré. Un défilement horizontal VOULU (kanban) reste permis dès qu'il vit da
   et rendre la vidéo. ⚠️ `npm run audit` refuse tout sigle 64×64 qui ne porte pas le tracé de la
   bande menthe, et toute trace de l'ancien logo (falsifié). ⚠️ Aucun `<mask id>` dans le SVG : il est
   collé plusieurs fois par page, deux identifiants identiques se marcheraient dessus.
+  ⚠️ **Icônes PNG/ICO en plus du SVG** (`favicon-32/48.png`, `apple-touch-icon.png` 180 px sans
+  arrondi, `icon-192/512.png` du manifeste, `favicon.ico` copié à la racine du site) : Safari
+  ignore un favicon SVG, Google et les lecteurs de flux vont chercher `/favicon.ico` — sans eux,
+  l'ANCIENNE icône restait affichée. Le workflow de déploiement les copie.
+  ⚠️ Les captures (`npm run shots`) montrent la barre latérale, donc le logo : les refaire après
+  un changement de logo, puis rendre la vidéo (elle les affiche).
   Charte complète : `CHARTE-GRAPHIQUE.md`.
 
 ## Rôles, offres, support

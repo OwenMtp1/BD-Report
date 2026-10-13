@@ -67,6 +67,10 @@ jobs:
           node scripts/i18n-pages.mjs out https://owenmtp1.github.io/BD-Report
           cp public/manifest.webmanifest out/app/manifest.webmanifest
           cp public/icon.svg out/app/icon.svg
+          # Icônes PNG/ICO (npm run logo) : Safari ignore le SVG, Google et les lecteurs
+          # de flux cherchent /favicon.ico à la racine.
+          cp public/*.png public/favicon.ico out/app/
+          cp site/favicon.ico out/favicon.ico
           cp public/sw.js out/app/sw.js
 
       - name: Publish to gh-pages

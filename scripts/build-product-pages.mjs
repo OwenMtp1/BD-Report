@@ -242,6 +242,8 @@ const page = (cat) => `<!doctype html>
 <title>BD Report — ${cat.fr.name} : ${cat.fr.title}</title>
 <meta name="description" content="${cat.fr.pitch.slice(0, 150)}">
 <link rel="icon" type="image/svg+xml" href="../app/icon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="../app/favicon-32.png">
+<link rel="apple-touch-icon" href="../app/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>

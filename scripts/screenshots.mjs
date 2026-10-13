@@ -148,6 +148,9 @@ const run = async () => {
       await page.waitForTimeout(1400)
     }
     const outFile = shot.file.replace(/(\.[a-z]+)$/, SUFFIX + '$1')
+    // La souris reste là où était le dernier clic : sur un graphique, elle y laisse une
+    // bulle d'info. On l'écarte dans un coin de la barre latérale, sans rien à survoler.
+    await page.mouse.move(4, 896); await page.waitForTimeout(250)
     await page.screenshot({ path: path.join(OUT, outFile), scale: 'css' })
     console.log('✓', outFile)
     // Une capture qui ouvre un panneau doit le refermer : laissé ouvert, il recouvre la

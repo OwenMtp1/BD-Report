@@ -168,6 +168,9 @@ for (const lang of LANGS) {
     // ⚠️ `poster` aussi : l'image d'attente d'une <video> est un lien de ressource comme un
     // autre. Sans lui, la vidéo de l'accueil s'affichait en carré noir sur /en/ et /es/.
     out = out.replace(/(href|src|poster)="(?:\.\.\/)*assets\//g, `$1="${ASSET_ROOT}/assets/`)
+    // ⚠️ Même chose pour l'APP, qui n'est publiée qu'une fois, à la racine : les liens
+    // « Se connecter » et l'icône d'onglet visaient /en/app/, une adresse vide (404).
+    out = out.replace(/(href|src)="(?:\.\.\/)*app\//g, `$1="${ASSET_ROOT}/app/`)
     writeFileSync(full, out)
     made++
   }
