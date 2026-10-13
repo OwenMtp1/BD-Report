@@ -14,7 +14,7 @@
   Structure publicitaire classique d'un 30 s SaaS :
     0–6,6 s   LE PROBLÈME — les trois douleurs du site, mot pour mot (tableur, 4 outils, le 28)
     6,6–10 s  LE PIVOT — « La fin de mois se négocie » → « se constate »
-    10–12,4 s LA MARQUE — le vrai logo (trois barres qui montent), le vrai slogan
+    10–12,4 s LA MARQUE — le vrai logo (le D dont les quatre bandes entrent une à une), le vrai slogan
     12,4–25,8 TROIS PREUVES — captures RÉELLES de l'app (démo fictive « Atlas Revenue »)
     25,8–30 s L'APPEL À L'ACTION — démo sans inscription
 
@@ -184,15 +184,7 @@
   <!-- ===================== ACTE 2 — LA MARQUE ===================== -->
   <div class="full center" id="scM">
     <div style="display:flex;flex-direction:column;align-items:center">
-      <svg id="logo" width="230" height="230" viewBox="0 0 64 64">
-        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#3B5BDB"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient></defs>
-        <rect id="lgBox" width="64" height="64" rx="15" fill="url(#lg)"/>
-        <rect id="lgB1" x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"/>
-        <rect id="lgB2" x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"/>
-        <rect id="lgB3" x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"/>
-        <circle id="lgDot" cx="45.5" cy="11" r="4" fill="#A7F3D0"/>
-      </svg>
+      <svg id="logo" width="230" height="230" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#1D3FD6"/><path id="lgB1" d="M17.6 16.16H30.56A15.84 15.84 0 0 1 44.67 24.8H17.6Z" fill="#FFFFFF" style="transform-box:fill-box;transform-origin:0 50%"/><path id="lgB2" d="M17.6 26.96H45.58A15.84 15.84 0 0 1 46.3 33.8H17.6Z" fill="#FFFFFF" style="transform-box:fill-box;transform-origin:0 50%"/><path id="lgB3" d="M17.6 35.96H45.9A15.84 15.84 0 0 1 43.34 41.36H17.6Z" fill="#FFFFFF" style="transform-box:fill-box;transform-origin:0 50%"/><path id="lgB4" d="M17.6 43.52H41.43A15.84 15.84 0 0 1 30.56 47.84H17.6Z" fill="#2EE6A8" style="transform-box:fill-box;transform-origin:0 50%"/></svg>
       <div id="word" style="font:900 132px Inter;letter-spacing:-.04em;margin-top:36px;line-height:1">BD Report</div>
       <div id="slogan" style="margin-top:44px;text-align:center">
         <div class="h2"><span class="mask"><span>Toute la prospection,</span></span></div>
@@ -264,13 +256,7 @@
   <!-- ===================== ACTE 4 — APPEL À L'ACTION ===================== -->
   <div class="full center" id="scZ">
     <div style="display:flex;flex-direction:column;align-items:center;text-align:center">
-      <svg id="logo2" width="120" height="120" viewBox="0 0 64 64">
-        <rect width="64" height="64" rx="15" fill="url(#lg)"/>
-        <rect x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"/>
-        <rect x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"/>
-        <rect x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"/>
-        <circle cx="45.5" cy="11" r="4" fill="#A7F3D0"/>
-      </svg>
+      <svg id="logo2" width="120" height="120" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#1D3FD6"/><path d="M17.6 16.16H30.56A15.84 15.84 0 0 1 44.67 24.8H17.6ZM17.6 26.96H45.58A15.84 15.84 0 0 1 46.3 33.8H17.6ZM17.6 35.96H45.9A15.84 15.84 0 0 1 43.34 41.36H17.6Z" fill="#FFFFFF"/><path d="M17.6 43.52H41.43A15.84 15.84 0 0 1 30.56 47.84H17.6Z" fill="#2EE6A8"/></svg>
       <div style="margin-top:40px">
         <div class="h1"><span class="mask"><span>Toute la prospection,</span></span></div>
         <div class="h1"><span class="mask"><span class="grad">et la rémunération qui va avec.</span></span></div>
@@ -506,14 +492,12 @@ function render(t) {
     if (v > 0) {
       const box = E.back(inv(t, 10.1, 10.65))
       $('logo').style.transform = `scale(${mix(.2, 1, box)}) rotate(${mix(-90, 0, E.out(inv(t, 10.1, 10.7)))}deg)`
-      // Les trois barres MONTENT l'une après l'autre — c'est ce que dit le logo.
-      ;[['lgB1', 34, 17], ['lgB2', 26, 25], ['lgB3', 16, 35]].forEach(([id, y, h], i) => {
-        const p = E.back(inv(t, 10.45 + i * .1, 10.85 + i * .1))
-        const hh = Math.max(0.01, h * p)
-        $(id).setAttribute('height', hh); $(id).setAttribute('y', y + h - hh)
+      // Les bandes du D ENTRENT l'une après l'autre, de la gauche — trois notes pour les
+      // trois blanches, la quatrième (10,85 s, cf. music.mjs) pour la bande menthe, la signée.
+      ;[10.45, 10.55, 10.65, 10.85].forEach((t0, i) => {
+        const p = E.back(inv(t, t0, t0 + .4))
+        $(`lgB${i + 1}`).style.transform = `scaleX(${Math.max(0.001, p)})`
       })
-      const dp = E.back(inv(t, 10.85, 11.15))
-      $('lgDot').setAttribute('r', 4 * dp); $('lgDot').setAttribute('cy', mix(18, 11, dp))
       const wp = E.out(inv(t, 10.75, 11.35))
       set($('word'), { opacity: wp, letterSpacing: `${mix(.25, -.04, wp)}em`, filter: `blur(${(1 - wp) * 10}px)` })
       const sl = $('slogan').querySelectorAll('.mask')

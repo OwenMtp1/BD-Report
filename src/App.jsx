@@ -154,7 +154,7 @@ function Login() {
         </div>
         <div className="text-center mb-6">
           <div className="mx-auto mb-3 w-fit"><LogoMark size={56} /></div>
-          <h1 className="text-2xl font-extrabold tracking-tight"><span className="text-[#3B5BDB]">BD</span><span className="text-gray-900"> Report</span></h1>
+          <h1 className="text-2xl font-extrabold tracking-tight"><span className="text-[#1D3FD6]">BD</span><span className="text-gray-900"> Report</span></h1>
           <p className="text-sm text-gray-500">{t('login.tagline')}</p>
         </div>
         <div className="space-y-3">

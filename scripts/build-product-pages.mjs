@@ -256,7 +256,7 @@ a{color:inherit;text-decoration:none}
 nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .nav-in{display:flex;align-items:center;gap:24px;height:64px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.5px}
-.logo b{color:var(--brand)}
+.logo b{color:#1D3FD6}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:14px}
 .lang-btn{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:6px 11px;font-weight:700;font-size:13px;cursor:pointer}
 .cat-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);background:#fff}
@@ -292,7 +292,7 @@ footer{border-top:1px solid var(--line);padding:22px 0;font-size:13.5px;color:va
 <nav>
   <div class="wrap nav-in">
     <a class="logo" href="../index.html">
-      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B5BDB"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#fff" opacity=".75"/><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#fff" opacity=".9"/><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#fff"/><circle cx="45.5" cy="11" r="4" fill="#A7F3D0"/></svg>
+      <svg width="30" height="30" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#1D3FD6"/><path d="M17.6 16.16H30.56A15.84 15.84 0 0 1 44.67 24.8H17.6ZM17.6 26.96H45.58A15.84 15.84 0 0 1 46.3 33.8H17.6ZM17.6 35.96H45.9A15.84 15.84 0 0 1 43.34 41.36H17.6Z" fill="#FFFFFF"/><path d="M17.6 43.52H41.43A15.84 15.84 0 0 1 30.56 47.84H17.6Z" fill="#2EE6A8"/></svg>
       <span><b>BD</b> Report</span>
     </a>
     <div class="nav-right">

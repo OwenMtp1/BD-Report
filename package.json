@@ -12,6 +12,7 @@
     "i18n:missing": "node scripts/i18n-coverage.mjs --list",
     "mobile": "npm run build && node scripts/mobile-check.mjs",
     "video": "node video/music.mjs && node video/render.mjs",
+    "logo": "node scripts/brand-logo.mjs",
     "shots": "npm run build && node scripts/screenshots.mjs && SHOT_THEME=light node scripts/screenshots.mjs",
     "tauri": "tauri"
   },

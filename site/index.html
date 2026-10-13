@@ -21,7 +21,7 @@
   --bg:#070A0F; --bg2:#0B0F16; --surface:#101620; --surface2:#151C27;
   --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
   --text:#F8FAFC; --muted:#94A3B8; --muted2:#6B7688;
-  --violet:#7C5CFF; --violet2:#9B84FF; --green:#22D3A6; --amber:#FFB547;
+  --logo-bd: #7C95FF; --violet:#7C5CFF; --violet2:#9B84FF; --green:#22D3A6; --amber:#FFB547;
   --veil: rgba(255, 255, 255, .03); --veil2: rgba(255, 255, 255, .08); --veil3: rgba(255, 255, 255, .015);
   --chrome: rgba(8, 11, 17, .72);
   --maxw:1140px;
@@ -38,7 +38,7 @@
   --bg: #FAFAFC; --bg2: #FFFFFF; --surface: #FFFFFF; --surface2: #F4F3F8;
   --line: rgba(20, 18, 27, .10); --line2: rgba(20, 18, 27, .18);
   --text: #14121B; --muted: #58546A; --muted2: #7C7890;
-  --violet: #5B3FE0; --violet2: #6D4AFF; --green: #0F9D77; --amber: #B4690E;
+  --logo-bd: #1D3FD6; --violet: #5B3FE0; --violet2: #6D4AFF; --green: #0F9D77; --amber: #B4690E;
 --veil: rgba(20, 18, 27, .04); --veil2: rgba(20, 18, 27, .08); --veil3: rgba(20, 18, 27, .022); --chrome: rgba(255, 255, 255, .78);
 }
 @media (prefers-color-scheme: light) {
@@ -46,7 +46,7 @@
     --bg: #FAFAFC; --bg2: #FFFFFF; --surface: #FFFFFF; --surface2: #F4F3F8;
     --line: rgba(20, 18, 27, .10); --line2: rgba(20, 18, 27, .18);
     --text: #14121B; --muted: #58546A; --muted2: #7C7890;
-    --violet: #5B3FE0; --violet2: #6D4AFF; --green: #0F9D77; --amber: #B4690E;
+    --logo-bd: #1D3FD6; --violet: #5B3FE0; --violet2: #6D4AFF; --green: #0F9D77; --amber: #B4690E;
     --veil: rgba(20, 18, 27, .04); --veil2: rgba(20, 18, 27, .08); --veil3: rgba(20, 18, 27, .022); --chrome: rgba(255, 255, 255, .78);
   }
 }
@@ -107,7 +107,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:50;transition:background .35s,bo
 nav.scrolled{background:var(--chrome);backdrop-filter:blur(16px) saturate(150%);border-bottom-color:var(--line)}
 .nav-in{display:flex;align-items:center;gap:26px;height:66px;max-width:var(--maxw);margin:0 auto;padding:0 24px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.5px;color:var(--text)}
-.logo b{color:var(--violet2)}
+.logo b{color:var(--logo-bd)} /* le bleu du logo — plus clair sur fond sombre */
 .nav-links{display:flex;gap:24px;margin-left:auto;font-weight:600;font-size:14px;color:var(--muted);align-items:center}
 .nav-links a{position:relative;transition:color .2s}
 .nav-links a:hover{color:var(--text)}
@@ -411,7 +411,7 @@ footer a{color:var(--violet2);font-weight:700}
 <nav id="nav">
   <div class="nav-in">
     <a class="logo" href="#">
-      <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9B84FF"/><stop offset="1" stop-color="#22D3A6"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/><rect x="13" y="34" width="9" height="17" rx="4.5" fill="#0B0F16" opacity=".85"/><rect x="27" y="26" width="9" height="25" rx="4.5" fill="#0B0F16" opacity=".9"/><rect x="41" y="16" width="9" height="35" rx="4.5" fill="#0B0F16"/></svg>
+      <svg width="30" height="30" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#1D3FD6"/><path d="M17.6 16.16H30.56A15.84 15.84 0 0 1 44.67 24.8H17.6ZM17.6 26.96H45.58A15.84 15.84 0 0 1 46.3 33.8H17.6ZM17.6 35.96H45.9A15.84 15.84 0 0 1 43.34 41.36H17.6Z" fill="#FFFFFF"/><path d="M17.6 43.52H41.43A15.84 15.84 0 0 1 30.56 47.84H17.6Z" fill="#2EE6A8"/></svg>
       <span><b>BD</b> Report</span>
     </a>
     <div class="nav-links">

@@ -161,7 +161,7 @@ for (let t = 12.4, s = 0; t < 25.6; t += BEAT / 2, s++) {
 // ======================================================================
 //  SOUND DESIGN SYNCHRONISÉ À L'IMAGE
 // ======================================================================
-// Le logo : trois barres qui montent = trois notes qui montent, puis le point mint.
+// Le logo : les trois bandes blanches du D entrent = trois notes qui montent, puis la bande menthe.
 ;[[10.45, 72], [10.55, 76], [10.65, 79]].forEach(([t, m], i) => pluck(t, m, { g: .16, dur: 1.1, pan: (i - 1) * .35, send: .6 }))
 pluck(10.85, 84, { g: .12, dur: 1.4, send: .7 })
 // La prime se FIGE : déclic sec du cadenas, puis un carillon. Sur le mot « Figée » (20,7 s)

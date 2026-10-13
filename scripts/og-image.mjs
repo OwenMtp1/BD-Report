@@ -6,6 +6,7 @@
 import { chromium } from 'playwright-core'
 import { readdirSync, existsSync } from 'node:fs'
 import path from 'node:path'
+import { markInner } from '../brand/logo.mjs'
 
 const OUT = process.argv[2] || 'site/assets/og.png'
 
@@ -30,11 +31,7 @@ const HTML = `<!doctype html><html><head><meta charset="utf-8">
         background-size:62px 62px;
         -webkit-mask-image:radial-gradient(circle at 30% 40%,#000,transparent 76%)}
   .row{position:relative;display:flex;align-items:center;gap:16px;margin-bottom:30px}
-  .mark{width:56px;height:56px;border-radius:15px;background:linear-gradient(135deg,#9B84FF,#22D3A6);
-        display:flex;align-items:center;justify-content:center}
-  .mark i{display:block;width:8px;height:26px;border-radius:4px;background:#0B0F16;margin:0 2px}
-  .mark i:nth-child(1){height:14px;align-self:flex-end;margin-bottom:15px}
-  .mark i:nth-child(2){height:20px;align-self:flex-end;margin-bottom:15px}
+  .mark{width:56px;height:56px;flex:none}
   .brand{font-size:30px;font-weight:800;letter-spacing:-.02em}
   h1{position:relative;font-size:60px;line-height:1.06;font-weight:800;letter-spacing:-.035em;max-width:19ch}
   .grad{background:linear-gradient(90deg,#B9A6FF,#7C5CFF 52%,#22D3A6);-webkit-background-clip:text;color:transparent}
@@ -44,7 +41,7 @@ const HTML = `<!doctype html><html><head><meta charset="utf-8">
         background:rgba(124,92,255,.1);border-radius:999px;padding:8px 20px}
 </style></head><body>
   <div class="halo"></div><div class="grid"></div>
-  <div class="row"><div class="mark"><i></i><i></i><i></i></div><div class="brand">BD Report</div></div>
+  <div class="row"><svg class="mark" viewBox="0 0 64 64">${markInner()}</svg><div class="brand">BD Report</div></div>
   <h1>Toute la prospection,<br><span class="grad">et la rémunération qui va avec.</span></h1>
   <p>Rendez-vous, pipeline, primes et pilotage d'équipe dans un seul espace.</p>
   <div class="foot"><span class="chip">BDR &amp; SDR</span><span class="chip">Primes au centime</span><span class="chip">FR · EN · ES</span></div>

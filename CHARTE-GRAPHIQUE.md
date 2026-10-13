@@ -6,24 +6,34 @@
 Baseline : **« Pilotez votre prospection. Encaissez vos primes. »**
 (EN : *"Run your pipeline. Cash your bonuses."*)
 
-## 2. Le logo
+## 2. Le logo — « bloc entonnoir »
 
-Le logo combine deux idées : le **reporting** (trois barres ascendantes, arrondies, en dégradé inversé d'opacité) et le **signal d'activité** (pastille verte « pulse » en haut à droite, comme un statut en ligne).
+Un **carré bleu roi** dans lequel est découpé un **D en quatre bandes**, de plus en plus fines en
+descendant : premiers RDV, R2, SQL, signatures — la forme réelle d'un pipeline. La dernière bande,
+**l'affaire signée**, est en **menthe**. Aucun dégradé, aucun code visuel « IA ».
 
-- **Monogramme** : carré arrondi (rayon ≈ 23 % du côté) en dégradé Bleu Report → Cyan Pulse, barres blanches, pastille menthe.
-- **Logotype** : « **BD** » en Bleu Report gras + « Report » en Encre — toujours en Inter Extra-Bold, espacement resserré (`tracking-tight`).
-- **Zone de protection** : un demi-module (la largeur d'une barre) autour du logo.
-- **Tailles minimales** : monogramme 24 px, logo complet 100 px de large.
-- **Interdits** : ne pas déformer, ne pas changer l'ordre des couleurs du dégradé, ne pas poser le monogramme sur un fond saturé sans la version blanche du logotype.
+- **Monogramme** : carré plein `#1D3FD6`, coins 15/64 du côté ; bandes blanches ; bande du bas `#2EE6A8`.
+- **Logotype** : « **BD** » Inter Extra-Bold + « Report » Inter Regular, interlettrage resserré.
+  Texte `#14171C` sur fond clair, blanc sur fond sombre. Le monogramme, lui, ne change JAMAIS de couleur.
+- **Zone de protection** : un quart du monogramme tout autour.
+- **Taille minimale** : 16 px (favicon) — le contraste menthe/bleu a été choisi pour tenir à cette taille.
+- **Interdits** : déformer, recolorer la bande menthe (le violet a été essayé : trop proche du bleu,
+  la bande disparaissait), ajouter un dégradé ou une ombre.
 
-Fichiers : `public/icon.svg` (monogramme), composants React `src/Brand.jsx` (`LogoMark`, `Wordmark`, `Logo`).
+**Source unique : `brand/logo.mjs`.** `node brand/logo.mjs` régénère `brand/*.svg`, `brand/*.png`
+(sigle 512/1024, logo horizontal noir et blanc 1760 px) et `public/icon.svg` — d'où partent le favicon
+du site et de l'app, le manifeste et les icônes de l'app de bureau (générées par la release).
+Le site, `src/Brand.jsx`, la vidéo et les bannières portent une copie du tracé : changer le logo,
+c'est changer `logo.mjs` puis remplacer ces copies.
 
 ## 3. Palette de couleurs
 
 ### Couleurs de marque
 | Nom | Hex | Usage |
 |---|---|---|
-| **Bleu Report** | `#3B5BDB` | Couleur principale : actions, liens, marque |
+| **Bleu roi (logo)** | `#1D3FD6` | Le monogramme, le « BD » du logotype |
+| **Menthe (logo)** | `#2EE6A8` | La bande signée du monogramme, rien d'autre |
+| **Bleu Report** | `#3B5BDB` | Couleur principale de l'interface : actions, liens |
 | **Cyan Pulse** | `#0EA5E9` | Dégradés, accents secondaires |
 | **Encre** | `#172033` | Texte principal |
 | **Nuit Report** | `#10162E` | Fonds sombres (splash, hero) |

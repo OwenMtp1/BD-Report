@@ -1359,6 +1359,35 @@ async function main() {
       'Notes : les actions de la carte ont perdu `shrink-0`')
   }
 
+  // ========================================================= LE LOGO — UNE SEULE VERSION
+  // Le logo vit en COPIE dans une vingtaine de pages du site, dans l'app, la vidéo et les
+  // générateurs d'images : `brand/logo.mjs` est la source. Une page oubliée afficherait
+  // l'ancien logo sans que rien ne le signale — on exige donc le tracé de la bande menthe
+  // partout où un sigle est dessiné, et l'absence de l'ancien (sa grande barre en x=41).
+  {
+    const { PATH_MINT } = await import('../brand/logo.mjs')
+    const root = process.cwd()
+    const read = f => fs.default.readFileSync(path.default.join(root, f), 'utf8')
+    const htmlIn = (d, acc = []) => {
+      for (const n of fs.default.readdirSync(path.default.join(root, d))) {
+        const rel = path.default.join(d, n)
+        if (fs.default.statSync(path.default.join(root, rel)).isDirectory()) { if (n !== 'assets') htmlIn(rel, acc) }
+        else if (n.endsWith('.html')) acc.push(rel)
+      }
+      return acc
+    }
+    const files = [...htmlIn('site'), 'src/Brand.jsx', 'public/icon.svg', 'video/ad.html',
+      'scripts/build-product-pages.mjs', 'scripts/linkedin-banner.mjs']
+    for (const f of files) {
+      const txt = read(f)
+      ok(!/x="41" y="16"/.test(txt), `Logo : ${f} dessine encore l'ancien logo (trois barres)`)
+      if (/viewBox="0 0 64 64"/.test(txt) || f.endsWith('.svg')) {
+        // La vidéo découpe le D bande par bande : le tracé y est le même, attribut par attribut.
+        ok(txt.includes(PATH_MINT), `Logo : ${f} dessine un sigle qui n'est pas celui de brand/logo.mjs`)
+      }
+    }
+  }
+
   process.stdout.write((problems.length ? 'PROBLÈMES:\n- ' + problems.join('\n- ') : 'AUDIT OK') + '\n')
 
 }
