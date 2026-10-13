@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+
+Sitemap: https://owenmtp1.github.io/BD-Report/sitemap.xml

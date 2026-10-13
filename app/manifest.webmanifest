@@ -1,0 +1,36 @@
+{
+  "name": "BD Report",
+  "short_name": "BD Report",
+  "description": "Pilotez votre prospection. Encaissez vos primes. L'espace sales tout-en-un des BDR / SDR.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#10162e",
+  "theme_color": "#1D3FD6",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
