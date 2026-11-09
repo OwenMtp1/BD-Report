@@ -458,6 +458,10 @@ t('⚠️ la routine est REPLIÉE par défaut, et se déplie d’un clic',
 t('⚠️ le filtre par type cherche dans TOUTES les rubriques — un don du staff vit en « admin », pas en « inventaire »',
   /cats: STATE\.kinds\.size \? null : catsParam\(\)/.test(P) && /class="kind-note"/.test(P));
 t('« Tous les types » rend la vue entière', /id="kindClear"/.test(P));
+t('⚠️ le bandeau DIT que la rubrique est mise de côté — sinon on croit à un bug',
+  /' — mise de côté' : ''/.test(P));
+t('le type filtré se retire depuis le bandeau comme les autres filtres',
+  /bits\.push\(\['Type d’action'/.test(P) && /quoi === 'kinds'\) STATE\.kinds\.clear\(\)/.test(P));
 
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);

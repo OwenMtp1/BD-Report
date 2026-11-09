@@ -2371,9 +2371,12 @@ function semerRoutineArgent(out){
   let id = 0;
   // Des dons du staff, rangés en « Action staff » comme en vrai : c'est
   // précisément ce que le staff ne retrouvait pas depuis Transactions.
+  // ⚠️ Étalés sur la JOURNÉE, pas sur trois jours : la période par défaut
+  // est 24 h, et un aperçu qui ne montre qu'un seul don ne montre pas le
+  // problème qu'on vient de corriger.
   for (let i = 0; i < 7; i++) {
     const a = pick(RP), st = pick(STAFF), m = int(2000, 90000);
-    out.push({ id:'EV-GIVE'+i, t: Date.now() - int(0, 72) * 3600000, cat:'admin', sev:'notice',
+    out.push({ id:'EV-GIVE'+i, t: Date.now() - int(0, 22) * 3600000, cat:'admin', sev:'notice',
       actor:st, target:a,
       msg:`${st.name} a rendu ${money(m)} à ${a.name} — dédommagement`,
       d:{ type:'give', kind:'money', montant:m, motif:'give admin — dédommagement',
@@ -4807,7 +4810,15 @@ function renderActiveFilters() {
   const host = $('#afilters'); if (!host) return;
   const bits = [];
   if (STATE.view === 'stream' && STATE.cat !== 'all')
-    bits.push(['Catégorie', (CAT[STATE.cat] || {}).label || STATE.cat, 'cat']);
+    // ⚠️ Un filtre par TYPE cherche dans toutes les rubriques : la
+    // rubrique courante est alors mise de côté, et le bandeau doit le
+    // DIRE. Sinon on lit « Transactions et coffres » au-dessus de
+    // résultats venus de « Action staff », et on croit à un bug.
+    bits.push(['Catégorie',
+      ((CAT[STATE.cat] || {}).label || STATE.cat) + (STATE.kinds.size ? ' — mise de côté' : ''), 'cat']);
+  if (STATE.kinds.size)
+    bits.push(['Type d’action',
+      [...STATE.kinds].map(id => (ARG[id] || {}).label || id).join(', '), 'kinds']);
   if (STATE.q) bits.push(['Recherche', '« ' + STATE.q + ' »', 'q']);
   [...STATE.sevs].forEach(id => bits.push(['Gravité', (SEV[id] || {}).label || id, 'sev:' + id]));
   if (STATE.range !== 24) bits.push(['Période', estCustom() ? chartCfg().title : (NOM_PERIODE[STATE.range] || STATE.range + ' h'), 'range']);
@@ -4824,9 +4835,10 @@ function renderActiveFilters() {
 }
 function clearFilter(quoi) {
   if (quoi === 'cat')   { STATE.cat = 'all'; STATE.view = 'stream'; }
+  else if (quoi === 'kinds') STATE.kinds.clear();
   else if (quoi === 'q'){ STATE.q = ''; $('#q').value = ''; $('#catQ').value = ''; }
   else if (quoi === 'range') { STATE.range = 24; STATE.from = STATE.to = null; }
-  else if (quoi === 'tout') { STATE.q = ''; $('#q').value = ''; $('#catQ').value = ''; STATE.sevs.clear(); STATE.range = 24; STATE.from = STATE.to = null; STATE.cat = 'all'; }
+  else if (quoi === 'tout') { STATE.q = ''; $('#q').value = ''; $('#catQ').value = ''; STATE.sevs.clear(); STATE.kinds.clear(); STATE.range = 24; STATE.from = STATE.to = null; STATE.cat = 'all'; }
   else if (quoi.startsWith('sev:')) STATE.sevs.delete(quoi.slice(4));
   STATE.limit = 120;
   document.querySelectorAll('[data-range]').forEach(b =>
