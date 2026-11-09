@@ -110,6 +110,61 @@ const PERMS = [
 ];
 const PERM_IDS = PERMS.map(p => p.id);
 
+/* ============================================================
+   SOUS-TYPES D'ARGENT — rendre le flux financier lisible
+   ------------------------------------------------------------
+   ⚠️ SUR QBCORE, TOUT L'ARGENT PASSE PAR UN SEUL ÉVÈNEMENT
+   (`OnMoneyChange`) : salaire, VIP, allocation, give d'un admin et
+   achat arrivent dans la même rubrique, avec la même tête. Le seul
+   élément qui les distingue — la RAISON — était capturé puis jamais
+   montré ni filtrable : on affichait le COMPTE (« (bank) »), ce qui
+   n'apprend rien. D'où des journaux où le salaire de tout le monde
+   noie le don suspect d'un administrateur.
+   ⚠️ On ne SUPPRIME pas le bruit, on le CLASSE : un salaire est
+   justement ce qui permet de repérer un dupe ou un abus. Les lignes
+   de routine se replient (`routine: true`), elles ne s'effacent pas.
+   ============================================================ */
+const ARGENT_TYPES = [
+  { id:'give_staff', label:'Don du staff',  fam:'var(--f-staff)', routine:false },
+  { id:'achat',      label:'Achat',         fam:'var(--f-shop)',  routine:false },
+  { id:'transfert',  label:'Virement',      fam:'var(--f-bien)',  routine:false },
+  { id:'amende',     label:'Amende',        fam:'var(--f-surv)',  routine:false },
+  { id:'salaire',    label:'Salaire',       fam:'var(--f-play)',  routine:true  },
+  { id:'vip',        label:'VIP',           fam:'var(--f-monde)', routine:true  },
+  { id:'allocation', label:'Allocation',    fam:'var(--f-play)',  routine:true  },
+  { id:'autre',      label:'Autre',         fam:'var(--muted)',   routine:false }
+];
+const ARGENT_IDS = ARGENT_TYPES.map(t => t.id);
+const ARGENT_ROUTINE = ARGENT_TYPES.filter(t => t.routine).map(t => t.id);
+
+// Motifs tels que les écrivent les frameworks : on les reconnaît sans
+// imposer de vocabulaire au serveur de jeu.
+const ARGENT_MOTIFS = [
+  ['give_staff', /(^|[^a-z])(give|gift|admin|staff|don)([^a-z]|$)|donn[ée]/i],
+  ['salaire',    /salaire|salary|paycheck|paie|payday|wage/i],
+  ['vip',        /vip|premium|donateur|donator|boost|priority/i],
+  ['allocation', /allocation|aide|welfare|ch[oô]mage|rsa|unemploy/i],
+  ['amende',     /amende|fine|ticket|contravention/i],
+  ['achat',      /achat|buy|bought|purchase|shop|boutique|vente|sold/i],
+  ['transfert',  /transfer|virement|wire|envoi/i]
+];
+
+/* Classe UN mouvement d'argent. `res` sert de dernier recours : une
+   action venue du panneau est un geste de staff, quoi qu'en dise le
+   motif. Rend `null` quand l'évènement ne porte pas d'argent — on ne
+   colle pas une étiquette financière sur une connexion. */
+function sousTypeArgent(d, res) {
+  if (!d || typeof d !== 'object') return null;
+  const aMontant = d.montant != null || d.montantEuros != null;
+  const estArgent = aMontant || d.kind === 'money';
+  if (!estArgent) return null;
+  if (d.type === 'give' || res === 'panneau') return 'give_staff';
+  const texte = [d.motif, d.raison, d.reason, d.kind, d.compte, d.source].filter(Boolean).join(' ');
+  for (const [id, re] of ARGENT_MOTIFS) if (re.test(texte)) return id;
+  return 'autre';
+}
+
+
 // ⚠️ PASSERELLE DES ANCIENS DROITS. Les bases déjà en service portent
 // « accounts.manage » et « players.gdpr » : à l'ouverture, `resolve`
 // filtrait sur PERM_IDS et les aurait fait DISPARAÎTRE (un fondateur privé
@@ -320,6 +375,7 @@ const canSeeCat = (r, c) => catsOf(r).includes(c);
 const SEV_IDS = SEVS.map(s => s.id);
 
 module.exports = { CATS, SEVS, GROUPS, CAT_IDS, SEV_IDS, canonCat, CAT_ALIAS, CAT_FALLBACK,
+                   ARGENT_TYPES, ARGENT_IDS, ARGENT_ROUTINE, sousTypeArgent,
                    PERMS, PERM_IDS, PERM_GROUPS, PERM_ALIAS, expandAliasPerms, ROLES, ROLE_IDS,
                    roleOf, canon, canonKey, permsOf, catsOf, rankOf, hasPerm, canSeeCat,
                    permsOfRoles, catsOfRoles, rankOfRoles, mainRole };

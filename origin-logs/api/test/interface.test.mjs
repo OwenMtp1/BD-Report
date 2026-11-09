@@ -241,7 +241,8 @@ t('hors environnement, c’est Origin Logs', /dans \? esp\.nom : 'Origin Logs'/.
 t('dedans, la page prend le nom du client, ses initiales et sa couleur',
   /initials\(\{ name: nom \}\) : 'OL'/.test(P) && /avatarStyle\(\{ name: nom \}\)/.test(P));
 t('et l’onglet du navigateur le dit aussi', /document\.title = \(dans \? nom/.test(P));
-t('⚠️ l’aperçu n’atterrit dans AUCUN environnement', /ME\.espace = null;/.test(P));
+t('⚠️ l’aperçu entre DIRECTEMENT dans un environnement — c’est le panneau de modération qu’on donne à voir',
+  /const demoSp = \(typeof DEMO_ESPACES/.test(P) && /ME\.espace = demoSp \? \{ id: demoSp\.id/.test(P));
 t('⚠️ tout se repeint SANS recharger — sinon l’aperçu, qui n’a pas de serveur, repartait dehors',
   /function poserEspaceDemo/.test(P) && /peindreIdentite\(\); buildNav\(\)/.test(P));
 t('entrer et ressortir passent par un seul chemin',
@@ -441,6 +442,22 @@ t('une règle expose seuil, catégorie, gravité, fenêtre et portée',
 t('on ajoute, supprime et enregistre les règles',
   /id="alAdd"/.test(P) && /id="alSave"/.test(P) && /data-aldel/.test(P)
   && /api\('\/api\/alerts\/rules', \{ method:'PUT'/.test(P));
+
+sect('Lisibilité de l’argent : le motif, le type, et la routine repliée');
+// ⚠️ Sur QBCore tout l'argent passe par un SEUL branchement : salaires,
+// allocations, avantages VIP et dons du staff arrivaient dans la même
+// rubrique, avec le même libellé, et le motif — pourtant capté — ne
+// s'affichait nulle part. Résultat : 40 lignes de routine noyaient les
+// 6 qui comptent, et un don du staff était introuvable.
+t('le catalogue des types d’argent arrive du serveur', /ARGENT *=/.test(P) && /argentTypes/.test(P));
+t('un évènement d’argent porte son type en pastille devant le message',
+  /class="arg-tag"/.test(P) && /ARG\[/.test(P));
+t('une barre de types filtre les transactions', /id="kindBar"/.test(P) && /function renderKindBar/.test(P));
+t('⚠️ la routine est REPLIÉE par défaut, et se déplie d’un clic',
+  /sansRoutine: *true/.test(P) && /id="routineBtn"/.test(P));
+t('⚠️ le filtre par type cherche dans TOUTES les rubriques — un don du staff vit en « admin », pas en « inventaire »',
+  /cats: STATE\.kinds\.size \? null : catsParam\(\)/.test(P) && /class="kind-note"/.test(P));
+t('« Tous les types » rend la vue entière', /id="kindClear"/.test(P));
 
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);

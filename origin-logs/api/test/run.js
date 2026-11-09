@@ -79,6 +79,9 @@ const SUITES = [
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
   // Moteur d'alertes : règles à seuil évaluées à l'ingestion.
   { nom: 'alertes', fichier: 'alertes.test.mjs', port: 8919, discord: false,
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
+  // Lisibilité de l'argent : classement par type à l'ingestion, filtres.
+  { nom: 'argent', fichier: 'argent.test.mjs', port: 8920, discord: false,
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] }
 ];
 

@@ -887,6 +887,11 @@ function normalize(raw, server) {
   const a = raw.actor || {};
   const t = raw.target || {};
   const data = raw.data && typeof raw.data === 'object' ? raw.data : {};
+  // ⚠️ L'ÉTIQUETTE D'ARGENT SE POSE À L'INGESTION, pas à l'affichage :
+  // c'est elle qu'on filtre en SQL. Sans elle, « montre-moi les dons du
+  // staff » obligerait à relire tout le journal en mémoire.
+  const sousType = CAT.sousTypeArgent(data, raw.res);
+  if (sousType && !data.argent) data.argent = sousType;
   const dataStr = JSON.stringify(data).slice(0, 8000);
   const msg = String(raw.msg || '').replace(/\s+/g, ' ').trim().slice(0, 500);
   const search = [msg, a.name, a.key, a.sid, t.name, t.key, raw.res, dataStr]
@@ -1071,7 +1076,11 @@ function outEvent(r, me) {
     actor: { name: r.actor_name || 'Système', sid: r.actor_sid, key: keyFor(me, r.actor_key),
              staff: !!r.actor_staff, license: showIds ? r.actor_key : null },
     target: r.target_name ? { name: r.target_name, key: keyFor(me, r.target_key) } : null,
-    msg: r.msg, d: data || {},
+    // Les journaux déjà en base n'ont pas l'étiquette : on la calcule à la
+    // volée, pour qu'un historique ancien se lise comme un nouveau.
+    msg: r.msg, d: data && !data.argent
+      ? Object.assign({}, data, CAT.sousTypeArgent(data, r.res) ? { argent: CAT.sousTypeArgent(data, r.res) } : {})
+      : (data || {}),
     pin: !!r.pin, done: !!r.done, doneBy: r.done_by || null
   };
 }
@@ -1103,6 +1112,21 @@ function buildWhere(me, p, opts) {
   if (p.from) { w.push('e.ts >= ?'); a.push(p.from); }
   if (p.to)   { w.push('e.ts <= ?'); a.push(p.to); }
   if (p.actor){ w.push('(e.actor_key = ? OR e.target_key = ?)'); a.push(p.actor, p.actor); }
+  // ⚠️ Le TYPE D'ACTION se filtre en SQL comme le reste : l'étiquette
+  // d'argent (`data.argent`) d'abord, le `kind` brut ensuite — une seule
+  // commande pour « les dons du staff » comme pour « les connexions ».
+  if (p.kinds && p.kinds.length) {
+    const k = p.kinds.filter(x => /^[a-z_]{2,24}$/.test(x));
+    if (k.length) {
+      w.push(`COALESCE(json_extract(e.data,'$.argent'), json_extract(e.data,'$.kind')) IN (${k.map(() => '?').join(',')})`);
+      a.push(...k);
+    }
+  }
+  // Le bruit de fond part de la VUE, jamais de la base.
+  if (p.sansRoutine && CAT.ARGENT_ROUTINE.length) {
+    w.push(`(json_extract(e.data,'$.argent') IS NULL OR json_extract(e.data,'$.argent') NOT IN (${CAT.ARGENT_ROUTINE.map(() => '?').join(',')}))`);
+    a.push(...CAT.ARGENT_ROUTINE);
+  }
   if (p.undone) w.push('md.at IS NULL');
   return { where: w, args: a };
 }
@@ -2315,6 +2339,7 @@ async function route(req, res) {
     const sp = me ? me.spaceId : 0;
     return ok(res, {
       cats: CAT.CATS, sevs: CAT.SEVS, groups: CAT.GROUPS,
+      argentTypes: CAT.ARGENT_TYPES, argentRoutine: CAT.ARGENT_ROUTINE,
       perms: CAT.PERMS, permGroups: CAT.PERM_GROUPS,
       roles: sp ? ROLESVC.list(db, sp).map(r => ({ id: r.key, label: r.label, rank: r.rank,
         desc: r.desc, perms: r.perms, cats: r.cats })) : [],
@@ -2365,6 +2390,12 @@ async function route(req, res) {
         sevs: Q.sev ? String(Q.sev).split(',') : null,
         from: N(Q.from), to: N(Q.to), q: Q.q, actor: S(Q.actor),
         undone: Q.undone === '1',
+        // « Filtre par type d'action » : un don du staff, un achat, un
+        // salaire… Plusieurs valeurs séparées par une virgule.
+        kinds: Q.kind ? String(Q.kind).split(',').slice(0, 12) : null,
+        // Replier le bruit de fond (salaires, VIP, allocations) SANS
+        // l'effacer : il reste en base, il quitte juste la vue.
+        sansRoutine: Q.sansRoutine === '1',
         limit: N(Q.limit), cursorTs: N(Q.cursorTs), cursorId: N(Q.cursorId)
       }));
     }

@@ -670,6 +670,19 @@ h1,h2,h3{margin:0;font-family:var(--ui);font-variation-settings:'wdth' 84;text-w
    Elles portent la couleur de ce qu'elles filtrent : le fond ne peut donc
    pas glisser d'une pastille à l'autre comme dans le rail (il changerait
    de teinte en route). C'est le CONTOUR et l'échelle qui animent. */
+/* Filtres par TYPE D'ACTION, et étiquette portée par chaque ligne d'argent.
+   Une couleur par type : « don du staff » ne doit pas avoir la même tête
+   qu'un salaire quand on balaie cinquante lignes. */
+.kind-note{font-size:11px;color:var(--vio-hi);align-self:center;font-style:italic}
+.kind-lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;align-self:center;margin-right:2px}
+.chip.kind i{width:7px;height:7px;border-radius:50%;background:var(--c);display:inline-block}
+.chip.kind[aria-pressed="true"]{color:var(--c);border-color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent)}
+.chip.kind.routine{opacity:.72;border-style:dashed}
+.chip.kind.routine[aria-pressed="true"]{opacity:1;border-style:solid}
+.arg-tag{display:inline-block;margin-right:7px;padding:1px 7px;border-radius:999px;font-size:10.5px;
+  font-weight:600;letter-spacing:.02em;color:var(--c);
+  background:color-mix(in srgb,var(--c) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--c) 34%,transparent);vertical-align:1px}
 .chip{
   display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:999px;
   border:1px solid var(--edge);background:var(--panel);font-size:11.5px;color:var(--muted);
@@ -1578,6 +1591,7 @@ select.input{height:36px}
         <button class="btn sm" id="catQClear" hidden>Effacer</button>
       </div>
       <div class="filters" id="sevBar" role="group" aria-label="Filtrer par gravité"></div>
+      <div class="filters" id="kindBar" role="group" aria-label="Filtrer par type d’action" hidden></div>
       <!-- Les captures ne se lisent pas : elles se REGARDENT. Les laisser
            dans le flux, en une ligne de texte chacune, aurait demandé
            d'ouvrir chaque évènement pour savoir laquelle on cherche. -->
@@ -2010,7 +2024,37 @@ let SEVS = [
 ];
 
 let CAT = {}, SEV = {}, GRP = {};
-function setCatalogue(cats, sevs, groups) {
+let ARGENT = [
+  { id:'give_staff', label:'Don du staff', fam:'var(--f-staff)', routine:false },
+  { id:'achat',      label:'Achat',        fam:'var(--f-shop)',  routine:false },
+  { id:'transfert',  label:'Virement',     fam:'var(--f-bien)',  routine:false },
+  { id:'amende',     label:'Amende',       fam:'var(--f-surv)',  routine:false },
+  { id:'salaire',    label:'Salaire',      fam:'var(--f-play)',  routine:true  },
+  { id:'vip',        label:'VIP',          fam:'var(--f-monde)', routine:true  },
+  { id:'allocation', label:'Allocation',   fam:'var(--f-play)',  routine:true  },
+  { id:'autre',      label:'Autre',        fam:'var(--muted)',   routine:false }
+];
+let ARG = {};
+const ARG_MOTIFS = [
+  ['give_staff', /(^|[^a-z])(give|gift|admin|staff|don)([^a-z]|$)|donn[ée]/i],
+  ['salaire',    /salaire|salary|paycheck|paie|payday|wage/i],
+  ['vip',        /vip|premium|donateur|donator|boost|priority/i],
+  ['allocation', /allocation|aide|welfare|ch[oô]mage|rsa|unemploy/i],
+  ['amende',     /amende|fine|ticket|contravention/i],
+  ['achat',      /achat|buy|bought|purchase|shop|boutique|vente|sold/i],
+  ['transfert',  /transfer|virement|wire|envoi/i]
+];
+function sousTypeArgentUI(d, res) {
+  if (!d || typeof d !== 'object') return null;
+  if (!(d.montant != null || d.montantEuros != null || d.kind === 'money')) return null;
+  if (d.type === 'give' || res === 'panneau') return 'give_staff';
+  const t = [d.motif, d.raison, d.kind, d.compte, d.source].filter(Boolean).join(' ');
+  for (const [id, re] of ARG_MOTIFS) if (re.test(t)) return id;
+  return 'autre';
+}
+function setCatalogue(cats, sevs, groups, argent) {
+  if (argent && argent.length) ARGENT = argent;
+  ARG = Object.fromEntries(ARGENT.map(a => [a.id, a]));
   if (groups && groups.length) GROUPS = groups;
   if (cats && cats.length) CATS = cats;
   if (sevs && sevs.length) SEVS = sevs;
@@ -2310,6 +2354,37 @@ function makeEvent(t){
     search:(txt+' '+acteur.name+' '+acteur.sid+' '+acteur.license+' '+JSON.stringify(r.d)).toLowerCase()
   };
 }
+/* ⚠️ LA DÉMO DOIT MONTRER LE PROBLÈME, pas seulement la solution : sans
+   salaires ni VIP, « masquer la routine » n'aurait rien à masquer et le
+   staff ne reconnaîtrait pas ses journaux. On sème donc le bruit de fond
+   tel qu'il arrive en vrai : beaucoup, régulier, peu intéressant. */
+function semerRoutineArgent(out){
+  const motifs = [['Salaire %s', 'salaire'], ['Prime VIP', 'vip'], ['Allocation chômage', 'allocation']];
+  let id = 0;
+  // Des dons du staff, rangés en « Action staff » comme en vrai : c'est
+  // précisément ce que le staff ne retrouvait pas depuis Transactions.
+  for (let i = 0; i < 7; i++) {
+    const a = pick(RP), st = pick(STAFF), m = int(2000, 90000);
+    out.push({ id:'EV-GIVE'+i, t: Date.now() - int(0, 72) * 3600000, cat:'admin', sev:'notice',
+      actor:st, target:a,
+      msg:`${st.name} a rendu ${money(m)} à ${a.name} — dédommagement`,
+      d:{ type:'give', kind:'money', montant:m, motif:'give admin — dédommagement',
+          cible:a.name, staff:st.name },
+      res:'panneau',
+      search:(st.name+' a rendu '+m+' a '+a.name+' give admin').toLowerCase() });
+  }
+  for (let i = 0; i < 260; i++) {
+    const a = pick(RP), [modele, motif] = motifs[i % 3];
+    const montant = motif === 'salaire' ? int(800, 4200) : motif === 'vip' ? 3500 : int(400, 900);
+    const t = Date.now() - int(0, 168) * 3600000;
+    out.push({ id:'EV-PAY'+(id++), t, cat:'inventaire', sev:'info', actor:a, target:null,
+      msg:`${a.name} a reçu ${money(montant)} — ${modele.replace('%s', a.job)}`,
+      d:{ kind:'money', compte:'bank', montant, operation:'add',
+          motif: modele.replace('%s', a.job) },
+      res:'qb-management',
+      search:(a.name+' a reçu '+montant+' '+motif).toLowerCase() });
+  }
+}
 function generate(n,spanH){
   const maintenant=Date.now(), out=[]; let garde=0;
   while(out.length<n && garde++<n*40){
@@ -2459,7 +2534,10 @@ const Demo = {
   async init() {
     if (this.ready) return;
     EVENTS = generate(2200, 168);
-    EVENTS.forEach(e => { e.html = true; });
+    semerRoutineArgent(EVENTS);
+    EVENTS.sort((a, b) => b.t - a.t);
+    EVENTS.forEach(e => { e.html = true;
+      const a = sousTypeArgentUI(e.d, e.res); if (a) (e.d = e.d || {}).argent = a; });
     this.ready = true;
   },
   decorate(e) { return Object.assign({}, e, { pin: MARKS.pin.has(e.id), done: MARKS.done.has(e.id) }); },
@@ -2472,6 +2550,9 @@ const Demo = {
       (!cats || cats.includes(e.cat)) &&
       (!sevs || sevs.includes(e.sev)) &&
       (!p.actor || (e.actor.key === p.actor || (e.target && e.target.key === p.actor))) &&
+      // Type d'action, et repli du bruit de fond : mêmes règles qu'en SQL.
+      (!p.kinds || !p.kinds.length || p.kinds.includes((e.d || {}).argent) || p.kinds.includes((e.d || {}).kind)) &&
+      (!p.sansRoutine || !((ARG[(e.d || {}).argent] || {}).routine)) &&
       (!q || e.search.includes(q)));
   },
   async query(p) {
@@ -2639,7 +2720,8 @@ const qs = o => Object.entries(o).filter(([, v]) => v != null && v !== '' )
 const Api = {
   async query(p) {
     return api('/api/events?' + qs({ cat: p.cats, sev: p.sevs, from: p.from, to: p.to, q: p.q,
-      actor: p.actor, limit: p.limit, cursorTs: p.cursorTs, cursorId: p.cursorId }));
+      actor: p.actor, limit: p.limit, cursorTs: p.cursorTs, cursorId: p.cursorId,
+      kind: p.kinds, sansRoutine: p.sansRoutine ? '1' : null }));
   },
   stats(from, to, buckets) { return api('/api/stats?' + qs({ from, to, buckets })); },
   player(key) { return api('/api/players/' + encodeURIComponent(key)); },
@@ -2672,6 +2754,9 @@ let EVENTS = [];
    État et rendu
    ============================================================ */
 const STATE = { view:'overview', cat:'all', range:24, q:'', sevs:new Set(),
+                // Filtre « type d'action », et repli du bruit de fond
+                // (salaires, VIP, allocations) : masqué PAR DÉFAUT, jamais effacé.
+                kinds:new Set(), sansRoutine:true,
                 limit:120, live:true, sel:null, banState:'actifs', banQ:'',
                 list:[], total:0, cursor:null, sevCounts:{}, stats:null, bans:null,
                 onQ:'', online:null, team:null, teamJours:7,
@@ -2771,7 +2856,13 @@ async function refresh(opts) {
   try {
     const jobs = [DS.stats(from, to, chartCfg().n)];
     if (STATE.view === 'stream') jobs.push(DS.query({
-      cats: catsParam(), sevs: [...STATE.sevs], from, to, q: STATE.q, limit: STATE.limit }));
+      // ⚠️ UN TYPE D'ACTION TRAVERSE LES RUBRIQUES. Un don du staff est
+      // rangé dans « Action staff », pas dans « Transactions » : demander
+      // « les dons » depuis l'écran Transactions rendait zéro. Dès qu'un
+      // type est coché, on cherche dans TOUT ce que le rôle peut lire.
+      cats: STATE.kinds.size ? null : catsParam(),
+      sevs: [...STATE.sevs], from, to, q: STATE.q, limit: STATE.limit,
+      kinds: [...STATE.kinds], sansRoutine: STATE.sansRoutine && argentEnVue() }));
     else if (STATE.view === 'bans') jobs.push(DS.bans(STATE.banState, STATE.banQ));
     else if (STATE.view === 'online') jobs.push(DS.online(STATE.onQ));
     else if (STATE.view === 'team')   jobs.push(DS.team(STATE.teamJours));
@@ -3400,12 +3491,38 @@ function renderStats() {
 /* ============================================================
    Flux
    ============================================================ */
+/* Les filtres d'argent n'ont de sens que là où il y a de l'argent : les
+   afficher sur « Connexions » serait sept boutons qui ne filtrent rien. */
+function argentEnVue() {
+  return STATE.cat === 'all' || ECO_CATS.includes(STATE.cat);
+}
 function renderSevBar() {
   const by = STATE.sevCounts || {};
   $('#sevBar').innerHTML = SEVS.map(x => `
     <button class="chip" data-sev="${x.id}" style="--c:${x.c}" aria-pressed="${STATE.sevs.has(x.id)}">
       <i></i>${esc(x.label)}<b>${by[x.id] || 0}</b></button>`).join('')
     + (STATE.sevs.size ? `<button class="btn sm" id="sevClear">Tout afficher</button>` : '');
+  renderKindBar();
+}
+/* ⚠️ FILTRER PAR TYPE D'ACTION, et replier le bruit de fond.
+   Tout l'argent d'un serveur arrive par le même évènement : salaire, VIP,
+   allocation, don d'un admin. Sans ces deux commandes, retrouver un don
+   suspect demandait de parcourir des centaines de lignes de paie. Le
+   repli ne SUPPRIME rien : les lignes restent en base et un clic les rend. */
+function renderKindBar() {
+  const host = $('#kindBar'); if (!host) return;
+  if (!argentEnVue()) { host.hidden = true; host.innerHTML = ''; return; }
+  host.hidden = false;
+  const chips = ARGENT.filter(a => a.id !== 'autre').map(a => `
+    <button class="chip kind${a.routine ? ' routine' : ''}" data-kind="${a.id}" style="--c:${a.fam}"
+      aria-pressed="${STATE.kinds.has(a.id)}" title="${a.routine ? 'Bruit de fond — replié par défaut' : 'Filtrer sur ce type'}">
+      <i></i>${esc(a.label)}</button>`).join('');
+  host.innerHTML = `<span class="kind-lab">Type d’action</span>${chips}
+    ${STATE.kinds.size ? '<span class="kind-note">cherché dans toutes les rubriques</span>' : ''}
+    <button class="btn sm${STATE.sansRoutine ? '' : ' on'}" id="routineBtn"
+      title="Salaires, VIP et allocations : repliés par défaut, jamais effacés">
+      ${STATE.sansRoutine ? '👁 Afficher la routine' : '🙈 Masquer la routine'}</button>
+    ${STATE.kinds.size ? '<button class="btn sm" id="kindClear">Tous les types</button>' : ''}`;
 }
 /* Le choix de densité se garde : le refaire à chaque connexion serait le
    pire des deux mondes — un réglage qu'on remarque sans le conserver.
@@ -3514,7 +3631,8 @@ function renderStream() {
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4 6.4 12 13 4.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>` : ''}
         </div>
-        <div class="ev-msg">${fmtMsg(e, STATE.q)}${indiceCharge(e, STATE.q)}<span class="ev-flags">${e.pin ? '<span class="pin-f" title="Épinglé">◆</span>' : ''}${e.done ? '<span class="done-f" title="Traité">✓</span>' : ''}</span></div>
+        <div class="ev-msg">${e.d && e.d.argent && ARG[e.d.argent]
+          ? `<span class="arg-tag" style="--c:${ARG[e.d.argent].fam}">${esc(ARG[e.d.argent].label)}</span>` : ''}${fmtMsg(e, STATE.q)}${indiceCharge(e, STATE.q)}<span class="ev-flags">${e.pin ? '<span class="pin-f" title="Épinglé">◆</span>' : ''}${e.done ? '<span class="done-f" title="Traité">✓</span>' : ''}</span></div>
       </div>
     </div>`;
   }).join('');
@@ -7817,7 +7935,7 @@ function goVue(v) {
 }
 
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate],[data-notedel],[data-evnav]');
+  const t = ev.target.closest('[data-view],[data-cat],[data-ev],[data-player],[data-sev],[data-copy],[data-range],[data-act],[data-shot],[data-staff-toggle],[data-banstate],[data-notedel],[data-evnav],[data-kind],#routineBtn,#kindClear');
   if (!t) return;
 
   if (t.dataset.view === 'platform')    return goVue('platform');
@@ -7859,6 +7977,16 @@ document.addEventListener('click', async ev => {
     if (STATE.view === 'overview' && connu) goStream(connu.cat);
     return openInspector(id);
   }
+  if (t.dataset.kind) {
+    const k = t.dataset.kind;
+    STATE.kinds.has(k) ? STATE.kinds.delete(k) : STATE.kinds.add(k);
+    // Choisir « Salaire » explicitement doit le MONTRER : filtrer sur une
+    // ligne de routine tout en la repliant ne rendrait jamais rien.
+    if (STATE.kinds.size && [...STATE.kinds].some(x => (ARG[x] || {}).routine)) STATE.sansRoutine = false;
+    STATE.cursor = null; refresh(); return;
+  }
+  if (t.id === 'routineBtn') { STATE.sansRoutine = !STATE.sansRoutine; STATE.cursor = null; refresh(); return; }
+  if (t.id === 'kindClear')  { STATE.kinds.clear(); STATE.cursor = null; refresh(); return; }
   if (t.dataset.cat) {
     // Bannissements : le registre d'abord. Le flux ne dit pas qui est
     // banni EN CE MOMENT, et c'est la seule question qu'on se pose ici.
@@ -8639,7 +8767,7 @@ async function startPanel() {
   if (MODE === 'api') {
     try {
       const c = await api('/api/catalogue');
-      setCatalogue(c.cats, c.sevs, c.groups);
+      setCatalogue(c.cats, c.sevs, c.groups, c.argentTypes);
       // ⚠️ « 0 jour » se lirait comme « effacé tout de suite » : l'exact
       // contraire de ce que veut dire une conservation illimitée.
       $('#retention').textContent = c.conservationIllimitee ? 'illimitée'
@@ -8668,11 +8796,13 @@ async function startPanel() {
     // Compte de démo relié à Discord : sa double authentification passe par
     // Discord, pas par un TOTP local (le bloc « Sécurité » reste donc masqué).
     ME.totp = { actif:false, disponible:false };
-    // ⚠️ ON N'ARRIVE DANS AUCUN ENVIRONNEMENT. L'aperçu ouvrait
-    // directement le panneau du premier client : on croyait que le
-    // produit ÉTAIT ce serveur-là, et rien ne disait qu'on en surveille
-    // plusieurs. On arrive sur Origin Logs, et l'on choisit où entrer.
-    ME.espace = null;
+    // ⚠️ L'APERÇU ENTRE DIRECTEMENT DANS UN ENVIRONNEMENT. Il atterrissait
+    // sur la console de supervision : un visiteur y voyait une liste de
+    // clients, pas le produit. Ce qu'il faut donner à voir, c'est le
+    // PANNEAU DE MODÉRATION d'un serveur. La supervision reste à un clic.
+    const demoSp = (typeof DEMO_ESPACES !== 'undefined' && DEMO_ESPACES[0]) || null;
+    ME.espace = demoSp ? { id: demoSp.id, nom: demoSp.nom, visite: true } : null;
+    if (demoSp) ME.roleLabel = 'Fondateur (équipe Origin Logs)';
     ME.perms = DEMO_PERMS.map(p => p.id); ME.cats = CATS.map(c => c.id);
     $('#whoBox').hidden = false;
     $('#whoName').textContent = ME.pseudo;
@@ -8686,7 +8816,9 @@ async function startPanel() {
   placerPeriode();   // sinon le bloc glissant démarre sous « 1 h » alors que « 24 h » est actif
   // Sans adresse précise, l'administration de plateforme atterrit sur sa
   // supervision : un panneau de logs de jeu ne lui apprendrait rien.
-  if (!applyHash()) { if (ME.plateforme) STATE.view = 'platform'; syncHash(true); }
+  // Dans un environnement on ouvre son tableau de bord ; sans adresse et
+  // sans espace, l'administration de plateforme atterrit sur sa supervision.
+  if (!applyHash()) { STATE.view = ME.espace ? 'overview' : (ME.plateforme ? 'platform' : 'overview'); syncHash(true); }
   render();
   await refresh();
   startStream();

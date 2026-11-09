@@ -15,9 +15,14 @@ CreateThread(function()
     AddEventHandler('QBCore:Server:OnMoneyChange', function(src, compte, montant, operation, raison)
       local p = Framework.GetPlayer(src); if not p then return end
       local verbe = operation == 'add' and 'a reçu' or 'a perdu'
+      -- ⚠️ ON ÉCRIT LE MOTIF, PAS LE COMPTE. « a reçu 3 500 $ (bank) »
+      -- n'apprend rien : tout l'argent passe par ce seul évènement, et
+      -- c'est la RAISON qui distingue un salaire d'un don d'administrateur.
+      -- Le compte reste dans les détails, où on le consulte si besoin.
+      local pourquoi = raison and tostring(raison) ~= '' and tostring(raison) or compte
       Origin.Log({
         cat = 'inventaire', sev = montant >= 50000 and 'notice' or 'info', actor = p,
-        msg = ('%s %s %s $ (%s)'):format(p.name, verbe, montant, compte),
+        msg = ('%s %s %s $ — %s'):format(p.name, verbe, montant, pourquoi),
         data = { kind = 'money', compte = compte, montant = montant,
                  operation = operation, motif = raison },
         res = 'qb-management'
