@@ -31,6 +31,7 @@
    ============================================================ */
 
 const CAT = require('./catalogue.js');
+const CLASSEUR = require('./classeur.js');
 
 /* ---------- ce que la ressource gère DÉJÀ toute seule ----------
    Une entrée ici veut dire : présente, elle est branchée sans rien
@@ -54,104 +55,64 @@ const NATIF = [
    pas : une entrée sans `hooks` sert quand même — elle dit « on connaît
    cette ressource, voilà la rubrique qu'elle alimente ». */
 const CONNUES = [
-  { id:'qb-banking',       label:'qb-banking',        cat:'boutique_caisse',
+  // ⚠️ UNE BANQUE EN JEU N'EST PAS LA CAISSE DE LA BOUTIQUE. Ces quatre
+  // ressources étaient rangées en « Boutique : caisse » — la rubrique des
+  // paiements en EUROS (Tebex) : chez un client, chaque retrait au
+  // distributeur s'affichait à côté des achats de grade VIP.
+  { id:'qb-banking',       label:'qb-banking',        cat:'inventaire',
     hooks:[{ ev:'qb-banking:server:withdraw', msg:'Retrait au distributeur' },
            { ev:'qb-banking:server:deposit',  msg:'Dépôt au distributeur' }] },
-  { id:'esx_banking',      label:'esx_banking',       cat:'boutique_caisse' },
-  { id:'Renewed-Banking',  label:'Renewed-Banking',   cat:'boutique_caisse' },
-  { id:'okokBanking',      label:'okokBanking',       cat:'boutique_caisse' },
+  { id:'esx_banking',      label:'esx_banking',       cat:'inventaire' },
+  { id:'Renewed-Banking',  label:'Renewed-Banking',   cat:'inventaire' },
+  { id:'okokBanking',      label:'okokBanking',       cat:'inventaire' },
   { id:'qb-garages',       label:'qb-garages',        cat:'proprietes' },
   { id:'cd_garage',        label:'cd_garage',         cat:'proprietes' },
   { id:'jg-advancedgarages', label:'JG Advanced Garages', cat:'proprietes' },
   { id:'qb-houses',        label:'qb-houses',         cat:'proprietes' },
   { id:'ps-housing',       label:'ps-housing',        cat:'proprietes' },
   { id:'qs-housing',       label:'qs-housing',        cat:'proprietes' },
-  { id:'qb-shops',         label:'qb-shops',          cat:'boutique_produits' },
+  { id:'qb-shops',         label:'qb-shops',          cat:'inventaire' },      // magasin EN JEU : une transaction
   { id:'ox_doorlock',      label:'ox_doorlock',       cat:'proprietes' },
   { id:'qb-ambulancejob',  label:'qb-ambulancejob',   cat:'facture_ems' },
   { id:'esx_ambulancejob', label:'esx_ambulancejob',  cat:'facture_ems' },
-  { id:'qb-policejob',     label:'qb-policejob',      cat:'admin' },
-  { id:'esx_policejob',    label:'esx_policejob',     cat:'admin' },
+  // La police est un MÉTIER tenu par des joueurs, pas le staff du serveur.
+  { id:'qb-policejob',     label:'qb-policejob',      cat:'jobs' },
+  { id:'esx_policejob',    label:'esx_policejob',     cat:'jobs' },
   { id:'qb-casino',        label:'qb-casino',         cat:'casino' },
   { id:'qb-adminmenu',     label:'qb-adminmenu',      cat:'admin' },
   { id:'txAdmin',          label:'txAdmin',           cat:'admin' },
   { id:'EasyAdmin',        label:'EasyAdmin',         cat:'admin' },
   { id:'qs-inventory',     label:'qs-inventory',      cat:'inventaire' },
   { id:'codem-inventory',  label:'codem-inventory',   cat:'inventaire' },
-  { id:'origen_police',    label:'Origen Police',     cat:'admin' },
+  { id:'origen_police',    label:'Origen Police',     cat:'jobs' },
   { id:'tgiann-inventory', label:'tgiann-inventory',  cat:'inventaire' },
-  { id:'qb-phone',         label:'qb-phone',          cat:'reports' },
-  { id:'lb-phone',         label:'lb-phone',          cat:'reports' },
+  // Un téléphone n'est pas un ticket : messages, appels et annonces sont ce
+  // que le joueur a sous les yeux.
+  { id:'qb-phone',         label:'qb-phone',          cat:'ecran_joueur' },
+  { id:'lb-phone',         label:'lb-phone',          cat:'ecran_joueur' },
   { id:'qb-management',    label:'qb-management',     cat:'jobs' },
   { id:'esx_society',      label:'esx_society',       cat:'jobs' }
 ];
 
 /* ---------- reconnaître un nom d'évènement inconnu ----------
-   ⚠️ Ce sont des INDICES, pas des vérités : « transfer » peut désigner
-   un virement comme un transfert de véhicule. C'est pourquoi rien ne se
-   branche tout seul — le panneau propose, l'humain valide. Un mot-clé
-   trop large produirait du bruit, et le bruit fait ignorer le reste. */
-const INDICES = [
-  { cat:'boutique_caisse',   mots:['bank','banque','atm','withdraw','deposit','retrait','virement','paycheck','salaire','salary','invoice','payment','paiement','pay','payer','cash','money','argent','wallet','compte'] },
-  { cat:'boutique_monnaie',  mots:['coin','token','credit','donator','vip','grade','rank','boutique','webshop','tebex'] },
-  { cat:'boutique_produits', mots:['shop','store','buy','sell','achat','vente','market','purchase'] },
-  { cat:'inventaire',        mots:['inventory','inventaire','stash','coffre','item','give','trade','echange','transfer','drop'] },
-  { cat:'items_sol',         mots:['pickup','ramasse','ground','sol','loot'] },
-  { cat:'proprietes',        mots:['house','housing','maison','apartment','appart','garage','vehicle','vehicule','car','property','propriete','key','cle','impound','fourriere'] },
-  { cat:'jobs',              mots:['job','metier','duty','service','society','societe','boss','entreprise','crew','gang','hire','fire','promote'] },
-  { cat:'casino',            mots:['casino','poker','blackjack','roulette','slot','bet','mise','gamble'] },
-  { cat:'jobs',              mots:['heist','braquage','robbery','robber'] },
-  { cat:'facture_ems',       mots:['ems','ambulance','medic','heal','revive','soin','hopital','hospital','facture'] },
-  { cat:'combat',            mots:['death','die','mort','kill','damage','shot','wound'] },
-  { cat:'bans',              mots:['ban','unban','blacklist'] },
-  { cat:'sanctions',         mots:['kick','warn','avertissement','mute','jail','prison'] },
-  { cat:'anticheat',         mots:['cheat','anticheat','detect','exploit','injector','trigger'] },
-  { cat:'admin',             mots:['admin','staff','noclip','godmode','spawn','teleport','tp','revive','setgroup'] },
-  { cat:'reports',           mots:['report','signalement','ticket','helpme','support'] }
-];
-
-/* ⚠️ Un nom qui se déclenche à chaque image n'a rien à faire dans un
-   journal : à 40 joueurs, un `hud:update` produit des millions de lignes
-   par jour et rend le panneau illisible. On les écarte AVANT de les
-   proposer — proposer puis compter sur la vigilance, c'est proposer. */
-const BRUIT = ['hud', 'update', 'sync', 'tick', 'loop', 'draw', 'nui', 'ping',
-               'heartbeat', 'refresh', 'position', 'coords', 'stress', 'hunger',
-               'thirst', 'stamina', 'minimap', 'blip', 'marker', 'anim', 'progress'];
-
+   Le dictionnaire, la notation et les pièges vivent dans `classeur.js` :
+   un seul endroit où ajouter un mot. Ce qui suit n'en est que la porte
+   d'entrée pour le scan.
+   ⚠️ Ce sont des INDICES, pas des vérités. Un rangement fait à la main
+   dans le panneau l'emporte toujours, et n'est jamais défait. */
+const INDICES = Object.entries(CLASSEUR.DICO).map(([cat, n]) => ({
+  cat, mots: [].concat(n.forts || [], n.moyens || [], n.faibles || []) }));
+const BRUIT = CLASSEUR.BRUIT;
 const normal = s => String(s || '').toLowerCase();
+const estBruit = ev => CLASSEUR.estBruit(ev);
 
-/* ⚠️ ON COMPARE DES MOTS, PAS DES MORCEAUX DE MOTS. Le premier jet
-   cherchait le mot-clé n'importe où dans le nom : « draw » (du bruit
-   d'affichage) reconnaissait « withdraw », et l'évènement de retrait
-   bancaire — exactement celui qu'on veut — partait à la poubelle. Même
-   piège dans l'autre sens : « cle » aurait reconnu « oracle », « tp »
-   à peu près tout. On découpe donc le nom en mots, séparateurs ET
-   casse mélangée comprises (`playerHudTick` → player, hud, tick). */
-const mots = ev => normal(String(ev || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2'))
-  .split(/[^a-z0-9]+/).filter(Boolean);
-
-/* Un mot-clé court doit correspondre EXACTEMENT ; à partir de quatre
-   lettres, un préfixe suffit (« bank » reconnaît « banking », « item »
-   reconnaît « items »). Sans ce seuil, les mots de deux ou trois lettres
-   rattraperaient la moitié du dictionnaire. */
-const colle = (tk, mot) => tk === mot || (mot.length >= 4 && tk.startsWith(mot));
-const estBruit = ev => { const t = mots(ev); return BRUIT.some(m => t.some(tk => colle(tk, m))); };
-
-/* Deviner la rubrique d'un nom d'évènement. Renvoie null quand rien ne
-   ressort : « je ne sais pas » est une réponse, et elle vaut mieux qu'un
-   rangement au hasard que personne ne viendra corriger. */
-function deviner(ev) {
-  const t = mots(ev);
-  let meilleur = null;
-  for (const ind of INDICES) {
-    for (const mot of ind.mots) {
-      if (!t.some(tk => colle(tk, mot))) continue;
-      // Le mot le plus long l'emporte : « banque » est plus parlant que
-      // « bank » dans « banque_interne », et « vehicule » que « cle ».
-      if (!meilleur || mot.length > meilleur.force) meilleur = { cat: ind.cat, force: mot.length, mot };
-    }
-  }
-  return meilleur;
+/* Deviner la rubrique d'un nom d'évènement — avec le nom de la ressource
+   quand on le connaît : `jg-advancedgarages` range ses évènements même
+   quand leur nom ne dit rien. Renvoie null quand rien ne ressort : « je
+   ne sais pas » vaut mieux qu'un rangement au hasard. */
+function deviner(ev, ressource) {
+  const r = CLASSEUR.classer({ ressource: ressource || '', evenement: ev });
+  return r ? { cat: r.cat, force: r.score, mot: r.mot, accord: r.accord } : null;
 }
 
 /* ---------- le verdict ---------- */
@@ -234,13 +195,18 @@ function analyser(inventaire, scan) {
     const connue = CONNUES.find(c => normal(c.id) === normal(entree.nom));
     for (const ev of entree.evenements || []) {
       if (estBruit(ev)) { ecartes.bruit++; continue; }
-      const d = deviner(ev);
-      // Une ressource connue impose SA rubrique : elle a été vérifiée à
-      // la main, l'indice n'est qu'une approximation.
-      const cat = connue ? connue.cat : (d ? d.cat : null);
+      const d = deviner(ev, entree.nom);
+      /* ⚠️ UNE RESSOURCE CONNUE DONNE LA RUBRIQUE PAR DÉFAUT, PAS LA
+         RUBRIQUE DE TOUT. Elle imposait la sienne à chacun de ses
+         évènements : `qb-adminmenu` rangeait un bannissement en « Action
+         staff », hors du registre où on le cherche. Un mot FORT dans le
+         nom de l'évènement (ban, kick, report…) l'emporte désormais ; à
+         défaut, la ressource décide comme avant. */
+      const net = d && d.force >= 15 && connue && d.cat !== connue.cat;
+      const cat = net ? d.cat : (connue ? connue.cat : (d ? d.cat : null));
       if (!cat) { ecartes.sansIndice++; continue; }
       candidats.push({ ressource: entree.nom, ev, cat,
-                       sur: connue ? 'catalogue' : 'indice', mot: d ? d.mot : null });
+                       sur: connue && !net ? 'catalogue' : 'indice', mot: d ? d.mot : null });
     }
   }
   // Le plus sûr en premier : ce qui vient du catalogue, puis l'indice le

@@ -24,6 +24,7 @@ const SAUV = require('./sauvegarde.js');
 const TRANSF = require('./transfert.js');
 const CONSERV = require('./conservation.js');
 const ECO = require('./ecosysteme.js');
+const CLASSEUR = require('./classeur.js');
 const PLAT = require('./plateforme.js');
 const BRANCH = require('./branchement.js');
 const LIC = require('./licence.js');
@@ -878,15 +879,35 @@ const uLift = db.prepare(`UPDATE sanctions SET active=0, lifted_at=?, lifted_by=
 const S = v => (v == null ? null : String(v));
 const N = v => (v == null || v === '' || isNaN(Number(v)) ? null : Number(v));
 
+/* ⚠️ UNE RUBRIQUE INCONNUE N'EST PLUS VERSÉE EN « ACTION STAFF ».
+   Un script du client qui appelle `Log({ cat = 'banque', … })`, ou qui
+   n'en donne aucune, tombait dans le fourre-tout : on retrouvait des
+   virements parmi les téléportations du staff. On range d'abord par
+   mots-clés — le nom demandé compte comme un nom d'évènement, puis la
+   ressource, puis la phrase — et le fourre-tout ne reçoit que ce qui n'a
+   VRAIMENT rien évoqué. La demande d'origine reste dans les données :
+   une faute de frappe doit continuer de se voir. */
+function rangerInconnue(raw, data) {
+  const demande = String(raw.cat == null ? '' : raw.cat).slice(0, 60);
+  const texte = [raw.msg, data && data.evenement, data && data.kind, data && data.type, data && data.motif]
+    .filter(v => typeof v === 'string').join(' ');
+  const r = CLASSEUR.classer({ ressource: raw.res || '', evenement: demande + ' ' + (data && typeof data.evenement === 'string' ? data.evenement : ''), texte });
+  if (demande) data.rubriqueDemandee = demande;
+  if (r) { data.rangePar = r.mot; return r.cat; }
+  return CAT.CAT_FALLBACK;
+}
+
 function normalize(raw, server) {
-  const cat = CAT.canonCat(raw.cat);
+  const data0 = raw.data && typeof raw.data === 'object' ? raw.data : {};
+  const connue = CAT.CAT_IDS.includes(raw.cat) || (raw.cat && CAT.CAT_ALIAS[raw.cat]);
+  const cat = connue ? CAT.canonCat(raw.cat) : rangerInconnue(raw, data0);
   const sev = CAT.SEV_IDS.includes(raw.sev) ? raw.sev : 'info';
   let ts = N(raw.ts) || now();
   const max = now() + 5 * 60000, min = now() - 7 * 86400000;
   if (ts > max || ts < min) ts = now();          // horloge de serveur de jeu fantaisiste
   const a = raw.actor || {};
   const t = raw.target || {};
-  const data = raw.data && typeof raw.data === 'object' ? raw.data : {};
+  const data = data0;
   // ⚠️ L'ÉTIQUETTE D'ARGENT SE POSE À L'INGESTION, pas à l'affichage :
   // c'est elle qu'on filtre en SQL. Sans elle, « montre-moi les dons du
   // staff » obligerait à relire tout le journal en mémoire.
@@ -1415,12 +1436,50 @@ function poserRaccordements(spaceId) {
     try { return Object.assign(JSON.parse(r.payload), { ts: r.ts }); } catch { return null; }
   };
   const a = ECO.analyser(lire('inventory'), lire('scans'));
+  /* ⚠️ UN RANGEMENT AUTOMATIQUE SE CORRIGE, UN RANGEMENT À LA MAIN NE
+     BOUGE JAMAIS. Le premier scan figeait la rubrique pour toujours
+     (`DO NOTHING`) : un dictionnaire amélioré ne profitait qu'aux
+     évènements jamais vus, et les journaux déjà mal rangés le restaient.
+     Un nouveau scan re-range donc ce que la MACHINE avait rangé — et
+     seulement cela : `source = 'manuel'` est une décision humaine. */
   const ins = db.prepare(`INSERT INTO hooks(space_id, ev, cat, sev, res, source, active, ts)
                           VALUES(?,?,?, 'info', ?,?, 1, ?)
-                          ON CONFLICT(space_id, ev) DO NOTHING`);
+                          ON CONFLICT(space_id, ev) DO UPDATE SET
+                            cat = excluded.cat, res = excluded.res, source = excluded.source, ts = excluded.ts
+                          WHERE hooks.source IS NOT 'manuel' AND hooks.cat IS NOT excluded.cat`);
   let n = 0;
   for (const c of a.candidats) n += DB.num(ins.run(spaceId, c.ev, c.cat, c.ressource, c.sur, now()).changes);
   return n;
+}
+
+/* ---------- le dictionnaire a changé : re-ranger ce qui est déjà posé ----------
+   Ajouter un mot à `classeur.js` ne servirait à rien chez les clients déjà
+   branchés si personne ne relançait leur scan — et personne ne le relance.
+   Quand la version du dictionnaire monte, l'API re-range d'elle-même, une
+   fois, tous les raccordements automatiques de tous les espaces. La
+   ressource relit ses raccordements chaque minute : les journaux suivants
+   tombent au bon endroit sans que personne ne touche au serveur de jeu.
+   ⚠️ Les journaux DÉJÀ écrits ne sont pas déplacés : un évènement rangé
+   reste où il a été lu, sinon un lien collé hier dans Discord mènerait
+   ailleurs aujourd'hui. */
+function reclasserRaccordements() {
+  const cle = 'classeur.version';
+  if (Number(getSetting(cle) || 0) >= CLASSEUR.DICO_VERSION) return;
+  let n = 0;
+  try {
+    const maj = db.prepare(`UPDATE hooks SET cat = ?, ts = ? WHERE space_id = ? AND ev = ?`);
+    const connues = new Map(ECO.CONNUES.map(c => [String(c.id).toLowerCase(), c.cat]));
+    for (const h of db.prepare(`SELECT space_id, ev, cat, res, source FROM hooks
+                                WHERE source IS NOT 'manuel'`).all().map(DB.row)) {
+      const d = ECO.deviner(h.ev, h.res);
+      const connue = connues.get(String(h.res || '').toLowerCase());
+      const net = d && d.force >= 15;
+      const cat = (connue && !(net && d.cat !== connue)) ? connue : (d ? d.cat : null);
+      if (cat && cat !== h.cat) { maj.run(cat, now(), h.space_id, h.ev); n++; }
+    }
+    setSetting(cle, String(CLASSEUR.DICO_VERSION), 'migration');
+    if (n) console.log(`  Dictionnaire de rangement v${CLASSEUR.DICO_VERSION} : ${n} raccordement(s) re-rangé(s).`);
+  } catch (e) { console.error('[classeur]', e.message); }
 }
 
 function purge() {
@@ -3854,6 +3913,9 @@ async function route(req, res) {
             if (b.cat !== undefined) {
               if (!CAT.CAT_IDS.includes(String(b.cat))) return fail(res, 400, 'Rubrique inconnue.');
               sets.push('cat = ?'); args.push(String(b.cat));
+              // Choisie par un humain : plus aucun re-rangement automatique
+              // (nouveau scan, dictionnaire amélioré) ne la défera.
+              sets.push("source = 'manuel'");
             }
             if (!sets.length) return ok(res, { ok: true });
             sets.push('ts = ?'); args.push(now());
@@ -4520,6 +4582,7 @@ server.listen(CFG.port, CFG.host, () => {
   planifierSauvegardes();
   rattraperRubriques();
   rattraperPermissions();
+  reclasserRaccordements();
   // Un premier balayage peu après le démarrage : un redémarrage est
   // justement le moment où l'on ignore ce qui s'est passé pendant l'arrêt.
   setTimeout(() => balayerAcces('démarrage').catch(e => console.error('[acces]', e.message)), 20000).unref();

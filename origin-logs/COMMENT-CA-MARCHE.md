@@ -542,13 +542,63 @@ Aujourd'hui le nom est découpé en mots (`playerHudTick` → player, hud, tick)
 Ce qui n'évoque **rien** n'est pas rangé au hasard : il est écarté, et le
 panneau dit combien.
 
+### Le classeur — ranger par mots-clés (`api/classeur.js`)
+
+On ne voit jamais la base ni les scripts d'un client : tout le rangement se fait
+sur des **mots**. Le dictionnaire vit dans **un seul fichier**, `api/classeur.js`
+(`DICO`), en français et en anglais :
+
+```js
+inventaire: {
+  forts:  ['bank', 'banque', 'atm', 'withdraw', 'retrait', 'salaire', 'buy', 'shop', …],
+  moyens: ['give', 'pay', 'weapon', …],
+  faibles:['add', 'remove', 'store']
+}
+```
+
+Trois règles :
+
+1. **On note.** Un mot fort vaut 5, un moyen 3, un faible 1 — multiplié par
+   l'endroit où il est lu : le nom de l'**évènement** compte triple, le nom de la
+   **ressource** et le texte libre comptent double. La rubrique la mieux notée
+   gagne ; sous 6 points, la réponse est « je ne sais pas ».
+2. **Les accords.** Deux mots ensemble disent autre chose que chacun seul :
+   `admin` + `give` est un don du staff (pas un échange entre joueurs),
+   `ambulance` + `bill` est une facture (pas une réanimation), `society` +
+   `withdraw` est un compte de société (pas un retrait personnel).
+3. **La ressource compte.** `jg-advancedgarages` range ses évènements même
+   quand leur nom ne dit rien.
+
+⚠️ **Une banque en jeu n'est pas la caisse de la boutique.** L'ancien
+dictionnaire envoyait tout ce qui parle d'argent en « Boutique : caisse » — la
+rubrique des paiements en **euros**. Les retraits, virements, salaires et achats
+en magasin vont en « Transactions et coffres ».
+
+**Pour ajouter un mot :** une ligne dans `DICO`, puis monter `DICO_VERSION`. Au
+démarrage suivant, l'API **re-range d'elle-même** les raccordements déjà posés
+chez tous les clients. ⚠️ Sauf ceux qu'un humain a rangés à la main dans le
+panneau (`source = 'manuel'`) : ceux-là ne bougent jamais.
+
+**Pour voir où tombe un nom**, sans serveur ni base :
+
+```
+node api/classeur.js okokBanking okokBanking:server:withdrawMoney
+→ Transactions et coffres  [inventaire]  40 points — mot : « withdraw »
+```
+
+Le même classeur sert à l'**ingestion** : un script du client qui appelle
+`Log()` sans rubrique, ou avec une rubrique inconnue (`cat = 'banque'`), n'est
+plus versé en « Action staff » — il est rangé d'après le nom demandé, la
+ressource et la phrase. La demande d'origine reste dans les données
+(`rubriqueDemandee`), et seul ce qui n'évoque vraiment rien garde le fourre-tout.
+
 ### Le raccordement
 
 Ce qui survit est écrit dans la table `hooks` et **activé d'office** :
 
 | ev | cat | active |
 |---|---|---|
-| `banque:retirer` | `boutique_caisse` | 1 |
+| `banque:retirer` | `inventaire` | 1 |
 | `braquage:fin` | `jobs` | 1 |
 
 La ressource lit cette table toutes les minutes (`GET /api/hooks`) et pose ses
@@ -556,7 +606,7 @@ La ressource lit cette table toutes les minutes (`GET /api/hooks`) et pose ses
 
 ```lua
 AddEventHandler('banque:retirer', function(...)
-  Origin.Log({ cat = 'boutique_caisse', msg = 'banque:retirer', … })
+  Origin.Log({ cat = 'inventaire', msg = 'banque:retirer', … })
 end)
 ```
 

@@ -568,9 +568,19 @@ déclenchements par minute, et la console le dit.
 
 `api/ecosysteme.js` connaît les ressources répandues (`Renewed-Banking`,
 `qb-garages`, `ps-housing`…) et leur rubrique. Une ressource du catalogue
-impose **sa** rubrique, vérifiée à la main, plutôt que l'indice tiré de son
-nom. Ajouter une entrée là suffit — rien d'autre à toucher, et la vingtième
-installation reconnaît ce que les dix-neuf précédentes ont appris.
+donne **sa** rubrique par défaut — sauf quand le nom de l'évènement porte un
+mot sans équivoque (`ban`, `kick`, `report`) : un bannissement lancé depuis
+`qb-adminmenu` va au registre, pas en « Action staff ».
+
+Tout le reste se range par **mots-clés**, dans `api/classeur.js` : une ligne
+dans `DICO` pour ajouter un mot, puis monter `DICO_VERSION` — au démarrage
+suivant, l'API re-range d'elle-même les raccordements déjà posés chez tous
+les clients (jamais ceux qu'un humain a rangés à la main). Pour voir où tombe
+un nom sans serveur :
+
+```
+node api/classeur.js okokBanking okokBanking:server:withdrawMoney
+```
 
 ### En console, si besoin
 

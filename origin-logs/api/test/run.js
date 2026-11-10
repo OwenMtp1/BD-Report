@@ -82,7 +82,17 @@ const SUITES = [
     comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
   // Lisibilité de l'argent : classement par type à l'ingestion, filtres.
   { nom: 'argent', fichier: 'argent.test.mjs', port: 8920, discord: false,
-    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] }
+    comptes: [['Nyx', 'fondateur', 'motdepassetest123']] },
+  // Rangement des logs par mots-clés, sur de vrais noms d'évènements.
+  // ⚠️ Des raccordements sont posés AVANT le démarrage, rangés comme les
+  // rangeait l'ancien dictionnaire : c'est le démarrage qui doit les
+  // re-ranger — sauf celui qu'un humain a placé.
+  { nom: 'classement', fichier: 'classement.test.mjs', port: 8921, discord: false,
+    hooks: [['vieux-banking:server:withdraw', 'boutique_caisse', 'vieux-banking', 'indice'],
+            ['vieux-phone:sendMessage', 'reports', 'vieux-phone', 'indice'],
+            ['vieux-admin:server:ban', 'admin', 'qb-adminmenu', 'catalogue'],
+            ['choisi:a:la:main:withdraw', 'casino', 'ma_banque', 'manuel']],
+    comptes: [['Sup', 'fondateur', 'motdepassesup12345', { plateforme: true }]] }
 ];
 
 const filtre = process.argv.slice(2).filter(a => !a.startsWith('-'));
@@ -96,7 +106,7 @@ if (!choisies.length) {
 }
 
 /* ---------- semis d'une base neuve ---------- */
-function semer(fichierDb, comptes) {
+function semer(fichierDb, comptes, hooks) {
   // On passe par les modules de l'API plutôt que par staff.js : c'est le
   // même chemin de code, sans dépendre de l'ordre des arguments d'une CLI.
   const DB = require(path.join(RACINE, 'db.js'));
@@ -114,6 +124,9 @@ function semer(fichierDb, comptes) {
       .run(pseudo, AUTH.hash(mdp), role, JSON.stringify([role]), Date.now(),
            o && o.plateforme ? 1 : 0, (o && o.discord) || null);
   }
+  for (const [ev, cat, res, source] of (hooks || []))
+    db.prepare(`INSERT INTO hooks(space_id, ev, cat, sev, res, source, active, ts)
+                VALUES(1,?,?, 'info', ?,?, 1, ?)`).run(ev, cat, res, source, Date.now());
   db.close();
 }
 
@@ -140,7 +153,7 @@ function lancer(cmd, args, env, silencieux) {
   const resultats = [];
   for (const s of choisies) {
     const fichierDb = path.join(TRAVAIL, s.nom + '.db');
-    semer(fichierDb, s.comptes);
+    semer(fichierDb, s.comptes, s.hooks);
 
     const base = 'http://127.0.0.1:' + s.port;
     // Pour la suite « licence » : une paire de clés éphémère. Le serveur

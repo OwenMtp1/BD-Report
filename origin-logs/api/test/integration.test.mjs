@@ -27,7 +27,9 @@ t('⚠️ « cle » ne reconnaît pas « oracle »', ECO.deviner('oracle:query')
 t('⚠️ ni « tp » n’importe quel mot qui commence par t', ECO.deviner('truc:machin')===null);
 t('un préfixe suffit à partir de 4 lettres', (ECO.deviner('shop:buyItem')||{}).cat==='inventaire'
   || (ECO.deviner('shop:buyItem')||{}).cat==='boutique_produits', JSON.stringify(ECO.deviner('shop:buyItem')));
-for (const [ev, cat] of [['renewed-banking:server:withdraw','boutique_caisse'],
+// ⚠️ Un retrait bancaire est une TRANSACTION, pas un paiement de boutique :
+// ce contrôle figeait le mauvais rangement (« Boutique : caisse »).
+for (const [ev, cat] of [['renewed-banking:server:withdraw','inventaire'],
                          ['qb-garages:server:takeOut','proprietes'],
                          ['police:server:ban','bans'],
                          ['ems:server:facture','facture_ems']]) {
@@ -77,7 +79,7 @@ t('qb-core, ox_inventory et baseevents sont « branchés »',
 t('⚠️ screenshot-basic manque, et l’écran dira pourquoi c’est gênant',
   a1.natives.some(n=>n.id==='screenshot-basic' && n.etat==='absente' && n.sans));
 t('Renewed-Banking est connue mais pas branchée',
-  a1.connues.some(c=>c.id==='Renewed-Banking' && c.cat==='boutique_caisse'));
+  a1.connues.some(c=>c.id==='Renewed-Banking' && c.cat==='inventaire'));
 t('et mon_braquage tombe dans les inconnues', a1.inconnues.some(r=>r.nom==='mon_braquage'));
 // ⚠️ Les gestes sur les joueurs qui DÉPENDENT d'une ressource sont repérés
 // dans l'inventaire déjà reçu : ox_inventory est là → « Voir l'inventaire »
@@ -98,19 +100,26 @@ const sc = await poster('/api/scan', CLE, { lus: 42, protegees:['esx_menu_defaul
     // ⚠️ Un champ de trop dans le corps : il ne doit JAMAIS être stocké.
     code:'if source then givemoney() end' },
   { nom:'Renewed-Banking', evenements:['renewed-banking:server:withdraw'] },
+  { nom:'mon_script', evenements:['bidule:chose'] },
   { nom:'ox_inventory', evenements:['ox_inventory:server:swap'] }
 ]});
 t('le scan est accepté', sc.status===200);
 const a2 = (await J('/api/platform/spaces/'+ID+'/integration')).body;
 t('les candidats sont proposés', a2.candidats.length>=2, a2.candidats.length+' candidats');
 t('⚠️ la ressource connue impose SA rubrique, pas l’indice',
-  a2.candidats.some(c=>c.ev==='renewed-banking:server:withdraw' && c.cat==='boutique_caisse' && c.sur==='catalogue'));
+  a2.candidats.some(c=>c.ev==='renewed-banking:server:withdraw' && c.cat==='inventaire' && c.sur==='catalogue'));
 t('un évènement sur mesure est deviné',
   a2.candidats.some(c=>c.ev==='braquage:server:payer' && c.sur==='indice'), 
   JSON.stringify(a2.candidats.find(c=>c.ev==='braquage:server:payer')||null));
 t('⚠️ le bruit est écarté AVANT d’être proposé',
   !a2.candidats.some(c=>c.ev==='hud:update') && a2.ecartes.bruit>=1);
-t('ce qui n’évoque rien est écarté aussi', !a2.candidats.some(c=>c.ev==='truc:machin'));
+t('ce qui n’évoque rien est écarté aussi', !a2.candidats.some(c=>c.ev==='bidule:chose'));
+// ⚠️ « truc:machin » ne dit rien, mais il vient de `mon_braquage` : le nom de
+// la RESSOURCE suffit à le ranger. Il partait à la poubelle, et avec lui la
+// moitié des évènements d'un script dont on ne connaît pas le vocabulaire.
+t('⚠️ un évènement muet est rangé d’après sa ressource',
+  a2.candidats.some(c=>c.ev==='truc:machin' && c.cat==='jobs' && c.sur==='indice'),
+  JSON.stringify(a2.candidats.find(c=>c.ev==='truc:machin')||null));
 t('⚠️ un évènement déjà couvert nativement n’est pas reproposé — sinon tout serait journalisé deux fois',
   !a2.candidats.some(c=>c.ressource==='ox_inventory') && a2.ecartes.natif>=1);
 t('les ressources protégées sont nommées, pas oubliées', a2.protegees.includes('esx_menu_default'));

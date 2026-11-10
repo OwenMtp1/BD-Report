@@ -44,8 +44,14 @@ end)
 --- @param o table {cat, sev, actor (src ou table), target (src ou table), msg, data, res}
 function Origin.Log(o)
   if not o or not o.msg then return end
-  local cat = o.cat or 'admin'   -- rubrique de repli : cf. CAT_FALLBACK côté API
-  if Config.Categories[cat] == false then return end
+  -- ⚠️ SANS RUBRIQUE, ON N'IMPOSE PLUS « admin » ICI. Un script qui appelle
+  -- Log() sans `cat` (ou avec un nom que le panneau ne connaît pas) voyait
+  -- tout partir en « Action staff ». On transmet la demande telle quelle :
+  -- c'est l'API qui range, par mots-clés, d'après le nom demandé, la
+  -- ressource et la phrase (api/classeur.js). Le dictionnaire vit donc à UN
+  -- seul endroit, et s'améliore sans redéployer cette ressource.
+  local cat = o.cat
+  if cat and Config.Categories[cat] == false then return end
 
   local acteur = o.actor
   if type(acteur) == 'number' or type(acteur) == 'string' then acteur = Framework.GetPlayer(acteur) end
@@ -54,7 +60,7 @@ function Origin.Log(o)
 
   file[#file + 1] = {
     ts = math.floor(os.time() * 1000),
-    cat = cat, sev = o.sev or 'info',
+    cat = cat or '', sev = o.sev or 'info',
     actor = acteur, target = cible,
     msg = o.msg, data = o.data or {}, res = o.res or 'origin_logs'
   }
