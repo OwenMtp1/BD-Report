@@ -157,7 +157,7 @@ sect('La liste des environnements est un ONGLET, pas une fenêtre');
 // quelque part, elle se refermait — et pour revenir au client suivant il
 // fallait la rouvrir. C'est l'écran que l'administration regarde le plus.
 t('la vue existe', /id="viewSpaces"/.test(P));
-t('elle a son entrée dans le rail', /data-view="spaces"/.test(P));
+t('elle a son entrée dans le rail', /view:'spaces', label:'Environnements'/.test(P));
 t('et son adresse, comme les autres vues', /'\/environnements'/.test(P));
 t('⚠️ le clic du rail la route vraiment — sans quoi l’onglet retombe sur la supervision',
   /dataset\.view === 'spaces'\)\s*return goVue\('spaces'\)/.test(P));
@@ -175,7 +175,7 @@ sect('Les offres se composent dans un ONGLET, avec leurs rubriques');
 // que par un nombre de jours, et il n'y avait rien à vendre au palier
 // du dessus.
 t('la vue existe', /id="viewPlans"/.test(P));
-t('elle a son entrée dans le rail', /data-view="plans"/.test(P));
+t('elle a son entrée dans le rail', /view:'plans', label:'Offres'/.test(P));
 t('et son adresse', /'\/offres'/.test(P));
 t('⚠️ le clic du rail la route vraiment — sans quoi l’onglet retombe sur la supervision',
   /dataset\.view === 'plans'\)\s*return goVue\('plans'\)/.test(P));
@@ -279,7 +279,7 @@ sect('Équipe & rôles de la plateforme : un ONGLET, en deux parties');
 // une modale, on changeait un rôle, elle se refermait, et il fallait la
 // rouvrir pour la personne suivante.
 t('la vue existe', /id="viewStaff"/.test(P));
-t('elle a son entrée dans le rail', /data-view="staff"/.test(P));
+t('elle a son entrée dans le rail', /view:'staff', label:'Équipe & rôles'/.test(P));
 t('et son adresse', /'\/equipe-plateforme'/.test(P));
 t('⚠️ le clic du rail la route vraiment', /dataset\.view === 'staff'\)\s*return goVue\('staff'\)/.test(P));
 t('⚠️ DEUX parties, pas une page de dix-neuf cases à traverser pour trouver un nom',
@@ -356,8 +356,8 @@ sect('« Analyse » : UNE rubrique, quatre sous-onglets');
 // facette de « que disent les chiffres ? ». Quatre rubriques à moitié vides
 // valaient moins qu'un seul écran assumant ses onglets. La barre de
 // sous-onglets est partagée ; chaque vue et chaque fonction de rendu restent.
-t('une SEULE rubrique « Analyse » dans le rail', /data-view="analyse"/.test(P)
-  && !/data-view="economy" style/.test(P));
+t('une SEULE rubrique « Analyse » dans le rail', /view:'analyse', label:'Analyse'/.test(P)
+  && !/view:'economy'/.test(P) && !/view:'playtime'/.test(P));
 t('elle ouvre le dernier sous-onglet consulté',
   /dataset\.view === 'analyse'\) return goVue\(STATE\.analyseTab \|\| 'stats'\)/.test(P)
   && /if \(ANALYSE_TABS\.includes\(v\)\) STATE\.analyseTab = v/.test(P));
@@ -385,7 +385,7 @@ t('⚠️ le temps de jeu dit que l’activité est un PROXY tant que la durée 
 t('⚠️ « Vue d’équipe » n’est plus une rubrique séparée du rail',
   !/data-view="team" style/.test(P));
 t('« Tableau de bord » a remplacé « Vue d’ensemble » dans le rail',
-  /nav-label">Tableau de bord</.test(P));
+  /view:'overview', label:'Tableau de bord'/.test(P) && !/label:'Vue d’ensemble'/.test(P));
 
 sect('L’administration est en PAGES, plus en fenêtres');
 // ⚠️ Rôles, Réglages, Comptes et Journal étaient des modales. Un back-office
@@ -409,7 +409,7 @@ for (const [k, path, fn, marker] of [
 t('⚠️ l’admin passe par data-view, plus par data-admin (routage)',
   !/dataset\.admin/.test(P) && !/data-admin="/.test(P));
 t('⚠️ « Comptes » est distinct du sous-onglet Analyse « Équipe »',
-  /k:'comptes',\s*label:'Comptes'/.test(P) && !/label:'Équipe'.*accès/.test(P));
+  /view:'comptes',\s*label:'Comptes'/.test(P) && !/label:'Équipe'.*accès/.test(P));
 
 sect('Vues sauvegardées : rappeler un filtre en un clic');
 t('le bouton « Vues » est dans la barre de période', /id="viewsBtn"/.test(P) && /id="viewsMenu"/.test(P));
@@ -462,6 +462,87 @@ t('⚠️ le bandeau DIT que la rubrique est mise de côté — sinon on croit �
   /' — mise de côté' : ''/.test(P));
 t('le type filtré se retire depuis le bandeau comme les autres filtres',
   /bits\.push\(\['Type d’action'/.test(P) && /quoi === 'kinds'\) STATE\.kinds\.clear\(\)/.test(P));
+
+sect('Refonte : une coquille qui mène partout');
+// ⚠️ « Tout doit être atteignable facilement ». Le rail était UNE liste
+// de trente et une entrées : cinq pages de plateforme, puis le tableau de
+// bord, puis dix-huit rubriques, puis l'administration tout en bas. On
+// atteignait les réglages en faisant défiler les journaux.
+t('⚠️ UN SEUL modèle pour la barre latérale ET la palette — deux listes finissent par diverger',
+  /function navModel\(\)/.test(P) && /function paletteDestinations\(\)[\s\S]{0,80}navModel\(\)/.test(P)
+  && /function buildNav\(\)[\s\S]{0,140}navModel\(\)/.test(P));
+t('⚠️ plateforme et serveur sont DEUX espaces de travail, jamais une seule liste',
+  /id="navTabs"/.test(P) && /function navMode\(\)/.test(P) && /data-navtab="plat"/.test(P));
+t('la bascule n’apparaît qu’à qui a les deux', /const deux = !!\(ME\.plateforme && ME\.espace\)/.test(P));
+t('⚠️ l’administration ne défile pas : elle est posée hors de la liste des rubriques',
+  /id="railAdmin"/.test(P) && /\.rail-admin\{flex:none/.test(P));
+t('les rubriques sont rangées en groupes repliables, et le choix se garde',
+  /data-fold="\$\{g\.id\}"/.test(P) && /function basculerGroupe/.test(P) && /PREF\.set\('fold'/.test(P));
+t('⚠️ le groupe qui porte la rubrique ouverte ne se présente jamais replié',
+  /const ouvert = actif \|\| !plies\[g\.id\]/.test(P));
+t('une rubrique s’épingle en tête depuis son titre', /id="pinCat"/.test(P) && /function basculerEpingle/.test(P)
+  && /class="nav-group">Épinglés</.test(P));
+t('le fil d’Ariane dit où l’on est', /id="crumbs"/.test(P) && /function crumbsFor\(\)/.test(P));
+
+sect('Refonte : la palette de commandes');
+t('la recherche vit dans une palette', /id="palette"/.test(P) && /function ouvrirPalette/.test(P));
+t('Ctrl/⌘ K l’ouvre de partout, y compris depuis un champ',
+  /\(e\.ctrlKey \|\| e\.metaKey\) && e\.key\.toLowerCase\(\) === 'k'/.test(P));
+t('« / » l’ouvre aussi — mais pas pendant qu’on écrit dans un champ',
+  /e\.key === '\/'[\s\S]{0,180}ouvrirPalette\(\)/.test(P));
+t('elle propose des écrans, des joueurs ET des actions',
+  /function paletteActions\(\)/.test(P) && /groupe:'Joueurs'/.test(P) && /groupe:'Écrans'/.test(P));
+t('⚠️ elle s’affiche SANS attendre le réseau : les joueurs s’y ajoutent ensuite',
+  /peindreSuggest\(items\);[\s\S]{0,400}await DS\.searchPlayers/.test(P));
+t('⚠️ une action referme la palette avant d’agir',
+  /if \(it\) \{ hideSuggest\(\); it\.go\(\); \}/.test(P));
+t('on tape sans accents', /sansAccents\(d\.titre\)/.test(P));
+
+sect('Refonte : deux thèmes, mêmes jetons');
+t('le thème sombre suit le système, et le choix explicite gagne dans les deux sens',
+  /@media \(prefers-color-scheme: dark\)\{\s*:root:not\(\[data-theme="light"\]\)/.test(P)
+  && /:root\[data-theme="dark"\]\{/.test(P));
+t('une bascule de thème, et elle se garde', /id="themeBtn"/.test(P) && /PREF\.set\('theme', t\)/.test(P));
+t('⚠️ le stockage local est GARDÉ — il manque en navigation privée et dans un aperçu',
+  /const PREF = \{[\s\S]{0,260}try \{[\s\S]{0,200}catch/.test(P));
+{
+  // ⚠️ AUCUNE COULEUR EN DUR DANS UN COMPOSANT. C'est ce qui rendait le
+  // thème sombre impossible : des restes de l'ancien thème (#8FEBD3 sur
+  // fond clair, ombres noires à 85 %) traînaient dans la feuille. On
+  // n'autorise un littéral que dans les blocs de jetons et pour les
+  // surfaces qui sont sombres par nature (image de capture, Discord).
+  const css = P.slice(P.indexOf('<style>'), P.indexOf('</style>')).replace(/\/\*[\s\S]*?\*\//g, '');
+  const hors = css.replace(/:root[^{]*\{[^}]*\}/g, '').replace(/@media \(prefers-color-scheme: dark\)\{\s*\}/g, '');
+  const permis = /shot-demo|shot-full|discord|\.mark|\.av\{|btn\.danger|duty-n|feed-new|af-x|check input|toast|btn\.primary/;
+  const fautifs = hors.split('}').filter(r => /#[0-9A-Fa-f]{3,8}\b/.test(r.replace(/#[a-zA-Z][\w-]*(?=[\s{.:,\[>])/g, '')) && !permis.test(r))
+    .map(r => r.trim().slice(0, 60));
+  t('⚠️ aucun composant ne porte de couleur en dur — sinon l’un des deux thèmes le paie',
+    fautifs.length === 0, fautifs.slice(0, 3).join(' | '));
+}
+
+sect('Refonte : le tableau de bord');
+t('⚠️ chaque tuile est une PORTE vers l’écran qui l’explique',
+  /class="kpis" id="status"/.test(P) && /const tuile = \(o\) =>/.test(P) && /data-cat="\$\{o\.cat\}"/.test(P));
+t('⚠️ une tuile ne s’ouvre que si la rubrique est dans les droits du compte',
+  /o\.cat === 'all' \|\| voit\(o\.cat\)/.test(P));
+t('⚠️ le compteur part de la valeur précédente, jamais de zéro à chaque rafraîchissement',
+  /const KPI_VU = \{\}/.test(P) && /avant === but\) return ecrire\(but\)/.test(P));
+t('la file « à traiter » est à hauteur du graphique', /class="dash-col">\s*<!--[\s\S]{0,400}<div id="duty">/.test(P));
+
+sect('Refonte : défauts corrigés au passage');
+t('⚠️ l’inspecteur fermé ne projette plus d’ombre sur le bord de tous les écrans',
+  /\.insp\{[^}]*visibility:hidden/.test(P) && /\.insp\.open\{[^}]*box-shadow:var\(--sh-3\)/.test(P)
+  && !/\.insp\{[^}]*box-shadow:/.test(P));
+t('⚠️ l’aperçu a un « qui est en ligne » — l’écran s’ouvrait sur une erreur',
+  /Demo\.online = async function/.test(P));
+t('⚠️ les chiffres du dossier ne s’écrasent plus quand la fenêtre déborde',
+  /\.sheet-body\{[^}]*grid-auto-rows:max-content/.test(P));
+t('⚠️ le bouton Discord garde son icône à côté de son libellé', /\.btn\.block\{display:flex/.test(P));
+t('les gestes de modération sont rangés par nature', /rang\('Sanctionner', sanc\)/.test(P)
+  && /rang\('En jeu', jeu\)/.test(P) && /rang\('Consulter', voir\)/.test(P));
+t('les réglages ont un sommaire et des cartes', /class="setnav"/.test(P) && /data-goto="alertesBloc"/.test(P));
+t('le compteur « Joueurs en ligne » se remplit sans ouvrir l’écran', /async function majEnLigne/.test(P));
+t('⚠️ le mouvement se coupe pour qui le demande', /prefers-reduced-motion:reduce/.test(P));
 
 const n=T.filter(([o])=>o).length;
 console.log(`\n  ${n}/${T.length} contrôles passés`);
