@@ -81,8 +81,8 @@ t('la barre du haut (recherche) ne porte pas période / direct / export',
   && !/id="exportBtn"/.test(barHtml) && !/id="modeTag"/.test(barHtml));
 // ⚠️ 1.6 + 3.10 : les CONTRÔLES du flux sont remontés en tête, dans une
 // barre contextuelle unique (#periodBar), plus dispersés dans le pied.
-t('les contrôles du flux vivent dans #periodBar, en tête',
-  /id="periodBar"/.test(P) && /id="rangeSeg"/.test(P) && /id="liveBtn"/.test(P)
+t('les contrôles du flux vivent dans #periodBar, en tête — sans l’indicateur « Direct » (on ne veut pas voir le direct à l’écran)',
+  /id="periodBar"/.test(P) && /id="rangeSeg"/.test(P) && !/id="liveBtn"/.test(P)
   && /id="exportBtn"/.test(P) && !/id="flowSettings"/.test(P));
 t('#periodBar ne s’affiche que sur les écrans temporels',
   /const VUES_TEMPS = \['overview', 'stream', 'economy', 'playtime', 'stats'\]/.test(P)

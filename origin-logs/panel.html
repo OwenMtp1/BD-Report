@@ -1265,11 +1265,6 @@ button.ev-actor:hover .ev-name{color:var(--vio-hi);text-decoration:underline;tex
          il fallait faire défiler dix-huit journaux pour les atteindre. Ils
          sont posés ici, hors de la liste, toujours à un clic. -->
     <div class="rail-admin" id="railAdmin" hidden></div>
-    <div class="rail-foot" id="railLive">
-      <div class="foot-line"><span class="pulse" id="pulse"></span><span>Flux <b id="liveState">en direct</b></span></div>
-      <div class="foot-line">Dernier <b id="lastTick">—</b></div>
-      <div class="foot-line">Rétention <b id="retention">30 jours</b></div>
-    </div>
     <!-- Le compte en bas à gauche, comme un vrai espace de travail. Cliquer
          ouvre la fiche profil. -->
     <div class="rail-account" id="whoBox" hidden role="button" tabindex="0" aria-haspopup="dialog" title="Voir mon profil">
@@ -1339,7 +1334,6 @@ button.ev-actor:hover .ev-name{color:var(--vio-hi);text-decoration:underline;tex
           <button class="btn sm" id="viewsBtn" aria-expanded="false" aria-haspopup="true" title="Vues sauvegardées">★ Vues</button>
           <div class="views-menu" id="viewsMenu" hidden role="menu" aria-label="Vues sauvegardées"></div>
         </div>
-        <button class="btn sm live" id="liveBtn" aria-pressed="true"><span class="pulse" aria-hidden="true"></span> Direct</button>
         <button class="btn sm" id="exportBtn">Exporter</button>
       </div>
       <!-- La plage libre se déplie sous la barre ; deux dates et « Appliquer ». -->
@@ -4025,10 +4019,6 @@ function openInspector(id) {
       </a>
       <span class="lite-m">Capture #${Number(e.d.capture)}${e.d.dimensions ? ' · ' + esc(e.d.dimensions) : ''}${e.d.poids ? ' · ' + esc(e.d.poids) : ''}${e.d.demandePar ? ' · demandée par ' + esc(e.d.demandePar) : ''}. Chaque consultation est inscrite au journal du panneau.</span>
     </div>` : ''}
-    <div class="block">
-      <h3 class="eyebrow">Données brutes</h3>
-      <pre class="payload">${jsonHtml(e.d || {})}</pre>
-    </div>
     <div class="tools">
       <button class="btn sm" data-copy="json">Copier le JSON</button>
       <button class="btn sm" data-copy="line">Copier la ligne</button>
@@ -5116,8 +5106,6 @@ function paletteActions() {
   a.push({ titre: sombre ? 'Passer en thème clair' : 'Passer en thème sombre', ic: sombre ? 'sun' : 'moon',
            cle:'theme sombre clair apparence nuit jour', go: basculerTheme });
   if (ME.espace) {
-    a.push({ titre: STATE.live ? 'Mettre le flux en pause' : 'Reprendre le flux en direct', ic:'pause',
-             cle:'flux direct pause live reprendre', go: () => { const b = $('#liveBtn'); if (b) b.click(); } });
     if (can('logs.export')) a.push({ titre:'Exporter la vue courante', ic:'down', cle:'exporter export csv telecharger',
              go: () => { const b = $('#exportBtn'); if (b) b.click(); } });
   }
@@ -8418,7 +8406,7 @@ function prendreNeufs() {
 function onLive(e) {
   if (!STATE.live) return;
   SEEN.set(e.id, e);
-  $('#lastTick').textContent = hhmmss(e.t);
+  const dernier = $('#lastTick'); if (dernier) dernier.textContent = hhmmss(e.t);
   if (STATE.view === 'stream' && matchesFilters(e)) {
     STATE.total++;
     STATE.sevCounts[e.sev] = (STATE.sevCounts[e.sev] || 0) + 1;
@@ -8716,7 +8704,6 @@ function peindreMarque() {
   if ($('#brandName')) $('#brandName').textContent = nom;
   if ($('#brandSub'))  $('#brandSub').textContent = dans ? 'Journal serveur' : 'Plateforme';
   // L'état du flux ne concerne qu'un serveur : hors de lui, il ne dit rien.
-  const live = $('#railLive'); if (live) live.hidden = !dans;
 }
 function peindreIdentite() {
   const esp = ME.espace, dans = !!esp;
@@ -8812,12 +8799,13 @@ function startStream() {
   stopStream = DS.stream(onLive);
 }
 
-$('#liveBtn').addEventListener('click', () => {
+const liveBtn = $('#liveBtn');
+if (liveBtn) liveBtn.addEventListener('click', () => {
   STATE.live = !STATE.live;
   $('#liveBtn').classList.toggle('live', STATE.live);
   $('#liveBtn').setAttribute('aria-pressed', String(STATE.live));
-  $('#liveState').textContent = STATE.live ? 'en direct' : 'en pause';
-  $('#pulse').classList.toggle('off', !STATE.live);
+  const etat = $('#liveState'); if (etat) etat.textContent = STATE.live ? 'en direct' : 'en pause';
+  const pouls = $('#pulse'); if (pouls) pouls.classList.toggle('off', !STATE.live);
   toast(STATE.live ? 'Flux repris' : 'Flux en pause — la liste ne bouge plus');
   if (STATE.live) refresh();
 });
@@ -9014,8 +9002,7 @@ async function startPanel() {
       setCatalogue(c.cats, c.sevs, c.groups, c.argentTypes);
       // ⚠️ « 0 jour » se lirait comme « effacé tout de suite » : l'exact
       // contraire de ce que veut dire une conservation illimitée.
-      $('#retention').textContent = c.conservationIllimitee ? 'illimitée'
-        : (c.retention || 30) + ' jours';
+      // (la rétention n'est plus affichée dans la barre latérale)
     } catch (e) {}
     $('#demoNote').hidden = true;
     $('#whoBox').hidden = false;
