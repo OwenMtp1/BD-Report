@@ -1056,6 +1056,13 @@ montré. Un défilement horizontal VOULU (kanban) reste permis dès qu'il vit da
   découpage tourne à chaque `npm run audit`), mais **`store.jsx` n'est pas branché dessus** : le
   drapeau `FEATURES.multiTenant` est donc inerte. Le runbook dit précisément ce qui reste, et
   pourquoi le branchement ne doit pas se faire avant d'avoir un projet Supabase de test.
+  ⚠️ **Faille corrigée dans le schéma CIBLE avant toute exécution** : `profiles_upd` laissait
+  chacun réécrire TOUTE sa ligne, `is_platform_admin` compris — un client se nommait admin
+  plateforme en une requête, puis `orgs_admin`/`om_admin` lui ouvraient toutes les orgs. Une
+  policy choisit des LIGNES, pas des colonnes : ce sont les DROITS PAR COLONNE (`revoke` puis
+  `grant insert|update (pseudo, full_name, photo, prefs)`) qui ferment la porte. `email` suit
+  l'identité Auth et n'est pas modifiable. `npm run audit` le fige (falsifié trois fois :
+  colonne accordée, `revoke` retiré, `grant` global ajouté).
 
 ## Vidéo publicitaire (30 s, motion design)
 - **`video/ad.html`** — l'animation, 1920×1080, ouverte à la main elle se joue en boucle.

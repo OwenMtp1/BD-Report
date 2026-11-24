@@ -85,6 +85,18 @@ create policy profiles_read on public.profiles for select using (id = auth.uid()
 create policy profiles_ins  on public.profiles for insert with check (id = auth.uid());
 create policy profiles_upd  on public.profiles for update using (id = auth.uid()) with check (id = auth.uid());
 
+-- ⚠️ UNE POLICY CHOISIT LES LIGNES, PAS LES COLONNES. Les deux ci-dessus laissaient
+-- chacun réécrire TOUTE sa ligne — `is_platform_admin` compris : un client se
+-- déclarait admin plateforme en une requête, puis `orgs_admin`/`om_admin` le
+-- laissaient s'inscrire dans n'importe quelle org et tout lire. Ce sont donc les
+-- DROITS PAR COLONNE qui ferment la porte : l'utilisateur ne touche qu'à ses champs
+-- d'affichage. `is_platform_admin` ne se pose qu'en service_role (script de
+-- migration, tableau de bord) ; `email` suit l'identité Auth, il ne se choisit pas.
+-- Le déclencheur `handle_new_user` est SECURITY DEFINER : ces retraits ne le gênent pas.
+revoke insert, update on public.profiles from anon, authenticated;
+grant insert (id, pseudo, full_name, photo, prefs) on public.profiles to authenticated;
+grant update (pseudo, full_name, photo, prefs)     on public.profiles to authenticated;
+
 -- orgs : visibles par leurs membres ; gérables par l'admin plateforme.
 drop policy if exists orgs_read  on public.orgs;
 drop policy if exists orgs_admin on public.orgs;

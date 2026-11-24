@@ -16,6 +16,7 @@
 | Mots de passe en clair | ✅ **supprimés** — purgés par la migration, plus jamais écrits |
 | Écrasement entre collègues | ✅ **corrigé** — fusion espace par espace |
 | Branchement de `store.jsx` sur l'auth Supabase | ⛔ **reste à faire** (voir « Ce qui reste » plus bas) |
+| Élévation de privilège via `profiles.is_platform_admin` | ✅ **fermée** — droits par colonne, figés par l'audit |
 | Exécution du SQL, migration, rotation de clé | ⛔ **à vous** — étapes 1 à 6 ci-dessous |
 
 ## Le risque, en une phrase

@@ -1388,6 +1388,25 @@ async function main() {
     }
   }
 
+  // ======================================= RLS CIBLE — PERSONNE NE SE NOMME ADMIN TOUT SEUL
+  // `profiles_upd` laissait chacun réécrire toute sa ligne, `is_platform_admin` compris :
+  // une requête suffisait à devenir admin plateforme, donc à lire toutes les orgs. Une
+  // policy filtre des LIGNES ; ce sont les droits par COLONNE qui protègent ce champ.
+  {
+    const sql = fs.default.readFileSync(path.default.join(process.cwd(), 'supabase', 'schema_multitenant.sql'), 'utf8')
+      .replace(/--[^\n]*/g, '')   // les commentaires citent le champ : seules les instructions comptent
+    ok(/revoke\s+insert\s*,\s*update\s+on\s+public\.profiles\s+from\s+anon\s*,\s*authenticated/i.test(sql),
+      "RLS : les droits d'écriture larges sur profiles ne sont plus retirés — chacun peut se nommer admin plateforme")
+    const grants = [...sql.matchAll(/grant\s+(insert|update)\s*\(([^)]*)\)\s*on\s+public\.profiles/gi)]
+    ok(grants.length === 2, "RLS : profiles doit accorder insert ET update colonne par colonne")
+    for (const [, verb, cols] of grants) {
+      ok(!/is_platform_admin/i.test(cols), `RLS : ${verb} sur profiles accorde is_platform_admin à l'utilisateur`)
+      ok(!/\bemail\b/i.test(cols), `RLS : ${verb} sur profiles laisse l'utilisateur changer son e-mail`)
+    }
+    ok(!/grant\s+(all|insert|update)\s+on\s+(table\s+)?public\.profiles/i.test(sql),
+      'RLS : un grant SANS liste de colonnes sur profiles rouvre is_platform_admin')
+  }
+
   process.stdout.write((problems.length ? 'PROBLÈMES:\n- ' + problems.join('\n- ') : 'AUDIT OK') + '\n')
 
 }
